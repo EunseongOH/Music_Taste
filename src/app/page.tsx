@@ -8,7 +8,7 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-between p-8 md:p-24 relative overflow-hidden">
+    <main className="w-full flex flex-1 flex-col items-center justify-between p-6 relative overflow-hidden">
       <div className="flex flex-col items-center justify-center flex-1 w-full text-center z-10 space-y-8 mt-12 md:mt-0">
         <div className="space-y-4">
           <h1 className="font-serif text-4xl md:text-6xl text-navy tracking-tight drop-shadow-sm">

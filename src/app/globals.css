@@ -10,7 +10,8 @@
 }
 
 :root {
-  --background: var(--color-cream);
+  --background: #EAE2D6;
+  --app-bg: var(--color-cream);
   --foreground: var(--color-charcoal);
 }
 

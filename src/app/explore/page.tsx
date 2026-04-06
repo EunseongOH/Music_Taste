@@ -65,28 +65,28 @@ export default function ExplorePage() {
   };
 
   return (
-    <main className="flex flex-col min-h-screen p-6 md:p-12 relative z-10 max-w-5xl mx-auto w-full">
-      <div className="mb-10 text-center md:text-left mt-8">
-        <h1 className="font-serif text-3xl md:text-4xl text-navy mb-2">어떤 아티스트를 좋아하시나요?</h1>
+    <main className="flex flex-col min-h-screen p-6 relative z-10 w-full">
+      <div className="mb-8 mt-8 text-center">
+        <h1 className="font-serif text-3xl md:text-4xl text-navy mb-2 break-keep">어떤 아티스트를 좋아하시나요?</h1>
         <p className="font-sans text-charcoal/70">선택한 아티스트와 비슷한 음악을 추천해드려요.</p>
       </div>
 
       {/* Search Bar */}
-      <div className="relative mb-12 max-w-2xl">
+      <div className="relative mb-10 w-full">
         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
           <Search className="text-navy/50" size={20} strokeWidth={1.5} />
         </div>
         <input 
           type="text" 
           placeholder="아티스트 검색..." 
-          className="w-full py-4 pl-12 pr-4 bg-transparent border-2 border-navy rounded-full focus:outline-none focus:ring-0 focus:border-point font-sans text-navy placeholder:text-navy/40 transition-colors bg-cream/30"
+          className="w-full py-3 pl-12 pr-4 bg-transparent border-2 border-navy rounded-full focus:outline-none focus:ring-0 focus:border-point font-sans text-navy placeholder:text-navy/40 transition-colors bg-cream/30"
         />
       </div>
 
       {/* Grid */}
       <motion.div 
         layout
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-10"
+        className="grid grid-cols-3 gap-x-3 gap-y-8"
       >
         <AnimatePresence>
           {artists.map((artist) => {
@@ -106,7 +106,7 @@ export default function ExplorePage() {
               >
                 <motion.div 
                   layout="position"
-                  className={`relative w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar ? 'border-point border-dashed bg-point/5' : isSelected ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
+                  className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar ? 'border-point border-dashed bg-point/5' : isSelected ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
                 >
                   <div className={`relative w-full h-full rounded-full overflow-hidden ${isSelected ? 'p-1' : ''}`}>
                     <div className="relative w-full h-full rounded-full overflow-hidden">
@@ -114,7 +114,7 @@ export default function ExplorePage() {
                         src={artist.image} 
                         alt={artist.name} 
                         fill 
-                        sizes="176px"
+                        sizes="112px"
                         className={`object-cover ${isSimilar ? 'opacity-90 mix-blend-multiply filter sepia-[0.3]' : ''} transition-all duration-300`} 
                       />
                     </div>
@@ -131,7 +131,7 @@ export default function ExplorePage() {
                 </motion.div>
                 <motion.span 
                   layout="position"
-                  className={`font-sans text-base md:text-lg text-center ${isSimilar ? 'text-point font-medium' : isSelected ? 'text-navy font-bold' : 'text-charcoal'}`}
+                  className={`font-sans text-xs sm:text-sm text-center line-clamp-1 w-full px-1 ${isSimilar ? 'text-point font-medium' : isSelected ? 'text-navy font-bold' : 'text-charcoal'}`}
                 >
                   {artist.name}
                 </motion.span>
