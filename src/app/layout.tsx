@@ -29,7 +29,7 @@ export default function RootLayout({
     <html lang="ko" className={`${pretendard.variable} ${playfair.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
         <div className="bg-grain" />
-        <div className="w-full max-w-[430px] mx-auto min-h-screen bg-[var(--app-bg)] shadow-2xl relative flex flex-col items-center">
+        <div className="w-full max-w-[430px] mx-auto min-h-screen bg-[var(--app-bg)] shadow-2xl relative flex flex-col px-6 overflow-x-hidden">
           {children}
         </div>
       </body>

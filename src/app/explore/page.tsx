@@ -66,7 +66,7 @@ export default function ExplorePage() {
   };
 
   return (
-    <main className="flex flex-col min-h-screen p-6 relative z-10 w-full mb-20">
+    <main className="flex flex-col min-h-screen py-6 relative z-10 w-full mb-20">
       <div className="mb-8 mt-4 text-center">
         <h1 className="font-serif text-3xl text-navy mb-2 break-keep tracking-tight">어떤 아티스트를<br/>좋아하시나요?</h1>
         <p className="font-sans text-charcoal/70 text-sm mt-3">최소 3명의 아티스트를 선택해주세요.</p>
