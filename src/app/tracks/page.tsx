@@ -130,19 +130,24 @@ export default function TracksPage() {
                 {artist.albums.map(album => {
                    const isExpanded = expandedAlbumId === album.id;
                    
+                   // Global transition for the elegant record-pulling feel
+                   const smoothTransition = { type: "tween", ease: "circOut", duration: 0.45 };
+                   
                    return (
                      <motion.div
                        layout
+                       transition={smoothTransition}
                        key={album.id}
-                       className={`flex flex-col relative transition-all duration-400 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5" : "col-span-1"}`}
+                       className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
                        onClick={() => {
                            if (!isExpanded) setExpandedAlbumId(album.id);
                        }}
                      >
                         {/* Cover & Info Row */}
-                        <motion.div layout className={`flex ${isExpanded ? "flex-row gap-4 items-center mb-5" : "flex-col gap-2"}`}>
+                        <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-row gap-4 items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
                            <motion.div 
                              layout
+                             transition={smoothTransition}
                              className={`relative aspect-square shrink-0 overflow-hidden ${isExpanded ? "w-20 shadow-md cursor-default pointer-events-none" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
                              // Forcing exact border radius transition via style to override tailwind during Framer motion transition.
                              style={{ borderRadius: isExpanded ? '1rem' : '2rem' }}
@@ -154,7 +159,7 @@ export default function TracksPage() {
                              )}
                            </motion.div>
                            
-                           <motion.div layout className={`flex flex-col justify-center ${isExpanded ? "flex-1" : "px-2 mt-1"}`}>
+                           <motion.div layout transition={smoothTransition} className={`flex flex-col justify-center ${isExpanded ? "flex-1" : "px-2 mt-1"}`}>
                               <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
                               <div className="flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5">
                                  {isExpanded && <Disc size={10} />}
@@ -167,12 +172,13 @@ export default function TracksPage() {
                         <AnimatePresence>
                           {isExpanded && (
                              <motion.div 
-                               initial={{ opacity: 0, height: 0 }}
-                               animate={{ opacity: 1, height: 'auto' }}
-                               exit={{ opacity: 0, height: 0 }}
-                               className="flex flex-col gap-1 overflow-hidden"
+                               initial={{ opacity: 0, height: 0, y: -15 }}
+                               animate={{ opacity: 1, height: 'auto', y: 0 }}
+                               exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                               transition={smoothTransition}
+                               className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
                              >
-                                <div className="w-full h-px bg-navy/10 mb-2" />
+                                <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
                                 {album.tracks.map((track, idx) => {
                                   const isSelected = selectedTrackIds.has(track.id);
                                   return (
