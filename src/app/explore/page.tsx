@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 interface Artist {
   id: string;
@@ -152,10 +153,10 @@ export default function ExplorePage() {
             exit={{ y: 100, opacity: 0, x: "-50%" }}
             className="fixed bottom-8 left-1/2 z-50 w-[90%] max-w-[380px]"
           >
-            <button className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors">
+            <Link href="/tracks" className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors">
               다음으로 넘어가기
               <span className="bg-point text-white text-xs px-2 py-1 rounded-full">{selectedIds.size}</span>
-            </button>
+            </Link>
           </motion.div>
         )}
       </AnimatePresence>
