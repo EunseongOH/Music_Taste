@@ -157,10 +157,17 @@ export default function ExplorePage() {
             exit={{ y: 100, opacity: 0, x: "-50%" }}
             className="fixed bottom-8 left-1/2 z-50 w-[90%] max-w-[380px]"
           >
-            <Link href="/tracks" className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors">
+            <button 
+              onClick={() => {
+                const selectedData = artists.filter(a => selectedIds.has(a.id));
+                sessionStorage.setItem('selectedArtists', JSON.stringify(selectedData));
+                window.location.href = '/tracks';
+              }}
+              className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
+            >
               다음으로 넘어가기
               <span className="bg-point text-white text-xs px-2 py-1 rounded-full">{selectedIds.size}</span>
-            </Link>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

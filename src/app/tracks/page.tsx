@@ -35,35 +35,47 @@ const generateTracks = (albumId: string, count: number): Track[] =>
     duration: `0${Math.floor(Math.random()*4)+2}:${String(Math.floor(Math.random()*60)).padStart(2, '0')}`
   }));
 
-const ARTIST_DATA: ArtistGroup[] = [
+const FALLBACK_ARTISTS: ArtistGroup[] = [
   {
     id: "a1", name: "The Beatles", image: "https://picsum.photos/seed/a1/300/300",
     albums: [
       { id: "al1_1", title: "Abbey Road", type: "Album", year: "1969", image: "https://picsum.photos/seed/al1_1/300/300", tracks: generateTracks("al1_1", 17) },
       { id: "al1_2", title: "Let It Be", type: "Album", year: "1970", image: "https://picsum.photos/seed/al1_2/300/300", tracks: generateTracks("al1_2", 12) },
-      { id: "al1_3", title: "Hey Jude", type: "Single", year: "1968", image: "https://picsum.photos/seed/al1_3/300/300", tracks: generateTracks("al1_3", 2) },
-    ]
-  },
-  {
-    id: "a2", name: "Daft Punk", image: "https://picsum.photos/seed/a2/300/300",
-    albums: [
-      { id: "al2_1", title: "Discovery", type: "Album", year: "2001", image: "https://picsum.photos/seed/al2_1/300/300", tracks: generateTracks("al2_1", 14) },
-      { id: "al2_2", title: "Random Access Memories", type: "Album", year: "2013", image: "https://picsum.photos/seed/al2_2/300/300", tracks: generateTracks("al2_2", 13) },
-    ]
-  },
-  {
-    id: "a3", name: "Radiohead", image: "https://picsum.photos/seed/a3/300/300",
-    albums: [
-      { id: "al3_1", title: "OK Computer", type: "Album", year: "1997", image: "https://picsum.photos/seed/al3_1/300/300", tracks: generateTracks("al3_1", 12) },
-      { id: "al3_2", title: "In Rainbows", type: "Album", year: "2007", image: "https://picsum.photos/seed/al3_2/300/300", tracks: generateTracks("al3_2", 10) },
     ]
   }
 ];
 
 export default function TracksPage() {
-  const [activeTab, setActiveTab] = useState<string>(ARTIST_DATA[0].id);
+  const [artistData, setArtistData] = useState<ArtistGroup[]>(FALLBACK_ARTISTS);
+  const [activeTab, setActiveTab] = useState<string>(FALLBACK_ARTISTS[0].id);
   const [expandedAlbumId, setExpandedAlbumId] = useState<string | null>(null);
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  React.useEffect(() => {
+    const stored = sessionStorage.getItem('selectedArtists');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.length > 0) {
+          const dynamicData = parsed.map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            image: a.image,
+            albums: [
+              { id: `al_${a.id}_1`, title: `${a.name} Greatest Hits`, type: "Album", year: "2024", image: `https://picsum.photos/seed/${a.id}_c1/300/300`, tracks: generateTracks(`al_${a.id}_1`, 12) },
+              { id: `al_${a.id}_2`, title: `Essential EP`, type: "EP", year: "2022", image: `https://picsum.photos/seed/${a.id}_c2/300/300`, tracks: generateTracks(`al_${a.id}_2`, 6) },
+            ]
+          }));
+          setArtistData(dynamicData);
+          setActiveTab(dynamicData[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to parse stored artists");
+      }
+    }
+    setIsLoaded(true);
+  }, []);
 
   // Scroll spy interaction
   const scrollToArtist = (artistId: string) => {
@@ -95,7 +107,7 @@ export default function TracksPage() {
 
         {/* Horizontal Artist Scroll */}
         <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-none px-6">
-          {ARTIST_DATA.map(artist => (
+          {artistData.map(artist => (
             <button
               key={artist.id}
               onClick={() => scrollToArtist(artist.id)}
@@ -112,7 +124,7 @@ export default function TracksPage() {
 
       {/* Artists & Albums Content */}
       <div className="py-6 pb-32 flex flex-col gap-14">
-        {ARTIST_DATA.map(artist => (
+        {artistData.map(artist => (
           <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40">
              {/* Artist Header */}
              <div className="flex items-center gap-3 mb-6">
@@ -131,7 +143,7 @@ export default function TracksPage() {
                    const isExpanded = expandedAlbumId === album.id;
                    
                    // Global transition for the elegant record-pulling feel
-                   const smoothTransition = { type: "tween", ease: "circOut", duration: 0.45 };
+                   const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
                    
                    return (
                      <motion.div
