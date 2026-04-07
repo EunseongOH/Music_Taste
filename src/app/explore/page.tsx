@@ -28,18 +28,24 @@ export default function ExplorePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const handleArtistClick = (artist: Artist) => {
-    // Prevent clicking on similar artists
-    if (artist.type === "similar") return;
+    // If it's a similar artist, just toggle selection without spawning more
+    if (artist.type === "similar") {
+      const newSelected = new Set(selectedIds);
+      if (newSelected.has(artist.id)) newSelected.delete(artist.id);
+      else newSelected.add(artist.id);
+      setSelectedIds(newSelected);
+      return;
+    }
 
     if (selectedIds.has(artist.id)) {
-      // Collapse / Deselect
+      // Collapse / Deselect for main artists
       const newSelected = new Set(selectedIds);
       newSelected.delete(artist.id);
       setSelectedIds(newSelected);
       // Remove the generated similar items for this artist
       setArtists(prev => prev.filter(a => a.parentId !== artist.id));
     } else {
-      // Expand / Select
+      // Expand / Select for main artists
       const newSelected = new Set(selectedIds);
       newSelected.add(artist.id);
       setSelectedIds(newSelected);
@@ -93,8 +99,6 @@ export default function ExplorePage() {
           {artists.map((artist) => {
             const isSimilar = artist.type === "similar";
             const isSelected = selectedIds.has(artist.id);
-            // Highlight parent if it is specifically selected
-            const highlightActive = isSimilar ? false : isSelected;
             
             return (
               <motion.div
@@ -109,20 +113,20 @@ export default function ExplorePage() {
               >
                 <motion.div 
                   layout="position"
-                  className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar ? 'border-point border-dashed bg-point/5 scale-90' : highlightActive ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
+                  className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar && !isSelected ? 'border-point border-dashed bg-point/5 scale-90' : isSimilar && isSelected ? 'border-point border-solid bg-point/10 scale-90 shadow-[0_0_15px_rgba(230,126,34,0.4)]' : isSelected ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
                 >
-                  <div className={`relative w-full h-full rounded-full overflow-hidden ${highlightActive ? 'p-1' : ''}`}>
+                  <div className={`relative w-full h-full rounded-full overflow-hidden ${isSelected ? 'p-1 bg-cream/50' : ''}`}>
                     <div className="relative w-full h-full rounded-full overflow-hidden">
                       <Image 
                         src={artist.image} 
                         alt={artist.name} 
                         fill 
                         sizes="112px"
-                        className={`object-cover ${isSimilar ? 'opacity-80 mix-blend-multiply filter sepia-[0.4]' : ''} transition-all duration-300`} 
+                        className={`object-cover ${isSimilar ? 'opacity-80 mix-blend-multiply filter sepia-[0.4]' : ''} transition-all duration-300 ${isSelected && isSimilar ? 'filter-none mix-blend-normal opacity-100' : ''}`} 
                       />
                     </div>
                   </div>
-                  {highlightActive && (
+                  {isSelected && (
                     <motion.div 
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -134,7 +138,7 @@ export default function ExplorePage() {
                 </motion.div>
                 <motion.span 
                   layout="position"
-                  className={`font-sans text-xs sm:text-sm text-center line-clamp-1 w-full px-1 ${isSimilar ? 'text-point font-medium' : highlightActive ? 'text-navy font-bold' : 'text-charcoal'}`}
+                  className={`font-sans text-xs sm:text-sm text-center line-clamp-1 w-full px-1 ${isSimilar && !isSelected ? 'text-point font-medium' : isSelected ? 'text-navy font-bold' : 'text-charcoal'}`}
                 >
                   {artist.name}
                 </motion.span>
