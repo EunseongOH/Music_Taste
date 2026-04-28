@@ -2,8 +2,11 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Compass, Disc } from "lucide-react";
+import { Check, Compass, Disc, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
+import BackButton from "@/components/BackButton";
+import ProfileHeader from "@/components/ProfileHeader";
 
 // --- DUMMY DATA STRUCTURE ---
 interface Track {
@@ -46,8 +49,9 @@ const FALLBACK_ARTISTS: ArtistGroup[] = [
 ];
 
 export default function TracksPage() {
+  const router = useRouter();
   const [artistData, setArtistData] = useState<ArtistGroup[]>(FALLBACK_ARTISTS);
-  const [activeTab, setActiveTab] = useState<string>(FALLBACK_ARTISTS[0].id);
+  const [expandedArtistId, setExpandedArtistId] = useState<string | null>(FALLBACK_ARTISTS[0].id);
   const [expandedAlbumId, setExpandedAlbumId] = useState<string | null>(null);
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
   const [isLoaded, setIsLoaded] = useState(false);
@@ -68,7 +72,7 @@ export default function TracksPage() {
             ]
           }));
           setArtistData(dynamicData);
-          setActiveTab(dynamicData[0].id);
+          setExpandedArtistId(dynamicData[0].id);
         }
       } catch (e) {
         console.error("Failed to parse stored artists");
@@ -77,15 +81,14 @@ export default function TracksPage() {
     setIsLoaded(true);
   }, []);
 
-  // Scroll spy interaction
-  const scrollToArtist = (artistId: string) => {
-    setActiveTab(artistId);
-    const element = document.getElementById(`artist-section-${artistId}`);
-    if (element) {
-      // Offset for sticky header (h-approx 140px)
-      const top = element.getBoundingClientRect().top + window.scrollY - 140;
-      window.scrollTo({ top, behavior: 'smooth' });
+  const toggleArtistAccordion = (artistId: string) => {
+    if (expandedArtistId === artistId) {
+      setExpandedArtistId(null);
+    } else {
+      setExpandedArtistId(artistId);
     }
+    // Only one artist open at a time is usually cleaner for UX.
+    setExpandedAlbumId(null); // Reset album expansion when switching artists
   };
 
   const toggleTrack = (trackId: string) => {
@@ -95,138 +98,196 @@ export default function TracksPage() {
     setSelectedTrackIds(newSelected);
   };
 
+  const handleStartWorldCup = () => {
+    // Gather full details for selected tracks
+    const selectedTracksData: any[] = [];
+    artistData.forEach(artist => {
+      artist.albums.forEach(album => {
+        album.tracks.forEach(track => {
+          if (selectedTrackIds.has(track.id)) {
+            selectedTracksData.push({
+              ...track,
+              artistName: artist.name,
+              albumTitle: album.title,
+              albumImage: album.image,
+            });
+          }
+        });
+      });
+    });
+
+    sessionStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
+    sessionStorage.removeItem("worldcup_progress");
+    router.push("/worldcup");
+  };
+
   return (
     <main className="flex flex-col min-h-screen relative z-10 w-full mb-10 overflow-hidden bg-[var(--app-bg)]">
       {/* Sticky Header with Toggles & Tabs */}
       <div className="sticky top-0 z-40 bg-cream/95 backdrop-blur-md pt-6 pb-2 px-6 border-b border-navy/10 flex flex-col gap-4 mx-[-1.5rem] w-[calc(100%+3rem)] shadow-sm">
-        <h1 className="font-serif text-2xl text-navy px-6 tracking-tight">트랙 디깅하기</h1>
+        <div className="flex items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
+            <h1 className="font-serif text-2xl text-navy tracking-tight">트랙 디깅하기</h1>
+          </div>
+          <ProfileHeader className="" />
+        </div>
         
         <p className="font-sans text-sm text-charcoal/80 px-6">
           앨범 커버를 탭해서 수록곡을 파헤쳐보세요
         </p>
 
-        {/* Horizontal Artist Scroll */}
-        <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-none px-6">
-          {artistData.map(artist => (
+        {/* Search Bar */}
+        <div className="relative w-full px-6 mt-1 mb-1">
+          <div className="absolute inset-y-0 left-10 flex items-center pointer-events-none">
+            <Search className="text-navy/50" size={18} strokeWidth={2} />
+          </div>
+          <input 
+            type="text" 
+            placeholder="트랙, 아티스트 검색..." 
+            className="w-full py-2.5 pl-11 pr-4 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
+          />
+        </div>
+
+        {/* Sorting Tags */}
+        <div className="flex overflow-x-auto gap-2 scrollbar-none pb-2 px-6">
+          {["추천순", "가나다순", "선택순"].map((sort) => (
             <button
-              key={artist.id}
-              onClick={() => scrollToArtist(artist.id)}
-              className={`flex-shrink-0 flex items-center gap-2 h-10 px-1.5 pr-4 rounded-full border-2 transition-all font-sans text-sm font-medium ${activeTab === artist.id ? "border-point text-point bg-point/5 shadow-sm" : "border-navy/20 text-charcoal/80 hover:border-navy/50"}`}
+              key={sort}
+              onClick={() => {}} // implement sorting logic if needed
+              className={`flex-shrink-0 px-4 py-1.5 rounded-full border-2 transition-all font-sans text-xs font-bold border-navy/10 text-charcoal/70 hover:border-navy/30 hover:bg-navy/5`}
             >
-              <div className="relative w-7 h-7 rounded-full overflow-hidden border border-navy/10">
-                <Image src={artist.image} alt={artist.name} fill sizes="28px" className="object-cover" />
-              </div>
-              {artist.name}
+              {sort}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Artists & Albums Content */}
-      <div className="py-6 pb-32 flex flex-col gap-14">
-        {artistData.map(artist => (
-          <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40">
-             {/* Artist Header */}
-             <div className="flex items-center gap-3 mb-6">
-                <div className="relative w-12 h-12 rounded-full overflow-hidden shadow-sm">
-                   <Image src={artist.image} alt={artist.name} fill sizes="48px" className="object-cover" />
-                </div>
-                <div>
-                   <h2 className="font-serif text-2xl text-navy">{artist.name}</h2>
-                   <p className="font-sans text-xs text-charcoal/60">{artist.albums.length} Releases</p>
-                </div>
-             </div>
+      {/* Artists Content */}
+      <div className="py-6 pb-32 flex flex-col gap-4 px-3">
+        {artistData.map(artist => {
+          const isArtistExpanded = expandedArtistId === artist.id;
+          return (
+            <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40 flex flex-col border border-navy/10 rounded-[2rem] bg-white/60 p-5 shadow-sm transition-all hover:border-navy/20">
+               {/* Artist Header (Accordion Toggle) */}
+               <div 
+                  className="flex items-center justify-between cursor-pointer w-full group"
+                  onClick={() => toggleArtistAccordion(artist.id)}
+               >
+                  <div className="flex items-center gap-4">
+                    <div className="relative w-14 h-14 rounded-full overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
+                       <Image src={artist.image} alt={artist.name} fill sizes="56px" className="object-cover" />
+                    </div>
+                    <div className="text-left">
+                       <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
+                       <p className="font-sans text-xs text-charcoal/60 mt-0.5">{artist.albums.reduce((acc, a) => acc + a.tracks.length, 0)} Tracks • {artist.albums.length} Releases</p>
+                    </div>
+                  </div>
+               </div>
 
-             {/* Artist Albums Grid */}
-             <div className="grid grid-cols-2 gap-4">
-                {artist.albums.map(album => {
-                   const isExpanded = expandedAlbumId === album.id;
-                   
-                   // Global transition for the elegant record-pulling feel
-                   const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
-                   
-                   return (
-                     <motion.div
-                       layout
-                       transition={smoothTransition}
-                       key={album.id}
-                       className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
-                       onClick={() => {
-                           if (!isExpanded) setExpandedAlbumId(album.id);
-                       }}
-                     >
-                        {/* Cover & Info Row */}
-                        <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-row gap-4 items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
-                           <motion.div 
-                             layout
-                             transition={smoothTransition}
-                             className={`relative aspect-square shrink-0 overflow-hidden ${isExpanded ? "w-20 shadow-md cursor-default pointer-events-none" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
-                             // Forcing exact border radius transition via style to override tailwind during Framer motion transition.
-                             style={{ borderRadius: isExpanded ? '1rem' : '2rem' }}
-                           >
-                             <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
-                             
-                             {!isExpanded && (
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                             )}
-                           </motion.div>
+               {/* Artist Albums Grid (Accordion Content) */}
+               <AnimatePresence>
+                 {isArtistExpanded && (
+                   <motion.div
+                     initial={{ height: 0, opacity: 0 }}
+                     animate={{ height: "auto", opacity: 1 }}
+                     exit={{ height: 0, opacity: 0 }}
+                     className="overflow-hidden"
+                   >
+                     <div className="mt-5 mb-2 h-px bg-navy/5 w-full hidden hidden-but-spacer-if-needed" />
+                     <div className="grid grid-cols-2 gap-4 mt-6">
+                        {artist.albums.map(album => {
+                           const isExpanded = expandedAlbumId === album.id;
                            
-                           <motion.div layout transition={smoothTransition} className={`flex flex-col justify-center ${isExpanded ? "flex-1" : "px-2 mt-1"}`}>
-                              <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
-                              <div className="flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5">
-                                 {isExpanded && <Disc size={10} />}
-                                 <span className="line-clamp-1">{album.type} • {album.year}</span>
-                              </div>
-                           </motion.div>
-                        </motion.div>
-                        
-                        {/* Expandable Tracks List */}
-                        <AnimatePresence>
-                          {isExpanded && (
-                             <motion.div 
-                               initial={{ opacity: 0, height: 0, y: -15 }}
-                               animate={{ opacity: 1, height: 'auto', y: 0 }}
-                               exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                           // Global transition for the elegant record-pulling feel
+                           const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
+                           
+                           return (
+                             <motion.div
+                               layout
                                transition={smoothTransition}
-                               className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
+                               key={album.id}
+                               className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
+                               onClick={() => {
+                                   if (!isExpanded) setExpandedAlbumId(album.id);
+                               }}
                              >
-                                <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
-                                {album.tracks.map((track, idx) => {
-                                  const isSelected = selectedTrackIds.has(track.id);
-                                  return (
-                                    <div 
-                                      key={track.id} 
-                                      onClick={(e) => { e.stopPropagation(); toggleTrack(track.id); }}
-                                      className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
-                                    >
-                                       <div className="flex items-center gap-3">
-                                          <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
-                                          <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
-                                       </div>
-                                       {isSelected ? (
-                                          <Check size={18} className="text-point" strokeWidth={3} />
-                                       ) : (
-                                          <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
-                                       )}
-                                    </div>
-                                  )
-                                })}
+                                {/* Cover & Info Row */}
+                                <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-row gap-4 items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
+                                   <motion.div 
+                                     layout
+                                     transition={smoothTransition}
+                                     className={`relative aspect-square shrink-0 overflow-hidden ${isExpanded ? "w-20 shadow-md cursor-default pointer-events-none" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
+                                     // Forcing exact border radius transition via style to override tailwind during Framer motion transition.
+                                     style={{ borderRadius: isExpanded ? '1rem' : '2rem' }}
+                                   >
+                                     <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                     
+                                     {!isExpanded && (
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
+                                     )}
+                                   </motion.div>
+                                   
+                                   <motion.div layout transition={smoothTransition} className={`flex flex-col justify-center ${isExpanded ? "flex-1" : "px-2 mt-1"}`}>
+                                      <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
+                                      <div className="flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5">
+                                         {isExpanded && <Disc size={10} />}
+                                         <span className="line-clamp-1">{album.type} • {album.year}</span>
+                                      </div>
+                                   </motion.div>
+                                </motion.div>
                                 
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
-                                  className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
-                                >
-                                  닫기
-                                </button>
+                                {/* Expandable Tracks List */}
+                                <AnimatePresence>
+                                  {isExpanded && (
+                                     <motion.div 
+                                       initial={{ opacity: 0, height: 0, y: -15 }}
+                                       animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                       exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                                       transition={smoothTransition}
+                                       className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
+                                     >
+                                        <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
+                                        {album.tracks.map((track, idx) => {
+                                          const isSelected = selectedTrackIds.has(track.id);
+                                          return (
+                                            <div 
+                                              key={track.id} 
+                                              onClick={(e) => { e.stopPropagation(); toggleTrack(track.id); }}
+                                              className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
+                                            >
+                                               <div className="flex items-center gap-3">
+                                                  <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                  <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
+                                               </div>
+                                               {isSelected ? (
+                                                  <Check size={18} className="text-point" strokeWidth={3} />
+                                               ) : (
+                                                  <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                               )}
+                                            </div>
+                                          )
+                                        })}
+                                        
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
+                                          className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
+                                        >
+                                          닫기
+                                        </button>
+                                     </motion.div>
+                                  )}
+                                </AnimatePresence>
                              </motion.div>
-                          )}
-                        </AnimatePresence>
-                     </motion.div>
-                   )
-                })}
-             </div>
-          </section>
-        ))}
+                           )
+                        })}
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+            </section>
+          )
+        })}
       </div>
 
       {/* FAB Bottom */}
@@ -238,6 +299,7 @@ export default function TracksPage() {
                 initial={{ y: 80, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 80, opacity: 0 }}
+                onClick={handleStartWorldCup}
                 className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-[0_10px_30px_rgba(26,42,108,0.3)] border border-navy/20 flex items-center justify-center gap-2 hover:bg-navy/90 transition-all active:scale-[0.98]"
               >
                 <Compass size={20} className="mr-1" />

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import BackButton from "@/components/BackButton";
+import ProfileHeader from "@/components/ProfileHeader";
 
 interface Artist {
   id: string;
@@ -71,29 +73,52 @@ export default function ExplorePage() {
     }
   };
 
-  return (
-    <main className="flex flex-col min-h-screen py-6 relative z-10 w-full mb-20">
-      <div className="mb-8 mt-4 text-center">
-        <h1 className="font-serif text-3xl text-navy mb-2 break-keep tracking-tight">어떤 아티스트를<br/>좋아하시나요?</h1>
-        <p className="font-sans text-charcoal/70 text-sm mt-3">최소 3명의 아티스트를 선택해주세요.</p>
-      </div>
+  const [sortOrder, setSortOrder] = useState<"추천순" | "가나다순" | "선택순">("추천순");
 
-      {/* Search Bar */}
-      <div className="relative mb-10 w-full">
-        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-          <Search className="text-navy/50" size={20} strokeWidth={1.5} />
+  return (
+    <main className="flex flex-col min-h-screen relative z-10 w-full mb-20 bg-[var(--app-bg)]">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-40 bg-[#F5F2ED]/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex flex-col gap-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <BackButton className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto md:top-auto md:left-auto right-auto font-bold" />
+          <ProfileHeader className="!relative !top-auto !right-auto !md:top-auto !md:right-auto" />
         </div>
-        <input 
-          type="text" 
-          placeholder="아티스트 검색..." 
-          className="w-full py-3 pl-12 pr-4 bg-transparent border-2 border-navy rounded-full focus:outline-none focus:ring-0 focus:border-point font-sans text-navy placeholder:text-navy/40 transition-colors bg-cream/30"
-        />
+
+        <div className="text-left mt-1 mb-2 px-1">
+          <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">어떤 아티스트를 좋아하시나요?</h1>
+          <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">최소 3명의 아티스트를 선택해주세요.</p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative w-full">
+          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+            <Search className="text-navy/50" size={18} strokeWidth={2} />
+          </div>
+          <input 
+            type="text" 
+            placeholder="아티스트 검색..." 
+            className="w-full py-2.5 pl-11 pr-4 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
+          />
+        </div>
+
+        {/* Sorting Tags */}
+        <div className="flex overflow-x-auto gap-2 scrollbar-none py-1 mt-1 px-1">
+          {["추천순", "가나다순", "선택순"].map((sort) => (
+            <button
+              key={sort}
+              onClick={() => setSortOrder(sort as any)}
+              className={`flex-shrink-0 px-4 py-1.5 rounded-full border-2 transition-all font-sans text-[0.8rem] font-bold ${sortOrder === sort ? 'border-point text-point bg-point/5 shadow-sm' : 'border-navy/10 text-charcoal/70 hover:border-navy/30 hover:bg-navy/5'}`}
+            >
+              {sort}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Grid */}
       <motion.div 
         layout
-        className="grid grid-cols-3 gap-x-3 gap-y-8"
+        className="grid grid-cols-3 gap-x-3 gap-y-8 mt-6 px-1"
       >
         <AnimatePresence>
           {artists.map((artist) => {
