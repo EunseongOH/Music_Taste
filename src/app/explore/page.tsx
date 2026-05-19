@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
+import { searchSpotifyArtists, getInitialArtists, getRelatedArtists } from "@/utils/spotify";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 
 interface Artist {
   id: string;
@@ -16,20 +19,69 @@ interface Artist {
   parentId?: string;
 }
 
-// Dummy data padded to 30 items for infinite scrolling feel
-const BASE_NAMES = ["The Beatles", "Daft Punk", "Radiohead", "Kendrick Lamar", "Tame Impala", "Frank Ocean", "Arctic Monkeys", "Gorillaz", "The Strokes", "Mac Miller"];
-const MAIN_ARTISTS: Artist[] = Array.from({ length: 30 }).map((_, i) => ({
-  id: `a${i + 1}`,
-  name: BASE_NAMES[i % BASE_NAMES.length] + (i >= BASE_NAMES.length ? ` ${Math.floor(i / BASE_NAMES.length) + 1}` : ""),
-  image: `https://picsum.photos/seed/art${i + 1}/300/300`,
-  type: "main",
-}));
-
 export default function ExplorePage() {
-  const [artists, setArtists] = useState<Artist[]>(MAIN_ARTISTS);
+  const { user } = useAuth();
+  const supabase = createClient();
+  const [artists, setArtists] = useState<Artist[]>([]);
+  const [defaultArtists, setDefaultArtists] = useState<Artist[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
 
-  const handleArtistClick = (artist: Artist) => {
+  // Load initial artists on mount
+  useEffect(() => {
+    const fetchInitial = async () => {
+      try {
+        const results = await getInitialArtists();
+        const mappedArtists: Artist[] = results.map((artist: any) => ({
+          id: artist.id,
+          name: artist.name,
+          image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+          type: "main",
+        }));
+        setDefaultArtists(mappedArtists);
+        setArtists(mappedArtists);
+      } catch (error) {
+        console.error("Failed to fetch initial artists:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+    fetchInitial();
+  }, []);
+
+  // Handle Search
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchQuery.trim().length === 0) {
+        if (selectedIds.size === 0 && defaultArtists.length > 0) {
+          setArtists(defaultArtists);
+        }
+        setIsSearching(false);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const results = await searchSpotifyArtists(searchQuery);
+        const mappedArtists: Artist[] = results.map((artist: any) => ({
+          id: artist.id,
+          name: artist.name,
+          image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+          type: "main",
+        }));
+        setArtists(mappedArtists);
+      } catch (error) {
+        console.error("Failed to search artists:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedIds.size, defaultArtists]);
+
+  const handleArtistClick = async (artist: Artist) => {
     // If it's a similar artist, just toggle selection without spawning more
     if (artist.type === "similar") {
       const newSelected = new Set(selectedIds);
@@ -52,28 +104,48 @@ export default function ExplorePage() {
       newSelected.add(artist.id);
       setSelectedIds(newSelected);
 
-      setArtists(prev => {
-        const index = prev.findIndex(a => a.id === artist.id);
-        if (index === -1) return prev;
+      try {
+        const related = await getRelatedArtists(artist.id);
         
-        const similar: Artist[] = [1, 2, 3].map(n => ({
-          id: `s-${artist.id}-${n}`,
-          name: `추천 ${n}`,
-          image: `https://picsum.photos/seed/sim-${artist.id}-${n}/300/300`,
-          type: "similar" as const,
-          parentId: artist.id
-        }));
+        setArtists(prev => {
+          const index = prev.findIndex(a => a.id === artist.id);
+          if (index === -1) return prev;
+          
+          // Filter out related artists that are already in the list to prevent duplicates
+          const uniqueRelated = related.filter((r: any) => !prev.some((a: any) => a.id === r.id));
+          const topRelated = uniqueRelated.slice(0, 3); // top 3 unique similar
+          
+          const similar: Artist[] = topRelated.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
+            type: "similar" as const,
+            parentId: artist.id
+          }));
 
-        return [
-          ...prev.slice(0, index + 1),
-          ...similar,
-          ...prev.slice(index + 1)
-        ];
-      });
+          return [
+            ...prev.slice(0, index + 1),
+            ...similar,
+            ...prev.slice(index + 1)
+          ];
+        });
+      } catch (error) {
+        console.error("Failed to fetch related artists", error);
+      }
     }
   };
 
   const [sortOrder, setSortOrder] = useState<"추천순" | "가나다순" | "선택순">("추천순");
+
+  if (isSearching && defaultArtists.length === 0) {
+    return (
+      <main className="flex flex-col min-h-screen relative z-10 w-full items-center justify-center bg-[var(--app-bg)]">
+        <Loader2 className="animate-spin text-point mb-6" size={48} strokeWidth={2.5} />
+        <h1 className="font-serif text-2xl text-navy font-bold">아티스트 탐색 중...</h1>
+        <p className="font-sans text-sm text-charcoal/70 mt-2">오늘의 추천 아티스트를 찾고 있어요</p>
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-col min-h-screen relative z-10 w-full mb-20 bg-[var(--app-bg)]">
@@ -92,11 +164,17 @@ export default function ExplorePage() {
         {/* Search Bar */}
         <div className="relative w-full">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-            <Search className="text-navy/50" size={18} strokeWidth={2} />
+            {isSearching ? (
+              <Loader2 className="text-navy/50 animate-spin" size={18} strokeWidth={2} />
+            ) : (
+              <Search className="text-navy/50" size={18} strokeWidth={2} />
+            )}
           </div>
           <input 
             type="text" 
-            placeholder="아티스트 검색..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="아티스트 검색 (예: The Beatles)..." 
             className="w-full py-2.5 pl-11 pr-4 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
           />
         </div>
@@ -183,9 +261,25 @@ export default function ExplorePage() {
             className="fixed bottom-8 left-1/2 z-50 w-[90%] max-w-[380px]"
           >
             <button 
-              onClick={() => {
+              onClick={async () => {
                 const selectedData = artists.filter(a => selectedIds.has(a.id));
-                sessionStorage.setItem('selectedArtists', JSON.stringify(selectedData));
+                // Ensure absolute uniqueness before passing to tracks page
+                const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a.id, a])).values());
+                sessionStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
+                localStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
+                
+                if (user) {
+                  try {
+                    await supabase.auth.updateUser({
+                      data: {
+                        selected_artists: uniqueSelectedData
+                      }
+                    });
+                  } catch (err) {
+                    console.error("Error saving selected artists to Supabase:", err);
+                  }
+                }
+                
                 window.location.href = '/tracks';
               }}
               className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"

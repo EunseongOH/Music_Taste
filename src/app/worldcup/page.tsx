@@ -9,6 +9,8 @@ import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 
 interface Track {
   id: string;
@@ -29,6 +31,8 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 export default function WorldCupPage() {
+  const { user } = useAuth();
+  const supabase = createClient();
   const router = useRouter();
 
   const [phase, setPhase] = useState<Phase>("loading");
@@ -53,14 +57,18 @@ export default function WorldCupPage() {
   const [isAnyLpActive, setIsAnyLpActive] = useState(false);
 
   useEffect(() => {
-    // Load from sessionStorage
-    const stored = sessionStorage.getItem("worldcup_tracks");
-    const savedState = sessionStorage.getItem("worldcup_progress");
+    // Load from sessionStorage or localStorage
+    const stored = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
+    const savedState = sessionStorage.getItem("worldcup_progress") || localStorage.getItem("worldcup_progress");
 
     if (!stored) {
       router.replace("/tracks");
       return;
     }
+
+    // Sync to both stores just to keep them in harmony
+    sessionStorage.setItem("worldcup_tracks", stored);
+    localStorage.setItem("worldcup_tracks", stored);
 
     try {
       const parsedTracks: Track[] = JSON.parse(stored);
@@ -99,10 +107,11 @@ export default function WorldCupPage() {
     }
   }, []);
 
-  // Save progress on state change
+  // Save progress on state change (Local storage only to prevent Cookie header bloating)
   useEffect(() => {
     if (phase === "loading") return;
-    sessionStorage.setItem("worldcup_progress", JSON.stringify({
+    
+    const progressObj = {
       phase,
       currentRoundName,
       matches,
@@ -111,7 +120,11 @@ export default function WorldCupPage() {
       eliminatedTracks,
       byeCount,
       selectedByes: Array.from(selectedByes)
-    }));
+    };
+
+    const progressData = JSON.stringify(progressObj);
+    sessionStorage.setItem("worldcup_progress", progressData);
+    localStorage.setItem("worldcup_progress", progressData);
   }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, byeCount, selectedByes]);
 
   const startRound = (participants: Track[], predefinedWinners: Track[] = []) => {

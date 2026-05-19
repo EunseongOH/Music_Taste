@@ -53,48 +53,93 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
     const VIEW_WIDTH = 100; // coordinate system 0 to 100 across width
     const VIEW_HEIGHT = Math.max(600, (sizes.length - 1) * ROW_HEIGHT + PADDING_Y * 2);
 
-    let calculatedPoints = [];
+    let calculatedPoints: { x: number, y: number, trackIdx: number, rank: number, track: Track }[] = [];
     let trackIdx = tracks.length - 1; // Start with lowest rank at the bottom
-    let isLeftToRight = true;
+    let isLeftToRight = false; // Start from right to left at the bottom row
+
+    const rowInfos = [];
 
     for (let r = sizes.length - 1; r >= 0; r--) {
       let S = sizes[r];
-      let rowPoints = [];
+      let rowNodes = [];
       for (let c = 0; c < S; c++) {
-        // distribute centers across 0..100
         let x = (c + 0.5) * (VIEW_WIDTH / S);
         let y = PADDING_Y + r * ROW_HEIGHT;
-        rowPoints.push({ x, y, trackIdx, rank: trackIdx + 1, track: tracks[trackIdx] });
+        rowNodes.push({ x, y, trackIdx, rank: trackIdx + 1, track: tracks[trackIdx] });
         trackIdx--;
       }
-      if (!isLeftToRight) {
-        rowPoints.reverse();
+      
+      let minX = rowNodes[0].x;
+      let maxX = rowNodes[rowNodes.length - 1].x;
+      if (S === 1) {
+        minX = 50; maxX = 50;
       }
-      calculatedPoints.push(...rowPoints);
+      
+      let paddingX = 15;
+      let rowLeftX = Math.max(5, minX - paddingX);
+      let rowRightX = Math.min(95, maxX + paddingX);
+      
+      if (isLeftToRight) {
+        calculatedPoints.push(...rowNodes);
+      } else {
+        calculatedPoints.push(...[...rowNodes].reverse());
+      }
+      
+      rowInfos.push({
+        r,
+        y: PADDING_Y + r * ROW_HEIGHT,
+        leftX: rowLeftX,
+        rightX: rowRightX,
+        isLeftToRight,
+        nodes: isLeftToRight ? rowNodes : [...rowNodes].reverse()
+      });
+      
       isLeftToRight = !isLeftToRight;
     }
 
     let d = "";
     const cameraKeyframes: {x: number, y: number}[] = [];
 
-    if (calculatedPoints.length > 0) {
-      d = `M ${calculatedPoints[0].x} ${calculatedPoints[0].y}`;
-      cameraKeyframes.push({ x: calculatedPoints[0].x, y: calculatedPoints[0].y });
-      
-      for (let i = 1; i < calculatedPoints.length; i++) {
-        let p0 = calculatedPoints[i - 1];
-        let p1 = calculatedPoints[i];
-        if (p0.y === p1.y) {
-          d += ` L ${p1.x} ${p1.y}`;
-          cameraKeyframes.push({ x: p1.x, y: p1.y });
-        } else {
-          // U-turn arc
-          let isRightSide = p0.x >= 50;
-          let outX = isRightSide ? Math.max(p0.x, p1.x) + 20 : Math.min(p0.x, p1.x) - 20;
-          d += ` C ${outX} ${p0.y}, ${outX} ${p1.y}, ${p1.x} ${p1.y}`;
+    if (rowInfos.length > 0) {
+      let firstRow = rowInfos[0];
+      let startX = firstRow.isLeftToRight ? firstRow.leftX : firstRow.rightX;
+      d = `M ${startX} ${firstRow.y}`;
+      cameraKeyframes.push({ x: startX, y: firstRow.y });
+
+      for (let i = 0; i < rowInfos.length; i++) {
+        let row = rowInfos[i];
+        let endX = row.isLeftToRight ? row.rightX : row.leftX;
+        
+        for (let node of row.nodes) {
+           cameraKeyframes.push({ x: node.x, y: node.y });
+        }
+        
+        d += ` L ${endX} ${row.y}`;
+        cameraKeyframes.push({ x: endX, y: row.y });
+
+        if (i < rowInfos.length - 1) {
+          let nextRow = rowInfos[i + 1];
+          let nextStartX = nextRow.isLeftToRight ? nextRow.leftX : nextRow.rightX;
           
-          cameraKeyframes.push({ x: Math.min(Math.max(outX, 0), 100), y: (p0.y + p1.y) / 2 });
-          cameraKeyframes.push({ x: p1.x, y: p1.y });
+          let p0x = endX;
+          let p0y = row.y;
+          let p3x = nextStartX;
+          let p3y = nextRow.y;
+          
+          let turnRadius = 20;
+          let isRightSideTurn = row.isLeftToRight;
+          let p1x = isRightSideTurn ? Math.max(p0x, p3x) + turnRadius : Math.min(p0x, p3x) - turnRadius;
+          let p2x = p1x;
+          
+          d += ` C ${p1x} ${p0y}, ${p2x} ${p3y}, ${p3x} ${p3y}`;
+          
+          for (let t = 0.2; t <= 0.8; t += 0.2) {
+             let mt = 1 - t;
+             let x = mt*mt*mt*p0x + 3*mt*mt*t*p1x + 3*mt*t*t*p2x + t*t*t*p3x;
+             let y = mt*mt*mt*p0y + 3*mt*mt*t*p0y + 3*mt*t*t*p3y + t*t*t*p3y;
+             cameraKeyframes.push({ x, y });
+          }
+          cameraKeyframes.push({ x: p3x, y: p3y });
         }
       }
     }
@@ -196,9 +241,10 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                   <div className="absolute inset-0 m-auto w-[15%] h-[15%] bg-cream border border-navy/20 rounded-full" />
                 </div>
                 
-                {/* Track Info (Hidden for lower ranks unless hovered, or just small) */}
-                <div className={`mt-2 text-center bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm border border-navy/5 ${isWinner ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 absolute top-full pointer-events-none'}`}>
-                  <p className="text-[10px] sm:text-xs font-bold text-navy line-clamp-1 max-w-[80px] break-keep">{pt.track.title}</p>
+                {/* Track Info (Always visible to show what songs were ranked) */}
+                <div className={`mt-2 text-center bg-white/90 backdrop-blur-md px-3 py-1 rounded-xl shadow-sm border border-navy/10 flex flex-col items-center transition-all ${isWinner ? 'scale-110' : 'scale-100'}`}>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-navy line-clamp-1 max-w-[90px] break-keep">{pt.track.title}</p>
+                  <p className="text-[7px] sm:text-[8px] text-navy/60 line-clamp-1 max-w-[90px] mt-0.5 break-keep">{pt.track.artistName}</p>
                 </div>
                 </motion.div>
               </div>

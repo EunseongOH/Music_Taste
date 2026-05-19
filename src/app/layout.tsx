@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const pretendard = localFont({
   src: "./fonts/PretendardVariable.woff2",
@@ -30,7 +31,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         <div className="bg-grain" />
         <div className="w-full max-w-[430px] mx-auto min-h-screen bg-[var(--app-bg)] shadow-2xl relative flex flex-col px-6 overflow-x-hidden">
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </div>
       </body>
     </html>

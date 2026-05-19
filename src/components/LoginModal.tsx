@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Mail, Lock, User, Phone, Globe, MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -28,12 +30,21 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
   const [signupPhone, setSignupPhone] = useState("");
   const [pwError, setPwError] = useState("");
 
+  const [loginError, setLoginError] = useState("");
+  const [signupError, setSignupError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize Supabase client inside the component or outside
+  const { user } = useAuth(); // If we want to detect if already logged in, but not strictly needed here since modal usually shows when not logged in.
+  const supabase = createClient();
+
   useEffect(() => {
     if (!isOpen) {
       setTimeout(() => {
         setMode("login");
         setLoginId(""); setLoginPw("");
         setSignupId(""); setSignupPw(""); setSignupName(""); setSignupNickname(""); setSignupPhone(""); setPwError("");
+        setLoginError(""); setSignupError("");
       }, 300);
     }
   }, [isOpen]);
@@ -64,23 +75,86 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
     }
   };
 
-  const onLoginSubmit = (e: React.FormEvent) => {
+  const onLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginId || !loginPw) return;
+    setIsLoading(true);
+    setLoginError("");
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: loginId,
+      password: loginPw,
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      setLoginError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      return;
+    }
+
     sessionStorage.setItem("isGuest", "false");
-    sessionStorage.setItem("userNickname", "Sortify User");
+    sessionStorage.setItem("userNickname", data.user?.user_metadata?.nickname || "User");
     handleSuccess();
   };
 
-  const onSignupSubmit = (e: React.FormEvent) => {
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setLoginError("");
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        setLoginError(`구글 로그인 오류: ${error.message}`);
+      }
+    } catch (err) {
+      setLoginError("구글 로그인 중 오류가 발생했습니다.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const error = validatePassword(signupPw);
-    if (error) {
-      setPwError(error);
+    const errorMsg = validatePassword(signupPw);
+    if (errorMsg) {
+      setPwError(errorMsg);
       return;
     }
     if (!signupId || !signupPw || !signupName || !signupNickname) return;
     
+    setIsLoading(true);
+    setSignupError("");
+
+    const { data, error } = await supabase.auth.signUp({
+      email: signupId,
+      password: signupPw,
+      options: {
+        data: {
+          name: signupName,
+          nickname: signupNickname,
+          phone: signupPhone || null,
+        }
+      }
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      if (error.status === 422 || error.message.includes("already registered")) {
+        setSignupError("이미 가입된 이메일입니다.");
+      } else {
+        setSignupError("회원가입 중 오류가 발생했습니다. 다시 시도해 주세요.");
+      }
+      return;
+    }
+
+    // Success
     sessionStorage.setItem("isGuest", "false");
     sessionStorage.setItem("userNickname", signupNickname);
     handleSuccess();
@@ -173,11 +247,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
 
                     <button 
                       type="submit"
-                      disabled={!loginId || !loginPw}
+                      disabled={!loginId || !loginPw || isLoading}
                       className="w-full py-3.5 mt-2 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      로그인
+                      {isLoading ? "로그인 중..." : "로그인"}
                     </button>
+                    {loginError && <div className="text-center text-sm font-bold text-red-500 mt-1">{loginError}</div>}
                   </form>
 
                   <div className="flex items-center gap-3 my-2">
@@ -189,7 +264,9 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
                   <div className="flex flex-col gap-2.5">
                     <button 
                       type="button"
-                      className="w-full py-3 bg-white border-2 border-navy/10 text-navy font-semibold rounded-xl hover:border-navy/30 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                      onClick={handleGoogleLogin}
+                      disabled={isLoading}
+                      className="w-full py-3 bg-white border-2 border-navy/10 text-navy font-semibold rounded-xl hover:border-navy/30 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
                     >
                       <Globe size={18} className="text-[#EA4335]" />
                       구글 간편 로그인
@@ -315,11 +392,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
 
                     <button 
                       type="submit"
-                      disabled={!signupId || !signupPw || !signupName || !!pwError}
+                      disabled={!signupId || !signupPw || !signupName || !!pwError || isLoading}
                       className="w-full py-3.5 mt-4 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      가입 완료하기
+                      {isLoading ? "가입 중..." : "가입 완료하기"}
                     </button>
+                    {signupError && <div className="text-center text-sm font-bold text-red-500 mt-1">{signupError}</div>}
                   </form>
 
                   <div className="mt-2 flex justify-center text-sm font-sans pt-2 border-t border-navy/10">

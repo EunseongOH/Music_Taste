@@ -3,24 +3,20 @@
 import React, { useState, useEffect } from "react";
 import ProfileModal from "./ProfileModal";
 import Image from "next/image";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function ProfileHeader({ className = "" }: { className?: string }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [profileImg, setProfileImg] = useState("https://picsum.photos/seed/user1/100/100");
+  const { user } = useAuth();
+  const [customProfileImg, setCustomProfileImg] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    setIsLoggedIn(sessionStorage.getItem("isGuest") === "false");
     const savedImg = sessionStorage.getItem("userProfileImg");
-    if (savedImg) setProfileImg(savedImg);
-
-    // Also listen to a custom event just in case login state changes
-    const handleStorageChange = () => {
-      setIsLoggedIn(sessionStorage.getItem("isGuest") === "false");
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    if (savedImg) setCustomProfileImg(savedImg);
   }, []);
+
+  const isLoggedIn = !!user;
+  const profileImg = customProfileImg || user?.user_metadata?.avatar_url || "https://picsum.photos/seed/user1/100/100";
 
   if (!isLoggedIn) return null;
 
@@ -37,7 +33,7 @@ export default function ProfileHeader({ className = "" }: { className?: string }
       <ProfileModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onUpdateImg={setProfileImg} 
+        onUpdateImg={setCustomProfileImg} 
       />
     </>
   );
