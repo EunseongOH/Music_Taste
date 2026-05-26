@@ -17,39 +17,43 @@ export default function Home() {
   const router = useRouter();
   const supabase = createClient();
 
+  const [activeDraft, setActiveDraft] = useState<any | null>(null);
+
   // Automatic redirect and progress check when logged in
   useEffect(() => {
     if (!isLoading && user) {
-      // 1. Sync from Supabase user_metadata to local storage if available
-      const cloudProgress = user.user_metadata?.worldcup_progress;
-      const cloudTracks = user.user_metadata?.worldcup_tracks;
-      const cloudArtists = user.user_metadata?.selected_artists;
+      const checkDraft = async () => {
+        try {
+          const { data: draft, error } = await supabase
+            .from('tournament_drafts')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
 
-      if (cloudProgress) {
-        localStorage.setItem("worldcup_progress", typeof cloudProgress === 'string' ? cloudProgress : JSON.stringify(cloudProgress));
-        sessionStorage.setItem("worldcup_progress", typeof cloudProgress === 'string' ? cloudProgress : JSON.stringify(cloudProgress));
-      }
-      if (cloudTracks) {
-        localStorage.setItem("worldcup_tracks", typeof cloudTracks === 'string' ? cloudTracks : JSON.stringify(cloudTracks));
-        sessionStorage.setItem("worldcup_tracks", typeof cloudTracks === 'string' ? cloudTracks : JSON.stringify(cloudTracks));
-      }
-      if (cloudArtists) {
-        localStorage.setItem("selectedArtists", typeof cloudArtists === 'string' ? cloudArtists : JSON.stringify(cloudArtists));
-        sessionStorage.setItem("selectedArtists", typeof cloudArtists === 'string' ? cloudArtists : JSON.stringify(cloudArtists));
-      }
+          if (!error && draft) {
+            setActiveDraft(draft);
+            setShowRestoreModal(true);
+          } else {
+            // Fallback to local storage checks
+            const hasProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
+            if (hasProgress) {
+              setShowRestoreModal(true);
+            } else {
+              router.push("/explore");
+            }
+          }
+        } catch (e) {
+          router.push("/explore");
+        }
+      };
 
-      const hasProgress = cloudProgress || localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
-      if (hasProgress) {
-        setShowRestoreModal(true);
-      } else {
-        router.push("/explore");
-      }
+      checkDraft();
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, supabase]);
 
   const handleStart = () => {
     if (user || sessionStorage.getItem("isGuest") === "true") {
-      const hasProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
+      const hasProgress = activeDraft || localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
       if (hasProgress) {
         setShowRestoreModal(true);
       } else {
@@ -61,14 +65,49 @@ export default function Home() {
   };
 
   const handleRestore = () => {
-    const storedTracks = localStorage.getItem("worldcup_tracks") || sessionStorage.getItem("worldcup_tracks");
-    const storedProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
-    
-    if (storedTracks) sessionStorage.setItem("worldcup_tracks", storedTracks);
-    if (storedProgress) sessionStorage.setItem("worldcup_progress", storedProgress);
-    
     setShowRestoreModal(false);
-    router.push("/worldcup");
+
+    if (activeDraft) {
+      // 1. Sync data to storage
+      if (activeDraft.selected_artists && activeDraft.selected_artists.length > 0) {
+        sessionStorage.setItem("selectedArtists", JSON.stringify(activeDraft.selected_artists));
+        localStorage.setItem("selectedArtists", JSON.stringify(activeDraft.selected_artists));
+      }
+      if (activeDraft.selected_tracks && activeDraft.selected_tracks.length > 0) {
+        sessionStorage.setItem("worldcup_tracks", JSON.stringify(activeDraft.selected_tracks));
+        localStorage.setItem("worldcup_tracks", JSON.stringify(activeDraft.selected_tracks));
+      }
+      if (activeDraft.phase && activeDraft.phase !== 'loading') {
+        const progressObj = {
+          phase: activeDraft.phase,
+          currentRoundName: activeDraft.current_round_name,
+          matches: activeDraft.matches,
+          currentMatchIndex: activeDraft.current_match_index,
+          winners: activeDraft.winners,
+          eliminatedTracks: activeDraft.eliminated_tracks,
+          byeCount: activeDraft.bye_count,
+          selectedByes: activeDraft.selected_byes
+        };
+        sessionStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
+        localStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
+      }
+
+      // 2. Redirect based on stage status
+      if (activeDraft.status === 'artist_selection') {
+        router.push("/explore");
+      } else if (activeDraft.status === 'track_selection') {
+        router.push("/tracks");
+      } else {
+        router.push("/worldcup");
+      }
+    } else {
+      // Fallback old behavior
+      const storedTracks = localStorage.getItem("worldcup_tracks") || sessionStorage.getItem("worldcup_tracks");
+      const storedProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
+      if (storedTracks) sessionStorage.setItem("worldcup_tracks", storedTracks);
+      if (storedProgress) sessionStorage.setItem("worldcup_progress", storedProgress);
+      router.push("/worldcup");
+    }
   };
 
   const handleStartNew = async () => {
@@ -78,9 +117,15 @@ export default function Home() {
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
     sessionStorage.removeItem("selectedArtists");
-    
+
     if (user) {
       try {
+        // Clear Supabase drafts table
+        await supabase
+          .from('tournament_drafts')
+          .delete()
+          .eq('user_id', user.id);
+
         await supabase.auth.updateUser({
           data: {
             worldcup_progress: null,
@@ -92,7 +137,7 @@ export default function Home() {
         console.error("Error clearing Supabase progress:", err);
       }
     }
-    
+
     setShowRestoreModal(false);
     router.push("/explore");
   };

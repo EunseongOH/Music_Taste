@@ -9,9 +9,10 @@ import LoginModal from "./LoginModal";
 
 interface BackButtonProps {
   className?: string;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
-export default function BackButton({ className = "" }: BackButtonProps) {
+export default function BackButton({ className = "", onClick }: BackButtonProps) {
   const router = useRouter();
   const [showWarning, setShowWarning] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -32,6 +33,11 @@ export default function BackButton({ className = "" }: BackButtonProps) {
   const handleBackClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    if (onClick) {
+      onClick(e);
+      return;
+    }
     
     // Fallback if sessionStorage is somehow not available
     let isGuest = false;

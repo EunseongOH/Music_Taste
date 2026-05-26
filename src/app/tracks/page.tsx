@@ -8,7 +8,7 @@ import Image from "next/image";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
-import { saveTrackSelectionDraft, loadActiveDraft } from "@/utils/worldcupDb";
+import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -67,6 +67,80 @@ export default function TracksPage() {
   const [modalArtistId, setModalArtistId] = useState<string | null>(null);
   const [unreleasedForm, setUnreleasedForm] = useState({ title: '', videoUrl: '', date: '' });
   const [notification, setNotification] = useState<string | null>(null);
+
+  const [showSaveWarning, setShowSaveWarning] = useState(false);
+
+  // Reload prevention for unsaved changes
+  React.useEffect(() => {
+    if (selectedTrackIds.size === 0) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [selectedTrackIds.size]);
+
+  // Back button interception
+  const handleBackClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (selectedTrackIds.size > 0) {
+      setShowSaveWarning(true);
+    } else {
+      if (window.history.length > 1) {
+        router.back();
+      } else {
+        router.push("/explore");
+      }
+    }
+  };
+
+  const handleConfirmSaveExit = async () => {
+    setShowSaveWarning(false);
+    
+    // Build full tracks data
+    const selectedTracksData: any[] = [];
+    artistData.forEach(artist => {
+      artist.albums.forEach(album => {
+        album.tracks.forEach(track => {
+          if (selectedTrackIds.has(track.id)) {
+            selectedTracksData.push({
+              ...track,
+              artistName: artist.name,
+              albumTitle: album.title,
+              albumImage: album.image,
+            });
+          }
+        });
+      });
+    });
+
+    const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
+    if (storedTracksStr) {
+      try {
+        const previouslyLoadedTracks = JSON.parse(storedTracksStr);
+        previouslyLoadedTracks.forEach((t: any) => {
+          if (selectedTrackIds.has(t.id) && !selectedTracksData.some(n => n.id === t.id)) {
+            selectedTracksData.push(t);
+          }
+        });
+      } catch (e) {}
+    }
+
+    const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
+    await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+    router.push("/explore");
+  };
+
+  const handleDiscardExit = async () => {
+    setShowSaveWarning(false);
+    if (user) {
+      await deleteActiveDraft();
+    }
+    localStorage.removeItem("worldcup_tracks");
+    sessionStorage.removeItem("worldcup_tracks");
+    router.push("/explore");
+  };
 
   React.useEffect(() => {
     const fetchSpotifyData = async () => {
@@ -133,13 +207,48 @@ export default function TracksPage() {
     if (!user || artistData.length === 0) return;
     const saveTrackDraft = async () => {
       const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-      await saveTrackSelectionDraft(selectedArtists, Array.from(selectedTrackIds));
+      
+      // Rebuild full tracks data
+      const selectedTracksData: any[] = [];
+      artistData.forEach(artist => {
+        artist.albums.forEach(album => {
+          album.tracks.forEach(track => {
+            if (selectedTrackIds.has(track.id)) {
+              selectedTracksData.push({
+                ...track,
+                artistName: artist.name,
+                albumTitle: album.title,
+                albumImage: album.image,
+              });
+            }
+          });
+        });
+      });
+
+      // Merge with any previously loaded tracks from storage that are still selected
+      const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
+      if (storedTracksStr) {
+        try {
+          const previouslyLoadedTracks = JSON.parse(storedTracksStr);
+          previouslyLoadedTracks.forEach((t: any) => {
+            if (selectedTrackIds.has(t.id) && !selectedTracksData.some(n => n.id === t.id)) {
+              selectedTracksData.push(t);
+            }
+          });
+        } catch (e) {}
+      }
+
+      await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+      
+      // Sync local storage
+      sessionStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
+      localStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
     };
     
     // Debounce slightly to prevent spamming when toggling checkboxes
     const timer = setTimeout(() => {
       saveTrackDraft();
-    }, 1000);
+    }, 1500); // 1.5s is safer for tracks
     return () => clearTimeout(timer);
   }, [selectedTrackIds, artistData, user]);
 
@@ -301,24 +410,40 @@ export default function TracksPage() {
       });
     });
 
+    // Merge with any previously loaded tracks from storage that are still selected
+    const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
+    if (storedTracksStr) {
+      try {
+        const previouslyLoadedTracks = JSON.parse(storedTracksStr);
+        previouslyLoadedTracks.forEach((t: any) => {
+          if (selectedTrackIds.has(t.id) && !selectedTracksData.some(n => n.id === t.id)) {
+            selectedTracksData.push(t);
+          }
+        });
+      } catch (e) {}
+    }
+
+    if (selectedTracksData.length < 4) {
+      alert("최소 4개의 트랙이 필요합니다.");
+      return;
+    }
+
     const tracksStr = JSON.stringify(selectedTracksData);
     sessionStorage.setItem("worldcup_tracks", tracksStr);
     localStorage.setItem("worldcup_tracks", tracksStr);
 
-    sessionStorage.removeItem("worldcup_progress");
-    localStorage.removeItem("worldcup_progress");
-
+    // Save as track selection draft before pushing so it is perfectly recorded on Supabase
     if (user) {
       try {
-        await supabase.auth.updateUser({
-          data: {
-            worldcup_progress: null
-          }
-        });
+        const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
+        await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
       } catch (err) {
-        console.error("Error clearing Supabase progress:", err);
+        console.error("Error saving draft before tournament:", err);
       }
     }
+
+    sessionStorage.removeItem("worldcup_progress");
+    localStorage.removeItem("worldcup_progress");
 
     router.push("/worldcup");
   };
@@ -345,7 +470,7 @@ export default function TracksPage() {
       <div className="sticky top-0 z-40 bg-cream/95 backdrop-blur-md pt-6 pb-2 px-6 border-b border-navy/10 flex flex-col gap-4 mx-[-1.5rem] w-[calc(100%+3rem)] shadow-sm">
         <div className="flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
+            <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
             <h1 className="font-serif text-2xl text-navy tracking-tight">트랙 디깅하기</h1>
           </div>
           <ProfileHeader className="" />
@@ -694,6 +819,55 @@ export default function TracksPage() {
               <p className="font-sans text-sm leading-snug">{notification}</p>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+      {/* Save Exit Confirmation Warning Modal */}
+      <AnimatePresence>
+        {showSaveWarning && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[100]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSaveWarning(false)}
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
+              <motion.div
+                className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              >
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">진행 내역을 저장할까요?</h2>
+                <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep">
+                  선택한 수록곡들이 있습니다. 지금까지의 진행 내역을 보관하고 나갈까요? (보관한 내역은 프로필의 내 아카이브에서 이어할 수 있습니다.)
+                </p>
+                
+                <div className="flex flex-col gap-2.5 w-full">
+                  <button 
+                    onClick={handleConfirmSaveExit}
+                    className="w-full py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md text-sm"
+                  >
+                    저장하고 나가기
+                  </button>
+                  <button 
+                    onClick={handleDiscardExit}
+                    className="w-full py-3.5 bg-white border-2 border-red-200 text-red-500 hover:bg-red-50 font-bold rounded-xl transition-all active:scale-[0.98] text-sm"
+                  >
+                    저장하지 않고 나가기
+                  </button>
+                  <button 
+                    onClick={() => setShowSaveWarning(false)}
+                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] text-sm"
+                  >
+                    취소
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
         )}
       </AnimatePresence>
     </main>

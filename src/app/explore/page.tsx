@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { searchSpotifyArtists, getInitialArtists, getRelatedArtists } from "@/utils/spotify";
-import { saveArtistSelectionDraft, loadActiveDraft } from "@/utils/worldcupDb";
+import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -23,11 +24,56 @@ interface Artist {
 export default function ExplorePage() {
   const { user } = useAuth();
   const supabase = createClient();
+  const router = useRouter();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [defaultArtists, setDefaultArtists] = useState<Artist[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
+  const [showSaveWarning, setShowSaveWarning] = useState(false);
+
+  // Reload prevention for unsaved changes
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [selectedIds.size]);
+
+  // Back button interception
+  const handleBackClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (selectedIds.size > 0) {
+      setShowSaveWarning(true);
+    } else {
+      if (window.history.length > 1) {
+        router.back();
+      } else {
+        router.push("/");
+      }
+    }
+  };
+
+  const handleConfirmSaveExit = async () => {
+    setShowSaveWarning(false);
+    const selectedData = artists.filter(a => selectedIds.has(a.id));
+    const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a.id, a])).values());
+    await saveArtistSelectionDraft(uniqueSelectedData);
+    router.push("/");
+  };
+
+  const handleDiscardExit = async () => {
+    setShowSaveWarning(false);
+    if (user) {
+      await deleteActiveDraft();
+    }
+    localStorage.removeItem("selectedArtists");
+    sessionStorage.removeItem("selectedArtists");
+    router.push("/");
+  };
 
   // Load initial artists and active draft on mount
   useEffect(() => {
@@ -195,7 +241,7 @@ export default function ExplorePage() {
       {/* Sticky Header */}
       <div className="sticky top-0 z-40 bg-[#F5F2ED]/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex flex-col gap-3 shadow-sm">
         <div className="flex items-center justify-between">
-          <BackButton className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto md:top-auto md:left-auto right-auto font-bold" />
+          <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto md:top-auto md:left-auto right-auto font-bold" />
           <ProfileHeader className="!relative !top-auto !right-auto !md:top-auto !md:right-auto" />
         </div>
 
@@ -335,6 +381,56 @@ export default function ExplorePage() {
       </AnimatePresence>
       
       <div className="h-32" /> {/* Bottom padding */}
+
+      {/* Save Exit Confirmation Warning Modal */}
+      <AnimatePresence>
+        {showSaveWarning && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[100]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSaveWarning(false)}
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
+              <motion.div
+                className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              >
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">진행 내역을 저장할까요?</h2>
+                <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep">
+                  선택한 아티스트 목록이 있습니다. 지금까지의 진행 내역을 보관하고 나갈까요? (보관한 내역은 프로필의 내 아카이브에서 이어할 수 있습니다.)
+                </p>
+                
+                <div className="flex flex-col gap-2.5 w-full">
+                  <button 
+                    onClick={handleConfirmSaveExit}
+                    className="w-full py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md text-sm"
+                  >
+                    저장하고 나가기
+                  </button>
+                  <button 
+                    onClick={handleDiscardExit}
+                    className="w-full py-3.5 bg-white border-2 border-red-200 text-red-500 hover:bg-red-50 font-bold rounded-xl transition-all active:scale-[0.98] text-sm"
+                  >
+                    저장하지 않고 나가기
+                  </button>
+                  <button 
+                    onClick={() => setShowSaveWarning(false)}
+                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] text-sm"
+                  >
+                    취소
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

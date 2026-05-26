@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Camera, User, Phone, Archive, ChevronRight, Calendar, Award, ArrowLeft } from "lucide-react";
+import { X, Camera, User, Phone, Archive, ChevronRight, Calendar, Award, ArrowLeft, Disc } from "lucide-react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -22,6 +23,9 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   
   const { signOut, user } = useAuth();
   const archives = user?.user_metadata?.archives || [];
+  const [completedResults, setCompletedResults] = useState<any[]>([]);
+  const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
+  const [isLoadingArchives, setIsLoadingArchives] = useState(false);
 
   const getArchiveTracks = (archive: any) => {
     if (!archive) return [];
@@ -35,6 +39,87 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
     }
     return archive.ranking || [];
   };
+
+  const handleResumeDraft = (draft: any) => {
+    // 1. Set selectedArtists in session and localStorage
+    if (draft.selected_artists && draft.selected_artists.length > 0) {
+      sessionStorage.setItem("selectedArtists", JSON.stringify(draft.selected_artists));
+      localStorage.setItem("selectedArtists", JSON.stringify(draft.selected_artists));
+    }
+    
+    // 2. Set worldcup_tracks (selected_tracks)
+    if (draft.selected_tracks && draft.selected_tracks.length > 0) {
+      sessionStorage.setItem("worldcup_tracks", JSON.stringify(draft.selected_tracks));
+      localStorage.setItem("worldcup_tracks", JSON.stringify(draft.selected_tracks));
+    }
+
+    // 3. Set worldcup_progress (matches, phase, currentRoundName, etc.)
+    if (draft.phase && draft.phase !== 'loading') {
+      const progressObj = {
+        phase: draft.phase,
+        currentRoundName: draft.current_round_name,
+        matches: draft.matches,
+        currentMatchIndex: draft.current_match_index,
+        winners: draft.winners,
+        eliminatedTracks: draft.eliminated_tracks,
+        byeCount: draft.bye_count,
+        selectedByes: draft.selected_byes
+      };
+      sessionStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
+      localStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
+    } else {
+      // Clear progress if they were in tracks/explore selection step
+      sessionStorage.removeItem("worldcup_progress");
+      localStorage.removeItem("worldcup_progress");
+    }
+
+    // 4. Redirect user based on status
+    onClose();
+    if (draft.status === 'artist_selection') {
+      window.location.href = '/explore';
+    } else if (draft.status === 'track_selection') {
+      window.location.href = '/tracks';
+    } else {
+      window.location.href = '/worldcup';
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && activeTab === "archive" && user) {
+      const fetchArchives = async () => {
+        setIsLoadingArchives(true);
+        const supabase = createClient();
+        
+        try {
+          // 1. Fetch completed results
+          const { data: resultsData, error: resultsError } = await supabase
+            .from('tournament_results')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+            
+          // 2. Fetch active drafts
+          const { data: draftsData, error: draftsError } = await supabase
+            .from('tournament_drafts')
+            .select('*')
+            .eq('user_id', user.id);
+            
+          if (!resultsError && resultsData) {
+            setCompletedResults(resultsData);
+          }
+          if (!draftsError && draftsData) {
+            setActiveDrafts(draftsData);
+          }
+        } catch (err) {
+          console.error("Error fetching database archives:", err);
+        } finally {
+          setIsLoadingArchives(false);
+        }
+      };
+      
+      fetchArchives();
+    }
+  }, [isOpen, activeTab, user]);
 
   const handleLogout = async () => {
     try {
@@ -144,7 +229,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   }`}
                 >
                   <Archive size={15} />
-                  내 아카이브 ({archives.length})
+                  내 아카이브 ({completedResults.length + activeDrafts.length})
                 </button>
               </div>
             )}
@@ -222,28 +307,71 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
             {/* TAB 2: Archives List */}
             {activeTab === "archive" && !selectedArchive && (
               <div className="w-full flex flex-col items-center">
-                {archives.length === 0 ? (
+                {isLoadingArchives ? (
+                  <div className="py-12 text-center flex flex-col items-center gap-2">
+                    <Disc className="animate-spin text-point/80" size={24} />
+                    <p className="font-sans text-xs text-navy/60 font-medium">아카이브를 불러오는 중...</p>
+                  </div>
+                ) : completedResults.length === 0 && activeDrafts.length === 0 ? (
                   <div className="py-12 px-4 text-center">
                     <Archive size={40} className="text-navy/20 mx-auto mb-3" />
-                    <p className="font-sans text-sm text-navy/50 font-medium">아직 저장된 취향표가 없습니다.</p>
-                    <p className="font-sans text-xs text-navy/40 mt-1">월드컵을 완료하고 아카이브에 저장해보세요!</p>
+                    <p className="font-sans text-sm text-navy/50 font-medium">아직 저장된 취향표나 초안이 없습니다.</p>
+                    <p className="font-sans text-xs text-navy/40 mt-1">월드컵을 완료하거나 중간에 이탈하여 저장해보세요!</p>
                   </div>
                 ) : (
                   <div className="w-full max-h-[300px] overflow-y-auto flex flex-col gap-2.5 pr-1">
-                    {archives.map((archive: any) => {
-                      const tracks = getArchiveTracks(archive);
+                    {/* Active Drafts */}
+                    {activeDrafts.map((draft: any) => {
+                      let stepText = "아티스트 선택 단계";
+                      if (draft.status === "track_selection") stepText = "곡 선택 단계";
+                      else if (draft.status === "pre_tournament" || draft.status === "playing") stepText = "LP 월드컵 진행 중";
+                      
                       return (
                         <button
-                          key={archive.id}
+                          key={draft.id}
                           type="button"
-                          onClick={() => setSelectedArchive(archive)}
+                          onClick={() => handleResumeDraft(draft)}
+                          className="w-full p-4 bg-point/5 border-2 border-point/30 rounded-2xl hover:border-point hover:bg-point/10 text-left transition-all active:scale-[0.98] flex items-center justify-between group shadow-sm"
+                        >
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar size={13} className="text-point/70" />
+                              <span className="font-sans font-bold text-[10px] text-point">
+                                {new Date(draft.updated_at).toLocaleDateString('ko-KR', {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit'
+                                })} [이어하기]
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="px-2 py-0.5 rounded-full bg-point text-cream font-sans font-bold text-[9px] shrink-0">
+                                진행 중
+                              </span>
+                              <span className="font-sans font-bold text-sm text-navy truncate">
+                                {draft.title} ({stepText})
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight size={18} className="text-point/50 group-hover:text-point transition-colors shrink-0 ml-2" />
+                        </button>
+                      );
+                    })}
+
+                    {/* Completed Results */}
+                    {completedResults.map((result: any) => {
+                      return (
+                        <button
+                          key={result.id}
+                          type="button"
+                          onClick={() => setSelectedArchive(result)}
                           className="w-full p-4 bg-white/50 border-2 border-navy/15 rounded-2xl hover:border-point hover:bg-white text-left transition-all active:scale-[0.98] flex items-center justify-between group shadow-sm"
                         >
                           <div className="flex flex-col gap-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <Calendar size={13} className="text-navy/50" />
                               <span className="font-sans font-bold text-xs text-navy">
-                                {new Date(archive.saved_at).toLocaleDateString('ko-KR', {
+                                {new Date(result.created_at).toLocaleDateString('ko-KR', {
                                   year: 'numeric',
                                   month: '2-digit',
                                   day: '2-digit'
@@ -251,9 +379,11 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <Award size={13} className="text-point shrink-0" />
+                              <span className="px-2 py-0.5 rounded-full bg-navy text-cream font-sans font-bold text-[9px] shrink-0">
+                                완료됨
+                              </span>
                               <span className="font-sans font-bold text-sm text-navy truncate">
-                                1위: {tracks[0]?.title || "곡 정보 없음"}
+                                1위: {result.winner_track_title} - {result.winner_track_artist}
                               </span>
                             </div>
                           </div>
