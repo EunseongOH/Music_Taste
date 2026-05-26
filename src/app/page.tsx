@@ -265,8 +265,20 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="w-full flex justify-center mt-auto pt-16 pb-8 z-10">
+      <div className="w-full flex flex-col items-center justify-center mt-auto pt-16 pb-8 z-10 gap-4">
          <LPPlayer />
+         
+         {user?.user_metadata?.is_admin === true && (
+           <motion.button
+             initial={{ opacity: 0, y: 10 }}
+             animate={{ opacity: 1, y: 0 }}
+             onClick={() => router.push("/admin")}
+             className="px-5 py-2 bg-navy/5 text-navy hover:text-point hover:bg-navy/10 rounded-full border border-navy/10 hover:border-point/20 transition-all font-sans font-bold text-xs tracking-wider cursor-pointer flex items-center gap-1.5 shadow-sm"
+           >
+             <span className="h-1.5 w-1.5 rounded-full bg-point animate-pulse" />
+             어드민 페이지로 이동
+           </motion.button>
+         )}
       </div>
 
       <LoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

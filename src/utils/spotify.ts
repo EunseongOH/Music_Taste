@@ -123,6 +123,14 @@ async function spotifyFetch(
   if (response.status === 429 && retries > 0) {
     const retryAfterHeader = response.headers.get('Retry-After');
     const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 2;
+    
+    // Add safety cap: if Spotify asks us to wait for more than 5 seconds, 
+    // do not block the server thread. Return the 429 response so the caller handles it gracefully.
+    if (retryAfterSeconds > 5) {
+      console.warn(`[Spotify API] 429 Rate limited. Spotify requested ${retryAfterSeconds}s delay which exceeds safety cap. Returning error response.`);
+      return response;
+    }
+    
     const retryAfterMs = retryAfterSeconds * 1000;
     
     console.warn(`[Spotify API] 429 Too Many Requests. Retrying in ${retryAfterMs}ms... (Retries left: ${retries})`);
@@ -231,8 +239,9 @@ export const getArtistAlbums = async (artistId: string) => {
 
   let allAlbums: any[] = [];
   let offset = 0;
-  const limit = 10; // Separated: limit 10 for albums (set to 10 due to API environment constraints)
+  const limit = 50; // Use max limit of 50 to minimize HTTP calls
   let total = 0;
+  let pageCount = 0;
 
   do {
     const response = await spotifyFetch(
@@ -242,14 +251,15 @@ export const getArtistAlbums = async (artistId: string) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-      throw new Error('Failed to fetch artist albums');
+      break; // Safe fallback: return whatever we managed to fetch
     }
 
     const data = await response.json();
     allAlbums = allAlbums.concat(data.items || []);
     total = data.total || 0;
     offset += limit;
-  } while (offset < total);
+    pageCount++;
+  } while (offset < total && pageCount < 2); // Cap at 2 requests (100 albums) to prevent rate limit storms
 
   const result = {
     items: allAlbums,
@@ -277,8 +287,9 @@ export const getAlbumTracks = async (albumId: string) => {
 
   let allTracks: any[] = [];
   let offset = 0;
-  const limit = 10; // Separated: limit 10 for tracks as requested (request repeatedly in chunks of 10)
+  const limit = 50; // Use max limit of 50 to minimize HTTP calls
   let total = 0;
+  let pageCount = 0;
 
   do {
     const response = await spotifyFetch(
@@ -288,14 +299,15 @@ export const getAlbumTracks = async (albumId: string) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Spotify API Error in getAlbumTracks (Status: ${response.status}):`, errorText);
-      throw new Error('Failed to fetch album tracks');
+      break; // Safe fallback: return whatever we managed to fetch
     }
 
     const data = await response.json();
     allTracks = allTracks.concat(data.items || []);
     total = data.total || 0;
     offset += limit;
-  } while (offset < total);
+    pageCount++;
+  } while (offset < total && pageCount < 2); // Cap at 2 requests (100 tracks) to prevent rate limit storms
 
   tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });
   return allTracks; // Array of track objects
