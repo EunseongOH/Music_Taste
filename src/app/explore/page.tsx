@@ -579,6 +579,10 @@ export default function ExplorePage() {
                       
                       if (user) {
                         try {
+                          // Await database draft update to ensure it is written before redirecting!
+                          await saveArtistSelectionDraft(selectedArtists);
+                          
+                          // Sync user metadata as a secondary backup
                           await supabase.auth.updateUser({
                             data: {
                               selected_artists: selectedArtists
