@@ -237,29 +237,50 @@ export const getArtistAlbums = async (artistId: string) => {
     return cached.data;
   }
 
-  let allAlbums: any[] = [];
-  let offset = 0;
-  const limit = 50; // Use max limit of 50 to minimize HTTP calls
-  let total = 0;
-  let pageCount = 0;
+  // 1. Fetch the first page (limit = 10) to obtain the total count
+  const firstResponse = await spotifyFetch(
+    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=0`
+  );
 
-  do {
-    const response = await spotifyFetch(
-      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${offset}`
-    );
+  if (!firstResponse.ok) {
+    const errorText = await firstResponse.text();
+    console.error(`Spotify API Error in getArtistAlbums (Status: ${firstResponse.status}):`, errorText);
+    throw new Error('Failed to fetch artist albums');
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-      break; // Safe fallback: return whatever we managed to fetch
+  const firstData = await firstResponse.json();
+  let allAlbums = firstData.items || [];
+  const total = firstData.total || 0;
+
+  // 2. If there are more than 10 albums, request the remaining chunks of 10 in parallel
+  if (total > 10) {
+    const fetchPromises = [];
+    const maxAlbumsLimit = 80; // Safety cap: load up to 80 albums (8 pages) to prevent excessive rate limiting
+    
+    for (let offset = 10; offset < total && offset < maxAlbumsLimit; offset += 10) {
+      fetchPromises.push(
+        (async () => {
+          try {
+            const res = await spotifyFetch(
+              `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=${offset}`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              return data.items || [];
+            }
+          } catch (err) {
+            console.error(`[Spotify API] Error fetching albums at offset ${offset}:`, err);
+          }
+          return [];
+        })()
+      );
     }
 
-    const data = await response.json();
-    allAlbums = allAlbums.concat(data.items || []);
-    total = data.total || 0;
-    offset += limit;
-    pageCount++;
-  } while (offset < total && pageCount < 2); // Cap at 2 requests (100 albums) to prevent rate limit storms
+    const additionalResults = await Promise.all(fetchPromises);
+    additionalResults.forEach((items) => {
+      allAlbums = allAlbums.concat(items);
+    });
+  }
 
   const result = {
     items: allAlbums,
@@ -285,29 +306,50 @@ export const getAlbumTracks = async (albumId: string) => {
     return cached.data;
   }
 
-  let allTracks: any[] = [];
-  let offset = 0;
-  const limit = 50; // Use max limit of 50 to minimize HTTP calls
-  let total = 0;
-  let pageCount = 0;
+  // 1. Fetch the first page (limit = 10) to obtain the total count
+  const firstResponse = await spotifyFetch(
+    `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=0`
+  );
 
-  do {
-    const response = await spotifyFetch(
-      `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${limit}&offset=${offset}`
-    );
+  if (!firstResponse.ok) {
+    const errorText = await firstResponse.text();
+    console.error(`Spotify API Error in getAlbumTracks (Status: ${firstResponse.status}):`, errorText);
+    throw new Error('Failed to fetch album tracks');
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Spotify API Error in getAlbumTracks (Status: ${response.status}):`, errorText);
-      break; // Safe fallback: return whatever we managed to fetch
+  const firstData = await firstResponse.json();
+  let allTracks = firstData.items || [];
+  const total = firstData.total || 0;
+
+  // 2. If there are more than 10 tracks, request the remaining chunks of 10 in parallel
+  if (total > 10) {
+    const fetchPromises = [];
+    const maxTracksLimit = 50; // Safety cap: load up to 50 tracks (5 pages) to prevent excessive rate limiting
+    
+    for (let offset = 10; offset < total && offset < maxTracksLimit; offset += 10) {
+      fetchPromises.push(
+        (async () => {
+          try {
+            const res = await spotifyFetch(
+              `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=${offset}`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              return data.items || [];
+            }
+          } catch (err) {
+            console.error(`[Spotify API] Error fetching tracks at offset ${offset}:`, err);
+          }
+          return [];
+        })()
+      );
     }
 
-    const data = await response.json();
-    allTracks = allTracks.concat(data.items || []);
-    total = data.total || 0;
-    offset += limit;
-    pageCount++;
-  } while (offset < total && pageCount < 2); // Cap at 2 requests (100 tracks) to prevent rate limit storms
+    const additionalResults = await Promise.all(fetchPromises);
+    additionalResults.forEach((items) => {
+      allTracks = allTracks.concat(items);
+    });
+  }
 
   tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });
   return allTracks; // Array of track objects
