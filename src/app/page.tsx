@@ -224,7 +224,7 @@ export default function Home() {
                 
                 <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">새로 시작하시겠습니까?</h2>
                 <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  이전의 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?
+                  이전의 완료되지 않은 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?
                 </p>
                 
                 <div className="flex gap-3 w-full">
