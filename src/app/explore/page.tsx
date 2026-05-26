@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Loader2, Disc } from "lucide-react";
+import { Search, Loader2, Disc, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -88,29 +88,56 @@ export default function ExplorePage() {
         }));
         setDefaultArtists(mappedArtists);
         
+        let restoredArtists: any[] = [];
+        let restoredIds: string[] = [];
+
+        // 1. First, check if there is an active draft in Supabase (if logged in)
         if (user) {
-          const draft = await loadActiveDraft();
-          if (draft && draft.selected_artists && draft.selected_artists.length > 0) {
-            // Restore from active draft
-            const draftIds = draft.selected_artists.map((a: any) => a.id);
-            setSelectedIds(new Set(draftIds));
-            
-            // Merge draft artists into mappedArtists to ensure selected ones are shown on screen
-            const mergedArtists = [...mappedArtists];
-            draft.selected_artists.forEach((draftArtist: any) => {
-              if (!mergedArtists.some(a => a.id === draftArtist.id)) {
-                mergedArtists.push({
-                  id: draftArtist.id,
-                  name: draftArtist.name,
-                  image: draftArtist.image,
-                  type: 'main'
-                });
-              }
-            });
-            setArtists(mergedArtists);
-          } else {
-            setArtists(mappedArtists);
+          try {
+            const draft = await loadActiveDraft();
+            if (draft && draft.selected_artists && draft.selected_artists.length > 0) {
+              restoredArtists = draft.selected_artists;
+              restoredIds = draft.selected_artists.map((a: any) => a.id);
+            }
+          } catch (err) {
+            console.error("Error loading draft inside explore mount:", err);
           }
+        }
+
+        // 2. If nothing from draft, fallback to sessionStorage or localStorage
+        if (restoredIds.length === 0) {
+          const localStored = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
+          if (localStored) {
+            try {
+              const parsed = JSON.parse(localStored);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                restoredArtists = parsed;
+                restoredIds = parsed.map((a: any) => a.id);
+              }
+            } catch (e) {}
+          }
+        }
+
+        // 3. Apply restored state and merge with viewport list
+        if (restoredIds.length > 0) {
+          setSelectedIds(new Set(restoredIds));
+          
+          // Hydrate local storages to keep them fully synced
+          sessionStorage.setItem('selectedArtists', JSON.stringify(restoredArtists));
+          localStorage.setItem('selectedArtists', JSON.stringify(restoredArtists));
+
+          const mergedArtists = [...mappedArtists];
+          restoredArtists.forEach((draftArtist: any) => {
+            if (!mergedArtists.some(a => a.id === draftArtist.id)) {
+              mergedArtists.push({
+                id: draftArtist.id,
+                name: draftArtist.name,
+                image: draftArtist.image || draftArtist.images?.[0]?.url || `https://picsum.photos/seed/${draftArtist.id}/300/300`,
+                type: 'main'
+              });
+            }
+          });
+          setArtists(mergedArtists);
         } else {
           setArtists(mappedArtists);
         }
@@ -340,6 +367,80 @@ export default function ExplorePage() {
         </AnimatePresence>
       </motion.div>
       
+      {/* Floating Selected Artists Bar */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 50, opacity: 0, x: "-50%" }}
+            animate={{ y: 0, opacity: 1, x: "-50%" }}
+            exit={{ y: 50, opacity: 0, x: "-50%" }}
+            transition={{ type: "spring", stiffness: 350, damping: 28 }}
+            className="fixed bottom-[92px] left-1/2 z-40 w-[92%] max-w-[380px] bg-cream/95 backdrop-blur-md border-[2.5px] border-navy rounded-[1.8rem] px-4 py-3 shadow-[0_12px_35px_rgba(26,42,108,0.18)] flex flex-col gap-1.5 pointer-events-auto"
+          >
+            <div className="flex items-center justify-between px-1">
+              <span className="font-sans text-[11px] font-bold text-navy/70 tracking-tight">선택한 아티스트</span>
+              <span className="bg-point text-white text-[9px] px-2 py-0.5 rounded-full font-bold">{selectedIds.size}명</span>
+            </div>
+            
+            <div className="flex overflow-x-auto gap-3 scrollbar-none py-1.5 w-full">
+              {Array.from(selectedIds).map(id => {
+                const artist = artists.find(a => a.id === id);
+                if (!artist) return null;
+                
+                return (
+                  <motion.div
+                    key={artist.id}
+                    layout
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.7, opacity: 0 }}
+                    className="flex-shrink-0 flex flex-col items-center relative group"
+                  >
+                    {/* Avatar with delete X badge */}
+                    <div className="relative w-11 h-11 rounded-full overflow-hidden border border-navy/20">
+                      <Image 
+                        src={artist.image} 
+                        alt={artist.name} 
+                        fill 
+                        sizes="44px"
+                        className="object-cover"
+                      />
+                      
+                      {/* Delete X Overlay Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleArtistClick(artist); // Toggles / Deselects naturally
+                        }}
+                        className="absolute inset-0 bg-red-500/80 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                      >
+                        <X size={14} className="text-white font-bold" strokeWidth={3} />
+                      </button>
+                    </div>
+                    
+                    {/* Compact Name */}
+                    <span className="font-sans text-[9px] text-charcoal font-medium text-center line-clamp-1 w-12 mt-1">
+                      {artist.name}
+                    </span>
+                    
+                    {/* Mobile always visible micro X delete badge */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleArtistClick(artist);
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border border-cream flex items-center justify-center shadow-sm cursor-pointer md:hidden"
+                    >
+                      <X size={8} className="text-white font-bold" strokeWidth={3} />
+                    </button>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Floating Action Button */}
       <AnimatePresence>
         {selectedIds.size >= 3 && (
