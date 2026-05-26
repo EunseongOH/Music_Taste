@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Loader2, Disc, X } from "lucide-react";
+import { Search, Loader2, Disc, X, Check } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -207,8 +207,21 @@ export default function ExplorePage() {
       return;
     }
 
+    const isSearchedArtist = searchQuery.trim().length > 0 && artists.some(a => a.id === artist.id);
+
+    if (isSearchedArtist) {
+      // Toggle selection only, do NOT load similar related artists for searched selections
+      const newSelected = new Set(selectedIds);
+      if (newSelected.has(artist.id)) {
+        newSelected.delete(artist.id);
+      } else {
+        newSelected.add(artist.id);
+      }
+      setSelectedIds(newSelected);
+      return;
+    }
+
     const isInDefault = defaultArtists.some(a => a.id === artist.id);
-    const isInSearch = artists.some(a => a.id === artist.id);
 
     if (selectedIds.has(artist.id)) {
       // Collapse / Deselect for main artists
@@ -219,9 +232,6 @@ export default function ExplorePage() {
       // Remove the generated similar items for this artist
       if (isInDefault) {
         setDefaultArtists(prev => prev.filter(a => a.parentId !== artist.id));
-      }
-      if (isInSearch) {
-        setArtists(prev => prev.filter(a => a.parentId !== artist.id));
       }
     } else {
       // Expand / Select for main artists
@@ -258,9 +268,6 @@ export default function ExplorePage() {
         if (isInDefault) {
           setDefaultArtists(prev => getExpandedList(prev));
         }
-        if (isInSearch) {
-          setArtists(prev => getExpandedList(prev));
-        }
       } catch (error) {
         console.error("Failed to fetch related artists", error);
       }
@@ -278,6 +285,60 @@ export default function ExplorePage() {
       </main>
     );
   }
+
+  const renderSearchArtistRow = (artist: Artist) => {
+    const isSelected = selectedIds.has(artist.id);
+    
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        key={artist.id}
+        onClick={() => handleArtistClick(artist)}
+        className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer select-none transition-all duration-300 ${
+          isSelected 
+            ? "bg-point/10 border-2 border-point shadow-[0_4px_12px_rgba(230,126,34,0.15)]" 
+            : "bg-white/50 hover:bg-white border-2 border-navy/5 hover:border-navy/10"
+        }`}
+      >
+        <div className="flex items-center gap-4">
+          <div className={`relative w-14 h-14 rounded-full overflow-hidden border-2 ${isSelected ? "border-point" : "border-navy/10"}`}>
+            <Image 
+              src={artist.image} 
+              alt={artist.name} 
+              fill 
+              sizes="56px"
+              className="object-cover"
+            />
+          </div>
+          <div className="flex flex-col">
+            <span className={`font-sans font-bold text-base ${isSelected ? "text-navy" : "text-charcoal"}`}>
+              {artist.name}
+            </span>
+            <span className="font-sans text-[11px] text-charcoal/50 font-medium">
+              아티스트
+            </span>
+          </div>
+        </div>
+
+        <div className="pr-2">
+          {isSelected ? (
+            <motion.div 
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="w-6 h-6 bg-point rounded-full border-2 border-cream flex items-center justify-center shadow-sm"
+            >
+              <Check size={14} className="text-cream" strokeWidth={3} />
+            </motion.div>
+          ) : (
+            <div className="w-6 h-6 rounded-full border-2 border-navy/15 hover:border-point transition-colors" />
+          )}
+        </div>
+      </motion.div>
+    );
+  };
 
   const renderArtistCard = (artist: Artist, idx?: number) => {
     const isSimilar = artist.type === "similar";
@@ -391,9 +452,9 @@ export default function ExplorePage() {
                   검색 결과가 없습니다. 다른 검색어를 입력해 보세요.
                 </div>
               ) : (
-                <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
+                <motion.div layout className="flex flex-col gap-2.5">
                   <AnimatePresence>
-                    {artists.map(renderArtistCard)}
+                    {artists.map(renderSearchArtistRow)}
                   </AnimatePresence>
                 </motion.div>
               )}
