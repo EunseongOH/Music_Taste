@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Camera, User, Phone, Archive, ChevronRight, Calendar, Award, ArrowLeft, Disc } from "lucide-react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -15,6 +16,7 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileModalProps) {
+  const router = useRouter();
   const [profileImg, setProfileImg] = useState("https://picsum.photos/seed/user1/100/100");
   const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
@@ -76,11 +78,11 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
     // 4. Redirect user based on status
     onClose();
     if (draft.status === 'artist_selection') {
-      window.location.href = '/explore';
+      router.push('/explore');
     } else if (draft.status === 'track_selection') {
-      window.location.href = '/tracks';
+      router.push('/tracks');
     } else {
-      window.location.href = '/worldcup';
+      router.push('/worldcup');
     }
   };
 
@@ -136,7 +138,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       localStorage.removeItem("worldcup_progress");
       
       onClose();
-      window.location.href = "/";
+      router.push("/");
     } catch (err) {
       console.error("Error signing out:", err);
     }
@@ -448,7 +450,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                       onClick={() => {
                         sessionStorage.setItem("worldcup_ranking", JSON.stringify(tracks));
                         onClose();
-                        window.location.href = "/taste";
+                        router.push("/taste");
                       }}
                       className="w-full py-3 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-1.5"
                     >

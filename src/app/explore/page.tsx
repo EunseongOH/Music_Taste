@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Disc } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -369,7 +369,7 @@ export default function ExplorePage() {
                   }
                 }
                 
-                window.location.href = '/tracks';
+                router.push('/tracks');
               }}
               className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
             >
@@ -387,7 +387,7 @@ export default function ExplorePage() {
         {showSaveWarning && (
           <>
             <motion.div
-              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[100]"
+              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -395,36 +395,53 @@ export default function ExplorePage() {
             />
             <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
               <motion.div
-                className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
+                initial={{ opacity: 0, scale: 0.9, y: 30 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                transition={{ type: "spring", stiffness: 380, damping: 26 }}
               >
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">진행 내역을 저장할까요?</h2>
-                <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep">
-                  선택한 아티스트 목록이 있습니다. 지금까지의 진행 내역을 보관하고 나갈까요? (보관한 내역은 프로필의 내 아카이브에서 이어할 수 있습니다.)
+                {/* Decorative LP Record Graphic */}
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
+                  className="w-16 h-16 bg-navy rounded-full flex items-center justify-center mb-5 shadow-lg border-2 border-point relative shrink-0"
+                >
+                  <Disc className="text-cream" size={32} />
+                  <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
+                </motion.div>
+
+                <h2 className="font-serif text-2xl font-bold text-navy mb-3 tracking-tight">진행 내역을 저장할까요?</h2>
+                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
+                  선택한 아티스트 목록이 있습니다. 지금까지의 진행 내역을 보관하고 나갈까요?<br/>
+                  <span className="text-point font-medium">(보관한 내역은 프로필의 내 아카이브에서 언제든 이어할 수 있습니다.)</span>
                 </p>
                 
                 <div className="flex flex-col gap-2.5 w-full">
-                  <button 
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleConfirmSaveExit}
-                    className="w-full py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md text-sm"
+                    className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
                   >
                     저장하고 나가기
-                  </button>
-                  <button 
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleDiscardExit}
-                    className="w-full py-3.5 bg-white border-2 border-red-200 text-red-500 hover:bg-red-50 font-bold rounded-xl transition-all active:scale-[0.98] text-sm"
+                    className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
                   >
                     저장하지 않고 나가기
-                  </button>
-                  <button 
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setShowSaveWarning(false)}
-                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] text-sm"
+                    className="w-full py-3.5 bg-white border-2 border-navy/10 text-charcoal font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
                   >
                     취소
-                  </button>
+                  </motion.button>
                 </div>
               </motion.div>
             </div>
