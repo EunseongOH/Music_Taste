@@ -9,6 +9,7 @@ import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
+import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -297,7 +298,34 @@ export default function TracksPage() {
             tracks: [], // Lazy loaded later
             totalTracks: albumRaw.total_tracks || 0
           }));
-          setArtistData(prev => prev.map(a => a.id === artistId ? { ...a, albums: mappedAlbums, albumsLoaded: true, totalReleases: albumsData.total } : a));
+
+          // Fetch unreleased tracks from Supabase and construct a virtual album
+          try {
+            const dbUnreleased = await fetchUnreleasedTracksForArtist(artistId);
+            if (dbUnreleased && dbUnreleased.length > 0) {
+              const unreleasedTracks: Track[] = dbUnreleased.map((t: any) => ({
+                id: t.id,
+                title: t.title,
+                duration: "Live"
+              }));
+
+              const virtualAlbum = {
+                id: `al_unreleased_${artistId}`,
+                title: "미발매곡",
+                type: "Single" as const,
+                year: new Date().getFullYear().toString(),
+                image: "https://picsum.photos/seed/default_record/300/300",
+                tracks: unreleasedTracks,
+                totalTracks: unreleasedTracks.length
+              };
+
+              mappedAlbums.push(virtualAlbum);
+            }
+          } catch (err) {
+            console.error("Failed to fetch unreleased tracks from Supabase:", err);
+          }
+
+          setArtistData(prev => prev.map(a => a.id === artistId ? { ...a, albums: mappedAlbums, albumsLoaded: true, totalReleases: albumsData.total + 1 } : a));
         } catch (e) {
           console.error("Failed to load albums for artist", e);
         } finally {
@@ -371,13 +399,35 @@ export default function TracksPage() {
     setSelectedTrackIds(newSelected);
   };
 
-  const handleAddUnreleased = (e: React.FormEvent) => {
+  const handleAddUnreleased = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!unreleasedForm.title.trim() || !modalArtistId) return;
 
     const newTrackId = `t_unreleased_${Date.now()}`;
     const defaultCover = "https://picsum.photos/seed/default_record/300/300";
+    
+    const targetArtist = artistData.find(a => a.id === modalArtistId);
+    const artistName = targetArtist ? targetArtist.name : "Unknown Artist";
 
+    // 1. Persist to DB if user is logged in
+    let persistSuccess = false;
+    if (user) {
+      try {
+        await submitUnreleasedTrack({
+          id: newTrackId,
+          title: unreleasedForm.title,
+          artistId: modalArtistId,
+          artistName: artistName,
+          videoUrl: unreleasedForm.videoUrl || undefined,
+          releaseDate: unreleasedForm.date || undefined
+        });
+        persistSuccess = true;
+      } catch (err) {
+        console.error("Failed to save unreleased track to Supabase:", err);
+      }
+    }
+
+    // 2. Optimistic UI update - Add to local artistData state
     setArtistData(prev => prev.map(artist => {
       if (artist.id === modalArtistId) {
         const newTrack: Track = { id: newTrackId, title: unreleasedForm.title, duration: "Live" };
@@ -405,6 +455,7 @@ export default function TracksPage() {
       return artist;
     }));
 
+    // 3. Add to selection immediately
     const newSelected = new Set(selectedTrackIds);
     newSelected.add(newTrackId);
     setSelectedTrackIds(newSelected);
@@ -412,7 +463,16 @@ export default function TracksPage() {
     setIsModalOpen(false);
     setUnreleasedForm({ title: '', videoUrl: '', date: '' });
 
-    setNotification("미발매곡 등록이 요청되었습니다. 공식 곡 승인 전이라도 월드컵에서 즉시 사용 가능합니다!");
+    // 4. Custom notification based on login state
+    if (user) {
+      if (persistSuccess) {
+        setNotification("미발매곡 등록이 요청되었습니다. 관리자 승인 전이라도 본인의 월드컵에선 즉시 사용 가능합니다!");
+      } else {
+        setNotification("DB 저장에 실패했으나, 임시 추가되어 현재 월드컵에선 즉시 사용 가능합니다!");
+      }
+    } else {
+      setNotification("로그인하지 않은 상태입니다. 임시 추가되어 즉시 사용 가능하지만, 종료 시 저장되지 않습니다.");
+    }
     setTimeout(() => setNotification(null), 5000);
   };
 
