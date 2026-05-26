@@ -8,6 +8,7 @@ import Link from "next/link";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { searchSpotifyArtists, getInitialArtists, getRelatedArtists } from "@/utils/spotify";
+import { saveArtistSelectionDraft, loadActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -28,7 +29,7 @@ export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
 
-  // Load initial artists on mount
+  // Load initial artists and active draft on mount
   useEffect(() => {
     const fetchInitial = async () => {
       try {
@@ -40,7 +41,33 @@ export default function ExplorePage() {
           type: "main",
         }));
         setDefaultArtists(mappedArtists);
-        setArtists(mappedArtists);
+        
+        if (user) {
+          const draft = await loadActiveDraft();
+          if (draft && draft.selected_artists && draft.selected_artists.length > 0) {
+            // Restore from active draft
+            const draftIds = draft.selected_artists.map((a: any) => a.id);
+            setSelectedIds(new Set(draftIds));
+            
+            // Merge draft artists into mappedArtists to ensure selected ones are shown on screen
+            const mergedArtists = [...mappedArtists];
+            draft.selected_artists.forEach((draftArtist: any) => {
+              if (!mergedArtists.some(a => a.id === draftArtist.id)) {
+                mergedArtists.push({
+                  id: draftArtist.id,
+                  name: draftArtist.name,
+                  image: draftArtist.image,
+                  type: 'main'
+                });
+              }
+            });
+            setArtists(mergedArtists);
+          } else {
+            setArtists(mappedArtists);
+          }
+        } else {
+          setArtists(mappedArtists);
+        }
       } catch (error) {
         console.error("Failed to fetch initial artists:", error);
       } finally {
@@ -48,7 +75,23 @@ export default function ExplorePage() {
       }
     };
     fetchInitial();
-  }, []);
+  }, [user]);
+
+  // Save artist selection to Supabase in background
+  useEffect(() => {
+    if (!user) return;
+    const saveDraft = async () => {
+      const selectedData = artists.filter(a => selectedIds.has(a.id));
+      const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a.id, a])).values());
+      // Save draft (updates even if empty, so deselecting all updates correctly)
+      await saveArtistSelectionDraft(uniqueSelectedData);
+    };
+    // Debounce saving slightly so we don't spam requests when user is clicking multiple artists quickly
+    const timer = setTimeout(() => {
+      saveDraft();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [selectedIds, artists, user]);
 
   // Handle Search
   useEffect(() => {

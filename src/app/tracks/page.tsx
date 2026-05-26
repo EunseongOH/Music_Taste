@@ -8,6 +8,7 @@ import Image from "next/image";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
+import { saveTrackSelectionDraft, loadActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -70,6 +71,27 @@ export default function TracksPage() {
   React.useEffect(() => {
     const fetchSpotifyData = async () => {
       let stored = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
+      let loadedSelectedTracks: string[] = [];
+
+      // Load from active draft in Supabase if user is logged in
+      if (user) {
+        try {
+          const draft = await loadActiveDraft();
+          if (draft) {
+            if (draft.selected_artists && draft.selected_artists.length > 0) {
+              stored = JSON.stringify(draft.selected_artists);
+              sessionStorage.setItem('selectedArtists', stored);
+              localStorage.setItem('selectedArtists', stored);
+            }
+            if (draft.selected_tracks && draft.selected_tracks.length > 0) {
+              loadedSelectedTracks = draft.selected_tracks;
+              setSelectedTrackIds(new Set(loadedSelectedTracks));
+            }
+          }
+        } catch (err) {
+          console.error("Error loading active draft from Supabase:", err);
+        }
+      }
 
       // Fallback to user_metadata from Supabase if not in storage but user is logged in
       if (!stored && user?.user_metadata?.selected_artists) {
@@ -105,6 +127,21 @@ export default function TracksPage() {
 
     fetchSpotifyData();
   }, [user]);
+
+  // Save selected tracks to Supabase in the background
+  React.useEffect(() => {
+    if (!user || artistData.length === 0) return;
+    const saveTrackDraft = async () => {
+      const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
+      await saveTrackSelectionDraft(selectedArtists, Array.from(selectedTrackIds));
+    };
+    
+    // Debounce slightly to prevent spamming when toggling checkboxes
+    const timer = setTimeout(() => {
+      saveTrackDraft();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [selectedTrackIds, artistData, user]);
 
   const toggleArtistAccordion = async (artistId: string) => {
     if (expandedArtistId === artistId) {

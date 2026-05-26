@@ -10,6 +10,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
+import { saveTournamentProgress, loadActiveDraft, saveCompletedResult } from "@/utils/worldcupDb";
 import { createClient } from "@/utils/supabase/client";
 
 interface Track {
@@ -57,57 +58,90 @@ export default function WorldCupPage() {
   const [isAnyLpActive, setIsAnyLpActive] = useState(false);
 
   useEffect(() => {
-    // Load from sessionStorage or localStorage
-    const stored = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
-    const savedState = sessionStorage.getItem("worldcup_progress") || localStorage.getItem("worldcup_progress");
+    const loadState = async () => {
+      let stored = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
+      let savedState = sessionStorage.getItem("worldcup_progress") || localStorage.getItem("worldcup_progress");
 
-    if (!stored) {
-      router.replace("/tracks");
-      return;
-    }
-
-    // Sync to both stores just to keep them in harmony
-    sessionStorage.setItem("worldcup_tracks", stored);
-    localStorage.setItem("worldcup_tracks", stored);
-
-    try {
-      const parsedTracks: Track[] = JSON.parse(stored);
-      
-      if (savedState) {
-        // Restore progress
-        const st = JSON.parse(savedState);
-        setTracks(parsedTracks);
-        setPhase(st.phase);
-        setCurrentRoundName(st.currentRoundName);
-        setMatches(st.matches);
-        setCurrentMatchIndex(st.currentMatchIndex);
-        setWinners(st.winners);
-        setEliminatedTracks(st.eliminatedTracks || []);
-        setByeCount(st.byeCount || 0);
-        setSelectedByes(new Set(st.selectedByes || []));
-      } else {
-        // Initialize new
-        setTracks(parsedTracks);
-        if (parsedTracks.length < 4) {
-             alert('최소 4개의 트랙이 필요합니다.');
-             router.replace("/tracks");
-             return;
-        }
-
-        if (parsedTracks.length % 2 !== 0) {
-          setPhase("pre-tournament");
-          setByeCount(1);
-        } else {
-          startRound(parsedTracks);
+      // 1. Try loading from active draft in Supabase if logged in
+      if (user) {
+        try {
+          const draft = await loadActiveDraft();
+          // If the draft contains active tournament play state
+          if (draft && (draft.status === 'playing' || draft.status === 'pre_tournament') && draft.phase) {
+            if (draft.tracks && draft.tracks.length > 0) {
+              stored = JSON.stringify(draft.tracks);
+              sessionStorage.setItem("worldcup_tracks", stored);
+              localStorage.setItem("worldcup_tracks", stored);
+            }
+            
+            const parsedTracks = draft.tracks || [];
+            setTracks(parsedTracks);
+            setPhase(draft.phase);
+            setCurrentRoundName(draft.current_round_name || "");
+            setMatches(draft.matches || []);
+            setCurrentMatchIndex(draft.current_match_index || 0);
+            setWinners(draft.winners || []);
+            setEliminatedTracks(draft.eliminated_tracks || []);
+            setByeCount(draft.bye_count || 0);
+            setSelectedByes(new Set(draft.selected_byes || []));
+            return;
+          }
+        } catch (err) {
+          console.error("Failed to load active tournament draft from Supabase:", err);
         }
       }
-    } catch (e) {
-      console.error(e);
-      router.replace("/tracks");
-    }
-  }, []);
 
-  // Save progress on state change (Local storage only to prevent Cookie header bloating)
+      // 2. Fallback to offline local storage
+      if (!stored) {
+        router.replace("/tracks");
+        return;
+      }
+
+      // Sync to both stores just to keep them in harmony
+      sessionStorage.setItem("worldcup_tracks", stored);
+      localStorage.setItem("worldcup_tracks", stored);
+
+      try {
+        const parsedTracks: Track[] = JSON.parse(stored);
+        
+        if (savedState) {
+          // Restore progress
+          const st = JSON.parse(savedState);
+          setTracks(parsedTracks);
+          setPhase(st.phase);
+          setCurrentRoundName(st.currentRoundName);
+          setMatches(st.matches);
+          setCurrentMatchIndex(st.currentMatchIndex);
+          setWinners(st.winners);
+          setEliminatedTracks(st.eliminated_tracks || []);
+          setByeCount(st.byeCount || 0);
+          setSelectedByes(new Set(st.selectedByes || []));
+        } else {
+          // Initialize new
+          setTracks(parsedTracks);
+          if (parsedTracks.length < 4) {
+               alert('최소 4개의 트랙이 필요합니다.');
+               router.replace("/tracks");
+               return;
+          }
+
+          if (parsedTracks.length % 2 !== 0) {
+            setPhase("pre-tournament");
+            setByeCount(1);
+          } else {
+            startRound(parsedTracks);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        router.replace("/tracks");
+      }
+    };
+
+    loadState();
+  }, [user]);
+
+  // Save progress on state change (Local storage & Supabase)
   useEffect(() => {
     if (phase === "loading") return;
     
@@ -125,7 +159,36 @@ export default function WorldCupPage() {
     const progressData = JSON.stringify(progressObj);
     sessionStorage.setItem("worldcup_progress", progressData);
     localStorage.setItem("worldcup_progress", progressData);
-  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, byeCount, selectedByes]);
+
+    // Autosave to Supabase database in the background
+    if (user) {
+      const saveToDb = async () => {
+        const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
+        const storedTracks = JSON.parse(sessionStorage.getItem("worldcup_tracks") || "[]");
+        await saveTournamentProgress(progressObj, storedArtists, storedTracks, "내 음악 월드컵");
+      };
+      // Debounce saving to DB by 1.5 seconds to avoid excessive requests during fast clicks
+      const timer = setTimeout(() => {
+        saveToDb();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, byeCount, selectedByes, user]);
+
+  // Save completed tournament results to Supabase when finished
+  useEffect(() => {
+    if (phase === "finished" && user && winners.length > 0) {
+      const saveResult = async () => {
+        const title = `${winners[0].artistName} 월드컵 결과`;
+        await saveCompletedResult(winners, eliminatedTracks, title);
+        
+        // Clean up offline local session storage progress as well
+        sessionStorage.removeItem("worldcup_progress");
+        localStorage.removeItem("worldcup_progress");
+      };
+      saveResult();
+    }
+  }, [phase, user, winners, eliminatedTracks]);
 
   const startRound = (participants: Track[], predefinedWinners: Track[] = []) => {
     const isPowerOf2 = (Math.log2(participants.length + predefinedWinners.length) % 1) === 0;
