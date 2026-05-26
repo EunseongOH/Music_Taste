@@ -430,121 +430,129 @@ export default function ExplorePage() {
         )}
       </div>
       
-      {/* Floating Selected Artists Bar */}
+      {/* Bottom Fixed Dock Panel (Full-Width Segmented View) */}
       <AnimatePresence>
         {selectedIds.size > 0 && (
           <motion.div
-            initial={{ y: 50, opacity: 0, x: "-50%" }}
-            animate={{ y: 0, opacity: 1, x: "-50%" }}
-            exit={{ y: 50, opacity: 0, x: "-50%" }}
-            transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            className="fixed bottom-[92px] left-1/2 z-40 w-[92%] max-w-[380px] bg-cream/95 backdrop-blur-md border-[2.5px] border-navy rounded-[1.8rem] px-4 py-3 shadow-[0_12px_35px_rgba(26,42,108,0.18)] flex flex-col gap-1.5 pointer-events-auto"
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 28 }}
+            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-[#F5F2ED]/98 border-t-[2.5px] border-navy/15 pt-4 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md flex flex-col gap-4"
           >
-            <div className="flex items-center justify-between px-1">
-              <span className="font-sans text-[11px] font-bold text-navy/70 tracking-tight">선택한 아티스트</span>
-              <span className="bg-point text-white text-[9px] px-2 py-0.5 rounded-full font-bold">{selectedIds.size}명</span>
-            </div>
-            
-            <div className="flex overflow-x-auto gap-3 scrollbar-none py-1.5 w-full">
-              {Array.from(selectedIds).map(id => {
-                const artist = artists.find(a => a.id === id);
-                if (!artist) return null;
-                
-                return (
-                  <motion.div
-                    key={artist.id}
-                    layout
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.7, opacity: 0 }}
-                    className="flex-shrink-0 flex flex-col items-center relative group"
-                  >
-                    {/* Avatar with delete X badge */}
-                    <div className="relative w-11 h-11 rounded-full overflow-hidden border border-navy/20">
-                      <Image 
-                        src={artist.image} 
-                        alt={artist.name} 
-                        fill 
-                        sizes="44px"
-                        className="object-cover"
-                      />
+            {/* 1. Selection Horizontal Bar */}
+            <div className="flex flex-col gap-1.5 w-full max-w-[380px] mx-auto">
+              <div className="flex items-center justify-between px-1">
+                <span className="font-sans text-[11px] font-bold text-navy/70 tracking-tight">선택한 아티스트</span>
+                <span className="bg-point text-white text-[9px] px-2 py-0.5 rounded-full font-bold">{selectedIds.size}명</span>
+              </div>
+              
+              <div className="flex overflow-x-auto gap-3 scrollbar-none py-1.5 w-full">
+                {Array.from(selectedIds).map(id => {
+                  // Fallback match: search both defaultArtists and artists to avoid missing profiles
+                  const artist = artists.find(a => a.id === id) || defaultArtists.find(a => a.id === id);
+                  if (!artist) return null;
+                  
+                  return (
+                    <motion.div
+                      key={artist.id}
+                      layout
+                      initial={{ scale: 0.7, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.7, opacity: 0 }}
+                      className="flex-shrink-0 flex flex-col items-center relative group"
+                    >
+                      {/* Avatar with delete X overlay */}
+                      <div className="relative w-11 h-11 rounded-full overflow-hidden border border-navy/20">
+                        <Image 
+                          src={artist.image} 
+                          alt={artist.name} 
+                          fill 
+                          sizes="44px"
+                          className="object-cover"
+                        />
+                        
+                        {/* Hover delete X badge */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArtistClick(artist);
+                          }}
+                          className="absolute inset-0 bg-red-500/80 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                        >
+                          <X size={14} className="text-white font-bold" strokeWidth={3} />
+                        </button>
+                      </div>
                       
-                      {/* Delete X Overlay Button */}
+                      {/* Compact Name */}
+                      <span className="font-sans text-[9px] text-charcoal font-medium text-center line-clamp-1 w-12 mt-1">
+                        {artist.name}
+                      </span>
+                      
+                      {/* Mobile always visible micro X delete badge */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleArtistClick(artist); // Toggles / Deselects naturally
+                          handleArtistClick(artist);
                         }}
-                        className="absolute inset-0 bg-red-500/80 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border border-cream flex items-center justify-center shadow-sm cursor-pointer md:hidden"
                       >
-                        <X size={14} className="text-white font-bold" strokeWidth={3} />
+                        <X size={8} className="text-white font-bold" strokeWidth={3} />
                       </button>
-                    </div>
-                    
-                    {/* Compact Name */}
-                    <span className="font-sans text-[9px] text-charcoal font-medium text-center line-clamp-1 w-12 mt-1">
-                      {artist.name}
-                    </span>
-                    
-                    {/* Mobile always visible micro X delete badge */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleArtistClick(artist);
-                      }}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border border-cream flex items-center justify-center shadow-sm cursor-pointer md:hidden"
-                    >
-                      <X size={8} className="text-white font-bold" strokeWidth={3} />
-                    </button>
-                  </motion.div>
-                );
-              })}
+                    </motion.div>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* 2. Transition Button (Renders when selection count >= 3 with a gap) */}
+            <AnimatePresence>
+              {selectedIds.size >= 3 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, height: 0 }}
+                  animate={{ opacity: 1, scale: 1, height: "auto" }}
+                  exit={{ opacity: 0, scale: 0.95, height: 0 }}
+                  className="w-full max-w-[380px] mx-auto"
+                >
+                  <button 
+                    onClick={async () => {
+                      // Lookup mapping utilizing both search and default list to ensure profiles never get lost
+                      const selectedData = Array.from(selectedIds).map(id => 
+                        artists.find(a => a.id === id) || defaultArtists.find(a => a.id === id)
+                      ).filter(Boolean);
+                      
+                      const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a!.id, a])).values());
+                      sessionStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
+                      localStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
+                      
+                      if (user) {
+                        try {
+                          await supabase.auth.updateUser({
+                            data: {
+                              selected_artists: uniqueSelectedData
+                            }
+                          });
+                        } catch (err) {
+                          console.error("Error saving selected artists to Supabase:", err);
+                        }
+                      }
+                      
+                      router.push('/tracks');
+                    }}
+                    className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
+                  >
+                    다음으로 넘어가기
+                    <span className="bg-point text-white text-xs px-2.5 py-0.5 rounded-full font-bold">{selectedIds.size}</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Floating Action Button */}
-      <AnimatePresence>
-        {selectedIds.size >= 3 && (
-          <motion.div 
-            initial={{ y: 100, opacity: 0, x: "-50%" }}
-            animate={{ y: 0, opacity: 1, x: "-50%" }}
-            exit={{ y: 100, opacity: 0, x: "-50%" }}
-            className="fixed bottom-8 left-1/2 z-50 w-[90%] max-w-[380px]"
-          >
-            <button 
-              onClick={async () => {
-                const selectedData = artists.filter(a => selectedIds.has(a.id));
-                // Ensure absolute uniqueness before passing to tracks page
-                const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a.id, a])).values());
-                sessionStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
-                localStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
-                
-                if (user) {
-                  try {
-                    await supabase.auth.updateUser({
-                      data: {
-                        selected_artists: uniqueSelectedData
-                      }
-                    });
-                  } catch (err) {
-                    console.error("Error saving selected artists to Supabase:", err);
-                  }
-                }
-                
-                router.push('/tracks');
-              }}
-              className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-2xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
-            >
-              다음으로 넘어가기
-              <span className="bg-point text-white text-xs px-2 py-1 rounded-full">{selectedIds.size}</span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
-      <div className="h-32" /> {/* Bottom padding */}
+      {/* Spacing bottom padding adjusted for taller Bottom Dock */}
+      <div className={selectedIds.size > 0 ? "h-64" : "h-32"} />
 
       {/* Save Exit Confirmation Warning Modal */}
       <AnimatePresence>
