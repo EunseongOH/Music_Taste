@@ -279,7 +279,7 @@ export default function ExplorePage() {
     );
   }
 
-  const renderArtistCard = (artist: Artist) => {
+  const renderArtistCard = (artist: Artist, idx?: number) => {
     const isSimilar = artist.type === "similar";
     const isSelected = selectedIds.has(artist.id);
     
@@ -305,6 +305,7 @@ export default function ExplorePage() {
                 alt={artist.name} 
                 fill 
                 sizes="112px"
+                priority={idx !== undefined && idx < 3}
                 className={`object-cover ${isSimilar ? 'opacity-80 mix-blend-multiply filter sepia-[0.4]' : ''} transition-all duration-300 ${isSelected && isSimilar ? 'filter-none mix-blend-normal opacity-100' : ''}`} 
               />
             </div>

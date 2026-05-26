@@ -532,7 +532,7 @@ export default function TracksPage() {
 
       {/* Artists Content */}
       <div className="py-6 pb-32 flex flex-col gap-4 px-3">
-        {artistData.map(artist => {
+        {artistData.map((artist, idx) => {
           const isArtistExpanded = expandedArtistId === artist.id;
           return (
             <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40 flex flex-col border border-navy/10 rounded-[2rem] bg-white/60 p-5 shadow-sm transition-all hover:border-navy/20">
@@ -543,7 +543,7 @@ export default function TracksPage() {
                >
                   <div className="flex items-center gap-4">
                     <div className="relative w-14 h-14 rounded-full overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
-                       <Image src={artist.image} alt={artist.name} fill sizes="56px" className="object-cover" />
+                       <Image src={artist.image} alt={artist.name} fill sizes="56px" priority={idx === 0} className="object-cover" />
                     </div>
                     <div className="text-left">
                        <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
