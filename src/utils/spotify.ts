@@ -194,18 +194,31 @@ export const getArtistAlbums = async (artistId: string) => {
     return cached.data;
   }
 
-  const response = await spotifyFetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10`);
+  let allAlbums: any[] = [];
+  let offset = 0;
+  const limit = 10; // Separated: limit 10 for albums (set to 10 due to API environment constraints)
+  let total = 0;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-    throw new Error('Failed to fetch artist albums');
-  }
+  do {
+    const response = await spotifyFetch(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${offset}`
+    );
 
-  const data = await response.json();
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
+      throw new Error('Failed to fetch artist albums');
+    }
+
+    const data = await response.json();
+    allAlbums = allAlbums.concat(data.items || []);
+    total = data.total || 0;
+    offset += limit;
+  } while (offset < total);
+
   const result = {
-    items: data.items,
-    total: data.total
+    items: allAlbums,
+    total: total
   };
 
   albumsCache.set(artistId, { data: result, timestamp: Date.now() });
@@ -224,19 +237,30 @@ export const getAlbumTracks = async (albumId: string) => {
     return cached.data;
   }
 
-  const response = await spotifyFetch(`https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10`);
+  let allTracks: any[] = [];
+  let offset = 0;
+  const limit = 10; // Separated: limit 10 for tracks as requested (request repeatedly in chunks of 10)
+  let total = 0;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Spotify API Error in getAlbumTracks (Status: ${response.status}):`, errorText);
-    throw new Error('Failed to fetch album tracks');
-  }
+  do {
+    const response = await spotifyFetch(
+      `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${limit}&offset=${offset}`
+    );
 
-  const data = await response.json();
-  const result = data.items;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Spotify API Error in getAlbumTracks (Status: ${response.status}):`, errorText);
+      throw new Error('Failed to fetch album tracks');
+    }
 
-  tracksCache.set(albumId, { data: result, timestamp: Date.now() });
-  return result; // Array of track objects
+    const data = await response.json();
+    allTracks = allTracks.concat(data.items || []);
+    total = data.total || 0;
+    offset += limit;
+  } while (offset < total);
+
+  tracksCache.set(albumId, { data: allTracks, timestamp: Date.now() });
+  return allTracks; // Array of track objects
 };
 
 // Fetch related artists (Fallback to random trending/genre artists due to Spotify API 403 restrictions on Client Credentials)
