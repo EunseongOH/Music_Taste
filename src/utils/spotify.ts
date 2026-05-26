@@ -1,5 +1,15 @@
 "use server";
 // src/utils/spotify.ts
+import { cookies } from "next/headers";
+
+const getLocaleCookie = async (): Promise<string> => {
+  try {
+    const cookieStore = await cookies();
+    return cookieStore.get("locale")?.value || "ko";
+  } catch (e) {
+    return "ko";
+  }
+};
 
 let cachedToken: string | null = null;
 let tokenExpirationTime: number = 0;
@@ -78,13 +88,32 @@ async function spotifyFetch(
 ): Promise<Response> {
   const token = await getSpotifyAccessToken();
 
+  const lang = await getLocaleCookie();
+
+  // Adjust URL to append localized market parameter (KR or US)
+  let adjustedUrl = url;
+  const marketVal = lang === "ko" ? "KR" : "US";
+  if (url.includes("?")) {
+    if (!url.includes("market=")) {
+      adjustedUrl = `${url}&market=${marketVal}`;
+    }
+  } else {
+    adjustedUrl = `${url}?market=${marketVal}`;
+  }
+
+  // Define language header priorities
+  const acceptLangHeader = lang === "ko" 
+    ? "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7" 
+    : "en-US,en;q=0.9";
+
   const headers = {
     ...options.headers,
     Authorization: `Bearer ${token}`,
+    "Accept-Language": acceptLangHeader,
   };
 
   // We explicitly set cache: 'no-store' to avoid Next.js's buggy file cache
-  const response = await fetch(url, { 
+  const response = await fetch(adjustedUrl, { 
     ...options, 
     headers,
     cache: 'no-store' 
@@ -117,7 +146,10 @@ export const searchSpotifyArtists = async (query: string) => {
   if (!query) return [];
 
   const trimmedQuery = query.trim().toLowerCase();
-  const cached = searchCache.get(trimmedQuery);
+  const lang = await getLocaleCookie();
+  const cacheKey = `${trimmedQuery}_${lang}`;
+  
+  const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 300 * 1000) { // 5 minutes cache for search
     return cached.data;
   }
@@ -132,7 +164,7 @@ export const searchSpotifyArtists = async (query: string) => {
 
   const data = await response.json();
   const items = data.artists.items;
-  searchCache.set(trimmedQuery, { data: items, timestamp: Date.now() });
+  searchCache.set(cacheKey, { data: items, timestamp: Date.now() });
   return items; // Array of artist objects
 };
 
@@ -189,7 +221,10 @@ export const getArtistAlbums = async (artistId: string) => {
     return { items: [], total: 0 };
   }
 
-  const cached = albumsCache.get(artistId);
+  const lang = await getLocaleCookie();
+  const cacheKey = `${artistId}_${lang}`;
+
+  const cached = albumsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
@@ -221,7 +256,7 @@ export const getArtistAlbums = async (artistId: string) => {
     total: total
   };
 
-  albumsCache.set(artistId, { data: result, timestamp: Date.now() });
+  albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 };
 
@@ -232,7 +267,10 @@ export const getAlbumTracks = async (albumId: string) => {
     return [];
   }
 
-  const cached = tracksCache.get(albumId);
+  const lang = await getLocaleCookie();
+  const cacheKey = `${albumId}_${lang}`;
+
+  const cached = tracksCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
@@ -259,7 +297,7 @@ export const getAlbumTracks = async (albumId: string) => {
     offset += limit;
   } while (offset < total);
 
-  tracksCache.set(albumId, { data: allTracks, timestamp: Date.now() });
+  tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });
   return allTracks; // Array of track objects
 };
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import LPPlayer from "@/components/LPPlayer";
 import LoginModal from "@/components/LoginModal";
 import { useAuth } from "@/components/AuthProvider";
-import { Trophy } from "lucide-react";
+import { Trophy, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { createClient } from "@/utils/supabase/client";
@@ -14,11 +14,56 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [hasPreviousProgress, setHasPreviousProgress] = useState(false);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
+
+  // Read locale on mount
+  useEffect(() => {
+    const savedLocale = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("locale="))
+      ?.split("=")[1];
+    
+    if (savedLocale === "en" || savedLocale === "ko") {
+      setLocale(savedLocale as any);
+    } else {
+      // Default to ko and save cookie
+      document.cookie = "locale=ko; path=/; max-age=31536000"; // 1 year
+    }
+  }, []);
+
+  const handleLanguageToggle = (lang: "ko" | "en") => {
+    setLocale(lang);
+    document.cookie = `locale=${lang}; path=/; max-age=31536000`;
+    router.refresh();
+  };
+
+  const t = {
+    ko: {
+      tagline1: "가장 선명한 취향의 기록.",
+      tagline2: "당신의 음악 취향을 나열하고, 나만의 색깔로 증폭시켜 보세요.",
+      start: "시작하기",
+      continue: "이어서 진행하기",
+      startNewTitle: "새로 시작하시겠습니까?",
+      startNewDesc: "이전의 완료되지 않은 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?",
+      cancel: "취소",
+      startNewBtn: "새로 시작",
+    },
+    en: {
+      tagline1: "Record your clearest taste.",
+      tagline2: "List your music preferences and amplify them with your own colors.",
+      start: "Start",
+      continue: "Continue Progress",
+      startNewTitle: "Start New?",
+      startNewDesc: "All uncompleted progress (selected artists and track details) will be deleted. Do you really want to start a new World Cup?",
+      cancel: "Cancel",
+      startNewBtn: "Start New",
+    }
+  }[locale];
 
   // 1. Check local storage progress on mount
   useEffect(() => {
@@ -160,14 +205,41 @@ export default function Home() {
 
   return (
     <main className="w-full flex flex-1 flex-col items-center justify-between py-6 relative overflow-hidden">
+      {/* Premium Floating Language Switcher */}
+      <div className="absolute top-6 left-6 z-50 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300">
+        <div className="flex items-center justify-center pl-2 pr-1">
+          <Globe size={14} className="text-navy/50 animate-pulse" />
+        </div>
+        <button
+          onClick={() => handleLanguageToggle("ko")}
+          className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${
+            locale === "ko" 
+              ? "bg-navy text-cream shadow-sm scale-105" 
+              : "text-navy/60 hover:text-navy hover:bg-navy/5"
+          }`}
+        >
+          KO
+        </button>
+        <button
+          onClick={() => handleLanguageToggle("en")}
+          className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${
+            locale === "en" 
+              ? "bg-navy text-cream shadow-sm scale-105" 
+              : "text-navy/60 hover:text-navy hover:bg-navy/5"
+          }`}
+        >
+          EN
+        </button>
+      </div>
+
       <div className="flex flex-col items-center justify-center flex-1 w-full text-center z-10 space-y-8 mt-12 md:mt-0">
         <div className="space-y-4">
           <h1 className="font-serif text-6xl md:text-8xl text-navy tracking-tight drop-shadow-sm font-bold">
             Sortify
           </h1>
           <p className="font-sans text-lg md:text-xl text-charcoal/80 max-w-md mx-auto leading-relaxed break-keep mt-2">
-            가장 선명한 취향의 기록.<br/>
-            당신의 음악 취향을 나열하고, 나만의 색깔로 증폭시켜 보세요.
+            {t.tagline1}<br/>
+            {t.tagline2}
           </p>
         </div>
         
@@ -177,7 +249,7 @@ export default function Home() {
             onClick={handleStart}
             className="px-12 py-3.5 bg-navy text-cream rounded-full hover:bg-navy/90 transition-all font-semibold text-lg shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer min-w-[180px]"
           >
-            시작하기
+            {t.start}
           </button>
           
           {hasPreviousProgress && (
@@ -187,7 +259,7 @@ export default function Home() {
               onClick={handleRestore}
               className="px-6 py-2 bg-transparent text-navy hover:text-point border-b border-navy/20 hover:border-point transition-all font-semibold text-sm cursor-pointer mt-1"
             >
-              이어서 진행하기
+              {t.continue}
             </motion.button>
           )}
         </div>
@@ -222,9 +294,9 @@ export default function Home() {
                   <Trophy className="text-point animate-bounce" size={24} />
                 </div>
                 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">새로 시작하시겠습니까?</h2>
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.startNewTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  이전의 완료되지 않은 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?
+                  {t.startNewDesc}
                 </p>
                 
                 <div className="flex gap-3 w-full">
@@ -232,13 +304,13 @@ export default function Home() {
                     onClick={() => setShowRestoreModal(false)}
                     className="flex-1 py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
                   >
-                    취소
+                    {t.cancel}
                   </button>
                   <button 
                     onClick={handleStartNew}
                     className="flex-[1.5] py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md cursor-pointer"
                   >
-                    새로 시작
+                    {t.startNewBtn}
                   </button>
                 </div>
               </motion.div>
