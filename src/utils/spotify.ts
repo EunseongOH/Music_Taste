@@ -245,7 +245,8 @@ export const getArtistAlbums = async (artistId: string) => {
   if (!firstResponse.ok) {
     const errorText = await firstResponse.text();
     console.error(`Spotify API Error in getArtistAlbums (Status: ${firstResponse.status}):`, errorText);
-    throw new Error('Failed to fetch artist albums');
+    // Graceful fallback: return empty list so the page still loads and users can still select unreleased tracks
+    return { items: [], total: 0 };
   }
 
   const firstData = await firstResponse.json();
@@ -314,7 +315,8 @@ export const getAlbumTracks = async (albumId: string) => {
   if (!firstResponse.ok) {
     const errorText = await firstResponse.text();
     console.error(`Spotify API Error in getAlbumTracks (Status: ${firstResponse.status}):`, errorText);
-    throw new Error('Failed to fetch album tracks');
+    // Graceful fallback: return empty list so the application remains responsive
+    return [];
   }
 
   const firstData = await firstResponse.json();
