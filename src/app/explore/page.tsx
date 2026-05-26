@@ -27,7 +27,8 @@ export default function ExplorePage() {
   const router = useRouter();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [defaultArtists, setDefaultArtists] = useState<Artist[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedArtists, setSelectedArtists] = useState<Artist[]>([]);
+  const selectedIds = React.useMemo(() => new Set(selectedArtists.map(a => a.id)), [selectedArtists]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
   const [showSaveWarning, setShowSaveWarning] = useState(false);
@@ -59,9 +60,7 @@ export default function ExplorePage() {
 
   const handleConfirmSaveExit = async () => {
     setShowSaveWarning(false);
-    const selectedData = artists.filter(a => selectedIds.has(a.id));
-    const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a.id, a])).values());
-    await saveArtistSelectionDraft(uniqueSelectedData);
+    await saveArtistSelectionDraft(selectedArtists);
     router.push("/");
   };
 
@@ -89,7 +88,6 @@ export default function ExplorePage() {
         setDefaultArtists(mappedArtists);
         
         let restoredArtists: any[] = [];
-        let restoredIds: string[] = [];
 
         // 1. First, check if there is an active draft in Supabase (if logged in)
         if (user) {
@@ -97,7 +95,6 @@ export default function ExplorePage() {
             const draft = await loadActiveDraft();
             if (draft && draft.selected_artists && draft.selected_artists.length > 0) {
               restoredArtists = draft.selected_artists;
-              restoredIds = draft.selected_artists.map((a: any) => a.id);
             }
           } catch (err) {
             console.error("Error loading draft inside explore mount:", err);
@@ -105,36 +102,39 @@ export default function ExplorePage() {
         }
 
         // 2. If nothing from draft, fallback to sessionStorage or localStorage
-        if (restoredIds.length === 0) {
+        if (restoredArtists.length === 0) {
           const localStored = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
           if (localStored) {
             try {
               const parsed = JSON.parse(localStored);
               if (Array.isArray(parsed) && parsed.length > 0) {
                 restoredArtists = parsed;
-                restoredIds = parsed.map((a: any) => a.id);
               }
             } catch (e) {}
           }
         }
 
         // 3. Apply restored state and merge with viewport list
-        if (restoredIds.length > 0) {
-          setSelectedIds(new Set(restoredIds));
+        if (restoredArtists.length > 0) {
+          // MERGED & SANITIZED restoredArtists to match Artist interface
+          const sanitizedRestored: Artist[] = restoredArtists.map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            image: a.image || a.images?.[0]?.url || `https://picsum.photos/seed/${a.id}/300/300`,
+            type: a.type || 'main',
+            parentId: a.parentId
+          }));
+
+          setSelectedArtists(sanitizedRestored);
           
           // Hydrate local storages to keep them fully synced
-          sessionStorage.setItem('selectedArtists', JSON.stringify(restoredArtists));
-          localStorage.setItem('selectedArtists', JSON.stringify(restoredArtists));
+          sessionStorage.setItem('selectedArtists', JSON.stringify(sanitizedRestored));
+          localStorage.setItem('selectedArtists', JSON.stringify(sanitizedRestored));
 
           const mergedArtists = [...mappedArtists];
-          restoredArtists.forEach((draftArtist: any) => {
+          sanitizedRestored.forEach((draftArtist: Artist) => {
             if (!mergedArtists.some(a => a.id === draftArtist.id)) {
-              mergedArtists.push({
-                id: draftArtist.id,
-                name: draftArtist.name,
-                image: draftArtist.image || draftArtist.images?.[0]?.url || `https://picsum.photos/seed/${draftArtist.id}/300/300`,
-                type: 'main'
-              });
+              mergedArtists.push(draftArtist);
             }
           });
           setArtists(mergedArtists);
@@ -154,17 +154,15 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!user) return;
     const saveDraft = async () => {
-      const selectedData = artists.filter(a => selectedIds.has(a.id));
-      const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a.id, a])).values());
       // Save draft (updates even if empty, so deselecting all updates correctly)
-      await saveArtistSelectionDraft(uniqueSelectedData);
+      await saveArtistSelectionDraft(selectedArtists);
     };
     // Debounce saving slightly so we don't spam requests when user is clicking multiple artists quickly
     const timer = setTimeout(() => {
       saveDraft();
     }, 1000);
     return () => clearTimeout(timer);
-  }, [selectedIds, artists, user]);
+  }, [selectedArtists, user]);
 
   // Handle Search
   useEffect(() => {
@@ -200,10 +198,13 @@ export default function ExplorePage() {
   const handleArtistClick = async (artist: Artist) => {
     // If it's a similar artist, just toggle selection without spawning more
     if (artist.type === "similar") {
-      const newSelected = new Set(selectedIds);
-      if (newSelected.has(artist.id)) newSelected.delete(artist.id);
-      else newSelected.add(artist.id);
-      setSelectedIds(newSelected);
+      setSelectedArtists(prev => {
+        if (prev.some(a => a.id === artist.id)) {
+          return prev.filter(a => a.id !== artist.id);
+        } else {
+          return [...prev, artist];
+        }
+      });
       return;
     }
 
@@ -211,13 +212,13 @@ export default function ExplorePage() {
 
     if (isSearchedArtist) {
       // Toggle selection only, do NOT load similar related artists for searched selections
-      const newSelected = new Set(selectedIds);
-      if (newSelected.has(artist.id)) {
-        newSelected.delete(artist.id);
-      } else {
-        newSelected.add(artist.id);
-      }
-      setSelectedIds(newSelected);
+      setSelectedArtists(prev => {
+        if (prev.some(a => a.id === artist.id)) {
+          return prev.filter(a => a.id !== artist.id);
+        } else {
+          return [...prev, artist];
+        }
+      });
       return;
     }
 
@@ -225,9 +226,7 @@ export default function ExplorePage() {
 
     if (selectedIds.has(artist.id)) {
       // Collapse / Deselect for main artists
-      const newSelected = new Set(selectedIds);
-      newSelected.delete(artist.id);
-      setSelectedIds(newSelected);
+      setSelectedArtists(prev => prev.filter(a => a.id !== artist.id));
       
       // Remove the generated similar items for this artist
       if (isInDefault) {
@@ -235,9 +234,10 @@ export default function ExplorePage() {
       }
     } else {
       // Expand / Select for main artists
-      const newSelected = new Set(selectedIds);
-      newSelected.add(artist.id);
-      setSelectedIds(newSelected);
+      setSelectedArtists(prev => {
+        if (prev.some(a => a.id === artist.id)) return prev;
+        return [...prev, artist];
+      });
 
       try {
         const related = await getRelatedArtists(artist.id);
@@ -510,11 +510,7 @@ export default function ExplorePage() {
               </div>
               
               <div className="flex overflow-x-auto gap-3 scrollbar-none py-1.5 w-full">
-                {Array.from(selectedIds).map(id => {
-                  // Fallback match: search both defaultArtists and artists to avoid missing profiles
-                  const artist = artists.find(a => a.id === id) || defaultArtists.find(a => a.id === id);
-                  if (!artist) return null;
-                  
+                {selectedArtists.map(artist => {
                   return (
                     <motion.div
                       key={artist.id}
@@ -578,20 +574,14 @@ export default function ExplorePage() {
                 >
                   <button 
                     onClick={async () => {
-                      // Lookup mapping utilizing both search and default list to ensure profiles never get lost
-                      const selectedData = Array.from(selectedIds).map(id => 
-                        artists.find(a => a.id === id) || defaultArtists.find(a => a.id === id)
-                      ).filter(Boolean);
-                      
-                      const uniqueSelectedData = Array.from(new Map(selectedData.map(a => [a!.id, a])).values());
-                      sessionStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
-                      localStorage.setItem('selectedArtists', JSON.stringify(uniqueSelectedData));
+                      sessionStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
+                      localStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
                       
                       if (user) {
                         try {
                           await supabase.auth.updateUser({
                             data: {
-                              selected_artists: uniqueSelectedData
+                              selected_artists: selectedArtists
                             }
                           });
                         } catch (err) {
