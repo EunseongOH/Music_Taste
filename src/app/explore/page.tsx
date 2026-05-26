@@ -207,13 +207,22 @@ export default function ExplorePage() {
       return;
     }
 
+    const isInDefault = defaultArtists.some(a => a.id === artist.id);
+    const isInSearch = artists.some(a => a.id === artist.id);
+
     if (selectedIds.has(artist.id)) {
       // Collapse / Deselect for main artists
       const newSelected = new Set(selectedIds);
       newSelected.delete(artist.id);
       setSelectedIds(newSelected);
+      
       // Remove the generated similar items for this artist
-      setArtists(prev => prev.filter(a => a.parentId !== artist.id));
+      if (isInDefault) {
+        setDefaultArtists(prev => prev.filter(a => a.parentId !== artist.id));
+      }
+      if (isInSearch) {
+        setArtists(prev => prev.filter(a => a.parentId !== artist.id));
+      }
     } else {
       // Expand / Select for main artists
       const newSelected = new Set(selectedIds);
@@ -223,7 +232,7 @@ export default function ExplorePage() {
       try {
         const related = await getRelatedArtists(artist.id);
         
-        setArtists(prev => {
+        const getExpandedList = (prev: Artist[]) => {
           const index = prev.findIndex(a => a.id === artist.id);
           if (index === -1) return prev;
           
@@ -244,7 +253,14 @@ export default function ExplorePage() {
             ...similar,
             ...prev.slice(index + 1)
           ];
-        });
+        };
+
+        if (isInDefault) {
+          setDefaultArtists(prev => getExpandedList(prev));
+        }
+        if (isInSearch) {
+          setArtists(prev => getExpandedList(prev));
+        }
       } catch (error) {
         console.error("Failed to fetch related artists", error);
       }
@@ -262,6 +278,56 @@ export default function ExplorePage() {
       </main>
     );
   }
+
+  const renderArtistCard = (artist: Artist) => {
+    const isSimilar = artist.type === "similar";
+    const isSelected = selectedIds.has(artist.id);
+    
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.4, type: "spring", bounce: 0.25 }}
+        key={artist.id}
+        onClick={() => handleArtistClick(artist)}
+        className="flex flex-col items-center gap-3 cursor-pointer group select-none"
+      >
+        <motion.div 
+          layout="position"
+          className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar && !isSelected ? 'border-point border-dashed bg-point/5 scale-90' : isSimilar && isSelected ? 'border-point border-solid bg-point/10 scale-90 shadow-[0_0_15px_rgba(230,126,34,0.4)]' : isSelected ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
+        >
+          <div className={`relative w-full h-full rounded-full overflow-hidden ${isSelected ? 'p-1 bg-cream/50' : ''}`}>
+            <div className="relative w-full h-full rounded-full overflow-hidden">
+              <Image 
+                src={artist.image} 
+                alt={artist.name} 
+                fill 
+                sizes="112px"
+                className={`object-cover ${isSimilar ? 'opacity-80 mix-blend-multiply filter sepia-[0.4]' : ''} transition-all duration-300 ${isSelected && isSimilar ? 'filter-none mix-blend-normal opacity-100' : ''}`} 
+              />
+            </div>
+          </div>
+          {isSelected && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-navy/20 flex items-center justify-center rounded-full pointer-events-none"
+            >
+              <div className="w-5 h-5 bg-point rounded-full border-2 border-cream shadow-sm" />
+            </motion.div>
+          )}
+        </motion.div>
+        <motion.span 
+          layout="position"
+          className={`font-sans text-xs sm:text-sm text-center line-clamp-1 w-full px-1 ${isSimilar && !isSelected ? 'text-point font-medium' : isSelected ? 'text-navy font-bold' : 'text-charcoal'}`}
+        >
+          {artist.name}
+        </motion.span>
+      </motion.div>
+    );
+  };
 
   return (
     <main className="flex flex-col min-h-screen relative z-10 w-full mb-20 bg-[var(--app-bg)]">
@@ -309,63 +375,60 @@ export default function ExplorePage() {
         </div>
       </div>
 
-      {/* Grid */}
-      <motion.div 
-        layout
-        className="grid grid-cols-3 gap-x-3 gap-y-8 mt-6 px-1"
-      >
-        <AnimatePresence>
-          {artists.map((artist) => {
-            const isSimilar = artist.type === "similar";
-            const isSelected = selectedIds.has(artist.id);
-            
-            return (
-              <motion.div
-                layout
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.4, type: "spring", bounce: 0.25 }}
-                key={artist.id}
-                onClick={() => handleArtistClick(artist)}
-                className={`flex flex-col items-center gap-3 cursor-pointer group select-none`}
-              >
-                <motion.div 
-                  layout="position"
-                  className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar && !isSelected ? 'border-point border-dashed bg-point/5 scale-90' : isSimilar && isSelected ? 'border-point border-solid bg-point/10 scale-90 shadow-[0_0_15px_rgba(230,126,34,0.4)]' : isSelected ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
-                >
-                  <div className={`relative w-full h-full rounded-full overflow-hidden ${isSelected ? 'p-1 bg-cream/50' : ''}`}>
-                    <div className="relative w-full h-full rounded-full overflow-hidden">
-                      <Image 
-                        src={artist.image} 
-                        alt={artist.name} 
-                        fill 
-                        sizes="112px"
-                        className={`object-cover ${isSimilar ? 'opacity-80 mix-blend-multiply filter sepia-[0.4]' : ''} transition-all duration-300 ${isSelected && isSimilar ? 'filter-none mix-blend-normal opacity-100' : ''}`} 
-                      />
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="absolute inset-0 bg-navy/20 flex items-center justify-center rounded-full pointer-events-none"
-                    >
-                      <div className="w-5 h-5 bg-point rounded-full border-2 border-cream shadow-sm" />
-                    </motion.div>
-                  )}
+      {/* Grids Container */}
+      <div className="flex flex-col mt-6 px-1 gap-10">
+        {searchQuery.trim().length > 0 ? (
+          <>
+            {/* 1. Search Results Section */}
+            <div className="flex flex-col">
+              <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
+                검색 결과
+                <span className="text-xs font-sans text-point font-medium">"{searchQuery}" 검색 결과입니다</span>
+              </h2>
+              {artists.length === 0 ? (
+                <div className="py-12 text-center font-sans text-sm text-charcoal/50 bg-white/20 border border-dashed border-navy/10 rounded-3xl">
+                  검색 결과가 없습니다. 다른 검색어를 입력해 보세요.
+                </div>
+              ) : (
+                <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
+                  <AnimatePresence>
+                    {artists.map(renderArtistCard)}
+                  </AnimatePresence>
                 </motion.div>
-                <motion.span 
-                  layout="position"
-                  className={`font-sans text-xs sm:text-sm text-center line-clamp-1 w-full px-1 ${isSimilar && !isSelected ? 'text-point font-medium' : isSelected ? 'text-navy font-bold' : 'text-charcoal'}`}
-                >
-                  {artist.name}
-                </motion.span>
+              )}
+            </div>
+
+            {/* 2. Recommended Section (Separated below with visual gap) */}
+            <div className="flex flex-col border-t border-navy/5 pt-8">
+              <h2 className="font-serif text-lg text-navy/60 font-bold mb-4 flex items-center justify-between">
+                오늘의 추천 아티스트
+                <span className="text-[10px] font-sans text-charcoal/40 font-medium">기존 추천 목록도 함께 살펴보세요</span>
+              </h2>
+              <motion.div 
+                layout 
+                className="grid grid-cols-3 gap-x-3 gap-y-8 opacity-75 hover:opacity-100 transition-opacity duration-300"
+              >
+                <AnimatePresence>
+                  {defaultArtists.map(renderArtistCard)}
+                </AnimatePresence>
               </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </motion.div>
+            </div>
+          </>
+        ) : (
+          /* 3. Recommended Section Only (When no search active) */
+          <div className="flex flex-col">
+            <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
+              오늘의 추천 아티스트
+              <span className="text-xs font-sans text-charcoal/60 font-medium">매일 새로운 아티스트를 소개해드려요</span>
+            </h2>
+            <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
+              <AnimatePresence>
+                {defaultArtists.map(renderArtistCard)}
+              </AnimatePresence>
+            </motion.div>
+          </div>
+        )}
+      </div>
       
       {/* Floating Selected Artists Bar */}
       <AnimatePresence>
