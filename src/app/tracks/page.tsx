@@ -159,8 +159,14 @@ export default function TracksPage() {
               localStorage.setItem('selectedArtists', stored);
             }
             if (draft.selected_tracks && draft.selected_tracks.length > 0) {
-              loadedSelectedTracks = draft.selected_tracks;
-              setSelectedTrackIds(new Set(loadedSelectedTracks));
+              // Hydrate local storages with full track metadata
+              const tracksStr = JSON.stringify(draft.selected_tracks);
+              sessionStorage.setItem("worldcup_tracks", tracksStr);
+              localStorage.setItem("worldcup_tracks", tracksStr);
+
+              // Set selected track IDs as Set of strings
+              const loadedTrackIds = draft.selected_tracks.map((t: any) => typeof t === 'string' ? t : t.id);
+              setSelectedTrackIds(new Set(loadedTrackIds));
             }
           }
         } catch (err) {
