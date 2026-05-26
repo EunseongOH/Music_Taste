@@ -13,13 +13,29 @@ import { createClient } from "@/utils/supabase/client";
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [hasPreviousProgress, setHasPreviousProgress] = useState(false);
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
 
-  // Automatic redirect and progress check when logged in
+  // 1. Check local storage progress on mount
+  useEffect(() => {
+    const hasLocalProgress = !!(
+      localStorage.getItem("worldcup_progress") || 
+      sessionStorage.getItem("worldcup_progress") ||
+      localStorage.getItem("worldcup_tracks") ||
+      sessionStorage.getItem("worldcup_tracks") ||
+      localStorage.getItem("selectedArtists") ||
+      sessionStorage.getItem("selectedArtists")
+    );
+    if (hasLocalProgress) {
+      setHasPreviousProgress(true);
+    }
+  }, []);
+
+  // 2. Check Supabase draft when user logs in (without automatic redirects or popups!)
   useEffect(() => {
     if (!isLoading && user) {
       const checkDraft = async () => {
@@ -32,29 +48,19 @@ export default function Home() {
 
           if (!error && draft) {
             setActiveDraft(draft);
-            setShowRestoreModal(true);
-          } else {
-            // Fallback to local storage checks
-            const hasProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
-            if (hasProgress) {
-              setShowRestoreModal(true);
-            } else {
-              router.push("/explore");
-            }
+            setHasPreviousProgress(true);
           }
-        } catch (e) {
-          router.push("/explore");
-        }
+        } catch (e) {}
       };
-
       checkDraft();
     }
-  }, [user, isLoading, router, supabase]);
+  }, [user, isLoading, supabase]);
 
   const handleStart = () => {
-    if (user || sessionStorage.getItem("isGuest") === "true") {
-      const hasProgress = activeDraft || localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
-      if (hasProgress) {
+    const isGuest = sessionStorage.getItem("isGuest") === "true";
+    if (user || isGuest) {
+      if (hasPreviousProgress) {
+        // Show confirmation warning before starting a new tournament (to prevent accidental overwrite)
         setShowRestoreModal(true);
       } else {
         router.push("/explore");
@@ -65,8 +71,6 @@ export default function Home() {
   };
 
   const handleRestore = () => {
-    setShowRestoreModal(false);
-
     if (activeDraft) {
       // 1. Sync data to storage
       if (activeDraft.selected_artists && activeDraft.selected_artists.length > 0) {
@@ -101,12 +105,24 @@ export default function Home() {
         router.push("/worldcup");
       }
     } else {
-      // Fallback old behavior
+      // Fallback local storage checks
+      const storedArtists = localStorage.getItem("selectedArtists") || sessionStorage.getItem("selectedArtists");
       const storedTracks = localStorage.getItem("worldcup_tracks") || sessionStorage.getItem("worldcup_tracks");
       const storedProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
+      
+      if (storedArtists) sessionStorage.setItem("selectedArtists", storedArtists);
       if (storedTracks) sessionStorage.setItem("worldcup_tracks", storedTracks);
       if (storedProgress) sessionStorage.setItem("worldcup_progress", storedProgress);
-      router.push("/worldcup");
+
+      if (storedProgress) {
+        router.push("/worldcup");
+      } else if (storedTracks) {
+        router.push("/worldcup");
+      } else if (storedArtists) {
+        router.push("/tracks");
+      } else {
+        router.push("/explore");
+      }
     }
   };
 
@@ -156,13 +172,24 @@ export default function Home() {
         </div>
         
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 mt-8">
+        <div className="flex flex-col items-center gap-3 mt-8 z-20">
           <button 
             onClick={handleStart}
-            className="px-10 py-3 bg-navy text-cream rounded-full hover:bg-navy/90 transition-colors font-medium text-lg"
+            className="px-12 py-3.5 bg-navy text-cream rounded-full hover:bg-navy/90 transition-all font-semibold text-lg shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer min-w-[180px]"
           >
             시작하기
           </button>
+          
+          {hasPreviousProgress && (
+            <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              onClick={handleRestore}
+              className="px-6 py-2 bg-transparent text-navy hover:text-point border-b border-navy/20 hover:border-point transition-all font-semibold text-sm cursor-pointer mt-1"
+            >
+              이어서 진행하기
+            </motion.button>
+          )}
         </div>
       </div>
 
@@ -172,7 +199,7 @@ export default function Home() {
 
       <LoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
-      {/* Restore Progress Modal */}
+      {/* Start New Warning Modal */}
       <AnimatePresence>
         {showRestoreModal && (
           <>
@@ -181,6 +208,7 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              onClick={() => setShowRestoreModal(false)}
             />
             <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
               <motion.div
@@ -194,23 +222,23 @@ export default function Home() {
                   <Trophy className="text-point animate-bounce" size={24} />
                 </div>
                 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">이어서 진행할까요?</h2>
-                <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep">
-                  이전에 진행 중이던 LP 월드컵 내역이 존재합니다. 이어서 취향을 기록하러 가볼까요?
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">새로 시작하시겠습니까?</h2>
+                <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
+                  이전의 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?
                 </p>
                 
                 <div className="flex gap-3 w-full">
                   <button 
-                    onClick={handleStartNew}
-                    className="flex-1 py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98]"
+                    onClick={() => setShowRestoreModal(false)}
+                    className="flex-1 py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
                   >
-                    새로 시작
+                    취소
                   </button>
                   <button 
-                    onClick={handleRestore}
-                    className="flex-[1.5] py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md"
+                    onClick={handleStartNew}
+                    className="flex-[1.5] py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md cursor-pointer"
                   >
-                    이어서 진행
+                    새로 시작
                   </button>
                 </div>
               </motion.div>
