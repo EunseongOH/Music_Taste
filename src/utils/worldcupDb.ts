@@ -46,6 +46,41 @@ export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTr
   }
 };
 
+// Downgrade active draft to Artist Selection and clear track selection
+export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) => {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const title = selectedArtists.length > 0 
+    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
+    : "내 음악 월드컵";
+
+  const { error } = await supabase
+    .from('tournament_drafts')
+    .upsert({
+      user_id: user.id,
+      status: 'artist_selection',
+      selected_artists: selectedArtists,
+      selected_tracks: null,
+      phase: null,
+      current_round_name: null,
+      current_match_index: null,
+      tracks: null,
+      matches: null,
+      winners: null,
+      eliminated_tracks: null,
+      selected_byes: null,
+      title,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.error("[Supabase DB] Error downgrading draft status:", error.message);
+  }
+};
+
+
 // Stage 3 & 4: Save active tournament playing state
 export const saveTournamentProgress = async (progressState: any, selectedArtists: any[], selectedTracks: any[], title: string) => {
   const supabase = createClient();

@@ -8,7 +8,7 @@ import Image from "next/image";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
-import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
+import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 
@@ -68,7 +68,7 @@ export default function TracksPage() {
   const [unreleasedForm, setUnreleasedForm] = useState({ title: '', videoUrl: '', date: '' });
   const [notification, setNotification] = useState<string | null>(null);
 
-  const [showSaveWarning, setShowSaveWarning] = useState(false);
+  const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
   const [customAlert, setCustomAlert] = useState<string | null>(null);
 
   // Reload prevention for unsaved changes
@@ -86,18 +86,35 @@ export default function TracksPage() {
   const handleBackClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (selectedTrackIds.size > 0) {
-      setShowSaveWarning(true);
+      setExitWizardStep('main');
     } else {
-      if (window.history.length > 1) {
-        router.back();
-      } else {
-        router.push("/explore");
-      }
+      router.push("/explore");
     }
   };
 
+  const handleReturnToArtists = async () => {
+    setExitWizardStep(null);
+    
+    // Clear track selections locally
+    localStorage.removeItem("worldcup_tracks");
+    sessionStorage.removeItem("worldcup_tracks");
+    setSelectedTrackIds(new Set());
+
+    // Update draft to artist_selection status and wipe selected_tracks in Supabase
+    if (user) {
+      try {
+        const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
+        await downgradeDraftToArtistSelection(selectedArtists);
+      } catch (err) {
+        console.error("Error downgrading draft state to artist_selection:", err);
+      }
+    }
+    
+    router.push("/explore");
+  };
+
   const handleConfirmSaveExit = async () => {
-    setShowSaveWarning(false);
+    setExitWizardStep(null);
     
     // Build full tracks data
     const selectedTracksData: any[] = [];
@@ -130,17 +147,17 @@ export default function TracksPage() {
 
     const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
     await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
-    router.push("/explore");
+    router.push("/");
   };
 
   const handleDiscardExit = async () => {
-    setShowSaveWarning(false);
+    setExitWizardStep(null);
     if (user) {
       await deleteActiveDraft();
     }
     localStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_tracks");
-    router.push("/explore");
+    router.push("/");
   };
 
   React.useEffect(() => {
@@ -828,16 +845,16 @@ export default function TracksPage() {
           </div>
         )}
       </AnimatePresence>
-      {/* Save Exit Confirmation Warning Modal */}
+      {/* 2-Step Exit Wizard Modal */}
       <AnimatePresence>
-        {showSaveWarning && (
+        {exitWizardStep !== null && (
           <>
             <motion.div
               className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowSaveWarning(false)}
+              onClick={() => setExitWizardStep(null)}
             />
             <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
               <motion.div
@@ -846,6 +863,7 @@ export default function TracksPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 30 }}
                 transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                layout
               >
                 {/* Decorative LP Record Graphic */}
                 <motion.div
@@ -857,38 +875,74 @@ export default function TracksPage() {
                   <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
                 </motion.div>
 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-3 tracking-tight">진행 내역을 저장할까요?</h2>
-                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  선택한 수록곡들이 있습니다. 지금까지의 진행 내역을 보관하고 나갈까요?<br/>
-                  <span className="text-point font-medium">(보관한 내역은 프로필의 내 아카이브에서 언제든 이어할 수 있습니다.)</span>
-                </p>
-                
-                <div className="flex flex-col gap-2.5 w-full">
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleConfirmSaveExit}
-                    className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
-                  >
-                    저장하고 나가기
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleDiscardExit}
-                    className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
-                  >
-                    저장하지 않고 나가기
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowSaveWarning(false)}
-                    className="w-full py-3.5 bg-white border-2 border-navy/10 text-charcoal font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
-                  >
-                    취소
-                  </motion.button>
-                </div>
+                {exitWizardStep === 'main' ? (
+                  <>
+                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">테스트를 이동할까요?</h2>
+                    <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
+                      이전 단계로 돌아가 아티스트를 다시 선택하거나, 지금 테스트를 종료하고 나갈 수 있습니다.
+                    </p>
+                    
+                    <div className="flex flex-col gap-2.5 w-full">
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleReturnToArtists}
+                        className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
+                      >
+                        아티스트 다시 고르기
+                      </motion.button>
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setExitWizardStep('exit_confirm')}
+                        className="w-full py-3.5 bg-white border-2 border-navy/15 text-navy font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
+                      >
+                        테스트 종료하고 나가기
+                      </motion.button>
+                      
+                      <button 
+                        onClick={() => setExitWizardStep(null)}
+                        className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
+                      >
+                        이대로 계속하기 (취소)
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">진행 내역을 보관할까요?</h2>
+                    <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
+                      선택한 수록곡 목록이 있습니다. 진행 내역을 보관하고 나갈까요?<br/>
+                      <span className="text-point font-medium">(보관한 내역은 프로필의 내 아카이브에서 이어할 수 있습니다.)</span>
+                    </p>
+                    
+                    <div className="flex flex-col gap-2.5 w-full">
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleConfirmSaveExit}
+                        className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
+                      >
+                        보관하고 종료하기
+                      </motion.button>
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleDiscardExit}
+                        className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
+                      >
+                        보관 안 함 (진행 삭제)
+                      </motion.button>
+                      
+                      <button 
+                        onClick={() => setExitWizardStep('main')}
+                        className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
+                      >
+                        이전 선택지로 돌아가기
+                      </button>
+                    </div>
+                  </>
+                )}
               </motion.div>
             </div>
           </>
