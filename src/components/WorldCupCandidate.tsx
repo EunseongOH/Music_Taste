@@ -109,10 +109,10 @@ export default function WorldCupCandidate({ track, onDrop, onActive }: WorldCupC
         {/* 1. The Album Cover (Sleeve) - Slides UP beautifully by percentage to maintain perfect proportion regardless of scale */}
         <motion.div
           animate={{ 
-            y: isLP ? "-12%" : 0, 
-            scale: isLP ? 0.82 : 1,
-            opacity: isLP ? 0.6 : 1,
-            rotate: isLP ? -3 : 0
+            y: isLP ? "-25%" : 0, 
+            scale: isLP ? 0.85 : 1,
+            opacity: isLP ? 0.5 : 1,
+            rotate: isLP ? -5 : 0
           }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
           className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(26,42,108,0.15)] overflow-hidden z-30 pointer-events-none"
