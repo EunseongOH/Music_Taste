@@ -222,77 +222,43 @@ export const getInitialArtists = async () => {
   return sliced;
 };
 
-// Fetch artist's albums
-export const getArtistAlbums = async (artistId: string) => {
+// Fetch artist's albums (Paged to prevent excessive rate limiting)
+export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) => {
   if (!artistId) {
     console.warn('[Spotify API] getArtistAlbums called with empty or undefined artistId');
     return { items: [], total: 0 };
   }
 
   const lang = await getLocaleCookie();
-  const cacheKey = `${artistId}_${lang}`;
+  const cacheKey = `${artistId}_${lang}_offset_${offset}_limit_${limit}`;
 
   const cached = albumsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
 
-  // 1. Fetch the first page (limit = 10) to obtain the total count
-  const firstResponse = await spotifyFetch(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=0`
+  // Fetch only the requested page to minimize requests
+  const response = await spotifyFetch(
+    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${offset}`
   );
 
-  if (!firstResponse.ok) {
-    const errorText = await firstResponse.text();
-    console.error(`Spotify API Error in getArtistAlbums (Status: ${firstResponse.status}):`, errorText);
-    // Graceful fallback: return empty list so the page still loads and users can still select unreleased tracks
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
     return { items: [], total: 0 };
   }
 
-  const firstData = await firstResponse.json();
-  let allAlbums = firstData.items || [];
-  const total = firstData.total || 0;
-
-  // 2. If there are more than 10 albums, request the remaining chunks of 10 in parallel
-  if (total > 10) {
-    const fetchPromises = [];
-    const maxAlbumsLimit = 80; // Safety cap: load up to 80 albums (8 pages) to prevent excessive rate limiting
-    
-    for (let offset = 10; offset < total && offset < maxAlbumsLimit; offset += 10) {
-      fetchPromises.push(
-        (async () => {
-          try {
-            const res = await spotifyFetch(
-              `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=${offset}`
-            );
-            if (res.ok) {
-              const data = await res.json();
-              return data.items || [];
-            }
-          } catch (err) {
-            console.error(`[Spotify API] Error fetching albums at offset ${offset}:`, err);
-          }
-          return [];
-        })()
-      );
-    }
-
-    const additionalResults = await Promise.all(fetchPromises);
-    additionalResults.forEach((items) => {
-      allAlbums = allAlbums.concat(items);
-    });
-  }
-
+  const data = await response.json();
   const result = {
-    items: allAlbums,
-    total: total
+    items: data.items || [],
+    total: data.total || 0
   };
 
   albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 };
 
-// Fetch album's tracks
+// Fetch album's tracks (Sequentially fetched in chunks of 10 to avoid 429 Rate Limits)
 export const getAlbumTracks = async (albumId: string) => {
   if (!albumId) {
     console.warn('[Spotify API] getAlbumTracks called with empty or undefined albumId');
@@ -315,7 +281,6 @@ export const getAlbumTracks = async (albumId: string) => {
   if (!firstResponse.ok) {
     const errorText = await firstResponse.text();
     console.error(`Spotify API Error in getAlbumTracks (Status: ${firstResponse.status}):`, errorText);
-    // Graceful fallback: return empty list so the application remains responsive
     return [];
   }
 
@@ -323,34 +288,25 @@ export const getAlbumTracks = async (albumId: string) => {
   let allTracks = firstData.items || [];
   const total = firstData.total || 0;
 
-  // 2. If there are more than 10 tracks, request the remaining chunks of 10 in parallel
+  // 2. If there are more than 10 tracks, request the remaining chunks of 10 sequentially
   if (total > 10) {
-    const fetchPromises = [];
-    const maxTracksLimit = 50; // Safety cap: load up to 50 tracks (5 pages) to prevent excessive rate limiting
+    const maxTracksLimit = 50; // Safety cap: load up to 50 tracks (5 pages)
     
     for (let offset = 10; offset < total && offset < maxTracksLimit; offset += 10) {
-      fetchPromises.push(
-        (async () => {
-          try {
-            const res = await spotifyFetch(
-              `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=${offset}`
-            );
-            if (res.ok) {
-              const data = await res.json();
-              return data.items || [];
-            }
-          } catch (err) {
-            console.error(`[Spotify API] Error fetching tracks at offset ${offset}:`, err);
-          }
-          return [];
-        })()
-      );
+      try {
+        const res = await spotifyFetch(
+          `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=${offset}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          allTracks = allTracks.concat(data.items || []);
+        }
+        // Small 50ms delay to avoid tripping 429
+        await delay(50);
+      } catch (err) {
+        console.error(`[Spotify API] Error fetching tracks at offset ${offset}:`, err);
+      }
     }
-
-    const additionalResults = await Promise.all(fetchPromises);
-    additionalResults.forEach((items) => {
-      allTracks = allTracks.concat(items);
-    });
   }
 
   tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });
@@ -395,4 +351,31 @@ export const getRelatedArtists = async (artistId: string) => {
     console.error("Failed to fetch related artists fallback", e);
     return [];
   }
+};
+// Search tracks by query string (returns raw Spotify track objects, up to 10 due to Feb 2026 updates)
+// The caller is responsible for filtering by artist IDs.
+export const searchTracksByQuery = async (query: string): Promise<any[]> => {
+  if (!query.trim()) return [];
+
+  const cacheKey = `tracks_${query.trim().toLowerCase()}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+    return cached.data;
+  }
+
+  const response = await spotifyFetch(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('[Spotify] searchTracksByQuery error:', errText);
+    return [];
+  }
+
+  const data = await response.json();
+  const items = data.tracks?.items ?? [];
+
+  searchCache.set(cacheKey, { data: items, timestamp: Date.now() });
+  return items;
 };

@@ -19,6 +19,7 @@ interface Artist {
   image: string;
   type: "main" | "similar";
   parentId?: string;
+  popularity?: number;
 }
 
 export default function ExplorePage() {
@@ -84,6 +85,7 @@ export default function ExplorePage() {
           name: artist.name,
           image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
           type: "main",
+          popularity: artist.popularity || 0,
         }));
         setDefaultArtists(mappedArtists);
         
@@ -183,6 +185,7 @@ export default function ExplorePage() {
           name: artist.name,
           image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
           type: "main",
+          popularity: artist.popularity || 0,
         }));
         setArtists(mappedArtists);
       } catch (error) {
@@ -255,7 +258,8 @@ export default function ExplorePage() {
             name: r.name,
             image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
             type: "similar" as const,
-            parentId: artist.id
+            parentId: artist.id,
+            popularity: r.popularity || 0,
           }));
 
           return [

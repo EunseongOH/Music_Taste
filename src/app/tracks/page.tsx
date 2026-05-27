@@ -35,16 +35,11 @@ interface ArtistGroup {
   name: string;
   image: string;
   albums: Album[];
+  unreleasedAlbums?: Album[]; // decoupled virtual single albums
   albumsLoaded?: boolean;
   totalReleases?: number;
+  albumsPage?: number; // 0-based page index
 }
-
-const generateTracks = (albumId: string, count: number): Track[] =>
-  Array.from({ length: count }).map((_, i) => ({
-    id: `t_${albumId}_${i+1}`,
-    title: `Track ${i+1}`,
-    duration: `0${Math.floor(Math.random()*4)+2}:${String(Math.floor(Math.random()*60)).padStart(2, '0')}`
-  }));
 
 const getYouTubeVideoId = (url: string) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -60,6 +55,13 @@ export default function TracksPage() {
   const [expandedArtistId, setExpandedArtistId] = useState<string | null>(null);
   const [expandedAlbumId, setExpandedAlbumId] = useState<string | null>(null);
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+  
+  // Advanced Selection Metadata Cache & Debounced Search States
+  const [selectedTracksMetadata, setSelectedTracksMetadata] = useState<Record<string, any>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadingAlbums, setLoadingAlbums] = useState<Set<string>>(new Set());
 
@@ -100,6 +102,7 @@ export default function TracksPage() {
     localStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_tracks");
     setSelectedTrackIds(new Set());
+    setSelectedTracksMetadata({});
 
     // Update draft to artist_selection status and wipe selected_tracks in Supabase
     if (user) {
@@ -117,21 +120,41 @@ export default function TracksPage() {
   const handleConfirmSaveExit = async () => {
     setExitWizardStep(null);
     
-    // Build full tracks data
+    // Build full tracks data using metadata cache and fallback search
     const selectedTracksData: any[] = [];
-    artistData.forEach(artist => {
-      artist.albums.forEach(album => {
-        album.tracks.forEach(track => {
-          if (selectedTrackIds.has(track.id)) {
-            selectedTracksData.push({
-              ...track,
-              artistName: artist.name,
-              albumTitle: album.title,
-              albumImage: album.image,
+    selectedTrackIds.forEach(id => {
+      if (selectedTracksMetadata[id]) {
+        selectedTracksData.push(selectedTracksMetadata[id]);
+      } else {
+        artistData.forEach(artist => {
+          artist.albums.forEach(album => {
+            const track = album.tracks.find(t => t.id === id);
+            if (track) {
+              selectedTracksData.push({
+                ...track,
+                artistName: artist.name,
+                albumTitle: album.title,
+                albumImage: album.image,
+                albumId: album.id
+              });
+            }
+          });
+          if (artist.unreleasedAlbums) {
+            artist.unreleasedAlbums.forEach(album => {
+              const track = album.tracks.find(t => t.id === id);
+              if (track) {
+                selectedTracksData.push({
+                  ...track,
+                  artistName: artist.name,
+                  albumTitle: album.title,
+                  albumImage: album.image,
+                  albumId: album.id
+                });
+              }
             });
           }
         });
-      });
+      }
     });
 
     const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
@@ -161,10 +184,10 @@ export default function TracksPage() {
     router.push("/");
   };
 
+  // Load selection draft & initial artists
   React.useEffect(() => {
     const fetchSpotifyData = async () => {
       let stored = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
-      let loadedSelectedTracks: string[] = [];
 
       // Load from active draft in Supabase if user is logged in
       if (user) {
@@ -182,9 +205,18 @@ export default function TracksPage() {
               sessionStorage.setItem("worldcup_tracks", tracksStr);
               localStorage.setItem("worldcup_tracks", tracksStr);
 
-              // Set selected track IDs as Set of strings
+              // Set selected track IDs
               const loadedTrackIds = draft.selected_tracks.map((t: any) => typeof t === 'string' ? t : t.id);
               setSelectedTrackIds(new Set(loadedTrackIds));
+
+              // Load metadata cache
+              const metadataMap: Record<string, any> = {};
+              draft.selected_tracks.forEach((t: any) => {
+                if (typeof t === 'object' && t !== null) {
+                  metadataMap[t.id] = t;
+                }
+              });
+              setSelectedTracksMetadata(metadataMap);
             }
           }
         } catch (err) {
@@ -192,13 +224,30 @@ export default function TracksPage() {
         }
       }
 
-      // Fallback to user_metadata from Supabase if not in storage but user is logged in
+      // Fallback to user_metadata from Supabase
       if (!stored && user?.user_metadata?.selected_artists) {
         const artistsData = user.user_metadata.selected_artists;
         stored = JSON.stringify(artistsData);
-        // Hydrate local storages
         sessionStorage.setItem('selectedArtists', stored);
         localStorage.setItem('selectedArtists', stored);
+      }
+
+      // Sync metadata cache from storage fallbacks
+      const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
+      if (storedTracksStr) {
+        try {
+          const previouslyLoadedTracks = JSON.parse(storedTracksStr);
+          const metadataMap: Record<string, any> = {};
+          const loadedTrackIds: string[] = [];
+          previouslyLoadedTracks.forEach((t: any) => {
+            metadataMap[t.id] = t;
+            loadedTrackIds.push(t.id);
+          });
+          setSelectedTracksMetadata(prev => ({ ...prev, ...metadataMap }));
+          if (selectedTrackIds.size === 0 && loadedTrackIds.length > 0) {
+            setSelectedTrackIds(new Set(loadedTrackIds));
+          }
+        } catch (e) {}
       }
 
       if (!stored) {
@@ -212,9 +261,11 @@ export default function TracksPage() {
             id: a.id,
             name: a.name,
             image: a.image,
-            albums: [], // Deferred loading
+            albums: [], 
+            unreleasedAlbums: [],
             albumsLoaded: false,
-            totalReleases: 0
+            totalReleases: 0,
+            albumsPage: 0
           }));
           setArtistData(initialData);
         }
@@ -233,24 +284,42 @@ export default function TracksPage() {
     const saveTrackDraft = async () => {
       const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
       
-      // Rebuild full tracks data
       const selectedTracksData: any[] = [];
-      artistData.forEach(artist => {
-        artist.albums.forEach(album => {
-          album.tracks.forEach(track => {
-            if (selectedTrackIds.has(track.id)) {
-              selectedTracksData.push({
-                ...track,
-                artistName: artist.name,
-                albumTitle: album.title,
-                albumImage: album.image,
+      selectedTrackIds.forEach(id => {
+        if (selectedTracksMetadata[id]) {
+          selectedTracksData.push(selectedTracksMetadata[id]);
+        } else {
+          artistData.forEach(artist => {
+            artist.albums.forEach(album => {
+              const track = album.tracks.find(t => t.id === id);
+              if (track) {
+                selectedTracksData.push({
+                  ...track,
+                  artistName: artist.name,
+                  albumTitle: album.title,
+                  albumImage: album.image,
+                  albumId: album.id
+                });
+              }
+            });
+            if (artist.unreleasedAlbums) {
+              artist.unreleasedAlbums.forEach(album => {
+                const track = album.tracks.find(t => t.id === id);
+                if (track) {
+                  selectedTracksData.push({
+                    ...track,
+                    artistName: artist.name,
+                    albumTitle: album.title,
+                    albumImage: album.image,
+                    albumId: album.id
+                  });
+                }
               });
             }
           });
-        });
+        }
       });
 
-      // Merge with any previously loaded tracks from storage that are still selected
       const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
       if (storedTracksStr) {
         try {
@@ -265,17 +334,44 @@ export default function TracksPage() {
 
       await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
       
-      // Sync local storage
       sessionStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
       localStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
     };
     
-    // Debounce slightly to prevent spamming when toggling checkboxes
     const timer = setTimeout(() => {
       saveTrackDraft();
-    }, 1500); // 1.5s is safer for tracks
+    }, 1500); 
     return () => clearTimeout(timer);
-  }, [selectedTrackIds, artistData, user]);
+  }, [selectedTrackIds, artistData, user, selectedTracksMetadata]);
+
+  // Debounced search effect
+  React.useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const artistIds = artistData.map(a => a.id).join(",");
+        const artistNames = artistData.map(a => a.name).join(",");
+        
+        const response = await fetch(`/api/spotify-search?q=${encodeURIComponent(searchQuery)}&artistIds=${artistIds}&artistNames=${artistNames}`);
+        if (response.ok) {
+          const data = await response.json();
+          setSearchResults(data.results || []);
+        }
+      } catch (err) {
+        console.error("Search fetch failed:", err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, artistData]);
 
   const toggleArtistAccordion = async (artistId: string) => {
     if (expandedArtistId === artistId) {
@@ -283,49 +379,72 @@ export default function TracksPage() {
     } else {
       setExpandedArtistId(artistId);
 
-      // Lazy load albums for this artist
+      // Lazy load page 1 of albums for this artist
       const artist = artistData.find(a => a.id === artistId);
       if (artist && !artist.albumsLoaded) {
         setLoadingAlbums(prev => new Set(prev).add(`artist_${artistId}`));
         try {
-          const albumsData = await getArtistAlbums(artistId);
+          const albumsData = await getArtistAlbums(artistId, 0, 10);
           const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
             id: albumRaw.id,
             title: albumRaw.name,
             type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
             year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
             image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
-            tracks: [], // Lazy loaded later
+            tracks: [], 
             totalTracks: albumRaw.total_tracks || 0
           }));
 
-          // Fetch unreleased tracks from Supabase and construct a virtual album
+          // Fetch unreleased tracks from Supabase and map them to custom virtual Single albums
+          let unreleasedAlbumsList: Album[] = [];
           try {
             const dbUnreleased = await fetchUnreleasedTracksForArtist(artistId);
             if (dbUnreleased && dbUnreleased.length > 0) {
-              const unreleasedTracks: Track[] = dbUnreleased.map((t: any) => ({
-                id: t.id,
-                title: t.title,
-                duration: "Live"
-              }));
+              unreleasedAlbumsList = dbUnreleased.map((t: any) => {
+                const youtubeId = getYouTubeVideoId(t.videoUrl || t.video_url || "");
+                const coverImage = youtubeId 
+                  ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+                  : `https://picsum.photos/seed/${t.id}/300/300`;
+                
+                const trackYear = t.releaseDate 
+                  ? t.releaseDate.substring(0, 4) 
+                  : t.release_date 
+                    ? t.release_date.substring(0, 4) 
+                    : new Date().getFullYear().toString();
 
-              const virtualAlbum = {
-                id: `al_unreleased_${artistId}`,
-                title: "미발매곡",
-                type: "Single" as const,
-                year: new Date().getFullYear().toString(),
-                image: "https://picsum.photos/seed/default_record/300/300",
-                tracks: unreleasedTracks,
-                totalTracks: unreleasedTracks.length
-              };
-
-              mappedAlbums.push(virtualAlbum);
+                return {
+                  id: `al_unreleased_${t.id}`,
+                  title: t.title, // album title matches track name perfectly
+                  type: "Single" as const,
+                  year: trackYear,
+                  image: coverImage,
+                  tracks: [
+                    {
+                      id: t.id,
+                      title: t.title,
+                      duration: "Live"
+                    }
+                  ],
+                  totalTracks: 1
+                };
+              });
             }
           } catch (err) {
             console.error("Failed to fetch unreleased tracks from Supabase:", err);
           }
 
-          setArtistData(prev => prev.map(a => a.id === artistId ? { ...a, albums: mappedAlbums, albumsLoaded: true, totalReleases: albumsData.total + 1 } : a));
+          setArtistData(prev => prev.map(a => 
+            a.id === artistId 
+              ? { 
+                  ...a, 
+                  albums: mappedAlbums, 
+                  unreleasedAlbums: unreleasedAlbumsList,
+                  albumsLoaded: true, 
+                  totalReleases: albumsData.total,
+                  albumsPage: 0
+                } 
+              : a
+          ));
         } catch (e) {
           console.error("Failed to load albums for artist", e);
         } finally {
@@ -337,8 +456,50 @@ export default function TracksPage() {
         }
       }
     }
-    // Only one artist open at a time is usually cleaner for UX.
-    setExpandedAlbumId(null); // Reset album expansion when switching artists
+    setExpandedAlbumId(null); 
+  };
+
+  // Change album pagination page (server-side getArtistAlbums limit=10)
+  const handleArtistAlbumsPageChange = async (artistId: string, targetPage: number) => {
+    const artist = artistData.find(a => a.id === artistId);
+    if (!artist) return;
+
+    setLoadingAlbums(prev => new Set(prev).add(`artist_${artistId}`));
+    try {
+      const offset = targetPage * 10;
+      const albumsData = await getArtistAlbums(artistId, offset, 10);
+      
+      const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
+        id: albumRaw.id,
+        title: albumRaw.name,
+        type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
+        year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
+        image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+        tracks: [],
+        totalTracks: albumRaw.total_tracks || 0
+      }));
+
+      setArtistData(prev => prev.map(a => 
+        a.id === artistId 
+          ? { 
+              ...a, 
+              albums: mappedAlbums, 
+              albumsPage: targetPage,
+              totalReleases: albumsData.total
+            } 
+          : a
+      ));
+      
+      setExpandedAlbumId(null);
+    } catch (e) {
+      console.error("Failed to change album page:", e);
+    } finally {
+      setLoadingAlbums(prev => {
+        const next = new Set(prev);
+        next.delete(`artist_${artistId}`);
+        return next;
+      });
+    }
   };
 
   const handleAlbumClick = async (albumId: string, artistId: string) => {
@@ -347,6 +508,9 @@ export default function TracksPage() {
       return;
     }
     setExpandedAlbumId(albumId);
+
+    // If it's a virtual unreleased album, it already has the track inside its properties
+    if (albumId.startsWith("al_unreleased_")) return;
 
     // Check if we already have tracks for this album
     const isLoaded = artistData.some(artist =>
@@ -392,11 +556,69 @@ export default function TracksPage() {
     }
   };
 
-  const toggleTrack = (trackId: string) => {
+  const toggleTrack = (trackId: string, metadata?: {
+    id: string;
+    title: string;
+    duration: string;
+    artistName: string;
+    albumTitle: string;
+    albumImage: string;
+    albumId?: string;
+  }) => {
     const newSelected = new Set(selectedTrackIds);
-    if (newSelected.has(trackId)) newSelected.delete(trackId);
-    else newSelected.add(trackId);
+    const newMetadata = { ...selectedTracksMetadata };
+
+    if (newSelected.has(trackId)) {
+      newSelected.delete(trackId);
+      delete newMetadata[trackId];
+    } else {
+      newSelected.add(trackId);
+      if (metadata) {
+        newMetadata[trackId] = metadata;
+      } else {
+        // Fallback: Populate metadata from state arrays if not supplied
+        let found = false;
+        artistData.forEach(artist => {
+          if (found) return;
+          artist.albums.forEach(album => {
+            if (found) return;
+            const t = album.tracks.find(x => x.id === trackId);
+            if (t) {
+              newMetadata[trackId] = {
+                id: t.id,
+                title: t.title,
+                duration: t.duration,
+                artistName: artist.name,
+                albumTitle: album.title,
+                albumImage: album.image,
+                albumId: album.id
+              };
+              found = true;
+            }
+          });
+          if (artist.unreleasedAlbums) {
+            artist.unreleasedAlbums.forEach(album => {
+              if (found) return;
+              const t = album.tracks.find(x => x.id === trackId);
+              if (t) {
+                newMetadata[trackId] = {
+                  id: t.id,
+                  title: t.title,
+                  duration: t.duration,
+                  artistName: artist.name,
+                  albumTitle: album.title,
+                  albumImage: album.image,
+                  albumId: album.id
+                };
+                found = true;
+              }
+            });
+          }
+        });
+      }
+    }
     setSelectedTrackIds(newSelected);
+    setSelectedTracksMetadata(newMetadata);
   };
 
   const handleAddUnreleased = async (e: React.FormEvent) => {
@@ -404,8 +626,15 @@ export default function TracksPage() {
     if (!unreleasedForm.title.trim() || !modalArtistId) return;
 
     const newTrackId = `t_unreleased_${Date.now()}`;
-    const defaultCover = "https://picsum.photos/seed/default_record/300/300";
+    const youtubeId = getYouTubeVideoId(unreleasedForm.videoUrl);
+    const coverImage = youtubeId 
+      ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+      : `https://picsum.photos/seed/${newTrackId}/300/300`;
     
+    const trackYear = unreleasedForm.date 
+      ? unreleasedForm.date.substring(0, 4) 
+      : new Date().getFullYear().toString();
+
     const targetArtist = artistData.find(a => a.id === modalArtistId);
     const artistName = targetArtist ? targetArtist.name : "Unknown Artist";
 
@@ -427,38 +656,39 @@ export default function TracksPage() {
       }
     }
 
+    const newTrack: Track = { id: newTrackId, title: unreleasedForm.title, duration: "Live" };
+    const newUnreleasedAlbum: Album = {
+      id: `al_unreleased_${newTrackId}`,
+      title: unreleasedForm.title, // 곡명이랑 앨범명 완벽 매칭
+      type: "Single" as const,
+      year: trackYear,
+      image: coverImage,
+      tracks: [newTrack],
+      totalTracks: 1
+    };
+
     // 2. Optimistic UI update - Add to local artistData state
     setArtistData(prev => prev.map(artist => {
       if (artist.id === modalArtistId) {
-        const newTrack: Track = { id: newTrackId, title: unreleasedForm.title, duration: "Live" };
-        const unreleasedAlbumIndex = artist.albums.findIndex(a => a.title === "미발매곡");
-
-        if (unreleasedAlbumIndex >= 0) {
-          const updatedAlbums = [...artist.albums];
-          updatedAlbums[unreleasedAlbumIndex] = {
-            ...updatedAlbums[unreleasedAlbumIndex],
-            tracks: [...updatedAlbums[unreleasedAlbumIndex].tracks, newTrack]
-          };
-          return { ...artist, albums: updatedAlbums };
-        } else {
-          const newAlbum: Album = {
-            id: `al_unreleased_${Date.now()}`,
-            title: "미발매곡",
-            type: "Single",
-            year: new Date().getFullYear().toString(),
-            image: defaultCover,
-            tracks: [newTrack]
-          };
-          return { ...artist, albums: [...artist.albums, newAlbum] };
-        }
+        const currentUnreleased = artist.unreleasedAlbums || [];
+        return {
+          ...artist,
+          unreleasedAlbums: [newUnreleasedAlbum, ...currentUnreleased]
+        };
       }
       return artist;
     }));
 
-    // 3. Add to selection immediately
-    const newSelected = new Set(selectedTrackIds);
-    newSelected.add(newTrackId);
-    setSelectedTrackIds(newSelected);
+    // 3. Add to selection immediately with metadata
+    toggleTrack(newTrackId, {
+      id: newTrackId,
+      title: unreleasedForm.title,
+      duration: "Live",
+      artistName: artistName,
+      albumTitle: unreleasedForm.title,
+      albumImage: coverImage,
+      albumId: `al_unreleased_${newTrackId}`
+    });
 
     setIsModalOpen(false);
     setUnreleasedForm({ title: '', videoUrl: '', date: '' });
@@ -466,12 +696,12 @@ export default function TracksPage() {
     // 4. Custom notification based on login state
     if (user) {
       if (persistSuccess) {
-        setNotification("미발매곡 등록이 요청되었습니다. 관리자 승인 전이라도 본인의 월드컵에선 즉시 사용 가능합니다!");
+        setNotification("미발매곡 등록이 요청되었습니다. 승인 대기 중이라도 월드컵 대진에는 즉시 사용 가능합니다!");
       } else {
-        setNotification("DB 저장에 실패했으나, 임시 추가되어 현재 월드컵에선 즉시 사용 가능합니다!");
+        setNotification("DB 저장에 실패했으나, 임시 추가되어 현재 세션에서 즉시 사용 가능합니다!");
       }
     } else {
-      setNotification("로그인하지 않은 상태입니다. 임시 추가되어 즉시 사용 가능하지만, 종료 시 저장되지 않습니다.");
+      setNotification("로그인하지 않은 상태입니다. 임시 추가되어 즉시 사용 가능하지만, 브라우저 종료 시 유실될 수 있습니다.");
     }
     setTimeout(() => setNotification(null), 5000);
   };
@@ -479,22 +709,42 @@ export default function TracksPage() {
   const handleStartWorldCup = async () => {
     // Gather full details for selected tracks
     const selectedTracksData: any[] = [];
-    artistData.forEach(artist => {
-      artist.albums.forEach(album => {
-        album.tracks.forEach(track => {
-          if (selectedTrackIds.has(track.id)) {
-            selectedTracksData.push({
-              ...track,
-              artistName: artist.name,
-              albumTitle: album.title,
-              albumImage: album.image,
+    selectedTrackIds.forEach(id => {
+      if (selectedTracksMetadata[id]) {
+        selectedTracksData.push(selectedTracksMetadata[id]);
+      } else {
+        artistData.forEach(artist => {
+          artist.albums.forEach(album => {
+            const track = album.tracks.find(t => t.id === id);
+            if (track) {
+              selectedTracksData.push({
+                ...track,
+                artistName: artist.name,
+                albumTitle: album.title,
+                albumImage: album.image,
+                albumId: album.id
+              });
+            }
+          });
+          if (artist.unreleasedAlbums) {
+            artist.unreleasedAlbums.forEach(album => {
+              const track = album.tracks.find(t => t.id === id);
+              if (track) {
+                selectedTracksData.push({
+                  ...track,
+                  artistName: artist.name,
+                  albumTitle: album.title,
+                  albumImage: album.image,
+                  albumId: album.id
+                });
+              }
             });
           }
         });
-      });
+      }
     });
 
-    // Merge with any previously loaded tracks from storage that are still selected
+    // Merge with legacy track list inside sessionStorage
     const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
     if (storedTracksStr) {
       try {
@@ -516,7 +766,7 @@ export default function TracksPage() {
     sessionStorage.setItem("worldcup_tracks", tracksStr);
     localStorage.setItem("worldcup_tracks", tracksStr);
 
-    // Save as track selection draft before pushing so it is perfectly recorded on Supabase
+    // Save as track selection draft before pushing
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
@@ -571,230 +821,537 @@ export default function TracksPage() {
           </div>
           <input
             type="text"
-            placeholder="트랙, 아티스트 검색..."
-            className="w-full py-2.5 pl-11 pr-4 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="선택한 아티스트의 곡 제목 검색..."
+            className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
           />
-        </div>
-
-        {/* Sorting Tags */}
-        <div className="flex overflow-x-auto gap-2 scrollbar-none pb-2 px-6">
-          {["추천순", "가나다순", "선택순"].map((sort) => (
+          {searchQuery && (
             <button
-              key={sort}
-              onClick={() => {}} // implement sorting logic if needed
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full border-2 transition-all font-sans text-xs font-bold border-navy/10 text-charcoal/70 hover:border-navy/30 hover:bg-navy/5`}
+              onClick={() => setSearchQuery("")}
+              className="absolute inset-y-0 right-10 flex items-center text-navy/40 hover:text-navy transition-colors"
             >
-              {sort}
+              <X size={16} />
             </button>
-          ))}
+          )}
         </div>
       </div>
 
-      {/* Artists Content */}
-      <div className="py-6 pb-32 flex flex-col gap-4 px-3">
-        {artistData.map((artist, idx) => {
-          const isArtistExpanded = expandedArtistId === artist.id;
-          return (
-            <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40 flex flex-col border border-navy/10 rounded-[2rem] bg-white/60 p-5 shadow-sm transition-all hover:border-navy/20">
-               {/* Artist Header (Accordion Toggle) */}
-               <div
-                  className="flex items-center justify-between cursor-pointer w-full group"
-                  onClick={() => toggleArtistAccordion(artist.id)}
-               >
-                  <div className="flex items-center gap-4">
-                    <div className="relative w-14 h-14 rounded-full overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
-                       <Image src={artist.image} alt={artist.name} fill sizes="56px" priority={idx === 0} className="object-cover" />
+      {/* Main Content Area */}
+      {searchQuery.trim() !== "" ? (
+        <div className="py-6 pb-32 px-3 flex flex-col gap-4">
+          <div className="flex items-center justify-between px-2 mb-2">
+            <h2 className="font-serif text-xl text-navy">검색 결과 ({searchResults.length})</h2>
+          </div>
+          {isSearching ? (
+            <div className="py-20 flex flex-col items-center justify-center text-navy/50 gap-3">
+              <Disc className="animate-spin text-point/70" size={28} />
+              <p className="font-sans text-sm">트랙을 검색하는 중...</p>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="py-20 text-center font-sans text-charcoal/50 text-sm">
+              선택하신 아티스트 범위 내에 일치하는 트랙이 없습니다. 🔍
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {searchResults.map((result) => {
+                const isSelected = selectedTrackIds.has(result.trackId);
+                return (
+                  <div
+                    key={result.trackId}
+                    onClick={() => {
+                      toggleTrack(result.trackId, {
+                        id: result.trackId,
+                        title: result.title,
+                        duration: result.duration,
+                        artistName: result.artistName,
+                        albumTitle: result.albumTitle,
+                        albumImage: result.albumImage,
+                        albumId: result.albumId
+                      });
+                    }}
+                    className={`flex items-center justify-between p-4 rounded-3xl cursor-pointer transition-all active:scale-[0.98] border ${
+                      isSelected 
+                        ? "bg-[#F1EADC] border-point/30 shadow-[0_4px_15px_rgba(26,42,108,0.06)]" 
+                        : "bg-white/60 border-navy/5 hover:border-navy/10 shadow-sm"
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-sm shrink-0">
+                        <Image src={result.albumImage} alt={result.albumTitle} fill className="object-cover" />
+                      </div>
+                      <div className="text-left max-w-[200px] sm:max-w-[400px]">
+                        <h4 className={`font-sans text-sm font-bold line-clamp-1 ${isSelected ? "text-point" : "text-navy"}`}>
+                          {result.title}
+                        </h4>
+                        <p className="font-sans text-xs text-charcoal/60 mt-0.5 line-clamp-1">
+                          {result.artistName} • {result.albumTitle}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-left">
-                       <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
-                       <p className="font-sans text-xs text-charcoal/60 mt-0.5">
-                         {loadingAlbums.has(`artist_${artist.id}`)
-                           ? "앨범 로딩 중..."
-                           : artist.albumsLoaded
-                             ? `${artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)} Tracks • ${artist.totalReleases || artist.albums.length} Releases`
-                             : "앨범 및 트랙 목록 열기"}
-                       </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-charcoal/40 font-sans mr-1">{result.duration}</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        isSelected ? "border-point bg-point text-white" : "border-navy/20"
+                      }`}>
+                        {isSelected && <Check size={14} className="text-white" strokeWidth={3} />}
+                      </div>
                     </div>
                   </div>
-               </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Standard Accordion Content */
+        <div className="py-6 pb-32 flex flex-col gap-4 px-3">
+          {artistData.map((artist, idx) => {
+            const isArtistExpanded = expandedArtistId === artist.id;
+            return (
+              <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40 flex flex-col border border-navy/10 rounded-[2rem] bg-white/60 p-5 shadow-sm transition-all hover:border-navy/20">
+                 {/* Artist Header (Accordion Toggle) */}
+                 <div
+                    className="flex items-center justify-between cursor-pointer w-full group"
+                    onClick={() => toggleArtistAccordion(artist.id)}
+                 >
+                    <div className="flex items-center gap-4">
+                      <div className="relative w-14 h-14 rounded-full overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
+                         <Image src={artist.image} alt={artist.name} fill sizes="56px" priority={idx === 0} className="object-cover" />
+                      </div>
+                      <div className="text-left">
+                         <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
+                         <p className="font-sans text-xs text-charcoal/60 mt-0.5">
+                           {loadingAlbums.has(`artist_${artist.id}`)
+                             ? "앨범 로딩 중..."
+                             : artist.albumsLoaded
+                               ? `${artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)} Tracks • ${artist.totalReleases || artist.albums.length} Releases`
+                               : "앨범 및 트랙 목록 열기"}
+                         </p>
+                      </div>
+                    </div>
+                 </div>
 
-               {/* Artist Albums Grid (Accordion Content) */}
-               <AnimatePresence>
-                 {isArtistExpanded && (
-                   <motion.div
-                     initial={{ height: 0, opacity: 0 }}
-                     animate={{ height: "auto", opacity: 1 }}
-                     exit={{ height: 0, opacity: 0 }}
-                     className="overflow-hidden"
-                   >
-                     <div className="mt-5 mb-2 h-px bg-navy/5 w-full hidden hidden-but-spacer-if-needed" />
-                     {loadingAlbums.has(`artist_${artist.id}`) ? (
-                        <div className="py-10 flex flex-col items-center justify-center text-navy/50 gap-3">
-                           <Disc className="animate-spin text-point/70" size={28} />
-                           <p className="font-sans text-sm">스포티파이에서 앨범을 불러오고 있어요...</p>
-                        </div>
-                     ) : (
-                       <div className="grid grid-cols-2 gap-4 mt-6">
-                          {artist.albums.map(album => {
-                           const isExpanded = expandedAlbumId === album.id;
-
-                           // Global transition for the elegant record-pulling feel
-                           const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
-
-                           return (
-                             <motion.div
-                               layout
-                               transition={smoothTransition}
-                               key={album.id}
-                               className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
-                               onClick={() => {
-                                 if (!isExpanded) {
-                                   handleAlbumClick(album.id, artist.id);
-                                 }
-                               }}
-                             >
-                                {/* Cover & Info Row */}
-                                <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
-                                   <div className={`relative flex justify-center items-center ${isExpanded ? "w-full mb-3 mt-4" : "w-full"}`}>
-
-                                     {/* LP Record (slides out when expanded) */}
-                                     <AnimatePresence>
-                                       {isExpanded && (
-                                         <motion.div
-                                           initial={{ x: 0, opacity: 0, rotate: -45 }}
-                                           animate={{ x: '45%', opacity: 1, rotate: 0 }}
-                                           exit={{ x: 0, opacity: 0, rotate: -45 }}
-                                           transition={{ type: "spring", stiffness: 100, damping: 20 }}
-                                           className="absolute top-0 bottom-0 my-auto w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-[#111] shadow-[0_4px_15px_rgba(0,0,0,0.4)] z-0 flex items-center justify-center pointer-events-none"
-                                           style={{
-                                             background: 'radial-gradient(circle, #222 0%, #0a0a0a 100%)',
-                                             boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)'
-                                           }}
-                                         >
-                                            {/* Grooves */}
-                                            <div className="absolute inset-[6px] border border-white/5 rounded-full" />
-                                            <div className="absolute inset-[14px] border border-white/5 rounded-full" />
-                                            <div className="absolute inset-[24px] border border-white/5 rounded-full" />
-                                            <div className="absolute inset-[36px] border border-white/5 rounded-full" />
-                                            {/* LP Label (Inner circle) */}
-                                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                              <Image src={album.image} alt={album.title} fill className="object-cover" />
-                                            </div>
-                                            {/* Center hole */}
-                                            <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
-                                         </motion.div>
-                                       )}
-                                     </AnimatePresence>
-
-                                     {/* Album Cover */}
-                                     <motion.div
-                                       layout
-                                       transition={smoothTransition}
-                                       onClick={(e) => {
-                                         if (isExpanded) {
-                                           e.stopPropagation();
-                                           handleAlbumClick(album.id, artist.id);
-                                         }
-                                       }}
-                                       className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-32 sm:w-36 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
-                                       style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
-                                     >
-                                       <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
-                                       {!isExpanded && (
-                                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                                       )}
-                                     </motion.div>
-                                   </div>
-
-                                   {/* Info */}
-                                   <motion.div
-                                       layout
-                                       transition={smoothTransition}
-                                       onClick={(e) => {
-                                         if (isExpanded) {
-                                           e.stopPropagation();
-                                           handleAlbumClick(album.id, artist.id);
-                                         }
-                                       }}
-                                       className={`flex flex-col justify-center text-center ${isExpanded ? "w-full mt-2 cursor-pointer" : "px-2 mt-1 text-left"}`}
-                                    >
-                                      <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
-                                      <div className={`flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5 ${isExpanded ? "justify-center" : "justify-start"}`}>
-                                         {isExpanded && <Disc size={10} />}
-                                         <span className="line-clamp-1">{album.type} • {album.year}</span>
-                                      </div>
-                                   </motion.div>
-                                </motion.div>
-
-                                {/* Expandable Tracks List */}
-                                <AnimatePresence>
-                                  {isExpanded && (
-                                     <motion.div
-                                       initial={{ opacity: 0, height: 0, y: -15 }}
-                                       animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                       exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
-                                       transition={smoothTransition}
-                                       onClick={(e) => e.stopPropagation()}
-                                       className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
-                                     >
-                                        <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
-
-                                        {loadingAlbums.has(album.id) ? (
-                                          <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
-                                            <Disc className="animate-spin text-point/70" size={20} />
-                                            <span>트랙을 불러오는 중...</span>
-                                          </div>
-                                        ) : (
-                                          album.tracks.map((track, idx) => {
-                                            const isSelected = selectedTrackIds.has(track.id);
-                                            return (
-                                              <div
-                                                key={track.id}
-                                                onClick={(e) => { e.stopPropagation(); toggleTrack(track.id); }}
-                                                className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
-                                              >
-                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
-                                                    <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
-                                                 </div>
-                                                 {isSelected ? (
-                                                    <Check size={18} className="text-point" strokeWidth={3} />
-                                                 ) : (
-                                                    <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
-                                                 )}
-                                              </div>
-                                            )
-                                          })
-                                        )}
-
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
-                                          className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
-                                        >
-                                          닫기
-                                        </button>
-                                     </motion.div>
-                                  )}
-                                </AnimatePresence>
-                             </motion.div>
-                           );
-                         })}
-                       </div>
-                     )}
-                     <button
-                       onClick={(e) => { e.stopPropagation(); setModalArtistId(artist.id); setIsModalOpen(true); }}
-                       className="w-full mt-4 py-3 rounded-2xl border border-dashed border-navy/30 text-navy/70 font-sans text-sm font-medium flex items-center justify-center gap-2 hover:bg-navy/5 hover:text-navy transition-colors"
+                 {/* Artist Albums Grid (Accordion Content) */}
+                 <AnimatePresence>
+                   {isArtistExpanded && (
+                     <motion.div
+                       initial={{ height: 0, opacity: 0 }}
+                       animate={{ height: "auto", opacity: 1 }}
+                       exit={{ height: 0, opacity: 0 }}
+                       className="overflow-hidden"
                      >
-                       <Plus size={16} />
-                       미발매곡 추가
-                     </button>
-                   </motion.div>
-                 )}
-               </AnimatePresence>
-            </section>
-          )
-        })}
-      </div>
+                       <div className="mt-5 mb-2 h-px bg-navy/5 w-full hidden" />
+                       {loadingAlbums.has(`artist_${artist.id}`) && artist.albums.length === 0 ? (
+                          <div className="py-10 flex flex-col items-center justify-center text-navy/50 gap-3">
+                             <Disc className="animate-spin text-point/70" size={28} />
+                             <p className="font-sans text-sm">스포티파이에서 앨범을 불러오고 있어요...</p>
+                          </div>
+                       ) : (
+                         <>
+                           {/* Released Albums Grid */}
+                           <div className="grid grid-cols-2 gap-4 mt-6">
+                              {artist.albums.map(album => {
+                               const isExpanded = expandedAlbumId === album.id;
+                               const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
+                               
+                               // Calculate selected count dynamically
+                               const selectedCount = album.tracks.filter(t => selectedTrackIds.has(t.id)).length;
+
+                               return (
+                                 <motion.div
+                                   layout
+                                   transition={smoothTransition}
+                                   key={album.id}
+                                   className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
+                                   onClick={() => {
+                                     if (!isExpanded) {
+                                       handleAlbumClick(album.id, artist.id);
+                                     }
+                                   }}
+                                 >
+                                    {/* Cover & Info Row */}
+                                    <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
+                                       <div className={`relative flex justify-center items-center ${isExpanded ? "w-full mb-3 mt-4" : "w-full"}`}>
+
+                                         {/* LP Record (slides out when expanded) */}
+                                         <AnimatePresence>
+                                           {isExpanded && (
+                                             <motion.div
+                                               initial={{ x: 0, opacity: 0, rotate: -45 }}
+                                               animate={{ x: '40%', opacity: 1, rotate: 0 }}
+                                               exit={{ x: 0, opacity: 0, rotate: -45 }}
+                                               transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                                               className="absolute top-0 bottom-0 my-auto w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-[#111] shadow-[0_4px_15px_rgba(0,0,0,0.4)] z-0 flex items-center justify-center pointer-events-none"
+                                               style={{
+                                                 background: 'radial-gradient(circle, #222 0%, #0a0a0a 100%)',
+                                                 boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)'
+                                               }}
+                                             >
+                                                {/* Grooves */}
+                                                <div className="absolute inset-[3px] sm:inset-[5px] border border-white/5 rounded-full" />
+                                                <div className="absolute inset-[7px] sm:inset-[11px] border border-white/5 rounded-full" />
+                                                <div className="absolute inset-[12px] sm:inset-[19px] border border-white/5 rounded-full" />
+                                                <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
+                                                {/* LP Label (Inner circle) */}
+                                                <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
+                                                  <Image src={album.image} alt={album.title} fill className="object-cover" />
+                                                </div>
+                                                {/* Center hole */}
+                                                <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
+                                             </motion.div>
+                                           )}
+                                         </AnimatePresence>
+
+                                         {/* Album Cover */}
+                                         <motion.div
+                                           layout
+                                           transition={smoothTransition}
+                                           onClick={(e) => {
+                                             if (isExpanded) {
+                                               e.stopPropagation();
+                                               handleAlbumClick(album.id, artist.id);
+                                             }
+                                           }}
+                                           className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
+                                           style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
+                                         >
+                                           <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                           {!isExpanded && (
+                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
+                                           )}
+                                           
+                                           {/* Dynamic spring-loaded selection count badge */}
+                                           <AnimatePresence>
+                                             {selectedCount > 0 && (
+                                               <motion.div
+                                                 initial={{ scale: 0, opacity: 0 }}
+                                                 animate={{ scale: 1, opacity: 1 }}
+                                                 exit={{ scale: 0, opacity: 0 }}
+                                                 transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                                 onClick={(e) => {
+                                                   e.stopPropagation();
+                                                 }}
+                                                 className="absolute top-2 right-2 z-30 w-6 h-6 rounded-full bg-point text-white font-sans text-xs font-bold flex items-center justify-center shadow-md select-none pointer-events-auto"
+                                               >
+                                                 {selectedCount}
+                                               </motion.div>
+                                             )}
+                                           </AnimatePresence>
+                                         </motion.div>
+                                       </div>
+
+                                       {/* Info */}
+                                       <motion.div
+                                           layout
+                                           transition={smoothTransition}
+                                           onClick={(e) => {
+                                             if (isExpanded) {
+                                               e.stopPropagation();
+                                               handleAlbumClick(album.id, artist.id);
+                                             }
+                                           }}
+                                           className={`flex flex-col justify-center text-center ${isExpanded ? "w-full mt-2 cursor-pointer" : "px-2 mt-1 text-left"}`}
+                                        >
+                                          <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
+                                          <div className={`flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5 ${isExpanded ? "justify-center" : "justify-start"}`}>
+                                             {isExpanded && <Disc size={10} />}
+                                             <span className="line-clamp-1">{album.type} • {album.year}</span>
+                                          </div>
+                                       </motion.div>
+                                    </motion.div>
+
+                                    {/* Expandable Tracks List */}
+                                    <AnimatePresence>
+                                      {isExpanded && (
+                                         <motion.div
+                                           initial={{ opacity: 0, height: 0, y: -15 }}
+                                           animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                           exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                                           transition={smoothTransition}
+                                           onClick={(e) => e.stopPropagation()}
+                                           className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
+                                         >
+                                            <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
+
+                                            {loadingAlbums.has(album.id) ? (
+                                              <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
+                                                <Disc className="animate-spin text-point/70" size={20} />
+                                                <span>트랙을 불러오는 중...</span>
+                                              </div>
+                                            ) : (
+                                              album.tracks.map((track, idx) => {
+                                                const isSelected = selectedTrackIds.has(track.id);
+                                                return (
+                                                  <div
+                                                    key={track.id}
+                                                    onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      toggleTrack(track.id, {
+                                                        id: track.id,
+                                                        title: track.title,
+                                                        duration: track.duration,
+                                                        artistName: artist.name,
+                                                        albumTitle: album.title,
+                                                        albumImage: album.image,
+                                                        albumId: album.id
+                                                      }); 
+                                                    }}
+                                                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
+                                                  >
+                                                     <div className="flex items-center gap-3">
+                                                        <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                        <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
+                                                     </div>
+                                                     {isSelected ? (
+                                                        <Check size={18} className="text-point" strokeWidth={3} />
+                                                     ) : (
+                                                        <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                                     )}
+                                                  </div>
+                                                )
+                                              })
+                                            )}
+
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
+                                              className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
+                                            >
+                                              닫기
+                                            </button>
+                                         </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                 </motion.div>
+                               );
+                              })}
+                           </div>
+
+                           {/* Spotify Released Albums Pagination Bar */}
+                           {artist.totalReleases && artist.totalReleases > 10 && (
+                             <div className="flex items-center justify-center gap-4 mt-6 py-2 border-t border-b border-navy/5 font-sans">
+                               <button
+                                 disabled={(artist.albumsPage || 0) === 0}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleArtistAlbumsPageChange(artist.id, (artist.albumsPage || 0) - 1);
+                                 }}
+                                 className="px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                               >
+                                 이전
+                               </button>
+                               <span className="text-xs font-medium text-navy/70">
+                                 {(artist.albumsPage || 0) + 1} / {Math.ceil(artist.totalReleases / 10)}
+                               </span>
+                               <button
+                                 disabled={(artist.albumsPage || 0) >= Math.ceil(artist.totalReleases / 10) - 1}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleArtistAlbumsPageChange(artist.id, (artist.albumsPage || 0) + 1);
+                                 }}
+                                 className="px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                               >
+                                 다음
+                               </button>
+                             </div>
+                           )}
+
+                           {/* Decoupled Unreleased Section - Renders individual virtual Single albums */}
+                           {artist.unreleasedAlbums && artist.unreleasedAlbums.length > 0 && (
+                             <div className="mt-8 pt-6 border-t border-dashed border-navy/10 text-left">
+                               <h3 className="font-serif text-lg text-navy mb-4 flex items-center gap-2">
+                                 <Compass size={18} className="text-point shrink-0" />
+                                 미발매곡
+                               </h3>
+                               <div className="grid grid-cols-2 gap-4">
+                                  {artist.unreleasedAlbums.map(album => {
+                                    const isExpanded = expandedAlbumId === album.id;
+                                    const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
+                                    
+                                    // Calculate selected count inside virtual single album (always max 1 track)
+                                    const selectedCount = album.tracks.filter(t => selectedTrackIds.has(t.id)).length;
+
+                                    return (
+                                      <motion.div
+                                        layout
+                                        transition={smoothTransition}
+                                        key={album.id}
+                                        className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
+                                        onClick={() => {
+                                          if (!isExpanded) {
+                                            handleAlbumClick(album.id, artist.id);
+                                          }
+                                        }}
+                                      >
+                                         {/* Cover & Info Row */}
+                                         <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
+                                            <div className={`relative flex justify-center items-center ${isExpanded ? "w-full mb-3 mt-4" : "w-full"}`}>
+
+                                              {/* LP Record (slides out when expanded) */}
+                                              <AnimatePresence>
+                                                {isExpanded && (
+                                                  <motion.div
+                                                    initial={{ x: 0, opacity: 0, rotate: -45 }}
+                                                    animate={{ x: '40%', opacity: 1, rotate: 0 }}
+                                                    exit={{ x: 0, opacity: 0, rotate: -45 }}
+                                                    transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                                                    className="absolute top-0 bottom-0 my-auto w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-[#111] shadow-[0_4px_15px_rgba(0,0,0,0.4)] z-0 flex items-center justify-center pointer-events-none"
+                                                    style={{
+                                                      background: 'radial-gradient(circle, #222 0%, #0a0a0a 100%)',
+                                                      boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)'
+                                                    }}
+                                                  >
+                                                     {/* Grooves */}
+                                                     <div className="absolute inset-[3px] sm:inset-[5px] border border-white/5 rounded-full" />
+                                                     <div className="absolute inset-[7px] sm:inset-[11px] border border-white/5 rounded-full" />
+                                                     <div className="absolute inset-[12px] sm:inset-[19px] border border-white/5 rounded-full" />
+                                                     <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
+                                                     {/* LP Label */}
+                                                     <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
+                                                       <Image src={album.image} alt={album.title} fill className="object-cover" />
+                                                     </div>
+                                                     {/* Center hole */}
+                                                     <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
+                                                  </motion.div>
+                                                )}
+                                              </AnimatePresence>
+
+                                              {/* Album Cover */}
+                                              <motion.div
+                                                layout
+                                                transition={smoothTransition}
+                                                onClick={(e) => {
+                                                  if (isExpanded) {
+                                                    e.stopPropagation();
+                                                    handleAlbumClick(album.id, artist.id);
+                                                  }
+                                                }}
+                                                className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
+                                                style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
+                                              >
+                                                <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                {!isExpanded && (
+                                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
+                                                )}
+                                                
+                                                {/* Selected count spring-badge */}
+                                                <AnimatePresence>
+                                                  {selectedCount > 0 && (
+                                                    <motion.div
+                                                      initial={{ scale: 0, opacity: 0 }}
+                                                      animate={{ scale: 1, opacity: 1 }}
+                                                      exit={{ scale: 0, opacity: 0 }}
+                                                      transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                      }}
+                                                      className="absolute top-2 right-2 z-30 w-6 h-6 rounded-full bg-point text-white font-sans text-xs font-bold flex items-center justify-center shadow-md select-none pointer-events-auto"
+                                                    >
+                                                      {selectedCount}
+                                                    </motion.div>
+                                                  )}
+                                                </AnimatePresence>
+                                              </motion.div>
+                                            </div>
+
+                                            {/* Info */}
+                                            <motion.div
+                                                layout
+                                                transition={smoothTransition}
+                                                onClick={(e) => {
+                                                  if (isExpanded) {
+                                                    e.stopPropagation();
+                                                    handleAlbumClick(album.id, artist.id);
+                                                  }
+                                                }}
+                                                className={`flex flex-col justify-center text-center ${isExpanded ? "w-full mt-2 cursor-pointer" : "px-2 mt-1 text-left"}`}
+                                             >
+                                               <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
+                                               <div className={`flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5 ${isExpanded ? "justify-center" : "justify-start"}`}>
+                                                  {isExpanded && <Disc size={10} />}
+                                                  <span className="line-clamp-1">{album.type} • {album.year}</span>
+                                               </div>
+                                            </motion.div>
+                                         </motion.div>
+
+                                         {/* Expandable Tracks List */}
+                                         <AnimatePresence>
+                                           {isExpanded && (
+                                              <motion.div
+                                                initial={{ opacity: 0, height: 0, y: -15 }}
+                                                animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                                exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                                                transition={smoothTransition}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
+                                              >
+                                                 <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
+
+                                                 {album.tracks.map((track, idx) => {
+                                                   const isSelected = selectedTrackIds.has(track.id);
+                                                   return (
+                                                     <div
+                                                       key={track.id}
+                                                       onClick={(e) => { 
+                                                         e.stopPropagation(); 
+                                                         toggleTrack(track.id, {
+                                                           id: track.id,
+                                                           title: track.title,
+                                                           duration: track.duration,
+                                                           artistName: artist.name,
+                                                           albumTitle: album.title, // identical to track title
+                                                           albumImage: album.image,
+                                                           albumId: album.id
+                                                         }); 
+                                                       }}
+                                                       className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
+                                                     >
+                                                        <div className="flex items-center gap-3">
+                                                           <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                           <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
+                                                        </div>
+                                                        {isSelected ? (
+                                                           <Check size={18} className="text-point" strokeWidth={3} />
+                                                        ) : (
+                                                           <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                                        )}
+                                                     </div>
+                                                   )
+                                                 })}
+
+                                                 <button
+                                                   onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
+                                                   className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
+                                                 >
+                                                   닫기
+                                                 </button>
+                                              </motion.div>
+                                           )}
+                                         </AnimatePresence>
+                                      </motion.div>
+                                    );
+                                  })}
+                               </div>
+                             </div>
+                           )}
+                         </>
+                       )}
+                       
+                       <button
+                         onClick={(e) => { e.stopPropagation(); setModalArtistId(artist.id); setIsModalOpen(true); }}
+                         className="w-full mt-6 py-3 rounded-2xl border border-dashed border-navy/30 text-navy/70 font-sans text-sm font-medium flex items-center justify-center gap-2 hover:bg-navy/5 hover:text-navy transition-colors"
+                       >
+                         <Plus size={16} />
+                         미발매곡 추가
+                       </button>
+                     </motion.div>
+                   )}
+                 </AnimatePresence>
+              </section>
+            )
+          })}
+        </div>
+      )}
 
       {/* FAB Bottom */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex justify-center pointer-events-none">
@@ -877,8 +1434,8 @@ export default function TracksPage() {
                   <div className="flex items-start gap-2 bg-navy/5 p-3 rounded-xl">
                     <Info size={16} className="text-navy/60 shrink-0 mt-0.5" />
                     <p className="font-sans text-[11px] leading-relaxed text-charcoal/70">
-                      커버 이미지를 첨부하지 않으면 기본 이미지가 적용됩니다.<br/>
-                      공식 곡 승인 전이라도 <span className="font-bold text-point">월드컵에서 즉시 사용</span>할 수 있습니다.
+                      공연 영상 등록 시 유튜브 썸네일이 고유 앨범 아트로 자동 적용됩니다.<br/>
+                      공식 승인 전이라도 <span className="font-bold text-point">월드컵 대진에 즉시 포함</span>할 수 있습니다.
                     </p>
                   </div>
                 </div>
@@ -905,6 +1462,7 @@ export default function TracksPage() {
           </div>
         )}
       </AnimatePresence>
+      
       {/* 2-Step Exit Wizard Modal */}
       <AnimatePresence>
         {exitWizardStep !== null && (
