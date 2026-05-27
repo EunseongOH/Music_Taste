@@ -31,16 +31,13 @@ export default function WorldCupCandidate({ track, onDrop, onActive }: WorldCupC
   }, [isLP, onActive]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Instantly pass the drag to the LP
     dragControls.start(e);
-    
     setIsPressing(true);
     controls.start({
       scale: 0.95,
       transition: { duration: 0.15 }
     });
 
-    // Short timer to reveal LP
     pressTimer.current = setTimeout(() => {
       setIsLP(true);
     }, 200);
@@ -53,30 +50,21 @@ export default function WorldCupCandidate({ track, onDrop, onActive }: WorldCupC
       scale: 1,
       transition: { type: "spring", stiffness: 300, damping: 20 }
     });
-    
-    // We don't instantly hide LP if they are dragging.
-    // Hiding it will be handled by onDragEnd.
   };
 
   const handleDragEnd = (event: any, info: any) => {
-    // Quick heuristic: Check if dropped roughly at the bottom center of the screen
-    // We will use standard viewport coordinates roughly. For accuracy,
-    // the parent could pass a ref to the drop zone bounding box.
-    // For now we rely on a custom event, or parent passing a drop function.
-    // We can also just rely on y offset being large enough.
     cancelPress();
     setIsLP(false);
     
-    if (info.offset.y > 150) {
+    // Play-in sensitive drag check 
+    if (info.offset.y > 100) {
       onDrop(track);
-    } else {
-      // Snap back if not dropped
     }
   };
 
   return (
     <motion.div
-      className="relative flex flex-col items-center select-none w-40 h-40 justify-center"
+      className="relative flex flex-col items-center select-none w-full justify-center"
       style={{ touchAction: "none" }}
       onPointerDown={handlePointerDown}
       onPointerUp={cancelPress}
@@ -84,55 +72,67 @@ export default function WorldCupCandidate({ track, onDrop, onActive }: WorldCupC
       onPointerCancel={cancelPress}
       animate={controls}
     >
-      {/* 2. The LP Record (Revealed underneath) */}
-      <motion.div
-        drag
-        dragControls={dragControls}
-        dragListener={false} // Custom listener via onPointerDown on parent
-        dragSnapToOrigin={true}
-        onDragStart={() => setIsLP(true)}
-        onDragEnd={handleDragEnd}
-        animate={{ 
-           scale: isLP ? 1 : 0.8,
-           opacity: isLP ? 1 : 0,
-        }}
-        whileDrag={{ scale: 1.1, zIndex: 50 }}
-        className="absolute w-36 h-36 rounded-full border-2 border-navy bg-[#1a1a1a] flex items-center justify-center shadow-2xl z-20 cursor-grab active:cursor-grabbing origin-center"
-      >
-        {/* Grooves */}
-        <div className="absolute w-[85%] h-[85%] rounded-full border border-white/10 pointer-events-none" />
-        <div className="absolute w-[70%] h-[70%] rounded-full border border-white/10 pointer-events-none" />
-        <div className="absolute w-[55%] h-[55%] rounded-full border border-white/10 pointer-events-none" />
+      {/* 
+        Responsive visual wrapper: 
+        Maintains a gorgeous scale that is optimized for small screens (360px+) 
+        without ever becoming too small on large modern devices (S20 Ultra / iPhone Max).
+      */}
+      <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center shrink-0">
         
-        {/* LP Label */}
-        <div className="w-16 h-16 rounded-full border border-navy/20 relative overflow-hidden bg-point z-10 flex items-center justify-center shadow-inner pointer-events-none">
-           <Image src={track.albumImage} alt={track.title} fill sizes="64px" className="object-cover opacity-80" />
-           <div className="w-4 h-4 rounded-full bg-cream border border-navy shadow-sm z-20 absolute" />
-        </div>
-      </motion.div>
+        {/* 2. The LP Record (Revealed underneath - scales perfectly using percentages) */}
+        <motion.div
+          drag
+          dragControls={dragControls}
+          dragListener={false} 
+          dragSnapToOrigin={true}
+          onDragStart={() => setIsLP(true)}
+          onDragEnd={handleDragEnd}
+          animate={{ 
+             scale: isLP ? 1 : 0.8,
+             opacity: isLP ? 1 : 0,
+          }}
+          whileDrag={{ scale: 1.1, zIndex: 50 }}
+          className="absolute w-[90%] h-[90%] rounded-full border-2 border-navy bg-[#1a1a1a] flex items-center justify-center shadow-2xl z-20 cursor-grab active:cursor-grabbing origin-center"
+        >
+          {/* Grooves */}
+          <div className="absolute w-[85%] h-[85%] rounded-full border border-white/10 pointer-events-none" />
+          <div className="absolute w-[70%] h-[70%] rounded-full border border-white/10 pointer-events-none" />
+          <div className="absolute w-[55%] h-[55%] rounded-full border border-white/10 pointer-events-none" />
+          
+          {/* LP Label (Scales perfectly in ratio) */}
+          <div className="w-[45%] h-[45%] rounded-full border border-navy/20 relative overflow-hidden bg-point z-10 flex items-center justify-center shadow-inner pointer-events-none">
+             <Image src={track.albumImage} alt={track.title} fill sizes="64px" className="object-cover opacity-80" />
+             <div className="w-[20%] h-[20%] rounded-full bg-cream border border-navy shadow-sm z-20 absolute" />
+          </div>
+        </motion.div>
 
-      {/* 1. The Album Cover (Sleeve) - Slides UP and slightly scales down */}
-      <motion.div
-        animate={{ 
-          y: isLP ? -90 : 0, 
-          scale: isLP ? 0.9 : 1,
-          opacity: isLP ? 0.6 : 1,
-          rotate: isLP ? -5 : 0
-        }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="absolute w-40 h-40 rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_10px_30px_rgba(26,42,108,0.2)] overflow-hidden z-30 pointer-events-none"
-      >
-        <Image src={track.albumImage} alt={track.title} fill sizes="160px" className="object-cover" />
-        <div className="absolute inset-0 bg-black/0 hover:bg-black/5 transition-colors" />
-      </motion.div>
+        {/* 1. The Album Cover (Sleeve) - Slides UP beautifully by percentage to maintain perfect proportion regardless of scale */}
+        <motion.div
+          animate={{ 
+            y: isLP ? "-12%" : 0, 
+            scale: isLP ? 0.82 : 1,
+            opacity: isLP ? 0.6 : 1,
+            rotate: isLP ? -3 : 0
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(26,42,108,0.15)] overflow-hidden z-30 pointer-events-none"
+        >
+          <Image src={track.albumImage} alt={track.title} fill sizes="(max-width: 768px) 140px, 160px" className="object-cover" />
+          <div className="absolute inset-0 bg-black/0 hover:bg-black/5 transition-colors" />
+        </motion.div>
+      </div>
 
-      {/* Info Label below */}
+      {/* 3. Normal Flow Info Label (Static relative placement) */}
       <motion.div 
-        animate={{ opacity: isLP ? 0 : 1, y: isLP ? 20 : 0 }}
-        className="absolute -bottom-16 text-center pointer-events-none w-full"
+        animate={{ opacity: isLP ? 0 : 1, y: isLP ? 15 : 0 }}
+        className="mt-3 text-center pointer-events-none w-full select-none"
       >
-        <h3 className="font-sans font-bold text-lg text-navy line-clamp-1">{track.title}</h3>
-        <p className="font-sans text-sm text-charcoal/70">{track.artistName}</p>
+        <h3 className="font-sans font-bold text-xs sm:text-base md:text-lg text-navy line-clamp-1 px-1">
+          {track.title}
+        </h3>
+        <p className="font-sans text-[10px] sm:text-sm text-charcoal/70 line-clamp-1 mt-0.5">
+          {track.artistName}
+        </p>
       </motion.div>
     </motion.div>
   );
