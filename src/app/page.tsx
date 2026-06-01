@@ -20,6 +20,7 @@ export default function Home() {
   const supabase = createClient();
 
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
+  const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
 
   const modes = [
@@ -90,9 +91,17 @@ export default function Home() {
     }
   }[locale];
 
-  // 1. Check local storage progress on mount
+  // 1. Sync activeDraft & hasPreviousProgress with activeCardIndex and activeDrafts
   useEffect(() => {
-    const hasLocalProgress = !!(
+    const isSingleForCard = activeCardIndex === 1;
+
+    // Filter active drafts for current mode
+    const matchingDraft = activeDrafts.find(draft => draft.is_single_artist === isSingleForCard);
+    setActiveDraft(matchingDraft || null);
+
+    // Check local progress for current mode
+    const localIsSingle = localStorage.getItem("worldcup_is_single_artist") === "true" || sessionStorage.getItem("worldcup_is_single_artist") === "true";
+    const hasLocal = !!(
       localStorage.getItem("worldcup_progress") || 
       sessionStorage.getItem("worldcup_progress") ||
       localStorage.getItem("worldcup_tracks") ||
@@ -100,29 +109,27 @@ export default function Home() {
       localStorage.getItem("selectedArtists") ||
       sessionStorage.getItem("selectedArtists")
     );
-    if (hasLocalProgress) {
-      setHasPreviousProgress(true);
-    }
-  }, []);
 
-  // 2. Check Supabase draft when user logs in (without automatic redirects or popups!)
+    const matchesLocalMode = hasLocal && (localIsSingle === isSingleForCard);
+    setHasPreviousProgress(!!matchingDraft || matchesLocalMode);
+  }, [activeCardIndex, activeDrafts]);
+
+  // 2. Check Supabase drafts when user logs in (without automatic redirects or popups!)
   useEffect(() => {
     if (!isLoading && user) {
-      const checkDraft = async () => {
+      const checkDrafts = async () => {
         try {
-          const { data: draft, error } = await supabase
+          const { data, error } = await supabase
             .from('tournament_drafts')
             .select('*')
-            .eq('user_id', user.id)
-            .single();
+            .eq('user_id', user.id);
 
-          if (!error && draft) {
-            setActiveDraft(draft);
-            setHasPreviousProgress(true);
+          if (!error && data) {
+            setActiveDrafts(data);
           }
         } catch (e) {}
       };
-      checkDraft();
+      checkDrafts();
     }
   }, [user, isLoading, supabase]);
 
@@ -144,6 +151,18 @@ export default function Home() {
         // Show confirmation warning before starting a new tournament (to prevent accidental overwrite)
         setShowRestoreModal(true);
       } else {
+        // Clear all to ensure clean slate for new mode
+        localStorage.removeItem("worldcup_tracks");
+        localStorage.removeItem("worldcup_progress");
+        localStorage.removeItem("selectedArtists");
+        sessionStorage.removeItem("worldcup_tracks");
+        sessionStorage.removeItem("worldcup_progress");
+        sessionStorage.removeItem("selectedArtists");
+        
+        const isSingle = activeMode.id === "single";
+        localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+        sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+
         router.push(activeMode.target);
       }
     } else {
@@ -153,6 +172,9 @@ export default function Home() {
 
   const handleRestore = () => {
     if (activeDraft) {
+      localStorage.setItem("worldcup_is_single_artist", activeDraft.is_single_artist ? "true" : "false");
+      sessionStorage.setItem("worldcup_is_single_artist", activeDraft.is_single_artist ? "true" : "false");
+
       // 1. Sync data to storage
       if (activeDraft.selected_artists && activeDraft.selected_artists.length > 0) {
         sessionStorage.setItem("selectedArtists", JSON.stringify(activeDraft.selected_artists));
@@ -179,30 +201,33 @@ export default function Home() {
 
       // 2. Redirect based on stage status
       if (activeDraft.status === 'artist_selection') {
-        router.push("/explore");
+        router.push(activeDraft.is_single_artist ? "/explore?mode=single" : "/explore");
       } else if (activeDraft.status === 'track_selection') {
-        router.push("/tracks");
+        router.push(activeDraft.is_single_artist ? "/tracks?mode=single" : "/tracks");
       } else {
-        router.push("/worldcup");
+        router.push(activeDraft.is_single_artist ? "/worldcup?mode=single" : "/worldcup");
       }
     } else {
       // Fallback local storage checks
       const storedArtists = localStorage.getItem("selectedArtists") || sessionStorage.getItem("selectedArtists");
       const storedTracks = localStorage.getItem("worldcup_tracks") || sessionStorage.getItem("worldcup_tracks");
       const storedProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
+      const localIsSingle = localStorage.getItem("worldcup_is_single_artist") === "true" || sessionStorage.getItem("worldcup_is_single_artist") === "true";
       
       if (storedArtists) sessionStorage.setItem("selectedArtists", storedArtists);
       if (storedTracks) sessionStorage.setItem("worldcup_tracks", storedTracks);
       if (storedProgress) sessionStorage.setItem("worldcup_progress", storedProgress);
 
+      const qs = localIsSingle ? "?mode=single" : "";
+
       if (storedProgress) {
-        router.push("/worldcup");
+        router.push(`/worldcup${qs}`);
       } else if (storedTracks) {
-        router.push("/worldcup");
+        router.push(`/worldcup${qs}`);
       } else if (storedArtists) {
-        router.push("/tracks");
+        router.push(`/tracks${qs}`);
       } else {
-        router.push("/explore");
+        router.push(`/explore${qs}`);
       }
     }
   };
@@ -211,17 +236,25 @@ export default function Home() {
     localStorage.removeItem("worldcup_tracks");
     localStorage.removeItem("worldcup_progress");
     localStorage.removeItem("selectedArtists");
+    localStorage.removeItem("worldcup_is_single_artist");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
     sessionStorage.removeItem("selectedArtists");
+    sessionStorage.removeItem("worldcup_is_single_artist");
+
+    const activeMode = modes[activeCardIndex];
+    const isSingle = activeMode.id === "single";
+    localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+    sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
 
     if (user) {
       try {
-        // Clear Supabase drafts table
+        // Clear Supabase drafts table for specific mode
         await supabase
           .from('tournament_drafts')
           .delete()
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('is_single_artist', isSingle);
 
         await supabase.auth.updateUser({
           data: {

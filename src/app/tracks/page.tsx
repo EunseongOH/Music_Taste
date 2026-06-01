@@ -116,7 +116,7 @@ export default function TracksPage() {
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await downgradeDraftToArtistSelection(selectedArtists);
+        await downgradeDraftToArtistSelection(selectedArtists, isSingleArtistMode);
       } catch (err) {
         console.error("Error downgrading draft state to artist_selection:", err);
       }
@@ -178,14 +178,14 @@ export default function TracksPage() {
     }
 
     const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-    await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+    await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
     router.push("/");
   };
 
   const handleDiscardExit = async () => {
     setExitWizardStep(null);
     if (user) {
-      await deleteActiveDraft();
+      await deleteActiveDraft(isSingleArtistMode);
     }
     localStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_tracks");
@@ -197,10 +197,13 @@ export default function TracksPage() {
     const fetchSpotifyData = async () => {
       let stored = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
 
+      const params = new URLSearchParams(window.location.search);
+      const isSingle = params.get("mode") === "single";
+
       // Load from active draft in Supabase if user is logged in
       if (user) {
         try {
-          const draft = await loadActiveDraft();
+          const draft = await loadActiveDraft(isSingle);
           if (draft) {
             if (draft.selected_artists && draft.selected_artists.length > 0) {
               stored = JSON.stringify(draft.selected_artists);
@@ -350,7 +353,7 @@ export default function TracksPage() {
         } catch (e) {}
       }
 
-      await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+      await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
       
       sessionStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
       localStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
@@ -914,7 +917,7 @@ export default function TracksPage() {
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+        await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
       } catch (err) {
         console.error("Error saving draft before tournament:", err);
       }

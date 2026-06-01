@@ -34,6 +34,7 @@ export default function ExplorePage() {
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  const [pendingSingleArtist, setPendingSingleArtist] = useState<Artist | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -69,14 +70,14 @@ export default function ExplorePage() {
 
   const handleConfirmSaveExit = async () => {
     setShowSaveWarning(false);
-    await saveArtistSelectionDraft(selectedArtists);
+    await saveArtistSelectionDraft(selectedArtists, isSingleArtistMode);
     router.push("/");
   };
 
   const handleDiscardExit = async () => {
     setShowSaveWarning(false);
     if (user) {
-      await deleteActiveDraft();
+      await deleteActiveDraft(isSingleArtistMode);
     }
     localStorage.removeItem("selectedArtists");
     sessionStorage.removeItem("selectedArtists");
@@ -87,6 +88,9 @@ export default function ExplorePage() {
   useEffect(() => {
     const fetchInitial = async () => {
       try {
+        const params = new URLSearchParams(window.location.search);
+        const isSingle = params.get("mode") === "single";
+        
         const results = await getInitialArtists();
         const mappedArtists: Artist[] = results.map((artist: any) => ({
           id: artist.id,
@@ -102,7 +106,7 @@ export default function ExplorePage() {
         // 1. First, check if there is an active draft in Supabase (if logged in)
         if (user) {
           try {
-            const draft = await loadActiveDraft();
+            const draft = await loadActiveDraft(isSingle);
             if (draft && draft.selected_artists && draft.selected_artists.length > 0) {
               restoredArtists = draft.selected_artists;
             }
@@ -165,14 +169,14 @@ export default function ExplorePage() {
     if (!user) return;
     const saveDraft = async () => {
       // Save draft (updates even if empty, so deselecting all updates correctly)
-      await saveArtistSelectionDraft(selectedArtists);
+      await saveArtistSelectionDraft(selectedArtists, isSingleArtistMode);
     };
     // Debounce saving slightly so we don't spam requests when user is clicking multiple artists quickly
     const timer = setTimeout(() => {
       saveDraft();
     }, 1000);
     return () => clearTimeout(timer);
-  }, [selectedArtists, user]);
+  }, [selectedArtists, user, isSingleArtistMode]);
 
   // Handle Search
   useEffect(() => {
@@ -208,16 +212,7 @@ export default function ExplorePage() {
 
   const handleArtistClick = async (artist: Artist) => {
     if (isSingleArtistMode) {
-      const selected = [artist];
-      setSelectedArtists(selected);
-      sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
-      localStorage.setItem('selectedArtists', JSON.stringify(selected));
-      
-      if (user) {
-        await saveArtistSelectionDraft(selected);
-      }
-      
-      router.push('/tracks?mode=single');
+      setPendingSingleArtist(artist);
       return;
     }
 
@@ -524,7 +519,7 @@ export default function ExplorePage() {
       
       {/* Bottom Fixed Dock Panel (Full-Width Segmented View) */}
       <AnimatePresence>
-        {selectedIds.size > 0 && (
+        {selectedIds.size > 0 && !isSingleArtistMode && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -606,11 +601,13 @@ export default function ExplorePage() {
                     onClick={async () => {
                       sessionStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
                       localStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
+                      localStorage.setItem('worldcup_is_single_artist', 'false');
+                      sessionStorage.setItem('worldcup_is_single_artist', 'false');
                       
                       if (user) {
                         try {
                           // Await database draft update to ensure it is written before redirecting!
-                          await saveArtistSelectionDraft(selectedArtists);
+                          await saveArtistSelectionDraft(selectedArtists, false);
                           
                           // Sync user metadata as a secondary backup
                           await supabase.auth.updateUser({
@@ -638,7 +635,7 @@ export default function ExplorePage() {
       </AnimatePresence>
 
       {/* Spacing bottom padding adjusted for taller Bottom Dock */}
-      <div className={selectedIds.size > 0 ? "h-64" : "h-32"} />
+      <div className={selectedIds.size > 0 && !isSingleArtistMode ? "h-64" : "h-32"} />
 
       {/* Save Exit Confirmation Warning Modal */}
       <AnimatePresence>
@@ -700,6 +697,84 @@ export default function ExplorePage() {
                   >
                     취소
                   </motion.button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Single Artist Mode Selection Confirmation Popup Modal */}
+      <AnimatePresence>
+        {pendingSingleArtist && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPendingSingleArtist(null)}
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
+              <motion.div
+                className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
+                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                transition={{ type: "spring", stiffness: 380, damping: 26 }}
+              >
+                {/* Artist Avatar with Spinning LP vibe */}
+                <div className="relative w-24 h-24 rounded-full border-4 border-navy overflow-hidden bg-white shadow-md mb-4 mt-2">
+                  <Image 
+                    src={pendingSingleArtist.image} 
+                    alt={pendingSingleArtist.name}
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                  />
+                </div>
+                
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">Sort 진행할까요?</h2>
+                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-2">
+                  <span className="font-bold text-point">'{pendingSingleArtist.name}'</span>의 전곡으로 음악 취향 순위를 정하는 월드컵을 진행하시겠습니까?
+                </p>
+                
+                <div className="flex flex-col gap-2 w-full">
+                  <button 
+                    onClick={async () => {
+                      const selected = [pendingSingleArtist];
+                      setSelectedArtists(selected);
+                      sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
+                      localStorage.setItem('selectedArtists', JSON.stringify(selected));
+                      localStorage.setItem('worldcup_is_single_artist', 'true');
+                      sessionStorage.setItem('worldcup_is_single_artist', 'true');
+                      
+                      if (user) {
+                        try {
+                          await saveArtistSelectionDraft(selected, true);
+                          await supabase.auth.updateUser({
+                            data: {
+                              selected_artists: selected
+                            }
+                          });
+                        } catch (err) {
+                          console.error("Error saving draft inside explore proceed:", err);
+                        }
+                      }
+                      
+                      setPendingSingleArtist(null);
+                      router.push('/tracks?mode=single');
+                    }}
+                    className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                  >
+                    진행하기
+                  </button>
+                  <button 
+                    onClick={() => setPendingSingleArtist(null)}
+                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    취소
+                  </button>
                 </div>
               </motion.div>
             </div>

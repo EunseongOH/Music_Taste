@@ -1,11 +1,12 @@
 import { createClient } from "./supabase/client";
 
 // Stage 1: Save artist selection
-export const saveArtistSelectionDraft = async (selectedArtists: any[]) => {
+export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
   const title = selectedArtists.length > 0 
     ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
@@ -14,11 +15,12 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[]) => {
     .from('tournament_drafts')
     .upsert({
       user_id: user.id,
+      is_single_artist: isSingle,
       status: 'artist_selection',
       selected_artists: selectedArtists,
       title,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    }, { onConflict: 'user_id,is_single_artist' });
 
   if (error) {
     console.error("[Supabase DB] Error saving artist selection draft:", error.message);
@@ -26,20 +28,23 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[]) => {
 };
 
 // Stage 2: Save track selection
-export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTracks: any[]) => {
+export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTracks: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
 
   const { error } = await supabase
     .from('tournament_drafts')
     .upsert({
       user_id: user.id,
+      is_single_artist: isSingle,
       status: 'track_selection',
       selected_artists: selectedArtists,
       selected_tracks: selectedTracks,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    }, { onConflict: 'user_id,is_single_artist' });
 
   if (error) {
     console.error("[Supabase DB] Error saving track selection draft:", error.message);
@@ -47,11 +52,12 @@ export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTr
 };
 
 // Downgrade active draft to Artist Selection and clear track selection
-export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) => {
+export const downgradeDraftToArtistSelection = async (selectedArtists: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
   const title = selectedArtists.length > 0 
     ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
@@ -60,6 +66,7 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) =>
     .from('tournament_drafts')
     .upsert({
       user_id: user.id,
+      is_single_artist: isSingle,
       status: 'artist_selection',
       selected_artists: selectedArtists,
       selected_tracks: null,
@@ -73,7 +80,7 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) =>
       selected_byes: null,
       title,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    }, { onConflict: 'user_id,is_single_artist' });
 
   if (error) {
     console.error("[Supabase DB] Error downgrading draft status:", error.message);
@@ -82,13 +89,16 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) =>
 
 
 // Stage 3 & 4: Save active tournament playing state
-export const saveTournamentProgress = async (progressState: any, selectedArtists: any[], selectedTracks: any[], title: string) => {
+export const saveTournamentProgress = async (progressState: any, selectedArtists: any[], selectedTracks: any[], title: string, isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
+
   const draftData = {
     user_id: user.id,
+    is_single_artist: isSingle,
     title,
     status: progressState.phase === 'pre-tournament' ? 'pre_tournament' : 'playing',
     selected_artists: selectedArtists,
@@ -107,7 +117,7 @@ export const saveTournamentProgress = async (progressState: any, selectedArtists
 
   const { error } = await supabase
     .from('tournament_drafts')
-    .upsert(draftData, { onConflict: 'user_id' });
+    .upsert(draftData, { onConflict: 'user_id,is_single_artist' });
 
   if (error) {
     console.error("[Supabase DB] Error saving tournament progress:", error.message);
@@ -115,36 +125,44 @@ export const saveTournamentProgress = async (progressState: any, selectedArtists
 };
 
 // Load active draft journey
-export const loadActiveDraft = async () => {
+export const loadActiveDraft = async (isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  const query = supabase
     .from('tournament_drafts')
     .select('*')
-    .eq('user_id', user.id)
-    .single();
+    .eq('user_id', user.id);
 
-  if (error) {
-    // If not found, it is expected if there is no active draft
+  if (isSingleArtist !== undefined) {
+    query.eq('is_single_artist', isSingleArtist);
+  }
+
+  const { data, error } = await query;
+  if (error || !data || data.length === 0) {
     return null;
   }
 
-  return data;
+  return data[0];
 };
 
 // Delete active draft
-export const deleteActiveDraft = async () => {
+export const deleteActiveDraft = async (isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { error } = await supabase
+  const query = supabase
     .from('tournament_drafts')
     .delete()
     .eq('user_id', user.id);
 
+  if (isSingleArtist !== undefined) {
+    query.eq('is_single_artist', isSingleArtist);
+  }
+
+  const { error } = await query;
   if (error) {
     console.error("[Supabase DB] Error deleting active draft:", error.message);
   }

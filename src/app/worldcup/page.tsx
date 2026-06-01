@@ -69,7 +69,9 @@ export default function WorldCupPage() {
       // 1. Try loading from active draft in Supabase if logged in
       if (user) {
         try {
-          const draft = await loadActiveDraft();
+          const params = new URLSearchParams(window.location.search);
+          const isSingle = params.get("mode") === "single";
+          const draft = await loadActiveDraft(isSingle);
           // If the draft contains active tournament play state
           if (draft && (draft.status === 'playing' || draft.status === 'pre_tournament') && draft.phase) {
             if (draft.tracks && draft.tracks.length > 0) {
@@ -159,7 +161,7 @@ export default function WorldCupPage() {
       const saveToDb = async () => {
         const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
         const storedTracks = JSON.parse(sessionStorage.getItem("worldcup_tracks") || "[]");
-        await saveTournamentProgress(progressObj, storedArtists, storedTracks, "내 음악 월드컵");
+        await saveTournamentProgress(progressObj, storedArtists, storedTracks, "내 음악 월드컵", isSingleArtistMode);
       };
       const timer = setTimeout(() => {
         saveToDb();
@@ -172,7 +174,7 @@ export default function WorldCupPage() {
   useEffect(() => {
     if (phase === "finished" && user && winners.length > 0) {
       const clearDraft = async () => {
-        await deleteActiveDraft();
+        await deleteActiveDraft(isSingleArtistMode);
         sessionStorage.removeItem("worldcup_progress");
         localStorage.removeItem("worldcup_progress");
       };
