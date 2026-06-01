@@ -10,7 +10,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
-import { saveTournamentProgress, loadActiveDraft, saveCompletedResult } from "@/utils/worldcupDb";
+import { saveTournamentProgress, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { createClient } from "@/utils/supabase/client";
 
 interface Track {
@@ -52,6 +52,14 @@ export default function WorldCupPage() {
   const [droppedTrack, setDroppedTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAnyLpActive, setIsAnyLpActive] = useState(false);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   useEffect(() => {
     const loadState = async () => {
@@ -160,17 +168,15 @@ export default function WorldCupPage() {
     }
   }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, user]);
 
-  // Save completed tournament results to Supabase when finished
+  // Clear active tournament drafts in Supabase when finished
   useEffect(() => {
     if (phase === "finished" && user && winners.length > 0) {
-      const saveResult = async () => {
-        const title = `${winners[0].artistName} 월드컵 결과`;
-        await saveCompletedResult(winners, eliminatedTracks, title);
-        
+      const clearDraft = async () => {
+        await deleteActiveDraft();
         sessionStorage.removeItem("worldcup_progress");
         localStorage.removeItem("worldcup_progress");
       };
-      saveResult();
+      clearDraft();
     }
   }, [phase, user, winners, eliminatedTracks]);
 
@@ -279,9 +285,9 @@ export default function WorldCupPage() {
           
           <button 
             onClick={() => {
-              router.push("/taste");
+              router.push(isSingleArtistMode ? "/taste?mode=single" : "/taste");
             }}
-            className="mt-12 px-8 py-3 rounded-full bg-navy text-cream font-bold hover:bg-navy/90 hover:scale-105 transition-all shadow-[0_10px_30px_rgba(26,42,108,0.3)]"
+            className="mt-12 px-8 py-3 rounded-full bg-navy text-cream font-bold hover:bg-navy/90 hover:scale-105 transition-all shadow-[0_10px_30px_rgba(26,42,108,0.3)] cursor-pointer"
           >
             내 음악 취향표 굽기 (FUNC-04)
           </button>

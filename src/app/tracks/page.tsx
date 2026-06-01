@@ -73,6 +73,14 @@ export default function TracksPage() {
 
   const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
   const [customAlert, setCustomAlert] = useState<string | null>(null);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   // Reload prevention for unsaved changes
   React.useEffect(() => {
@@ -91,7 +99,7 @@ export default function TracksPage() {
     if (selectedTrackIds.size > 0) {
       setExitWizardStep('main');
     } else {
-      router.push("/explore");
+      router.push(isSingleArtistMode ? "/explore?mode=single" : "/explore");
     }
   };
 
@@ -114,7 +122,7 @@ export default function TracksPage() {
       }
     }
     
-    router.push("/explore");
+    router.push(isSingleArtistMode ? "/explore?mode=single" : "/explore");
   };
 
   const handleConfirmSaveExit = async () => {
@@ -278,6 +286,16 @@ export default function TracksPage() {
     fetchSpotifyData();
   }, [user]);
 
+  // Auto-expand single artist on mount in Single-Artist Mode
+  React.useEffect(() => {
+    if (isLoaded && isSingleArtistMode && artistData.length === 1) {
+      const singleArtist = artistData[0];
+      if (!singleArtist.albumsLoaded && !loadingAlbums.has(`artist_${singleArtist.id}`)) {
+        toggleArtistAccordion(singleArtist.id);
+      }
+    }
+  }, [isLoaded, isSingleArtistMode, artistData]);
+
   // Save selected tracks to Supabase in the background
   React.useEffect(() => {
     if (!user || artistData.length === 0) return;
@@ -433,11 +451,88 @@ export default function TracksPage() {
             console.error("Failed to fetch unreleased tracks from Supabase:", err);
           }
 
+          let finalAlbums = mappedAlbums;
+          if (isSingleArtistMode) {
+            finalAlbums = await Promise.all(
+              mappedAlbums.map(async (album: any) => {
+                try {
+                  const tracksRaw = await getAlbumTracks(album.id);
+                  const tracks = tracksRaw.map((t: any) => {
+                    const totalSeconds = Math.floor(t.duration_ms / 1000);
+                    const mins = Math.floor(totalSeconds / 60);
+                    const secs = String(totalSeconds % 60).padStart(2, '0');
+                    return {
+                      id: t.id,
+                      title: t.name,
+                      duration: `${mins}:${secs}`,
+                      previewUrl: t.preview_url
+                    };
+                  });
+                  
+                  setSelectedTrackIds(prev => {
+                    const next = new Set(prev);
+                    tracks.forEach((track: any) => next.add(track.id));
+                    return next;
+                  });
+
+                  setSelectedTracksMetadata(prev => {
+                    const next = { ...prev };
+                    tracks.forEach((track: any) => {
+                      next[track.id] = {
+                        id: track.id,
+                        title: track.title,
+                        duration: track.duration,
+                        artistName: artist.name,
+                        albumTitle: album.title,
+                        albumImage: album.image,
+                        albumId: album.id
+                      };
+                    });
+                    return next;
+                  });
+
+                  return { ...album, tracks };
+                } catch (e) {
+                  console.error("Failed to load tracks for album " + album.id, e);
+                  return album;
+                }
+              })
+            );
+
+            if (unreleasedAlbumsList.length > 0) {
+              setSelectedTrackIds(prev => {
+                const next = new Set(prev);
+                unreleasedAlbumsList.forEach(album => {
+                  album.tracks.forEach(track => next.add(track.id));
+                });
+                return next;
+              });
+
+              setSelectedTracksMetadata(prev => {
+                const next = { ...prev };
+                unreleasedAlbumsList.forEach(album => {
+                  album.tracks.forEach(track => {
+                    next[track.id] = {
+                      id: track.id,
+                      title: track.title,
+                      duration: track.duration,
+                      artistName: artist.name,
+                      albumTitle: album.title,
+                      albumImage: album.image,
+                      albumId: album.id
+                    };
+                  });
+                });
+                return next;
+              });
+            }
+          }
+
           setArtistData(prev => prev.map(a => 
             a.id === artistId 
               ? { 
                   ...a, 
-                  albums: mappedAlbums, 
+                  albums: finalAlbums, 
                   unreleasedAlbums: unreleasedAlbumsList,
                   albumsLoaded: true, 
                   totalReleases: albumsData.total,
@@ -479,11 +574,60 @@ export default function TracksPage() {
         totalTracks: albumRaw.total_tracks || 0
       }));
 
+      let finalAlbums = mappedAlbums;
+      if (isSingleArtistMode) {
+        finalAlbums = await Promise.all(
+          mappedAlbums.map(async (album: any) => {
+            try {
+              const tracksRaw = await getAlbumTracks(album.id);
+              const tracks = tracksRaw.map((t: any) => {
+                const totalSeconds = Math.floor(t.duration_ms / 1000);
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = String(totalSeconds % 60).padStart(2, '0');
+                return {
+                  id: t.id,
+                  title: t.name,
+                  duration: `${mins}:${secs}`,
+                  previewUrl: t.preview_url
+                };
+              });
+              
+              setSelectedTrackIds(prev => {
+                const next = new Set(prev);
+                tracks.forEach((track: any) => next.add(track.id));
+                return next;
+              });
+
+              setSelectedTracksMetadata(prev => {
+                const next = { ...prev };
+                tracks.forEach((track: any) => {
+                  next[track.id] = {
+                    id: track.id,
+                    title: track.title,
+                    duration: track.duration,
+                    artistName: artist.name,
+                    albumTitle: album.title,
+                    albumImage: album.image,
+                    albumId: album.id
+                  };
+                });
+                return next;
+              });
+
+              return { ...album, tracks };
+            } catch (e) {
+              console.error("Failed to load tracks for album " + album.id, e);
+              return album;
+            }
+          })
+        );
+      }
+
       setArtistData(prev => prev.map(a => 
         a.id === artistId 
           ? { 
               ...a, 
-              albums: mappedAlbums, 
+              albums: finalAlbums, 
               albumsPage: targetPage,
               totalReleases: albumsData.total
             } 
@@ -779,7 +923,7 @@ export default function TracksPage() {
     sessionStorage.removeItem("worldcup_progress");
     localStorage.removeItem("worldcup_progress");
 
-    router.push("/worldcup");
+    router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
   };
 
   if (!isLoaded) {
@@ -949,6 +1093,80 @@ export default function TracksPage() {
                           </div>
                        ) : (
                          <>
+                           {isSingleArtistMode && artist.albums.length > 0 && (
+                             <div className="flex justify-end gap-2.5 mt-4 px-1.5">
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   const nextIds = new Set(selectedTrackIds);
+                                   const nextMetadata = { ...selectedTracksMetadata };
+
+                                   artist.albums.forEach(album => {
+                                     album.tracks.forEach(track => {
+                                       nextIds.add(track.id);
+                                       nextMetadata[track.id] = {
+                                         id: track.id,
+                                         title: track.title,
+                                         duration: track.duration,
+                                         artistName: artist.name,
+                                         albumTitle: album.title,
+                                         albumImage: album.image,
+                                         albumId: album.id
+                                       };
+                                     });
+                                   });
+
+                                   if (artist.unreleasedAlbums) {
+                                     artist.unreleasedAlbums.forEach(album => {
+                                       album.tracks.forEach(track => {
+                                         nextIds.add(track.id);
+                                         nextMetadata[track.id] = {
+                                           id: track.id,
+                                           title: track.title,
+                                           duration: track.duration,
+                                           artistName: artist.name,
+                                           albumTitle: album.title,
+                                           albumImage: album.image,
+                                           albumId: album.id
+                                         };
+                                       });
+                                     });
+                                   }
+
+                                   setSelectedTrackIds(nextIds);
+                                   setSelectedTracksMetadata(nextMetadata);
+                                 }}
+                                 className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                               >
+                                 전체 선택
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   const nextIds = new Set(selectedTrackIds);
+                                   artist.albums.forEach(album => {
+                                     album.tracks.forEach(track => {
+                                       nextIds.delete(track.id);
+                                     });
+                                   });
+
+                                   if (artist.unreleasedAlbums) {
+                                     artist.unreleasedAlbums.forEach(album => {
+                                       album.tracks.forEach(track => {
+                                         nextIds.delete(track.id);
+                                       });
+                                     });
+                                   }
+
+                                   setSelectedTrackIds(nextIds);
+                                 }}
+                                 className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-point hover:text-point text-xs font-sans font-bold text-navy bg-white hover:bg-point/5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                               >
+                                 전체 해제
+                               </button>
+                             </div>
+                           )}
+
                            {/* Released Albums Grid */}
                            <div className="grid grid-cols-2 gap-4 mt-6">
                               {artist.albums.map(album => {

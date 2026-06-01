@@ -33,6 +33,14 @@ export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
   const [showSaveWarning, setShowSaveWarning] = useState(false);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   // Reload prevention for unsaved changes
   useEffect(() => {
@@ -199,6 +207,20 @@ export default function ExplorePage() {
   }, [searchQuery, selectedIds.size, defaultArtists]);
 
   const handleArtistClick = async (artist: Artist) => {
+    if (isSingleArtistMode) {
+      const selected = [artist];
+      setSelectedArtists(selected);
+      sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
+      localStorage.setItem('selectedArtists', JSON.stringify(selected));
+      
+      if (user) {
+        await saveArtistSelectionDraft(selected);
+      }
+      
+      router.push('/tracks?mode=single');
+      return;
+    }
+
     // If it's a similar artist, just toggle selection without spawning more
     if (artist.type === "similar") {
       setSelectedArtists(prev => {
@@ -405,8 +427,12 @@ export default function ExplorePage() {
         </div>
 
         <div className="text-left mt-1 mb-2 px-1">
-          <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">어떤 아티스트를 좋아하시나요?</h1>
-          <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">최소 3명의 아티스트를 선택해주세요.</p>
+          <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">
+            {isSingleArtistMode ? "최애 아티스트를 선택해 주세요" : "어떤 아티스트를 좋아하시나요?"}
+          </h1>
+          <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">
+            {isSingleArtistMode ? "1명의 아티스트를 골라 모든 곡을 정렬해봅니다." : "최소 3명의 아티스트를 선택해주세요."}
+          </p>
         </div>
 
         {/* Search Bar */}

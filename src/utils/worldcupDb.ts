@@ -151,13 +151,30 @@ export const deleteActiveDraft = async () => {
 };
 
 // Save completed tournament results
-export const saveCompletedResult = async (finalWinners: any[], eliminatedTracks: any[], title: string) => {
+export const saveCompletedResult = async (
+  finalWinners: any[], 
+  eliminatedTracks: any[], 
+  title: string,
+  options?: {
+    isPublic?: boolean;
+    isSingleArtist?: boolean;
+    artistId?: string | null;
+    artistName?: string | null;
+  }
+) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
 
   const winner = finalWinners[0];
   const fullRanking = [winner, ...eliminatedTracks];
+
+  let userNickname = "";
+  let userProfileImage = "";
+  if (typeof window !== "undefined") {
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || user.email || "음악팬";
+    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
+  }
 
   const resultData = {
     user_id: user.id,
@@ -168,6 +185,12 @@ export const saveCompletedResult = async (finalWinners: any[], eliminatedTracks:
     winner_track_image: winner.albumImage,
     total_candidates: fullRanking.length,
     ranking: fullRanking,
+    is_public: options?.isPublic ?? true,
+    is_single_artist: options?.isSingleArtist ?? false,
+    artist_id: options?.artistId ?? null,
+    artist_name: options?.artistName ?? null,
+    user_nickname: userNickname,
+    user_profile_image: userProfileImage
   };
 
   const { error: insertError } = await supabase
@@ -176,6 +199,78 @@ export const saveCompletedResult = async (finalWinners: any[], eliminatedTracks:
 
   if (insertError) {
     console.error("[Supabase DB] Error saving tournament results:", insertError.message);
+    return false;
+  }
+
+  // Once saved successfully, clear the draft
+  await deleteActiveDraft();
+  return true;
+};
+
+// Fetch completed result for a specific artist (single artist mode check)
+export const fetchCompletedResultByArtist = async (artistId: string) => {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('tournament_results')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_single_artist', true)
+    .eq('artist_id', artistId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("[Supabase DB] Error fetching artist result:", error.message);
+    return null;
+  }
+  return data && data.length > 0 ? data[0] : null;
+};
+
+// Overwrite an existing completed result
+export const overwriteCompletedResult = async (
+  resultId: string,
+  finalWinners: any[],
+  eliminatedTracks: any[],
+  title: string,
+  options?: { isPublic?: boolean }
+) => {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const winner = finalWinners[0];
+  const fullRanking = [winner, ...eliminatedTracks];
+
+  let userNickname = "";
+  let userProfileImage = "";
+  if (typeof window !== "undefined") {
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || user.email || "음악팬";
+    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
+  }
+
+  const updateData = {
+    title,
+    winner_track_id: winner.id,
+    winner_track_title: winner.title,
+    winner_track_artist: winner.artistName,
+    winner_track_image: winner.albumImage,
+    total_candidates: fullRanking.length,
+    ranking: fullRanking,
+    is_public: options?.isPublic ?? true,
+    user_nickname: userNickname,
+    user_profile_image: userProfileImage,
+    created_at: new Date().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('tournament_results')
+    .update(updateData)
+    .eq('id', resultId);
+
+  if (error) {
+    console.error("[Supabase DB] Error overwriting tournament result:", error.message);
     return false;
   }
 

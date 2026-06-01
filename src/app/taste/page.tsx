@@ -10,6 +10,7 @@ import SnakePathTimeline from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 
 interface Track {
   id: string;
@@ -29,6 +30,17 @@ export default function ResultPage() {
   const [isSaved, setIsSaved] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [cameraRig, setCameraRig] = useState<{xKeyframes: string[], yKeyframes: string[], times: number[]} | null>(null);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
+  const [showOverwriteModal, setShowOverwriteModal] = useState(false);
+  const [existingResult, setExistingResult] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   useEffect(() => {
     const storedRanking = sessionStorage.getItem("worldcup_ranking");
@@ -71,10 +83,42 @@ export default function ResultPage() {
     }
   };
 
-  const handleSaveToArchive = async () => {
+  const executeSaveArchive = async (overwrite: boolean) => {
     if (!user) return;
     setIsSavingArchive(true);
     try {
+      let artistId = null;
+      let artistName = null;
+      try {
+        const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
+        if (storedArtists) {
+          const parsed = JSON.parse(storedArtists);
+          if (parsed && parsed.length > 0) {
+            artistId = parsed[0].id;
+            artistName = parsed[0].name;
+          }
+        }
+      } catch (e) {}
+
+      const title = isSingleArtistMode && artistName 
+        ? `${artistName}의 곡 Sort` 
+        : `${winners[0].artistName} 월드컵 결과`;
+
+      let dbSuccess = false;
+      if (overwrite && existingResult) {
+        dbSuccess = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic });
+      } else {
+        dbSuccess = await saveCompletedResult(winners, winners.slice(1), title, {
+          isPublic,
+          isSingleArtist: isSingleArtistMode,
+          artistId,
+          artistName
+        });
+      }
+
+      if (!dbSuccess) throw new Error("Database save failed");
+
+      // Save to auth metadata archives for backward compatibility
       const currentArchives = user.user_metadata?.archives || [];
       
       const compressedRanking = winners.map(track => {
@@ -91,9 +135,12 @@ export default function ResultPage() {
       });
 
       const newArchiveItem = {
-        id: `archive_${Date.now()}`,
+        id: overwrite && existingResult ? existingResult.id : `archive_${Date.now()}`,
         saved_at: new Date().toISOString(),
-        r: compressedRanking
+        r: compressedRanking,
+        title,
+        is_single_artist: isSingleArtistMode,
+        artist_id: artistId
       };
       
       const normalizedArchives = currentArchives.map((arc: any) => {
@@ -118,7 +165,14 @@ export default function ResultPage() {
         };
       });
 
-      const updatedArchives = [newArchiveItem, ...normalizedArchives];
+      let updatedArchives = [];
+      if (overwrite && existingResult) {
+        updatedArchives = normalizedArchives.map((arc: any) => 
+          arc.id === existingResult.id || arc.artist_id === artistId ? newArchiveItem : arc
+        );
+      } else {
+        updatedArchives = [newArchiveItem, ...normalizedArchives];
+      }
       
       const { error } = await supabase.auth.updateUser({
         data: {
@@ -131,11 +185,47 @@ export default function ResultPage() {
       if (error) throw error;
       
       setIsSaved(true);
-      alert("내 아카이브에 성공적으로 저장되었습니다!");
+      alert(overwrite ? "기존 기록을 성공적으로 갱신했습니다!" : "내 아카이브에 성공적으로 저장되었습니다!");
+      setShowOverwriteModal(false);
     } catch (err) {
       console.error("Failed to save to archive:", err);
       alert("아카이브 저장에 실패했습니다. 다시 시도해주세요.");
     } finally {
+      setIsSavingArchive(false);
+    }
+  };
+
+  const handleSaveToArchive = async () => {
+    if (!user) return;
+    setIsSavingArchive(true);
+
+    try {
+      let artistId = null;
+      let artistName = null;
+      try {
+        const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
+        if (storedArtists) {
+          const parsed = JSON.parse(storedArtists);
+          if (parsed && parsed.length > 0) {
+            artistId = parsed[0].id;
+            artistName = parsed[0].name;
+          }
+        }
+      } catch (e) {}
+
+      if (isSingleArtistMode && artistId) {
+        const existing = await fetchCompletedResultByArtist(artistId);
+        if (existing) {
+          setExistingResult(existing);
+          setShowOverwriteModal(true);
+          setIsSavingArchive(false);
+          return;
+        }
+      }
+
+      await executeSaveArchive(false);
+    } catch (e) {
+      console.error(e);
       setIsSavingArchive(false);
     }
   };
@@ -300,6 +390,24 @@ export default function ResultPage() {
                 className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center gap-3 z-50 pointer-events-none"
               >
                 {user && (
+                  <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl px-4 py-2 flex items-center justify-between shadow-sm z-30 mb-1 select-none">
+                    <div className="flex flex-col text-left">
+                      <span className="font-sans font-bold text-xs text-navy">취향 순위표 전체 공개</span>
+                      <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-0.5">비슷한 취향의 메이트 찾기에 사용됩니다.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPublic(p => !p)}
+                      className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isPublic ? "bg-point" : "bg-navy/20"}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isPublic ? "translate-x-5" : "translate-x-0"}`}
+                      />
+                    </button>
+                  </div>
+                )}
+
+                {user && (
                   <button 
                     onClick={handleSaveToArchive}
                     disabled={isSavingArchive || isSaved}
@@ -336,6 +444,60 @@ export default function ResultPage() {
             )}
          </AnimatePresence>
       </div>
+
+      {/* Overwrite Choice Dialog Modal */}
+      <AnimatePresence>
+        {showOverwriteModal && existingResult && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[999]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowOverwriteModal(false)}
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4 pointer-events-none">
+              <motion.div
+                className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              >
+                <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 bg-point/5 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
+                  <Archive className="text-point animate-bounce" size={24} />
+                </div>
+                
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">이전 기록이 있습니다!</h2>
+                <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
+                  해당 아티스트로 이미 완료된 Sort 결과가 아카이브에 존재합니다. 기존 기록을 갱신하시겠습니까, 아니면 별도의 기록으로 새로 추가하여 저장하시겠습니까?
+                </p>
+                
+                <div className="flex flex-col gap-2 w-full">
+                  <button 
+                    onClick={() => executeSaveArchive(true)}
+                    className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm"
+                  >
+                    기존 기록 갱신하기 (Overwrite)
+                  </button>
+                  <button 
+                    onClick={() => executeSaveArchive(false)}
+                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    새로운 기록으로 추가 (Save New)
+                  </button>
+                  <button 
+                    onClick={() => setShowOverwriteModal(false)}
+                    className="w-full py-3 bg-white border border-red-200 text-red-500 font-medium text-xs rounded-xl hover:bg-red-50/50 transition-all cursor-pointer mt-1"
+                  >
+                    취소
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
