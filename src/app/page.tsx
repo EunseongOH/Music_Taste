@@ -295,7 +295,6 @@ export default function Home() {
             className="flex cursor-grab active:cursor-grabbing w-full"
             animate={{ x: `-${activeCardIndex * 100}%` }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            style={{ width: `${modes.length * 100}%` }}
           >
             {modes.map((mode) => (
               <div key={mode.id} className="w-full px-4 shrink-0 flex justify-center">
