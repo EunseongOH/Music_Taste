@@ -368,21 +368,20 @@ export default function WorldCupPage() {
 
             {/* Hint */}
             {!isPlaying && !droppedTrack && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className={`text-center font-sans text-sm font-medium mb-4 sm:mb-8 z-20 px-6 py-2 rounded-full transition-colors duration-300 shadow-sm relative
-                  ${isAnyLpActive ? "bg-point text-white" : "bg-navy/5 text-navy/70"}`}
-              >
-                {isAnyLpActive ? (
-                   <span>턴테이블 위로 옮겨주세요 ↓</span>
-                ) : (
-                   <span>더 좋아하는 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러주세요</span>
-                )}
-              </motion.div>
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className={`text-center font-sans text-sm font-medium mb-6 sm:mb-10 z-20 px-6 py-2 rounded-full transition-colors duration-300 shadow-sm relative
+                    ${isAnyLpActive ? "bg-point text-white" : "bg-navy/5 text-navy/70"}`}
+                >
+                  {isAnyLpActive ? (
+                     <span>턴테이블 위로 옮겨주세요 ↓</span>
+                  ) : (
+                     <span>더 좋아하는 곡의 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러주세요</span>
+                  )}
+                </motion.div>
             )}
 
-            {/* LP Player Drop Zone */}
-            <div className="w-full relative z-10 pb-4">
+            <div className="w-full relative z-10 pb-4 mt-4">
               <LPPlayer 
                 isPlaying={isPlaying} 
                 currentTrack={droppedTrack} 
