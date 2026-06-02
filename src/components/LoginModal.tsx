@@ -131,13 +131,25 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
     setIsLoading(true);
     setSignupError("");
 
+    // Check if nickname already exists in database results
+    const { data: dupData, error: dupError } = await supabase
+      .from("tournament_results")
+      .select("id")
+      .eq("user_nickname", signupNickname.trim());
+
+    if (!dupError && dupData && dupData.length > 0) {
+      setSignupError("이미 사용 중인 닉네임입니다.");
+      setIsLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: signupId,
       password: signupPw,
       options: {
         data: {
           name: signupName,
-          nickname: signupNickname,
+          nickname: signupNickname.trim(),
           phone: signupPhone || null,
         }
       }

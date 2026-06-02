@@ -58,6 +58,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  useEffect(() => {
+    if (!isLoading && user) {
+      const ensureValidNickname = async () => {
+        const metaNickname = user.user_metadata?.nickname;
+        const email = user.email;
+        
+        // If nickname is empty, contains '@' (email style), or is equal to email, generate a new safe nickname
+        if (!metaNickname || metaNickname.includes("@") || metaNickname.trim() === "" || metaNickname === email) {
+          try {
+            const { generateUniqueNickname } = await import("@/utils/nickname");
+            const uniqueNickname = await generateUniqueNickname();
+            
+            // 1. Update Auth user metadata
+            const { error: authError } = await supabase.auth.updateUser({
+              data: {
+                nickname: uniqueNickname
+              }
+            });
+            
+            if (authError) {
+              console.error("Failed to update user auth metadata with unique nickname:", authError.message);
+              return;
+            }
+            
+            // 2. Update existing results in DB so history is updated and matching lists show it correctly
+            await supabase
+              .from("tournament_results")
+              .update({ user_nickname: uniqueNickname })
+              .eq("user_id", user.id);
+              
+            // 3. Save to storage
+            sessionStorage.setItem("userNickname", uniqueNickname);
+            localStorage.setItem("userNickname", uniqueNickname);
+            
+            // Refetch current user to update AuthContext state
+            const { data } = await supabase.auth.getUser();
+            if (data?.user) {
+              setUser(data.user);
+            }
+          } catch (err) {
+            console.error("Failed to automatically generate and save unique nickname:", err);
+          }
+        } else {
+          // Sync valid nickname to storage
+          sessionStorage.setItem("userNickname", metaNickname);
+          localStorage.setItem("userNickname", metaNickname);
+        }
+      };
+      
+      ensureValidNickname();
+    }
+  }, [user, isLoading, supabase]);
+
   return (
     <AuthContext.Provider value={{ user, session, isLoading, signOut }}>
       {children}

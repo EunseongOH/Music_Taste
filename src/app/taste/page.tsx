@@ -29,11 +29,16 @@ export default function ResultPage() {
   const [isSavingArchive, setIsSavingArchive] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [cameraRig, setCameraRig] = useState<{xKeyframes: string[], yKeyframes: string[], times: number[]} | null>(null);
+  const timelineWrapperRef = useRef<HTMLDivElement>(null);
+  const [cameraRig, setCameraRig] = useState<{xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[]} | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [rawKeyframes, setRawKeyframes] = useState<{x: number, y: number}[]>([]);
+  const [timelineViewBoxHeight, setTimelineViewBoxHeight] = useState(600);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [showOverwriteModal, setShowOverwriteModal] = useState(false);
   const [existingResult, setExistingResult] = useState<any | null>(null);
+  const [archiveTitle, setArchiveTitle] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -61,6 +66,27 @@ export default function ResultPage() {
       router.replace("/tracks");
     }
   }, []);
+
+  useEffect(() => {
+    if (winners.length === 0) return;
+
+    let artistName = null;
+    try {
+      const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
+      if (storedArtists) {
+        const parsed = JSON.parse(storedArtists);
+        if (parsed && parsed.length > 0) {
+          artistName = parsed[0].name;
+        }
+      }
+    } catch (e) {}
+
+    const defaultTitle = isSingleArtistMode && artistName 
+      ? `${artistName}의 곡 Sort` 
+      : `${winners[0]?.artistName || ""} 취향표`;
+      
+    setArchiveTitle(defaultTitle.slice(0, 16));
+  }, [winners, isSingleArtistMode]);
 
   const handleExport = async () => {
     if (!containerRef.current) return;
@@ -100,9 +126,9 @@ export default function ResultPage() {
         }
       } catch (e) {}
 
-      const title = isSingleArtistMode && artistName 
+      const title = archiveTitle.trim() || (isSingleArtistMode && artistName 
         ? `${artistName}의 곡 Sort` 
-        : `${winners[0].artistName} 월드컵 결과`;
+        : `${winners[0]?.artistName || ""} 취향표`);
 
       let dbSuccess = false;
       if (overwrite && existingResult) {
@@ -260,40 +286,109 @@ export default function ResultPage() {
         console.error("Error clearing active progress in Supabase:", err);
       }
     }
-    
+
     window.location.href = "/";
   };
 
-  const S = 3.0; // Zoomed in enough to see details but wide enough to show context
-  const panDuration = Math.max(5, winners.length * 0.35); // Path drawing time
-  const totalDuration = panDuration + 1.5; // Path + Zoom out
+  const S = 3.8; // Restored 3.8x dramatic close-up zoom for immersive close-up tracking shots!
+  const panDuration = Math.max(8.0, winners.length * 0.65); // Slower, highly legible cinematic tracking speed!
+  const startDelay = 1.0; // Deliberate cinematic delay at the starting position to let vinyl records pop in
+  const holdDuration = 1.5; // Freeze-frame focus hold on the #1 song
+  const zoomOutDuration = 1.2; // Zoom out to reveal the full path
+  const totalDuration = startDelay + panDuration + holdDuration + zoomOutDuration;
+
+  // Resize observer and window resize listener to track exact width and height of the timeline viewport
+  useEffect(() => {
+    const el = timelineWrapperRef.current;
+    if (!el) return;
+
+    const updateDimensions = () => {
+      if (timelineWrapperRef.current) {
+        setDimensions({
+          width: timelineWrapperRef.current.clientWidth,
+          height: timelineWrapperRef.current.clientHeight
+        });
+      }
+    };
+
+    updateDimensions();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateDimensions();
+    });
+
+    resizeObserver.observe(el);
+    window.addEventListener("resize", updateDimensions);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateDimensions);
+    };
+  }, []);
 
   const handleLayoutComplete = useCallback((keyframes: {x: number, y: number}[], viewBoxHeight: number) => {
-    const K = keyframes.length;
+    setRawKeyframes(keyframes);
+    setTimelineViewBoxHeight(viewBoxHeight);
+  }, []);
+
+  useEffect(() => {
+    const K = rawKeyframes.length;
     if (K === 0) return;
-    
-    // 화면에 하나씩만 보이도록, 선의 모든 Node와 코너를 완벽하게 정중앙에 위치하도록 X/Y 모두 추적 (Drone Tracking)
-    const xKeyframes = keyframes.map(k => `${50 - k.x}%`);
-    const yKeyframes = keyframes.map(k => `${50 - (k.y / viewBoxHeight * 100)}%`);
-    
+
+    // Use measured dimensions, with conservative fallbacks if not yet measured
+    const W = dimensions.width || (timelineWrapperRef.current ? timelineWrapperRef.current.clientWidth : 360) || 360;
+    const H = dimensions.height || (timelineWrapperRef.current ? timelineWrapperRef.current.clientHeight : 500) || 500;
+
+    // 화면에 하나씩만 보이도록, 선의 모든 Node와 코너를 완벽하게 정중앙에 위치하도록 X/Y 모두 픽셀 기반으로 절대 추적 (Drone Tracking)
+    // S 배율 확대 공간 내에서의 절대 좌표 조정을 위해 가로/세로 이동 거리에 S(3.8) 배율 인자를 정확하게 곱해줍니다.
+    const xKeyframes = rawKeyframes.map(k => `${S * W * (50 - k.x) / 100}px`);
+    const yKeyframes = rawKeyframes.map(k => `${S * (H / 2 - k.y)}px`);
+
     // Distribute time proportionally based on path distance to track the line drawing evenly
     let totalDist = 0;
     const dists = [0];
     for (let i = 1; i < K; i++) {
-       const dx = keyframes[i].x - keyframes[i-1].x;
+       const dx = rawKeyframes[i].x - rawKeyframes[i-1].x;
        // Scale dy so it's visually proportional to dx (assuming ~9/16 aspect ratio on mobile)
-       const dy_scaled = (keyframes[i].y - keyframes[i-1].y) * (100 * 16 / 9) / viewBoxHeight;
+       const dy_scaled = (rawKeyframes[i].y - rawKeyframes[i-1].y) * (100 * 16 / 9) / timelineViewBoxHeight;
        totalDist += Math.sqrt(dx*dx + dy_scaled*dy_scaled);
        dists.push(totalDist);
     }
     if (totalDist === 0) totalDist = 1;
 
-    const fraction = panDuration / totalDuration;
-    const times = dists.map(d => (d / totalDist) * fraction);
-    times.push(1); // Final zoom out point
+    // Calculate time fractions for starting hold, panning, top hold, and final zoom out
+    const startFraction = startDelay / totalDuration;
+    const panFraction = panDuration / totalDuration;
+    const holdFraction = holdDuration / totalDuration;
 
-    setCameraRig({ xKeyframes, yKeyframes, times });
-  }, [panDuration, totalDuration]);
+    const holdStartFraction = startFraction + panFraction;
+    const holdEndFraction = holdStartFraction + holdFraction;
+
+    // Build the times array
+    const times = [
+      0.0, // initial start position point
+      ...dists.map(d => startFraction + (d / totalDist) * panFraction), // panning points
+      holdEndFraction, // end of top focus hold
+      1.0 // final zoom out point
+    ];
+
+    // Build extended keyframes for absolute control
+    const firstX = xKeyframes[0];
+    const firstY = yKeyframes[0];
+    const finalX = xKeyframes[xKeyframes.length - 1];
+    const finalY = yKeyframes[yKeyframes.length - 1];
+
+    const extendedXKeyframes = [firstX, ...xKeyframes, finalX, "0px"];
+    const extendedYKeyframes = [firstY, ...yKeyframes, finalY, "0px"];
+    const scaleKeyframes = [S, ...xKeyframes.map(() => S), S, 1];
+
+    setCameraRig({ 
+      xKeyframes: extendedXKeyframes, 
+      yKeyframes: extendedYKeyframes, 
+      scaleKeyframes, 
+      times 
+    });
+  }, [rawKeyframes, timelineViewBoxHeight, dimensions, winners.length]);
 
   return (
     <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
@@ -319,131 +414,151 @@ export default function ResultPage() {
           </button>
         </div>
       </div>
+      {/* Unboxed seamless full-screen results area */}
+      <motion.div 
+        layout
+        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} // smooth spring-like layout ease
+        ref={containerRef}
+        className={showButton 
+          ? "flex-1 w-full max-w-2xl relative bg-[#F5F2ED] flex flex-col min-h-screen py-4 px-2 sm:px-6 mx-auto pb-32 overflow-y-auto scrollbar-none" 
+          : "fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 bg-[#F5F2ED] overflow-hidden flex flex-col"
+        }
+      >
+         {/* Background Elements */}
+         <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />
 
-      <div className="flex-[1] overflow-y-auto w-full pb-32">
-         {/* Instruction / Top Section */}
-         <div className="p-6 text-center">
-            <h2 className="font-serif text-2xl text-navy">My Music Taste</h2>
-            <p className="font-sans text-sm text-charcoal/70 mt-1">
-               월드컵 결과, 나의 최애 곡들입니다.
-            </p>
-         </div>
+         {/* Floating Skip Button for Cinematic Zoom-in Animation */}
+         {!showButton && (
+           <button
+             onClick={() => setShowButton(true)}
+             className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+           >
+             스킵 Skip ⏭️
+           </button>
+         )}
 
-         {/* 9:16 Canvas Area */}
-         <div className="px-0 sm:px-4 flex justify-center w-full relative z-50">
-            <motion.div 
-              layout
-              transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} // smooth spring-like layout ease
-              ref={containerRef}
-              className={showButton 
-                ? "w-full max-w-md aspect-[9/16] relative bg-[#F5F2ED] rounded-[2rem] shadow-xl overflow-hidden border-4 border-navy border-opacity-10" 
-                : "fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 bg-[#F5F2ED] overflow-hidden flex flex-col pt-12 sm:pt-0"
-              }
-            >
-               {/* Background Elements */}
-               <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />
-
-               {/* Header inside the image */}
-               <motion.div layout className="relative z-10 pt-10 px-6 text-center bg-gradient-to-b from-[#F5F2ED] via-[#F5F2ED]/80 to-transparent pb-8">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-navy/5 text-navy mb-3">
-                     <Music size={24} />
-                  </div>
-                  <h3 className="font-serif text-4xl text-navy mb-1 leading-tight tracking-tighter">My Taste</h3>
-                  <p className="font-sans font-bold text-[10px] uppercase tracking-[0.2em] text-point">The Analog Record Shop</p>
-               </motion.div>
-
-               {/* Timeline Content */}
-               <motion.div layout className="relative z-10 flex-1 w-full h-[calc(100%-120px)] mt-4">
-                  {winners.length > 0 && (
-                    <motion.div
-                      initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
-                      animate={cameraRig ? { 
-                        scale: [...cameraRig.xKeyframes.map(() => S), 1], 
-                        x: [...cameraRig.xKeyframes, "0%"],
-                        y: [...cameraRig.yKeyframes, "0%"]
-                      } : {}}
-                      transition={{ 
-                        duration: totalDuration, 
-                        times: cameraRig?.times,
-                        ease: "linear"
-                      }}
-                      className="w-full h-full origin-center"
-                      onAnimationComplete={() => setShowButton(true)}
-                    >
-                      <SnakePathTimeline 
-                         tracks={winners} 
-                         drawDuration={panDuration} 
-                         onLayoutComplete={handleLayoutComplete} 
-                      />
-                    </motion.div>
-                  )}
-               </motion.div>
-            </motion.div>
-         </div>
-
-         {/* Floating Actions */}
-         <AnimatePresence>
-            {showButton && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center gap-3 z-50 pointer-events-none"
+         {/* Timeline Content */}
+         <motion.div 
+           layout 
+           ref={timelineWrapperRef}
+           className={`relative z-10 flex-1 w-full mt-4 ${
+             showButton ? "overflow-y-auto scrollbar-none pb-20" : "overflow-hidden"
+           }`}
+         >
+            {winners.length > 0 && (
+              <motion.div
+                initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
+                animate={showButton ? { scale: 1, x: "0px", y: "0px" } : (cameraRig ? { 
+                   scale: cameraRig.scaleKeyframes, 
+                   x: cameraRig.xKeyframes,
+                   y: cameraRig.yKeyframes
+                } : {})}
+                transition={showButton ? { duration: 0.1 } : { 
+                   duration: totalDuration, 
+                   times: cameraRig?.times,
+                   ease: "linear"
+                }}
+                className="w-full h-full origin-center"
+                onAnimationComplete={() => {
+                  if (!showButton) setShowButton(true);
+                }}
               >
-                {user && (
-                  <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl px-4 py-2 flex items-center justify-between shadow-sm z-30 mb-1 select-none">
-                    <div className="flex flex-col text-left">
-                      <span className="font-sans font-bold text-xs text-navy">취향 순위표 전체 공개</span>
-                      <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-0.5">비슷한 취향의 메이트 찾기에 사용됩니다.</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsPublic(p => !p)}
-                      className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isPublic ? "bg-point" : "bg-navy/20"}`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isPublic ? "translate-x-5" : "translate-x-0"}`}
-                      />
-                    </button>
-                  </div>
-                )}
-
-                {user && (
-                  <button 
-                    onClick={handleSaveToArchive}
-                    disabled={isSavingArchive || isSaved}
-                    className={`w-full max-w-[380px] pointer-events-auto py-3.5 rounded-full font-sans font-bold text-base transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2
-                      ${isSaved 
-                        ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-500/30 cursor-default' 
-                        : 'bg-white border-2 border-navy text-navy hover:bg-navy/5'
-                      }
-                    `}
-                  >
-                     {isSaved ? (
-                       <>
-                         <Check size={18} />
-                         아카이브 저장 완료
-                       </>
-                     ) : (
-                       <>
-                         <Archive size={18} />
-                         {isSavingArchive ? "아카이브 저장 중..." : "내 아카이브에 저장"}
-                       </>
-                     )}
-                  </button>
-                )}
-                
-                <button 
-                  onClick={handleExport}
-                  disabled={isExporting}
-                  className={`w-full max-w-[380px] pointer-events-auto py-4 rounded-full bg-navy text-cream font-sans font-bold text-base shadow-[0_10px_30px_rgba(26,42,108,0.3)] border border-navy/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isExporting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-navy/90 hover:-translate-y-1'}`}
-                >
-                   <Download size={18} className="mr-1" />
-                   {isExporting ? "이미지 저장 중..." : "인스타그램 스토리 이미지 저장"}
-                </button>
+                 <SnakePathTimeline 
+                    tracks={winners} 
+                    drawDuration={panDuration} 
+                    onLayoutComplete={handleLayoutComplete} 
+                    isCompleted={showButton}
+                 />
               </motion.div>
             )}
-         </AnimatePresence>
-      </div>
+         </motion.div>
+      </motion.div>
+
+      {/* Floating Actions */}
+      <AnimatePresence>
+         {showButton && (
+           <motion.div 
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center gap-3 z-50 pointer-events-none"
+           >
+             {user && !isSaved && (
+                <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl p-4 flex flex-col gap-2.5 shadow-sm z-30 mb-0.5 select-none text-left">
+                  <div className="flex flex-col text-left">
+                    <label htmlFor="archive-title-input" className="font-sans font-bold text-xs text-navy">아카이브 저장명</label>
+                    <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-1">기록될 나만의 취향표 제목을 입력해주세요.</span>
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      id="archive-title-input"
+                      type="text"
+                      maxLength={16}
+                      value={archiveTitle}
+                      onChange={(e) => setArchiveTitle(e.target.value)}
+                      placeholder="제목을 입력하세요 (최대 16자)"
+                      className="w-full px-3.5 py-2.5 bg-white border border-navy/20 focus:border-point focus:ring-1 focus:ring-point rounded-xl font-sans text-sm text-navy placeholder-charcoal/30 transition-all pr-12 focus:outline-none"
+                    />
+                    <span className="absolute right-3.5 font-sans text-[10px] font-bold text-charcoal/40 select-none">
+                      {archiveTitle.length}/16
+                    </span>
+                  </div>
+                </div>
+              )}
+
+             {user && (
+               <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl px-4 py-2 flex items-center justify-between shadow-sm z-30 mb-1 select-none">
+                 <div className="flex flex-col text-left">
+                   <span className="font-sans font-bold text-xs text-navy">취향 순위표 전체 공개</span>
+                   <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-0.5">비슷한 취향의 메이트 찾기에 사용됩니다.</span>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => setIsPublic(p => !p)}
+                   className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isPublic ? "bg-point" : "bg-navy/20"}`}
+                 >
+                   <span
+                     className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isPublic ? "translate-x-5" : "translate-x-0"}`}
+                   />
+                 </button>
+               </div>
+             )}
+
+             {user && (
+               <button 
+                 onClick={handleSaveToArchive}
+                 disabled={isSavingArchive || isSaved}
+                 className={`w-full max-w-[380px] pointer-events-auto py-3.5 rounded-full font-sans font-bold text-base transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2
+                   ${isSaved 
+                     ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-500/30 cursor-default' 
+                     : 'bg-white border-2 border-navy text-navy hover:bg-navy/5'
+                   }
+                 `}
+               >
+                  {isSaved ? (
+                    <>
+                      <Check size={18} />
+                      아카이브 저장 완료
+                    </>
+                  ) : (
+                    <>
+                      <Archive size={18} />
+                      {isSavingArchive ? "아카이브 저장 중..." : "내 아카이브에 저장"}
+                    </>
+                  )}
+                </button>
+              )}
+              
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`w-full max-w-[380px] pointer-events-auto py-4 rounded-full bg-navy text-cream font-sans font-bold text-base shadow-[0_10px_30px_rgba(26,42,108,0.3)] border border-navy/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isExporting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-navy/90 hover:-translate-y-1'}`}
+              >
+                 <Download size={18} className="mr-1" />
+                 {isExporting ? "이미지 저장 중..." : "인스타그램 스토리 이미지 저장"}
+              </button>
+            </motion.div>
+          )}
+       </AnimatePresence>
 
       {/* Overwrite Choice Dialog Modal */}
       <AnimatePresence>

@@ -295,7 +295,7 @@ export default function ExplorePage() {
     }
   };
 
-  const [sortOrder, setSortOrder] = useState<"추천순" | "가나다순" | "선택순">("추천순");
+
 
   if (isSearching && defaultArtists.length === 0) {
     return (
@@ -448,19 +448,7 @@ export default function ExplorePage() {
           />
         </div>
 
-        {/* Sorting Tags */}
-        <div className="flex overflow-x-auto gap-2 scrollbar-none py-1 mt-1 px-1">
-          {["추천순", "가나다순", "선택순"].map((sort) => (
-            <button
-              key={sort}
-              onClick={() => setSortOrder(sort as any)}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full border-2 transition-all font-sans text-[0.8rem] font-bold ${sortOrder === sort ? 'border-point text-point bg-point/5 shadow-sm' : 'border-navy/10 text-charcoal/70 hover:border-navy/30 hover:bg-navy/5'}`}
-            >
-              {sort}
-            </button>
-          ))}
         </div>
-      </div>
 
       {/* Grids Container */}
       <div className="flex flex-col mt-6 px-1 gap-10">
@@ -487,10 +475,6 @@ export default function ExplorePage() {
 
             {/* 2. Recommended Section (Separated below with visual gap) */}
             <div className="flex flex-col border-t border-navy/5 pt-8">
-              <h2 className="font-serif text-lg text-navy/60 font-bold mb-4 flex items-center justify-between">
-                오늘의 추천 아티스트
-                <span className="text-[10px] font-sans text-charcoal/40 font-medium">기존 추천 목록도 함께 살펴보세요</span>
-              </h2>
               <motion.div 
                 layout 
                 className="grid grid-cols-3 gap-x-3 gap-y-8 opacity-75 hover:opacity-100 transition-opacity duration-300"
@@ -504,10 +488,6 @@ export default function ExplorePage() {
         ) : (
           /* 3. Recommended Section Only (When no search active) */
           <div className="flex flex-col">
-            <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
-              오늘의 추천 아티스트
-              <span className="text-xs font-sans text-charcoal/60 font-medium">매일 새로운 아티스트를 소개해드려요</span>
-            </h2>
             <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
               <AnimatePresence>
                 {defaultArtists.map(renderArtistCard)}

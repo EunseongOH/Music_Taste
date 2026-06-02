@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, Calendar, Archive, Trash2, Heart, Award, Music, 
-  User, Disc, ArrowLeft, Eye, EyeOff, Sparkles, MessageCircle, Link2
+  User, Disc, ArrowLeft, Eye, EyeOff, Sparkles, MessageCircle, Link2, ChevronDown
 } from "lucide-react";
 import Image from "next/image";
 import BackButton from "@/components/BackButton";
@@ -43,6 +43,18 @@ interface TournamentResult {
   user_profile_image: string;
   created_at: string;
 }
+
+const formatNickname = (name: string): string => {
+  if (!name) return "음악팬";
+  if (name.includes("@")) {
+    const [localPart] = name.split("@");
+    if (localPart.length <= 3) {
+      return `${localPart}***`;
+    }
+    return `${localPart.substring(0, 3)}***`;
+  }
+  return name;
+};
 
 export default function ExploreTastePage() {
   const router = useRouter();
@@ -177,20 +189,28 @@ export default function ExploreTastePage() {
     return ranking.slice(0, 10).map((t: any) => getNormalizedTrackId(t)).filter(Boolean);
   };
 
-  // Jaccard similarity calculator: intersection / union
+  // Rank-weighted similarity calculator (higher rank matches yield higher scores)
   const getJaccardSimilarity = (myResult: TournamentResult, otherResult: TournamentResult): number => {
     const myIds = getTop10Ids(myResult);
     const otherIds = getTop10Ids(otherResult);
 
     if (myIds.length === 0 || otherIds.length === 0) return 0;
 
-    const mySet = new Set(myIds);
-    const otherSet = new Set(otherIds);
+    let accumulatedScore = 0;
+    const maxScore = 55; // Sum of weights from 10 down to 1 (10+9+8+7+6+5+4+3+2+1)
 
-    const intersection = new Set([...mySet].filter(x => otherSet.has(x)));
-    const union = new Set([...mySet, ...otherSet]);
+    myIds.forEach((myId, i) => {
+      const otherIndex = otherIds.indexOf(myId);
+      if (otherIndex !== -1) {
+        const myWeight = 10 - i;             // Rank 1 gets 10, Rank 10 gets 1
+        const otherWeight = 10 - otherIndex; // Rank 1 gets 10, Rank 10 gets 1
+        const rankDiffPenalty = 1 - Math.abs(i - otherIndex) / 10; // Closer ranks get higher multiplier
+        
+        accumulatedScore += ((myWeight + otherWeight) / 2) * rankDiffPenalty;
+      }
+    });
 
-    return (intersection.size / union.size) * 100;
+    return (accumulatedScore / maxScore) * 100;
   };
 
   // Filter and process matches based on selected match criteria
@@ -208,10 +228,9 @@ export default function ExploreTastePage() {
         songMates.push(other);
       }
 
-      // 2. Same winner artist mate (avoid redundant song mate if possible or keep them categorized)
+      // 2. Same winner artist mate
       if (
-        other.winner_track_artist.toLowerCase().trim() === baseResult.winner_track_artist.toLowerCase().trim() &&
-        other.winner_track_id !== baseResult.winner_track_id
+        other.winner_track_artist.toLowerCase().trim() === baseResult.winner_track_artist.toLowerCase().trim()
       ) {
         artistMates.push(other);
       }
@@ -476,24 +495,36 @@ export default function ExploreTastePage() {
             ) : (
               <>
                 {/* Match Base Criteria Selector */}
-                <div className="bg-[#FAF8F5] border-2 border-navy/15 rounded-3xl p-4 flex flex-col gap-2 shadow-sm">
-                  <label className="font-sans text-xs font-bold text-navy flex items-center gap-1.5">
-                    <Disc size={13} className="text-point animate-spin" style={{ animationDuration: "3s" }} />
-                    매칭 기준 취향표 선택
-                  </label>
-                  <select
-                    value={selectedMatchBaseResultId}
-                    onChange={(e) => setSelectedMatchBaseResultId(e.target.value)}
-                    className="w-full py-3 px-4 bg-white border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-xs text-navy font-bold"
-                  >
-                    {completedResults.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.title} ({new Date(r.created_at).toLocaleDateString("ko-KR")})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="font-sans text-[9px] text-charcoal/50 leading-none mt-1">
-                    선택한 취향표의 1위 곡, 아티스트 및 Top 10을 기준으로 소울메이트를 탐색합니다.
+                <div className="bg-[#FAF8F5] border-2 border-navy/15 rounded-[2rem] p-5 flex flex-col gap-3 shadow-sm mx-0">
+                  <div className="flex items-center justify-between">
+                    <label className="font-sans text-xs font-bold text-navy flex items-center gap-2">
+                      <Disc size={14} className="text-point animate-spin" style={{ animationDuration: "4s" }} />
+                      매칭 기준 취향표 선택
+                    </label>
+                    <span className="font-sans font-bold text-[8px] text-point bg-point/10 px-2 py-0.5 rounded-full border border-point/15">
+                      기준 데이터
+                    </span>
+                  </div>
+
+                  <div className="relative w-full">
+                    <select
+                      value={selectedMatchBaseResultId}
+                      onChange={(e) => setSelectedMatchBaseResultId(e.target.value)}
+                      className="w-full py-3.5 pl-4 pr-10 bg-white border-2 border-navy/20 rounded-2xl appearance-none focus:outline-none focus:border-point font-sans text-xs text-navy font-bold cursor-pointer transition-all shadow-sm hover:border-navy/40"
+                    >
+                      {completedResults.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.title} ({new Date(r.created_at).toLocaleDateString("ko-KR")})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-navy/60">
+                      <ChevronDown size={14} strokeWidth={2.5} />
+                    </div>
+                  </div>
+
+                  <p className="font-sans text-[10px] text-navy/50 leading-relaxed">
+                    선택한 취향표의 1위 곡, 최애 아티스트 및 Top 10 순위를 기준으로 나와 음악 성향이 비슷한 소울메이트를 탐색합니다.
                   </p>
                 </div>
 
@@ -554,7 +585,7 @@ export default function ExploreTastePage() {
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
                               src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                              alt={mate.user_nickname}
+                              alt={formatNickname(mate.user_nickname)}
                               width={64}
                               height={64}
                               className="object-cover w-full h-full"
@@ -565,7 +596,7 @@ export default function ExploreTastePage() {
                             </div>
                           </div>
                           <span className="font-serif text-sm text-navy font-bold truncate w-full mt-3">
-                            {mate.user_nickname}
+                            {formatNickname(mate.user_nickname)}
                           </span>
                           <span className="font-sans text-[9px] text-charcoal/50 leading-none mt-1">
                             {new Date(mate.created_at).toLocaleDateString("ko-KR")}
@@ -612,7 +643,7 @@ export default function ExploreTastePage() {
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
                               src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                              alt={mate.user_nickname}
+                              alt={formatNickname(mate.user_nickname)}
                               width={64}
                               height={64}
                               className="object-cover w-full h-full"
@@ -622,7 +653,7 @@ export default function ExploreTastePage() {
                             </div>
                           </div>
                           <span className="font-serif text-sm text-navy font-bold truncate w-full mt-3">
-                            {mate.user_nickname}
+                            {formatNickname(mate.user_nickname)}
                           </span>
                           <span className="font-sans text-[9px] text-charcoal/50 leading-none mt-1">
                             {new Date(mate.created_at).toLocaleDateString("ko-KR")}
@@ -667,7 +698,7 @@ export default function ExploreTastePage() {
                             <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300">
                               <Image
                                 src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                                alt={mate.user_nickname}
+                                alt={formatNickname(mate.user_nickname)}
                                 width={48}
                                 height={48}
                                 className="object-cover w-full h-full"
@@ -675,7 +706,7 @@ export default function ExploreTastePage() {
                             </div>
                             <div className="leading-tight min-w-0 text-left">
                               <h4 className="font-serif text-sm text-navy font-bold truncate">
-                                {mate.user_nickname}
+                                {formatNickname(mate.user_nickname)}
                               </h4>
                               <p className="font-sans text-[10px] text-charcoal/50 mt-0.5 truncate">
                                 1위: {mate.winner_track_title} - {mate.winner_track_artist}
@@ -850,7 +881,7 @@ export default function ExploreTastePage() {
                     <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm">
                       <Image
                         src={selectedMateDetail.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                        alt={selectedMateDetail.user_nickname}
+                        alt={formatNickname(selectedMateDetail.user_nickname)}
                         width={48}
                         height={48}
                         className="object-cover w-full h-full"
@@ -861,7 +892,7 @@ export default function ExploreTastePage() {
                         {formattedDate} • 메이트 취향 리스트
                       </span>
                       <h3 className="font-serif text-lg text-navy font-bold truncate mt-0.5">
-                        {selectedMateDetail.user_nickname}님의 LP 레코드
+                        {formatNickname(selectedMateDetail.user_nickname)}님의 LP 레코드
                       </h3>
                     </div>
                   </div>

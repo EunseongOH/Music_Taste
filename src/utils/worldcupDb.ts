@@ -190,7 +190,13 @@ export const saveCompletedResult = async (
   let userNickname = "";
   let userProfileImage = "";
   if (typeof window !== "undefined") {
-    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || user.email || "음악팬";
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = user.user_metadata?.nickname || "";
+    }
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = "음악팬";
+    }
     userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
   }
 
@@ -264,7 +270,13 @@ export const overwriteCompletedResult = async (
   let userNickname = "";
   let userProfileImage = "";
   if (typeof window !== "undefined") {
-    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || user.email || "음악팬";
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = user.user_metadata?.nickname || "";
+    }
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = "음악팬";
+    }
     userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
   }
 
