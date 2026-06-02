@@ -60,6 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && user) {
+      // Self-heal: clear bloated archives array from user_metadata to fix HTTP 431 errors
+      if (user.user_metadata?.archives) {
+        supabase.auth.updateUser({
+          data: {
+            archives: null
+          }
+        }).catch(e => console.error("Failed to self-heal archives metadata:", e));
+      }
+
       const ensureValidNickname = async () => {
         const metaNickname = user.user_metadata?.nickname;
         const email = user.email;

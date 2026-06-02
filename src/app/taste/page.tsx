@@ -207,65 +207,10 @@ export default function ResultPage() {
 
       if (!dbSuccess) throw new Error("Database save failed");
 
-      // Save to auth metadata archives for backward compatibility
-      const currentArchives = user.user_metadata?.archives || [];
-      
-      const compressedRanking = winners.map(track => {
-        let imgHash = track.albumImage || "";
-        if (imgHash.startsWith("https://i.scdn.co/image/")) {
-          imgHash = imgHash.replace("https://i.scdn.co/image/", "");
-        }
-        return {
-          i: track.id,
-          t: track.title,
-          a: track.artistName,
-          m: imgHash
-        };
-      });
-
-      const newArchiveItem = {
-        id: overwrite && existingResult ? existingResult.id : `archive_${Date.now()}`,
-        saved_at: new Date().toISOString(),
-        r: compressedRanking,
-        title,
-        is_single_artist: isSingleArtistMode,
-        artist_id: artistId
-      };
-      
-      const normalizedArchives = currentArchives.map((arc: any) => {
-        if (arc.r) return arc;
-        const ranking = arc.ranking || [];
-        const compressed = ranking.map((track: any) => {
-          let imgHash = track.albumImage || "";
-          if (imgHash.startsWith("https://i.scdn.co/image/")) {
-            imgHash = imgHash.replace("https://i.scdn.co/image/", "");
-          }
-          return {
-            i: track.id,
-            t: track.title,
-            a: track.artistName,
-            m: imgHash
-          };
-        });
-        return {
-          id: arc.id || `archive_${Date.now()}`,
-          saved_at: arc.saved_at || new Date().toISOString(),
-          r: compressed
-        };
-      });
-
-      let updatedArchives = [];
-      if (overwrite && existingResult) {
-        updatedArchives = normalizedArchives.map((arc: any) => 
-          arc.id === existingResult.id || arc.artist_id === artistId ? newArchiveItem : arc
-        );
-      } else {
-        updatedArchives = [newArchiveItem, ...normalizedArchives];
-      }
-      
+      // Clear active progress and wipe archives from user_metadata to prevent HTTP 431 cookie bloat
       const { error } = await supabase.auth.updateUser({
         data: {
-          archives: updatedArchives,
+          archives: null,
           worldcup_progress: null, // Clear active progress to free up cookie space
           worldcup_tracks: null
         }
