@@ -11,6 +11,7 @@ import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
+import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
 
 interface Track {
   id: string;
@@ -34,6 +35,7 @@ export default function ResultPage() {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [rawKeyframes, setRawKeyframes] = useState<{x: number, y: number}[]>([]);
   const [timelineViewBoxHeight, setTimelineViewBoxHeight] = useState(600);
+  const [template, setTemplate] = useState<"pyramid" | "list" | "retro">("pyramid");
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [showOverwriteModal, setShowOverwriteModal] = useState(false);
@@ -88,24 +90,80 @@ export default function ResultPage() {
     setArchiveTitle(defaultTitle.slice(0, 16));
   }, [winners, isSingleArtistMode]);
 
+  const handleDownloadCSV = () => {
+    if (winners.length === 0) return;
+    
+    // Add UTF-8 BOM to prevent Korean character encoding issues in MS Excel
+    const csvRows = ["\uFEFFRank,Title,Artist"];
+    winners.forEach((track, idx) => {
+      const titleEscaped = track.title.replace(/"/g, '""');
+      const artistEscaped = track.artistName.replace(/"/g, '""');
+      csvRows.push(`${idx + 1},"${titleEscaped}","${artistEscaped}"`);
+    });
+
+    const csvContent = csvRows.join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    const artistName = winners[0]?.artistName || "Artist";
+    link.download = `${artistName}_Music_Taste_Ranking.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleExport = async () => {
-    if (!containerRef.current) return;
+    if (winners.length === 0) return;
     setIsExporting(true);
+
     try {
-      const dataUrl = await htmlToImage.toPng(containerRef.current, { 
-         cacheBust: true, 
-         pixelRatio: 2,
-         style: { 
-           transform: 'scale(1)', 
-           borderRadius: '0',
-           overflow: 'visible',
-           height: 'auto'
-         } // fix for scrollable container and rounded corner cutoffs
-      });
-      const link = document.createElement('a');
-      link.download = 'music_taste_result.png';
-      link.href = dataUrl;
-      link.click();
+      if (template === "pyramid") {
+        const el = document.getElementById("export-pyramid-card");
+        if (!el) throw new Error("Export element not found");
+        
+        const dataUrl = await htmlToImage.toPng(el, { 
+           cacheBust: true, 
+           pixelRatio: 3, // extremely high resolution
+        });
+        const link = document.createElement('a');
+        link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`;
+        link.href = dataUrl;
+        link.click();
+      } else {
+        const pageSize = template === "list" ? 15 : 10;
+        const totalPages = Math.ceil(winners.length / pageSize);
+
+        let exportPages = [0]; // default: first page only
+        
+        if (totalPages > 1) {
+          const confirmAll = window.confirm(`전체 랭킹(${winners.length}곡)을 인스타그램 스토리용 9:16 이미지 ${totalPages}장으로 나누어 다운로드하시겠습니까?\n\n(취소를 누르시면 TOP ${pageSize}이 있는 1페이지만 다운로드됩니다.)`);
+          if (confirmAll) {
+            exportPages = Array.from({ length: totalPages }, (_, i) => i);
+          }
+        }
+
+        // Sequential exports with a slight delay to allow clean consecutive browser downloads
+        for (let i = 0; i < exportPages.length; i++) {
+          const pIdx = exportPages[i];
+          const el = document.getElementById(`export-card-page-${pIdx}`);
+          if (!el) continue;
+
+          // Add a brief timeout to keep downloads ordered and prevent browser blocking
+          await new Promise((resolve) => setTimeout(resolve, i * 450));
+
+          const dataUrl = await htmlToImage.toPng(el, { 
+             cacheBust: true, 
+             pixelRatio: 3,
+          });
+          const link = document.createElement('a');
+          link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`;
+          link.href = dataUrl;
+          link.click();
+        }
+      }
     } catch (err) {
       console.error('Failed to export image', err);
       alert('이미지 저장에 실패했습니다. 다시 시도해주세요.');
@@ -432,6 +490,44 @@ export default function ResultPage() {
          {/* Background Elements */}
          <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />
 
+         {/* Segmented Design Customization Selector */}
+         {showButton && (
+           <div className="relative z-30 w-full max-w-md mx-auto px-4 mt-2 mb-4 select-none">
+             <div className="flex bg-[#1A2A6C]/5 p-1.5 rounded-2xl border border-[#1A2A6C]/10 backdrop-blur-sm gap-0.5">
+               <button
+                 onClick={() => setTemplate("pyramid")}
+                 className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
+                   template === "pyramid" 
+                     ? "bg-white text-navy shadow-sm" 
+                     : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
+                 }`}
+               >
+                 📐 피라미드형
+               </button>
+               <button
+                 onClick={() => setTemplate("list")}
+                 className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
+                   template === "list" 
+                     ? "bg-white text-navy shadow-sm" 
+                     : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
+                 }`}
+               >
+                 📜 감성 리스트형
+               </button>
+               <button
+                 onClick={() => setTemplate("retro")}
+                 className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
+                   template === "retro" 
+                     ? "bg-white text-navy shadow-sm" 
+                     : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
+                 }`}
+               >
+                 📻 레코드형
+               </button>
+             </div>
+           </div>
+         )}
+
          {/* Floating Skip Button for Cinematic Zoom-in Animation */}
          {!showButton && (
            <button
@@ -442,41 +538,60 @@ export default function ResultPage() {
            </button>
          )}
 
-         <motion.div 
-           layout 
-           ref={timelineWrapperRef}
-           className={`relative z-10 w-full mt-4 ${
-             showButton ? "h-auto overflow-visible pb-20" : "flex-1 overflow-hidden"
-           }`}
-         >
-            {winners.length > 0 && (
-              <motion.div
-                initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
-                animate={showButton ? { scale: 1, x: "0px", y: "0px" } : (cameraRig ? { 
-                   scale: cameraRig.scaleKeyframes, 
-                   x: cameraRig.xKeyframes,
-                   y: cameraRig.yKeyframes
-                } : {})}
-                transition={showButton ? { duration: 0.1 } : { 
-                   duration: totalDuration, 
-                   times: cameraRig?.times,
-                   ease: "linear"
-                }}
-                className={showButton ? "w-full origin-center" : "w-full h-full origin-center"}
-                style={showButton ? { height: timelineViewBoxHeight } : {}}
-                onAnimationComplete={() => {
-                  if (!showButton) setShowButton(true);
-                }}
-              >
-                 <SnakePathTimeline 
-                    tracks={winners} 
-                    drawDuration={panDuration} 
-                    onLayoutComplete={handleLayoutComplete} 
-                    isCompleted={showButton}
-                 />
-              </motion.div>
-            )}
-         </motion.div>
+          <motion.div 
+            layout 
+            ref={timelineWrapperRef}
+            className={`relative z-10 w-full mt-4 ${
+              showButton ? "h-auto overflow-visible pb-20" : "flex-1 overflow-hidden"
+            }`}
+          >
+             {winners.length > 0 && (
+               <>
+                 {/* 1. Pyramid Template */}
+                 {template === "pyramid" && (
+                   <motion.div
+                     initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
+                     animate={showButton ? { scale: 1, x: "0px", y: "0px" } : (cameraRig ? { 
+                        scale: cameraRig.scaleKeyframes, 
+                        x: cameraRig.xKeyframes,
+                        y: cameraRig.yKeyframes
+                     } : {})}
+                     transition={showButton ? { duration: 0.1 } : { 
+                        duration: totalDuration, 
+                        times: cameraRig?.times,
+                        ease: "linear"
+                     }}
+                     className={showButton ? "w-full origin-center" : "w-full h-full origin-center"}
+                     style={showButton ? { height: timelineViewBoxHeight } : {}}
+                     onAnimationComplete={() => {
+                       if (!showButton) setShowButton(true);
+                     }}
+                   >
+                      <SnakePathTimeline 
+                         tracks={winners} 
+                         drawDuration={panDuration} 
+                         onLayoutComplete={handleLayoutComplete} 
+                         isCompleted={showButton}
+                      />
+                   </motion.div>
+                 )}
+
+                 {/* 2. Emotional List Template */}
+                 {showButton && template === "list" && (
+                   <div className="w-full max-w-md mx-auto">
+                     <EmotionalListTemplate tracks={winners} />
+                   </div>
+                 )}
+
+                 {/* 3. Vintage Vinyl Template */}
+                 {showButton && template === "retro" && (
+                   <div className="w-full max-w-md mx-auto">
+                     <VintageVinylTemplate tracks={winners} />
+                   </div>
+                 )}
+               </>
+             )}
+          </motion.div>
       </motion.div>
 
       {/* Floating Actions */}
@@ -553,14 +668,24 @@ export default function ResultPage() {
                 </button>
               )}
               
-              <button 
-                onClick={handleExport}
-                disabled={isExporting}
-                className={`w-full max-w-[380px] pointer-events-auto py-4 rounded-full bg-navy text-cream font-sans font-bold text-base shadow-[0_10px_30px_rgba(26,42,108,0.3)] border border-navy/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isExporting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-navy/90 hover:-translate-y-1'}`}
-              >
-                 <Download size={18} className="mr-1" />
-                 {isExporting ? "이미지 저장 중..." : "인스타그램 스토리 이미지 저장"}
-              </button>
+              <div className="w-full max-w-[380px] flex gap-2 pointer-events-auto shadow-lg rounded-full">
+                <button 
+                  onClick={handleDownloadCSV}
+                  className="flex-1 py-4 bg-[#0F766E] hover:bg-[#0D625B] text-white font-sans font-bold text-xs border border-teal-800/20 rounded-l-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer"
+                  title="Microsoft Excel / Google Sheets용 CSV 파일 저장"
+                >
+                   Excel 저장
+                </button>
+                
+                <button 
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className={`flex-[2] py-4 bg-navy text-cream font-sans font-bold text-xs border border-navy/20 rounded-r-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer ${isExporting ? 'opacity-70' : 'hover:bg-[#111A3E]'}`}
+                >
+                   <Download size={14} />
+                   {isExporting ? "스토리 저장 중..." : "인스타 스토리 저장"}
+                </button>
+              </div>
             </motion.div>
           )}
        </AnimatePresence>
@@ -618,6 +743,90 @@ export default function ResultPage() {
           </>
         )}
       </AnimatePresence>
+      {/* Offscreen High-Fidelity 9:16 Instagram Story Export Cards */}
+      {winners.length > 0 && (
+        <div 
+          className="absolute top-[-9999px] left-[-9999px] pointer-events-none select-none"
+          style={{ width: "450px" }}
+        >
+          {/* 1. Pyramid Export Card (Uses computed scale factor to fit all songs in a single card) */}
+          {(() => {
+            const scaleFactor = Math.min(1.0, 600 / timelineViewBoxHeight);
+            return (
+              <div 
+                id="export-pyramid-card"
+                className="w-[450px] h-[800px] bg-[#F5F2ED] relative flex flex-col justify-between p-7 overflow-hidden"
+              >
+                {/* Header */}
+                <div className="text-center flex flex-col items-center">
+                  <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-navy/5 text-navy mb-1.5">
+                    <Music size={16} />
+                  </div>
+                  <h3 className="font-serif text-2xl text-navy leading-none tracking-tight">My Taste</h3>
+                  <p className="font-sans font-bold text-[7px] uppercase tracking-[0.2em] text-[#E67E22] mt-1">The Analog Record Shop</p>
+                </div>
+
+                {/* Vector Scaled Timeline Container */}
+                <div className="relative flex-1 w-full my-3 overflow-hidden" style={{ height: "600px" }}>
+                  <div 
+                    style={{
+                      width: `${100 / scaleFactor}%`,
+                      height: `${timelineViewBoxHeight}px`,
+                      transform: `scale(${scaleFactor})`,
+                      transformOrigin: "top center",
+                      position: "absolute",
+                      top: 0,
+                      left: "50%",
+                      marginLeft: `-${50 / scaleFactor}%`
+                    }}
+                  >
+                    <SnakePathTimeline 
+                      tracks={winners} 
+                      drawDuration={0.1}
+                      isCompleted={true}
+                    />
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-navy/15 pt-2 flex items-center justify-between text-navy/40 text-[9px] font-bold">
+                  <span className="font-serif">The Record Shop</span>
+                  <span className="font-sans uppercase tracking-wider">Total {winners.length} tracks</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 2. Paginated Export Cards for List and Retro Templates */}
+          {(() => {
+            const pageSize = template === "list" ? 15 : 10;
+            const totalPages = Math.ceil(winners.length / pageSize);
+            return Array.from({ length: totalPages }).map((_, pIdx) => (
+              <div 
+                key={`export-page-${pIdx}`}
+                id={`export-card-page-${pIdx}`}
+                className="w-[450px] h-[800px] bg-[#FAF7F2] relative flex flex-col justify-between overflow-hidden"
+              >
+                {template === "list" ? (
+                  <EmotionalListTemplate 
+                    tracks={winners} 
+                    isExport 
+                    pageIndex={pIdx} 
+                    pageSize={15} 
+                  />
+                ) : (
+                  <VintageVinylTemplate 
+                    tracks={winners} 
+                    isExport 
+                    pageIndex={pIdx} 
+                    pageSize={10} 
+                  />
+                )}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
     </main>
   );
 }
