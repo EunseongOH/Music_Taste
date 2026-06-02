@@ -95,7 +95,12 @@ export default function ResultPage() {
       const dataUrl = await htmlToImage.toPng(containerRef.current, { 
          cacheBust: true, 
          pixelRatio: 2,
-         style: { transform: 'scale(1)', borderRadius: '0' } // fix for some rounded corner cutoffs
+         style: { 
+           transform: 'scale(1)', 
+           borderRadius: '0',
+           overflow: 'visible',
+           height: 'auto'
+         } // fix for scrollable container and rounded corner cutoffs
       });
       const link = document.createElement('a');
       link.download = 'music_taste_result.png';
@@ -437,12 +442,11 @@ export default function ResultPage() {
            </button>
          )}
 
-         {/* Timeline Content */}
          <motion.div 
            layout 
            ref={timelineWrapperRef}
-           className={`relative z-10 flex-1 w-full mt-4 ${
-             showButton ? "overflow-y-auto scrollbar-none pb-20" : "overflow-hidden"
+           className={`relative z-10 w-full mt-4 ${
+             showButton ? "h-auto overflow-visible pb-20" : "flex-1 overflow-hidden"
            }`}
          >
             {winners.length > 0 && (
@@ -458,7 +462,8 @@ export default function ResultPage() {
                    times: cameraRig?.times,
                    ease: "linear"
                 }}
-                className="w-full h-full origin-center"
+                className={showButton ? "w-full origin-center" : "w-full h-full origin-center"}
+                style={showButton ? { height: timelineViewBoxHeight } : {}}
                 onAnimationComplete={() => {
                   if (!showButton) setShowButton(true);
                 }}
