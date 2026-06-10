@@ -1,12 +1,12 @@
 "use server";
 // src/utils/spotify.ts
-import { cookies } from "next/headers";
 
 const getLocaleCookie = async (): Promise<string> => {
   try {
+    const { cookies } = await import("next/headers");
     const cookieStore = await cookies();
     return cookieStore.get("locale")?.value || "ko";
-  } catch (e) {
+  } catch {
     return "ko";
   }
 };
