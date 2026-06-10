@@ -28,7 +28,11 @@ const nextConfig: NextConfig = {
   // Increase HTTP header size limit to prevent HTTP 431 errors from large cookies
   experimental: {
     serverActions: {
-      allowedOrigins: ["localhost:3000"],
+      allowedOrigins: [
+        "localhost:3000",
+        "sortify.kr",
+        "www.sortify.kr",
+      ],
     },
   },
 };
