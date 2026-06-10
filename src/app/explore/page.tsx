@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Loader2, Disc, X, Check } from "lucide-react";
 import Image from "next/image";
@@ -36,6 +36,11 @@ export default function ExplorePage() {
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [pendingSingleArtist, setPendingSingleArtist] = useState<Artist | null>(null);
+  const [visibleDefaultCount, setVisibleDefaultCount] = useState(30);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [hasMoreSearch, setHasMoreSearch] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const observerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -187,12 +192,16 @@ export default function ExplorePage() {
           setArtists(defaultArtists);
         }
         setIsSearching(false);
+        setSearchOffset(0);
+        setHasMoreSearch(true);
         return;
       }
 
       setIsSearching(true);
+      setSearchOffset(0);
+      setHasMoreSearch(true);
       try {
-        const results = await searchSpotifyArtists(searchQuery);
+        const results = await searchSpotifyArtists(searchQuery, 10, 0);
         const mappedArtists: Artist[] = results.map((artist: any) => ({
           id: artist.id,
           name: artist.name,
@@ -201,6 +210,9 @@ export default function ExplorePage() {
           popularity: artist.popularity || 0,
         }));
         setArtists(mappedArtists);
+        if (results.length < 10) {
+          setHasMoreSearch(false);
+        }
       } catch (error) {
         console.error("Failed to search artists:", error);
       } finally {
@@ -210,6 +222,64 @@ export default function ExplorePage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery, selectedIds.size, defaultArtists]);
+
+  const handleLoadMore = async () => {
+    const isSearchingActive = searchQuery.trim().length > 0;
+    
+    if (isSearchingActive) {
+      if (!hasMoreSearch || isLoadingMore || isSearching) return;
+      
+      setIsLoadingMore(true);
+      try {
+        const nextOffset = searchOffset + 10;
+        const results = await searchSpotifyArtists(searchQuery, 10, nextOffset);
+        if (results.length === 0) {
+          setHasMoreSearch(false);
+        } else {
+          const mappedArtists: Artist[] = results.map((artist: any) => ({
+            id: artist.id,
+            name: artist.name,
+            image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+            type: "main",
+            popularity: artist.popularity || 0,
+          }));
+          
+          setArtists(prev => {
+            const prevIds = new Set(prev.map(a => a.id));
+            const filteredNew = mappedArtists.filter(a => !prevIds.has(a.id));
+            return [...prev, ...filteredNew];
+          });
+          setSearchOffset(nextOffset);
+          if (results.length < 10) {
+            setHasMoreSearch(false);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load more searched artists:", e);
+      } finally {
+        setIsLoadingMore(false);
+      }
+    } else {
+      if (visibleDefaultCount >= defaultArtists.length) return;
+      setVisibleDefaultCount(prev => Math.min(defaultArtists.length, prev + 20));
+    }
+  };
+
+  useEffect(() => {
+    if (!observerRef.current) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    
+    observer.observe(observerRef.current);
+    return () => observer.disconnect();
+  }, [searchQuery, searchOffset, hasMoreSearch, isLoadingMore, isSearching, defaultArtists.length, visibleDefaultCount]);
 
   const handleArtistClick = async (artist: Artist) => {
     if (isSingleArtistMode) {
@@ -454,46 +524,43 @@ export default function ExplorePage() {
       {/* Grids Container */}
       <div className="flex flex-col mt-6 px-1 gap-10">
         {searchQuery.trim().length > 0 ? (
-          <>
-            {/* 1. Search Results Section */}
-            <div className="flex flex-col">
-              <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
-                검색 결과
-                <span className="text-xs font-sans text-point font-medium">"{searchQuery}" 검색 결과입니다</span>
-              </h2>
-              {artists.length === 0 ? (
-                <div className="py-12 text-center font-sans text-sm text-charcoal/50 bg-white/20 border border-dashed border-navy/10 rounded-3xl">
-                  검색 결과가 없습니다. 다른 검색어를 입력해 보세요.
-                </div>
-              ) : (
-                <motion.div layout className="flex flex-col gap-2.5">
-                  <AnimatePresence>
-                    {artists.map(renderSearchArtistRow)}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </div>
-
-            {/* 2. Recommended Section (Separated below with visual gap) */}
-            <div className="flex flex-col border-t border-navy/5 pt-8">
-              <motion.div 
-                layout 
-                className="grid grid-cols-3 gap-x-3 gap-y-8 opacity-75 hover:opacity-100 transition-opacity duration-300"
-              >
+          /* 1. Search Results Section */
+          <div className="flex flex-col">
+            <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
+              검색 결과
+              <span className="text-xs font-sans text-point font-medium">"{searchQuery}" 검색 결과입니다</span>
+            </h2>
+            {artists.length === 0 ? (
+              <div className="py-12 text-center font-sans text-sm text-charcoal/50 bg-white/20 border border-dashed border-navy/10 rounded-3xl">
+                검색 결과가 없습니다. 다른 검색어를 입력해 보세요.
+              </div>
+            ) : (
+              <motion.div layout className="flex flex-col gap-2.5">
                 <AnimatePresence>
-                  {defaultArtists.map(renderArtistCard)}
+                  {artists.map(renderSearchArtistRow)}
                 </AnimatePresence>
               </motion.div>
-            </div>
-          </>
+            )}
+          </div>
         ) : (
-          /* 3. Recommended Section Only (When no search active) */
+          /* 2. Recommended Section Only (When no search active) */
           <div className="flex flex-col">
             <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
               <AnimatePresence>
-                {defaultArtists.map(renderArtistCard)}
+                {defaultArtists.slice(0, visibleDefaultCount).map(renderArtistCard)}
               </AnimatePresence>
             </motion.div>
+          </div>
+        )}
+      </div>
+
+      {/* Infinite Scroll Sentinel */}
+      <div ref={observerRef} className="h-16 w-full flex items-center justify-center mt-6">
+        {((searchQuery.trim().length > 0 && hasMoreSearch) || 
+          (searchQuery.trim().length === 0 && visibleDefaultCount < defaultArtists.length)) && (
+          <div className="flex flex-col items-center gap-1.5 py-4">
+            <Loader2 className="animate-spin text-point/60" size={24} />
+            <span className="font-sans text-[10px] text-navy/40 font-bold">아티스트 더 불러오는 중...</span>
           </div>
         )}
       </div>

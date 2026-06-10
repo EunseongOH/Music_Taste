@@ -28,6 +28,12 @@ const searchCache = new Map<string, { data: any; timestamp: number }>();
 let cachedInitialArtists: any[] | null = null;
 let initialArtistsExpirationTime = 0;
 
+let lastSpotifyError = "";
+
+export const getLastSpotifyError = async () => {
+  return lastSpotifyError;
+};
+
 // Get the access token using the Client Credentials Flow
 export const getSpotifyAccessToken = async (): Promise<string> => {
   // Return cached token if valid
@@ -150,57 +156,67 @@ async function spotifyFetch(
 }
 
 // Search for artists
-export const searchSpotifyArtists = async (query: string) => {
+export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0) => {
   if (!query) return [];
 
   const trimmedQuery = query.trim().toLowerCase();
   const lang = await getLocaleCookie();
-  const cacheKey = `${trimmedQuery}_${lang}`;
+  const cacheKey = `${trimmedQuery}_${lang}_limit_${limit}_offset_${offset}`;
   
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 300 * 1000) { // 5 minutes cache for search
     return cached.data;
   }
   
-  const response = await spotifyFetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=5`);
+  const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=${limit}&offset=${offset}`;
+  const response = await spotifyFetch(url);
 
   if (!response.ok) {
     const errText = await response.text();
     console.error("Spotify Search Error:", errText);
-    throw new Error('Failed to search artists');
+    lastSpotifyError = `Search API Error (URL: ${url}) (Status ${response.status}): ${errText}`;
+    return []; // Return empty instead of throwing to prevent crashing UI
   }
 
   const data = await response.json();
-  const items = data.artists.items;
-  searchCache.set(cacheKey, { data: items, timestamp: Date.now() });
+  const items = data.artists?.items || [];
+  if (items.length > 0) {
+    searchCache.set(cacheKey, { data: items, timestamp: Date.now() });
+  }
   return items; // Array of artist objects
 };
 
 // Fetch initial popular artists dynamically using Spotify Search API by genres
 export const getInitialArtists = async () => {
-  if (cachedInitialArtists && Date.now() < initialArtistsExpirationTime) {
+  if (cachedInitialArtists && cachedInitialArtists.length > 0 && Date.now() < initialArtistsExpirationTime) {
     return cachedInitialArtists;
   }
 
-  // Diverse genre and trending queries
+  // Diverse genre and trending queries (including 2025/2026 and more genres)
   const queries = [
     'genre:k-pop', 'genre:pop', 'genre:hip-hop', 'genre:rock', 
     'genre:r-b', 'genre:indie', 'genre:electronic', 'genre:jazz', 
-    'year:2024', 'year:2023-2024'
+    'genre:ballad', 'genre:trot', 'year:2026', 'year:2025'
   ];
   
-  // Pick 4 random distinct queries
-  const selectedQueries = queries.sort(() => 0.5 - Math.random()).slice(0, 4);
+  // Pick 10 random queries to build a diverse pool while keeping limit at 10
+  const selectedQueries = queries.sort(() => 0.5 - Math.random()).slice(0, 10);
 
-  // Fetch 10 artists for each query (Spotify limits Client Credentials search limit to 10 for some queries)
+  // Fetch 10 artists for each query (strictly complying with Spotify Client Credentials search limit of 10)
   const results = await Promise.all(selectedQueries.map(async (query) => {
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=10`;
     try {
-      const response = await spotifyFetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=10`);
-      if (!response.ok) return [];
+      const response = await spotifyFetch(url);
+      if (!response.ok) {
+        const errText = await response.text();
+        lastSpotifyError = `Initial Query ${query} Error (URL: ${url}) (Status ${response.status}): ${errText}`;
+        return [];
+      }
       const data = await response.json();
       return data.artists?.items || [];
-    } catch (e) {
+    } catch (e: any) {
       console.warn(`Search failed for ${query}`, e);
+      lastSpotifyError = `Initial Query ${query} Exception (URL: ${url}): ${e.message}`;
       return [];
     }
   }));
@@ -215,9 +231,14 @@ export const getInitialArtists = async () => {
     [uniqueArtists[i], uniqueArtists[j]] = [uniqueArtists[j], uniqueArtists[i]];
   }
 
-  const sliced = uniqueArtists.slice(0, 24);
-  cachedInitialArtists = sliced;
-  initialArtistsExpirationTime = Date.now() + CACHE_TTL; // Cache for 1 hour
+  // Slice to 120 artists to give a large pool for client-side pagination, cached for 1 hour
+  const sliced = uniqueArtists.slice(0, 120);
+  if (sliced.length > 0) {
+    cachedInitialArtists = sliced;
+    initialArtistsExpirationTime = Date.now() + CACHE_TTL; // Cache for 1 hour
+  } else {
+    cachedInitialArtists = null;
+  }
 
   return sliced;
 };
