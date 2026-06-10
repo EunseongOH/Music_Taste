@@ -154,8 +154,29 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     const top = window.screenY + (window.outerHeight - height) / 2;
     
     const popup = window.open(
-      "/auth/popup-login",
+      "/auth/popup-login?provider=google",
       "Google Login",
+      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      setLoginError("팝업 차단이 감지되었습니다. 팝업 허용 후 다시 시도해주세요.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleKakaoLogin = () => {
+    setIsLoading(true);
+    setLoginError("");
+
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popup = window.open(
+      "/auth/popup-login?provider=kakao",
+      "Kakao Login",
       `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
     );
 
@@ -395,6 +416,8 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                     {/* Kakao Login Button — Official Brand Guideline */}
                     <button 
                       type="button"
+                      onClick={handleKakaoLogin}
+                      disabled={isLoading}
                       className="w-full flex items-center justify-center bg-[#FEE500] text-[#000000D9] font-bold hover:brightness-95 active:brightness-90 transition-all disabled:opacity-50 shadow-sm"
                       style={{
                         borderRadius: "12px",
