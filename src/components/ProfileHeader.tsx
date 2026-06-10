@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import ProfileModal from "./ProfileModal";
 import Image from "next/image";
 import { useAuth } from "@/components/AuthProvider";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 export default function ProfileHeader({ className = "" }: { className?: string }) {
   const { user } = useAuth();

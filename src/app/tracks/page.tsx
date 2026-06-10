@@ -12,6 +12,7 @@ import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeD
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 // --- DUMMY DATA STRUCTURE ---
 interface Track {
@@ -73,6 +74,14 @@ export default function TracksPage() {
 
   const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
   const [customAlert, setCustomAlert] = useState<string | null>(null);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   // Reload prevention for unsaved changes
   React.useEffect(() => {
@@ -91,7 +100,7 @@ export default function TracksPage() {
     if (selectedTrackIds.size > 0) {
       setExitWizardStep('main');
     } else {
-      router.push("/explore");
+      router.push(isSingleArtistMode ? "/explore?mode=single" : "/explore");
     }
   };
 
@@ -108,13 +117,13 @@ export default function TracksPage() {
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await downgradeDraftToArtistSelection(selectedArtists);
+        await downgradeDraftToArtistSelection(selectedArtists, isSingleArtistMode);
       } catch (err) {
         console.error("Error downgrading draft state to artist_selection:", err);
       }
     }
     
-    router.push("/explore");
+    router.push(isSingleArtistMode ? "/explore?mode=single" : "/explore");
   };
 
   const handleConfirmSaveExit = async () => {
@@ -170,14 +179,14 @@ export default function TracksPage() {
     }
 
     const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-    await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+    await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
     router.push("/");
   };
 
   const handleDiscardExit = async () => {
     setExitWizardStep(null);
     if (user) {
-      await deleteActiveDraft();
+      await deleteActiveDraft(isSingleArtistMode);
     }
     localStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_tracks");
@@ -189,34 +198,74 @@ export default function TracksPage() {
     const fetchSpotifyData = async () => {
       let stored = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
 
+      const params = new URLSearchParams(window.location.search);
+      const isSingle = params.get("mode") === "single";
+
       // Load from active draft in Supabase if user is logged in
       if (user) {
         try {
-          const draft = await loadActiveDraft();
+          const draft = await loadActiveDraft(isSingle);
           if (draft) {
             if (draft.selected_artists && draft.selected_artists.length > 0) {
-              stored = JSON.stringify(draft.selected_artists);
+              // In single-artist mode, only keep the first (single) artist
+              const draftArtists = isSingle ? draft.selected_artists.slice(0, 1) : draft.selected_artists;
+              stored = JSON.stringify(draftArtists);
               sessionStorage.setItem('selectedArtists', stored);
               localStorage.setItem('selectedArtists', stored);
             }
             if (draft.selected_tracks && draft.selected_tracks.length > 0) {
-              // Hydrate local storages with full track metadata
-              const tracksStr = JSON.stringify(draft.selected_tracks);
-              sessionStorage.setItem("worldcup_tracks", tracksStr);
-              localStorage.setItem("worldcup_tracks", tracksStr);
+              let tracksToLoad = draft.selected_tracks;
 
-              // Set selected track IDs
-              const loadedTrackIds = draft.selected_tracks.map((t: any) => typeof t === 'string' ? t : t.id);
-              setSelectedTrackIds(new Set(loadedTrackIds));
-
-              // Load metadata cache
-              const metadataMap: Record<string, any> = {};
-              draft.selected_tracks.forEach((t: any) => {
-                if (typeof t === 'object' && t !== null) {
-                  metadataMap[t.id] = t;
+              // Build the set of valid artist IDs/names from the draft's own artist list
+              if (draft.selected_artists && draft.selected_artists.length > 0) {
+                if (isSingle) {
+                  // Single-artist mode: only tracks belonging to the one artist
+                  const singleArtistName = draft.selected_artists[0]?.name?.toLowerCase();
+                  tracksToLoad = draft.selected_tracks.filter((t: any) =>
+                    typeof t === 'object' && t !== null &&
+                    (t.artistName?.toLowerCase() === singleArtistName)
+                  );
+                } else {
+                  // Multi-artist mode: only tracks whose artist is in the selected list
+                  const validArtistIds = new Set(
+                    draft.selected_artists.map((a: any) => a.id?.toLowerCase()).filter(Boolean)
+                  );
+                  const validArtistNames = new Set(
+                    draft.selected_artists.map((a: any) => a.name?.toLowerCase()).filter(Boolean)
+                  );
+                  tracksToLoad = draft.selected_tracks.filter((t: any) => {
+                    if (typeof t !== 'object' || t === null) return false;
+                    // Match by artistId first, fall back to artistName
+                    const byId = t.artistId && validArtistIds.has(t.artistId.toLowerCase());
+                    const byName = t.artistName && validArtistNames.has(t.artistName.toLowerCase());
+                    return byId || byName;
+                  });
                 }
-              });
-              setSelectedTracksMetadata(metadataMap);
+              }
+
+              if (tracksToLoad.length > 0) {
+                // Hydrate local storages with full track metadata
+                const tracksStr = JSON.stringify(tracksToLoad);
+                sessionStorage.setItem("worldcup_tracks", tracksStr);
+                localStorage.setItem("worldcup_tracks", tracksStr);
+
+                // Set selected track IDs
+                const loadedTrackIds = tracksToLoad.map((t: any) => typeof t === 'string' ? t : t.id);
+                setSelectedTrackIds(new Set(loadedTrackIds));
+
+                // Load metadata cache
+                const metadataMap: Record<string, any> = {};
+                tracksToLoad.forEach((t: any) => {
+                  if (typeof t === 'object' && t !== null) {
+                    metadataMap[t.id] = t;
+                  }
+                });
+                setSelectedTracksMetadata(metadataMap);
+              } else {
+                // No valid tracks for this mode — clear any stale storage
+                sessionStorage.removeItem("worldcup_tracks");
+                localStorage.removeItem("worldcup_tracks");
+              }
             }
           }
         } catch (err) {
@@ -227,7 +276,8 @@ export default function TracksPage() {
       // Fallback to user_metadata from Supabase
       if (!stored && user?.user_metadata?.selected_artists) {
         const artistsData = user.user_metadata.selected_artists;
-        stored = JSON.stringify(artistsData);
+        const normalizedArtists = isSingle ? artistsData.slice(0, 1) : artistsData;
+        stored = JSON.stringify(normalizedArtists);
         sessionStorage.setItem('selectedArtists', stored);
         localStorage.setItem('selectedArtists', stored);
       }
@@ -236,16 +286,54 @@ export default function TracksPage() {
       const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
       if (storedTracksStr) {
         try {
-          const previouslyLoadedTracks = JSON.parse(storedTracksStr);
-          const metadataMap: Record<string, any> = {};
-          const loadedTrackIds: string[] = [];
-          previouslyLoadedTracks.forEach((t: any) => {
-            metadataMap[t.id] = t;
-            loadedTrackIds.push(t.id);
-          });
-          setSelectedTracksMetadata(prev => ({ ...prev, ...metadataMap }));
-          if (selectedTrackIds.size === 0 && loadedTrackIds.length > 0) {
-            setSelectedTrackIds(new Set(loadedTrackIds));
+          const previouslyLoadedTracks: any[] = JSON.parse(storedTracksStr);
+
+          // Validate stored tracks match the current artist selection
+          let validTracks = previouslyLoadedTracks;
+          if (stored) {
+            try {
+              const parsedArtists: { id?: string; name?: string }[] = JSON.parse(stored);
+              if (isSingle) {
+                const singleArtistName = parsedArtists[0]?.name?.toLowerCase();
+                if (singleArtistName) {
+                  validTracks = previouslyLoadedTracks.filter((t: any) =>
+                    t.artistName?.toLowerCase() === singleArtistName
+                  );
+                }
+              } else {
+                // Multi-artist mode: keep only tracks that belong to a selected artist
+                const validIds = new Set(
+                  parsedArtists.map(a => a.id?.toLowerCase()).filter(Boolean)
+                );
+                const validNames = new Set(
+                  parsedArtists.map(a => a.name?.toLowerCase()).filter(Boolean)
+                );
+                validTracks = previouslyLoadedTracks.filter((t: any) => {
+                  const byId = t.artistId && validIds.has(t.artistId.toLowerCase());
+                  const byName = t.artistName && validNames.has(t.artistName.toLowerCase());
+                  return byId || byName;
+                });
+              }
+              // If filtering changed the list, update storage to remove stale tracks
+              if (validTracks.length !== previouslyLoadedTracks.length) {
+                const cleanStr = JSON.stringify(validTracks);
+                sessionStorage.setItem("worldcup_tracks", cleanStr);
+                localStorage.setItem("worldcup_tracks", cleanStr);
+              }
+            } catch (e) {}
+          }
+
+          if (validTracks.length > 0) {
+            const metadataMap: Record<string, any> = {};
+            const loadedTrackIds: string[] = [];
+            validTracks.forEach((t: any) => {
+              metadataMap[t.id] = t;
+              loadedTrackIds.push(t.id);
+            });
+            setSelectedTracksMetadata(prev => ({ ...prev, ...metadataMap }));
+            if (selectedTrackIds.size === 0 && loadedTrackIds.length > 0) {
+              setSelectedTrackIds(new Set(loadedTrackIds));
+            }
           }
         } catch (e) {}
       }
@@ -256,8 +344,10 @@ export default function TracksPage() {
       }
       try {
         const parsed = JSON.parse(stored);
-        if (parsed.length > 0) {
-          const initialData = parsed.map((a: any) => ({
+        // In single-artist mode: strictly enforce only 1 artist
+        const artistsToLoad = isSingle ? parsed.slice(0, 1) : parsed;
+        if (artistsToLoad.length > 0) {
+          const initialData = artistsToLoad.map((a: any) => ({
             id: a.id,
             name: a.name,
             image: a.image,
@@ -277,6 +367,16 @@ export default function TracksPage() {
 
     fetchSpotifyData();
   }, [user]);
+
+  // Auto-expand single artist on mount in Single-Artist Mode
+  React.useEffect(() => {
+    if (isLoaded && isSingleArtistMode && artistData.length === 1) {
+      const singleArtist = artistData[0];
+      if (!singleArtist.albumsLoaded && !loadingAlbums.has(`artist_${singleArtist.id}`)) {
+        toggleArtistAccordion(singleArtist.id);
+      }
+    }
+  }, [isLoaded, isSingleArtistMode, artistData]);
 
   // Save selected tracks to Supabase in the background
   React.useEffect(() => {
@@ -332,7 +432,7 @@ export default function TracksPage() {
         } catch (e) {}
       }
 
-      await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+      await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
       
       sessionStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
       localStorage.setItem("worldcup_tracks", JSON.stringify(selectedTracksData));
@@ -433,11 +533,88 @@ export default function TracksPage() {
             console.error("Failed to fetch unreleased tracks from Supabase:", err);
           }
 
+          let finalAlbums = mappedAlbums;
+          if (isSingleArtistMode) {
+            finalAlbums = await Promise.all(
+              mappedAlbums.map(async (album: any) => {
+                try {
+                  const tracksRaw = await getAlbumTracks(album.id);
+                  const tracks = tracksRaw.map((t: any) => {
+                    const totalSeconds = Math.floor(t.duration_ms / 1000);
+                    const mins = Math.floor(totalSeconds / 60);
+                    const secs = String(totalSeconds % 60).padStart(2, '0');
+                    return {
+                      id: t.id,
+                      title: t.name,
+                      duration: `${mins}:${secs}`,
+                      previewUrl: t.preview_url
+                    };
+                  });
+                  
+                  setSelectedTrackIds(prev => {
+                    const next = new Set(prev);
+                    tracks.forEach((track: any) => next.add(track.id));
+                    return next;
+                  });
+
+                  setSelectedTracksMetadata(prev => {
+                    const next = { ...prev };
+                    tracks.forEach((track: any) => {
+                      next[track.id] = {
+                        id: track.id,
+                        title: track.title,
+                        duration: track.duration,
+                        artistName: artist.name,
+                        albumTitle: album.title,
+                        albumImage: album.image,
+                        albumId: album.id
+                      };
+                    });
+                    return next;
+                  });
+
+                  return { ...album, tracks };
+                } catch (e) {
+                  console.error("Failed to load tracks for album " + album.id, e);
+                  return album;
+                }
+              })
+            );
+
+            if (unreleasedAlbumsList.length > 0) {
+              setSelectedTrackIds(prev => {
+                const next = new Set(prev);
+                unreleasedAlbumsList.forEach(album => {
+                  album.tracks.forEach(track => next.add(track.id));
+                });
+                return next;
+              });
+
+              setSelectedTracksMetadata(prev => {
+                const next = { ...prev };
+                unreleasedAlbumsList.forEach(album => {
+                  album.tracks.forEach(track => {
+                    next[track.id] = {
+                      id: track.id,
+                      title: track.title,
+                      duration: track.duration,
+                      artistName: artist.name,
+                      albumTitle: album.title,
+                      albumImage: album.image,
+                      albumId: album.id
+                    };
+                  });
+                });
+                return next;
+              });
+            }
+          }
+
           setArtistData(prev => prev.map(a => 
             a.id === artistId 
               ? { 
                   ...a, 
-                  albums: mappedAlbums, 
+                  albums: finalAlbums, 
                   unreleasedAlbums: unreleasedAlbumsList,
                   albumsLoaded: true, 
                   totalReleases: albumsData.total,
@@ -479,11 +656,60 @@ export default function TracksPage() {
         totalTracks: albumRaw.total_tracks || 0
       }));
 
+      let finalAlbums = mappedAlbums;
+      if (isSingleArtistMode) {
+        finalAlbums = await Promise.all(
+          mappedAlbums.map(async (album: any) => {
+            try {
+              const tracksRaw = await getAlbumTracks(album.id);
+              const tracks = tracksRaw.map((t: any) => {
+                const totalSeconds = Math.floor(t.duration_ms / 1000);
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = String(totalSeconds % 60).padStart(2, '0');
+                return {
+                  id: t.id,
+                  title: t.name,
+                  duration: `${mins}:${secs}`,
+                  previewUrl: t.preview_url
+                };
+              });
+              
+              setSelectedTrackIds(prev => {
+                const next = new Set(prev);
+                tracks.forEach((track: any) => next.add(track.id));
+                return next;
+              });
+
+              setSelectedTracksMetadata(prev => {
+                const next = { ...prev };
+                tracks.forEach((track: any) => {
+                  next[track.id] = {
+                    id: track.id,
+                    title: track.title,
+                    duration: track.duration,
+                    artistName: artist.name,
+                    albumTitle: album.title,
+                    albumImage: album.image,
+                    albumId: album.id
+                  };
+                });
+                return next;
+              });
+
+              return { ...album, tracks };
+            } catch (e) {
+              console.error("Failed to load tracks for album " + album.id, e);
+              return album;
+            }
+          })
+        );
+      }
+
       setArtistData(prev => prev.map(a => 
         a.id === artistId 
           ? { 
               ...a, 
-              albums: mappedAlbums, 
+              albums: finalAlbums, 
               albumsPage: targetPage,
               totalReleases: albumsData.total
             } 
@@ -770,7 +996,7 @@ export default function TracksPage() {
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await saveTrackSelectionDraft(selectedArtists, selectedTracksData);
+        await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
       } catch (err) {
         console.error("Error saving draft before tournament:", err);
       }
@@ -779,7 +1005,7 @@ export default function TracksPage() {
     sessionStorage.removeItem("worldcup_progress");
     localStorage.removeItem("worldcup_progress");
 
-    router.push("/worldcup");
+    router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
   };
 
   if (!isLoaded) {
@@ -949,6 +1175,80 @@ export default function TracksPage() {
                           </div>
                        ) : (
                          <>
+                           {isSingleArtistMode && artist.albums.length > 0 && (
+                             <div className="flex justify-end gap-2.5 mt-4 px-1.5">
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   const nextIds = new Set(selectedTrackIds);
+                                   const nextMetadata = { ...selectedTracksMetadata };
+
+                                   artist.albums.forEach(album => {
+                                     album.tracks.forEach(track => {
+                                       nextIds.add(track.id);
+                                       nextMetadata[track.id] = {
+                                         id: track.id,
+                                         title: track.title,
+                                         duration: track.duration,
+                                         artistName: artist.name,
+                                         albumTitle: album.title,
+                                         albumImage: album.image,
+                                         albumId: album.id
+                                       };
+                                     });
+                                   });
+
+                                   if (artist.unreleasedAlbums) {
+                                     artist.unreleasedAlbums.forEach(album => {
+                                       album.tracks.forEach(track => {
+                                         nextIds.add(track.id);
+                                         nextMetadata[track.id] = {
+                                           id: track.id,
+                                           title: track.title,
+                                           duration: track.duration,
+                                           artistName: artist.name,
+                                           albumTitle: album.title,
+                                           albumImage: album.image,
+                                           albumId: album.id
+                                         };
+                                       });
+                                     });
+                                   }
+
+                                   setSelectedTrackIds(nextIds);
+                                   setSelectedTracksMetadata(nextMetadata);
+                                 }}
+                                 className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                               >
+                                 전체 선택
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   const nextIds = new Set(selectedTrackIds);
+                                   artist.albums.forEach(album => {
+                                     album.tracks.forEach(track => {
+                                       nextIds.delete(track.id);
+                                     });
+                                   });
+
+                                   if (artist.unreleasedAlbums) {
+                                     artist.unreleasedAlbums.forEach(album => {
+                                       album.tracks.forEach(track => {
+                                         nextIds.delete(track.id);
+                                       });
+                                     });
+                                   }
+
+                                   setSelectedTrackIds(nextIds);
+                                 }}
+                                 className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-point hover:text-point text-xs font-sans font-bold text-navy bg-white hover:bg-point/5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                               >
+                                 전체 해제
+                               </button>
+                             </div>
+                           )}
+
                            {/* Released Albums Grid */}
                            <div className="grid grid-cols-2 gap-4 mt-6">
                               {artist.albums.map(album => {

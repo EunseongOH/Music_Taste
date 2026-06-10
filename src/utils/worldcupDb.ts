@@ -1,11 +1,12 @@
 import { createClient } from "./supabase/client";
 
 // Stage 1: Save artist selection
-export const saveArtistSelectionDraft = async (selectedArtists: any[]) => {
+export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
   const title = selectedArtists.length > 0 
     ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
@@ -14,6 +15,7 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[]) => {
     .from('tournament_drafts')
     .upsert({
       user_id: user.id,
+      is_single_artist: isSingle,
       status: 'artist_selection',
       selected_artists: selectedArtists,
       title,
@@ -26,15 +28,18 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[]) => {
 };
 
 // Stage 2: Save track selection
-export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTracks: any[]) => {
+export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTracks: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
 
   const { error } = await supabase
     .from('tournament_drafts')
     .upsert({
       user_id: user.id,
+      is_single_artist: isSingle,
       status: 'track_selection',
       selected_artists: selectedArtists,
       selected_tracks: selectedTracks,
@@ -47,11 +52,12 @@ export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTr
 };
 
 // Downgrade active draft to Artist Selection and clear track selection
-export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) => {
+export const downgradeDraftToArtistSelection = async (selectedArtists: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
   const title = selectedArtists.length > 0 
     ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
@@ -60,6 +66,7 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) =>
     .from('tournament_drafts')
     .upsert({
       user_id: user.id,
+      is_single_artist: isSingle,
       status: 'artist_selection',
       selected_artists: selectedArtists,
       selected_tracks: null,
@@ -82,13 +89,16 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[]) =>
 
 
 // Stage 3 & 4: Save active tournament playing state
-export const saveTournamentProgress = async (progressState: any, selectedArtists: any[], selectedTracks: any[], title: string) => {
+export const saveTournamentProgress = async (progressState: any, selectedArtists: any[], selectedTracks: any[], title: string, isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
+
   const draftData = {
     user_id: user.id,
+    is_single_artist: isSingle,
     title,
     status: progressState.phase === 'pre-tournament' ? 'pre_tournament' : 'playing',
     selected_artists: selectedArtists,
@@ -115,49 +125,80 @@ export const saveTournamentProgress = async (progressState: any, selectedArtists
 };
 
 // Load active draft journey
-export const loadActiveDraft = async () => {
+export const loadActiveDraft = async (isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  const query = supabase
     .from('tournament_drafts')
     .select('*')
-    .eq('user_id', user.id)
-    .single();
+    .eq('user_id', user.id);
 
-  if (error) {
-    // If not found, it is expected if there is no active draft
+  if (isSingleArtist !== undefined) {
+    query.eq('is_single_artist', isSingleArtist);
+  }
+
+  const { data, error } = await query;
+  if (error || !data || data.length === 0) {
     return null;
   }
 
-  return data;
+  return data[0];
 };
 
 // Delete active draft
-export const deleteActiveDraft = async () => {
+export const deleteActiveDraft = async (isSingleArtist?: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { error } = await supabase
+  const query = supabase
     .from('tournament_drafts')
     .delete()
     .eq('user_id', user.id);
 
+  if (isSingleArtist !== undefined) {
+    query.eq('is_single_artist', isSingleArtist);
+  }
+
+  const { error } = await query;
   if (error) {
     console.error("[Supabase DB] Error deleting active draft:", error.message);
   }
 };
 
 // Save completed tournament results
-export const saveCompletedResult = async (finalWinners: any[], eliminatedTracks: any[], title: string) => {
+export const saveCompletedResult = async (
+  finalWinners: any[], 
+  eliminatedTracks: any[], 
+  title: string,
+  options?: {
+    isPublic?: boolean;
+    isSingleArtist?: boolean;
+    artistId?: string | null;
+    artistName?: string | null;
+  }
+) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  if (!user) return { success: false, error: { message: "로그인 세션이 만료되었습니다. 다시 로그인 해주세요." } };
 
   const winner = finalWinners[0];
   const fullRanking = [winner, ...eliminatedTracks];
+
+  let userNickname = "";
+  let userProfileImage = "";
+  if (typeof window !== "undefined") {
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = user.user_metadata?.nickname || "";
+    }
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = "음악팬";
+    }
+    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
+  }
 
   const resultData = {
     user_id: user.id,
@@ -165,9 +206,15 @@ export const saveCompletedResult = async (finalWinners: any[], eliminatedTracks:
     winner_track_id: winner.id,
     winner_track_title: winner.title,
     winner_track_artist: winner.artistName,
-    winner_track_image: winner.albumImage,
+    winner_track_image: winner.albumImage || "",
     total_candidates: fullRanking.length,
     ranking: fullRanking,
+    is_public: options?.isPublic ?? true,
+    is_single_artist: options?.isSingleArtist ?? false,
+    artist_id: options?.artistId ?? null,
+    artist_name: options?.artistName ?? null,
+    user_nickname: userNickname,
+    user_profile_image: userProfileImage
   };
 
   const { error: insertError } = await supabase
@@ -175,11 +222,89 @@ export const saveCompletedResult = async (finalWinners: any[], eliminatedTracks:
     .insert(resultData);
 
   if (insertError) {
-    console.error("[Supabase DB] Error saving tournament results:", insertError.message);
-    return false;
+    console.error("[Supabase DB] Error saving tournament results:", insertError);
+    return { success: false, error: insertError };
   }
 
   // Once saved successfully, clear the draft
   await deleteActiveDraft();
-  return true;
+  return { success: true };
+};
+
+// Fetch completed result for a specific artist (single artist mode check)
+export const fetchCompletedResultByArtist = async (artistId: string) => {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('tournament_results')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_single_artist', true)
+    .eq('artist_id', artistId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("[Supabase DB] Error fetching artist result:", error.message);
+    return null;
+  }
+  return data && data.length > 0 ? data[0] : null;
+};
+
+// Overwrite an existing completed result
+export const overwriteCompletedResult = async (
+  resultId: string,
+  finalWinners: any[],
+  eliminatedTracks: any[],
+  title: string,
+  options?: { isPublic?: boolean }
+) => {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: { message: "로그인 세션이 만료되었습니다. 다시 로그인 해주세요." } };
+
+  const winner = finalWinners[0];
+  const fullRanking = [winner, ...eliminatedTracks];
+
+  let userNickname = "";
+  let userProfileImage = "";
+  if (typeof window !== "undefined") {
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = user.user_metadata?.nickname || "";
+    }
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = "음악팬";
+    }
+    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
+  }
+
+  const updateData = {
+    title,
+    winner_track_id: winner.id,
+    winner_track_title: winner.title,
+    winner_track_artist: winner.artistName,
+    winner_track_image: winner.albumImage || "",
+    total_candidates: fullRanking.length,
+    ranking: fullRanking,
+    is_public: options?.isPublic ?? true,
+    user_nickname: userNickname,
+    user_profile_image: userProfileImage,
+    created_at: new Date().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('tournament_results')
+    .update(updateData)
+    .eq('id', resultId);
+
+  if (error) {
+    console.error("[Supabase DB] Error overwriting tournament result:", error);
+    return { success: false, error };
+  }
+
+  // Once saved successfully, clear the draft
+  await deleteActiveDraft();
+  return { success: true };
 };

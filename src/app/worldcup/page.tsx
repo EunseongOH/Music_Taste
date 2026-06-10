@@ -10,8 +10,9 @@ import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
-import { saveTournamentProgress, loadActiveDraft, saveCompletedResult } from "@/utils/worldcupDb";
+import { saveTournamentProgress, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface Track {
   id: string;
@@ -52,6 +53,14 @@ export default function WorldCupPage() {
   const [droppedTrack, setDroppedTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAnyLpActive, setIsAnyLpActive] = useState(false);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   useEffect(() => {
     const loadState = async () => {
@@ -61,7 +70,9 @@ export default function WorldCupPage() {
       // 1. Try loading from active draft in Supabase if logged in
       if (user) {
         try {
-          const draft = await loadActiveDraft();
+          const params = new URLSearchParams(window.location.search);
+          const isSingle = params.get("mode") === "single";
+          const draft = await loadActiveDraft(isSingle);
           // If the draft contains active tournament play state
           if (draft && (draft.status === 'playing' || draft.status === 'pre_tournament') && draft.phase) {
             if (draft.tracks && draft.tracks.length > 0) {
@@ -151,7 +162,7 @@ export default function WorldCupPage() {
       const saveToDb = async () => {
         const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
         const storedTracks = JSON.parse(sessionStorage.getItem("worldcup_tracks") || "[]");
-        await saveTournamentProgress(progressObj, storedArtists, storedTracks, "내 음악 월드컵");
+        await saveTournamentProgress(progressObj, storedArtists, storedTracks, "내 음악 월드컵", isSingleArtistMode);
       };
       const timer = setTimeout(() => {
         saveToDb();
@@ -160,17 +171,15 @@ export default function WorldCupPage() {
     }
   }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, user]);
 
-  // Save completed tournament results to Supabase when finished
+  // Clear active tournament drafts in Supabase when finished
   useEffect(() => {
     if (phase === "finished" && user && winners.length > 0) {
-      const saveResult = async () => {
-        const title = `${winners[0].artistName} 월드컵 결과`;
-        await saveCompletedResult(winners, eliminatedTracks, title);
-        
+      const clearDraft = async () => {
+        await deleteActiveDraft(isSingleArtistMode);
         sessionStorage.removeItem("worldcup_progress");
         localStorage.removeItem("worldcup_progress");
       };
-      saveResult();
+      clearDraft();
     }
   }, [phase, user, winners, eliminatedTracks]);
 
@@ -279,9 +288,9 @@ export default function WorldCupPage() {
           
           <button 
             onClick={() => {
-              router.push("/taste");
+              router.push(isSingleArtistMode ? "/taste?mode=single" : "/taste");
             }}
-            className="mt-12 px-8 py-3 rounded-full bg-navy text-cream font-bold hover:bg-navy/90 hover:scale-105 transition-all shadow-[0_10px_30px_rgba(26,42,108,0.3)]"
+            className="mt-12 px-8 py-3 rounded-full bg-navy text-cream font-bold hover:bg-navy/90 hover:scale-105 transition-all shadow-[0_10px_30px_rgba(26,42,108,0.3)] cursor-pointer"
           >
             내 음악 취향표 굽기 (FUNC-04)
           </button>
@@ -368,21 +377,20 @@ export default function WorldCupPage() {
 
             {/* Hint */}
             {!isPlaying && !droppedTrack && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className={`text-center font-sans text-sm font-medium mb-4 sm:mb-8 z-20 px-6 py-2 rounded-full transition-colors duration-300 shadow-sm relative
-                  ${isAnyLpActive ? "bg-point text-white" : "bg-navy/5 text-navy/70"}`}
-              >
-                {isAnyLpActive ? (
-                   <span>턴테이블 위로 옮겨주세요 ↓</span>
-                ) : (
-                   <span>더 좋아하는 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러주세요</span>
-                )}
-              </motion.div>
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className={`text-center font-sans text-sm font-medium mb-6 sm:mb-10 z-20 px-6 py-2 rounded-full transition-colors duration-300 shadow-sm relative
+                    ${isAnyLpActive ? "bg-point text-white" : "bg-navy/5 text-navy/70"}`}
+                >
+                  {isAnyLpActive ? (
+                     <span>턴테이블 위로 옮겨주세요 ↓</span>
+                  ) : (
+                     <span>더 좋아하는 곡의 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러주세요</span>
+                  )}
+                </motion.div>
             )}
 
-            {/* LP Player Drop Zone */}
-            <div className="w-full relative z-10 pb-4">
+            <div className="w-full relative z-10 pb-4 mt-4">
               <LPPlayer 
                 isPlaying={isPlaying} 
                 currentTrack={droppedTrack} 

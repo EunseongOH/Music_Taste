@@ -12,6 +12,7 @@ import { searchSpotifyArtists, getInitialArtists, getRelatedArtists } from "@/ut
 import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface Artist {
   id: string;
@@ -33,6 +34,15 @@ export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
   const [showSaveWarning, setShowSaveWarning] = useState(false);
+  const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  const [pendingSingleArtist, setPendingSingleArtist] = useState<Artist | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsSingleArtistMode(params.get("mode") === "single");
+    }
+  }, []);
 
   // Reload prevention for unsaved changes
   useEffect(() => {
@@ -61,14 +71,14 @@ export default function ExplorePage() {
 
   const handleConfirmSaveExit = async () => {
     setShowSaveWarning(false);
-    await saveArtistSelectionDraft(selectedArtists);
+    await saveArtistSelectionDraft(selectedArtists, isSingleArtistMode);
     router.push("/");
   };
 
   const handleDiscardExit = async () => {
     setShowSaveWarning(false);
     if (user) {
-      await deleteActiveDraft();
+      await deleteActiveDraft(isSingleArtistMode);
     }
     localStorage.removeItem("selectedArtists");
     sessionStorage.removeItem("selectedArtists");
@@ -79,6 +89,9 @@ export default function ExplorePage() {
   useEffect(() => {
     const fetchInitial = async () => {
       try {
+        const params = new URLSearchParams(window.location.search);
+        const isSingle = params.get("mode") === "single";
+        
         const results = await getInitialArtists();
         const mappedArtists: Artist[] = results.map((artist: any) => ({
           id: artist.id,
@@ -94,7 +107,7 @@ export default function ExplorePage() {
         // 1. First, check if there is an active draft in Supabase (if logged in)
         if (user) {
           try {
-            const draft = await loadActiveDraft();
+            const draft = await loadActiveDraft(isSingle);
             if (draft && draft.selected_artists && draft.selected_artists.length > 0) {
               restoredArtists = draft.selected_artists;
             }
@@ -157,14 +170,14 @@ export default function ExplorePage() {
     if (!user) return;
     const saveDraft = async () => {
       // Save draft (updates even if empty, so deselecting all updates correctly)
-      await saveArtistSelectionDraft(selectedArtists);
+      await saveArtistSelectionDraft(selectedArtists, isSingleArtistMode);
     };
     // Debounce saving slightly so we don't spam requests when user is clicking multiple artists quickly
     const timer = setTimeout(() => {
       saveDraft();
     }, 1000);
     return () => clearTimeout(timer);
-  }, [selectedArtists, user]);
+  }, [selectedArtists, user, isSingleArtistMode]);
 
   // Handle Search
   useEffect(() => {
@@ -199,6 +212,11 @@ export default function ExplorePage() {
   }, [searchQuery, selectedIds.size, defaultArtists]);
 
   const handleArtistClick = async (artist: Artist) => {
+    if (isSingleArtistMode) {
+      setPendingSingleArtist(artist);
+      return;
+    }
+
     // If it's a similar artist, just toggle selection without spawning more
     if (artist.type === "similar") {
       setSelectedArtists(prev => {
@@ -278,7 +296,7 @@ export default function ExplorePage() {
     }
   };
 
-  const [sortOrder, setSortOrder] = useState<"추천순" | "가나다순" | "선택순">("추천순");
+
 
   if (isSearching && defaultArtists.length === 0) {
     return (
@@ -405,8 +423,12 @@ export default function ExplorePage() {
         </div>
 
         <div className="text-left mt-1 mb-2 px-1">
-          <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">어떤 아티스트를 좋아하시나요?</h1>
-          <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">최소 3명의 아티스트를 선택해주세요.</p>
+          <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">
+            {isSingleArtistMode ? "최애 아티스트를 선택해 주세요" : "어떤 아티스트를 좋아하시나요?"}
+          </h1>
+          <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">
+            {isSingleArtistMode ? "1명의 아티스트를 골라 모든 곡을 정렬해봅니다." : "최소 3명의 아티스트를 선택해주세요."}
+          </p>
         </div>
 
         {/* Search Bar */}
@@ -427,19 +449,7 @@ export default function ExplorePage() {
           />
         </div>
 
-        {/* Sorting Tags */}
-        <div className="flex overflow-x-auto gap-2 scrollbar-none py-1 mt-1 px-1">
-          {["추천순", "가나다순", "선택순"].map((sort) => (
-            <button
-              key={sort}
-              onClick={() => setSortOrder(sort as any)}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full border-2 transition-all font-sans text-[0.8rem] font-bold ${sortOrder === sort ? 'border-point text-point bg-point/5 shadow-sm' : 'border-navy/10 text-charcoal/70 hover:border-navy/30 hover:bg-navy/5'}`}
-            >
-              {sort}
-            </button>
-          ))}
         </div>
-      </div>
 
       {/* Grids Container */}
       <div className="flex flex-col mt-6 px-1 gap-10">
@@ -466,10 +476,6 @@ export default function ExplorePage() {
 
             {/* 2. Recommended Section (Separated below with visual gap) */}
             <div className="flex flex-col border-t border-navy/5 pt-8">
-              <h2 className="font-serif text-lg text-navy/60 font-bold mb-4 flex items-center justify-between">
-                오늘의 추천 아티스트
-                <span className="text-[10px] font-sans text-charcoal/40 font-medium">기존 추천 목록도 함께 살펴보세요</span>
-              </h2>
               <motion.div 
                 layout 
                 className="grid grid-cols-3 gap-x-3 gap-y-8 opacity-75 hover:opacity-100 transition-opacity duration-300"
@@ -483,10 +489,6 @@ export default function ExplorePage() {
         ) : (
           /* 3. Recommended Section Only (When no search active) */
           <div className="flex flex-col">
-            <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
-              오늘의 추천 아티스트
-              <span className="text-xs font-sans text-charcoal/60 font-medium">매일 새로운 아티스트를 소개해드려요</span>
-            </h2>
             <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
               <AnimatePresence>
                 {defaultArtists.map(renderArtistCard)}
@@ -498,7 +500,7 @@ export default function ExplorePage() {
       
       {/* Bottom Fixed Dock Panel (Full-Width Segmented View) */}
       <AnimatePresence>
-        {selectedIds.size > 0 && (
+        {selectedIds.size > 0 && !isSingleArtistMode && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -578,13 +580,35 @@ export default function ExplorePage() {
                 >
                   <button 
                     onClick={async () => {
+                      // Check if artist selection changed from what was previously stored
+                      const prevStoredStr = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
+                      let artistsChanged = true;
+                      if (prevStoredStr) {
+                        try {
+                          const prevArtists: { id: string }[] = JSON.parse(prevStoredStr);
+                          const prevIds = new Set(prevArtists.map(a => a.id));
+                          const curIds = new Set(selectedArtists.map(a => a.id));
+                          artistsChanged =
+                            prevIds.size !== curIds.size ||
+                            selectedArtists.some(a => !prevIds.has(a.id));
+                        } catch (e) {}
+                      }
+
                       sessionStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
                       localStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
+                      localStorage.setItem('worldcup_is_single_artist', 'false');
+                      sessionStorage.setItem('worldcup_is_single_artist', 'false');
+
+                      // If the artist lineup changed, discard stale track selections
+                      if (artistsChanged) {
+                        sessionStorage.removeItem('worldcup_tracks');
+                        localStorage.removeItem('worldcup_tracks');
+                      }
                       
                       if (user) {
                         try {
                           // Await database draft update to ensure it is written before redirecting!
-                          await saveArtistSelectionDraft(selectedArtists);
+                          await saveArtistSelectionDraft(selectedArtists, false);
                           
                           // Sync user metadata as a secondary backup
                           await supabase.auth.updateUser({
@@ -612,7 +636,7 @@ export default function ExplorePage() {
       </AnimatePresence>
 
       {/* Spacing bottom padding adjusted for taller Bottom Dock */}
-      <div className={selectedIds.size > 0 ? "h-64" : "h-32"} />
+      <div className={selectedIds.size > 0 && !isSingleArtistMode ? "h-64" : "h-32"} />
 
       {/* Save Exit Confirmation Warning Modal */}
       <AnimatePresence>
@@ -674,6 +698,88 @@ export default function ExplorePage() {
                   >
                     취소
                   </motion.button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Single Artist Mode Selection Confirmation Popup Modal */}
+      <AnimatePresence>
+        {pendingSingleArtist && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPendingSingleArtist(null)}
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
+              <motion.div
+                className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
+                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                transition={{ type: "spring", stiffness: 380, damping: 26 }}
+              >
+                {/* Artist Avatar with Spinning LP vibe */}
+                <div className="relative w-24 h-24 rounded-full border-4 border-navy overflow-hidden bg-white shadow-md mb-4 mt-2">
+                  <Image 
+                    src={pendingSingleArtist.image} 
+                    alt={pendingSingleArtist.name}
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                  />
+                </div>
+                
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">Sort 진행할까요?</h2>
+                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-2">
+                  <span className="font-bold text-point">'{pendingSingleArtist.name}'</span>의 전곡으로 음악 취향 순위를 정하는 월드컵을 진행하시겠습니까?
+                </p>
+                
+                <div className="flex flex-col gap-2 w-full">
+                  <button 
+                    onClick={async () => {
+                      const selected = [pendingSingleArtist];
+                      setSelectedArtists(selected);
+                      sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
+                      localStorage.setItem('selectedArtists', JSON.stringify(selected));
+                      localStorage.setItem('worldcup_is_single_artist', 'true');
+                      sessionStorage.setItem('worldcup_is_single_artist', 'true');
+
+                      // Clear any stale track selections — a new single artist means fresh start
+                      sessionStorage.removeItem('worldcup_tracks');
+                      localStorage.removeItem('worldcup_tracks');
+                      
+                      if (user) {
+                        try {
+                          await saveArtistSelectionDraft(selected, true);
+                          await supabase.auth.updateUser({
+                            data: {
+                              selected_artists: selected
+                            }
+                          });
+                        } catch (err) {
+                          console.error("Error saving draft inside explore proceed:", err);
+                        }
+                      }
+                      
+                      setPendingSingleArtist(null);
+                      router.push('/tracks?mode=single');
+                    }}
+                    className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                  >
+                    진행하기
+                  </button>
+                  <button 
+                    onClick={() => setPendingSingleArtist(null)}
+                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    취소
+                  </button>
                 </div>
               </motion.div>
             </div>

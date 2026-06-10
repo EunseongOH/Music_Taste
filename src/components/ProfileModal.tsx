@@ -8,6 +8,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const [profileImg, setProfileImg] = useState("https://picsum.photos/seed/user1/100/100");
   const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
+  const [updateError, setUpdateError] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<"profile" | "archive">("profile");
   const [selectedArchive, setSelectedArchive] = useState<any | null>(null);
   
@@ -158,16 +161,82 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       // Reset tab and selection on reopen
       setActiveTab("profile");
       setSelectedArchive(null);
+      setUpdateError("");
+      setIsUpdating(false);
     }
   }, [isOpen]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    sessionStorage.setItem("userNickname", nickname);
-    sessionStorage.setItem("userPhone", phone);
-    sessionStorage.setItem("userProfileImg", profileImg);
-    onUpdateImg(profileImg);
-    onClose();
+    const trimmedNickname = nickname.trim();
+    if (!trimmedNickname) {
+      setUpdateError("닉네임을 입력해 주세요.");
+      return;
+    }
+
+    setIsUpdating(true);
+    setUpdateError("");
+
+    const supabase = createClient();
+
+    try {
+      if (user) {
+        // 1. Check if the nickname is already used by ANOTHER user in historical results
+        const { data: dupData, error: dupError } = await supabase
+          .from("tournament_results")
+          .select("id")
+          .eq("user_nickname", trimmedNickname)
+          .neq("user_id", user.id);
+
+        if (dupError) {
+          console.error("Error checking nickname uniqueness:", dupError.message);
+        }
+
+        if (dupData && dupData.length > 0) {
+          setUpdateError("이미 사용 중인 닉네임입니다.");
+          setIsUpdating(false);
+          return;
+        }
+
+        // 2. Update Supabase Auth metadata
+        const { error: authError } = await supabase.auth.updateUser({
+          data: {
+            nickname: trimmedNickname,
+            phone: phone.trim() || null
+          }
+        });
+
+        if (authError) {
+          setUpdateError(`프로필 업데이트 실패: ${authError.message}`);
+          setIsUpdating(false);
+          return;
+        }
+
+        // 3. Update all past results in tournament_results
+        await supabase
+          .from("tournament_results")
+          .update({ 
+            user_nickname: trimmedNickname,
+            user_profile_image: profileImg
+          })
+          .eq("user_id", user.id);
+      }
+
+      // Sync local storage and session storage
+      sessionStorage.setItem("userNickname", trimmedNickname);
+      localStorage.setItem("userNickname", trimmedNickname);
+      sessionStorage.setItem("userPhone", phone.trim());
+      sessionStorage.setItem("userProfileImg", profileImg);
+      localStorage.setItem("userProfileImg", profileImg);
+
+      onUpdateImg(profileImg);
+      onClose();
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+      setUpdateError("업데이트 중 오류가 발생했습니다.");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleImageChange = () => {
@@ -288,19 +357,27 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   </div>
                 </div>
 
+                {updateError && (
+                  <div className="text-center text-xs font-bold text-red-500 mt-1">
+                    {updateError}
+                  </div>
+                )}
+
                 <div className="flex gap-3 mt-4 w-full">
                   <button 
                     type="button"
                     onClick={handleLogout}
-                    className="flex-1 py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 hover:border-red-200 font-bold text-base rounded-xl transition-all active:scale-[0.98]"
+                    disabled={isUpdating}
+                    className="flex-1 py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 hover:border-red-200 font-bold text-base rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
                   >
                     로그아웃
                   </button>
                   <button 
                     type="submit"
-                    className="flex-[2] py-3.5 bg-navy text-cream font-bold text-base rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-[0_4px_15px_rgba(26,42,108,0.2)]"
+                    disabled={isUpdating}
+                    className="flex-[2] py-3.5 bg-navy text-cream font-bold text-base rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    저장하기
+                    {isUpdating ? "저장 중..." : "저장하기"}
                   </button>
                 </div>
               </form>
