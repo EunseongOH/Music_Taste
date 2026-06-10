@@ -12,6 +12,7 @@ import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
 import { saveTournamentProgress, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface Track {
   id: string;

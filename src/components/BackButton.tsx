@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, X } from "lucide-react";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 import { motion, AnimatePresence } from "framer-motion";
 import LoginModal from "./LoginModal";
 

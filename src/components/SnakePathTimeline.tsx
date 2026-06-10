@@ -146,14 +146,23 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
 
     for (let r = sizes.length - 1; r >= 0; r--) {
       let S = sizes[r];
-      let rowNodes = [];
+      // Allocate an S-sized array, always indexed left (c=0) to right (c=S-1)
+      const rowNodes: { x: number, y: number, trackIdx: number, rank: number, track: Track, rowCapacity: number }[] = new Array(S);
+
       for (let c = 0; c < S; c++) {
-        let x = (c + 0.5) * (VIEW_WIDTH / S);
-        let y = PADDING_Y + r * ROW_HEIGHT;
-        rowNodes.push({ x, y, trackIdx, rank: trackIdx + 1, track: tracks[trackIdx], rowCapacity: S });
-        trackIdx--;
+        const x = (c + 0.5) * (VIEW_WIDTH / S);
+        const y = PADDING_Y + r * ROW_HEIGHT;
+        // Left-to-right path (isLeftToRight=true):  c=0 is path start → assign highest-number (lowest-rank) first
+        // Right-to-left path (isLeftToRight=false):  c=S-1 is path start → assign highest-number there
+        // Either way, path end always holds the highest-rank (lowest index) of this row,
+        // which then connects cleanly to the next-row's path start (the next highest rank).
+        const ti = isLeftToRight ? (trackIdx - c) : (trackIdx - (S - 1 - c));
+        rowNodes[c] = { x, y, trackIdx: ti, rank: ti + 1, track: tracks[ti], rowCapacity: S };
       }
-      
+
+      // Advance the global pointer past all nodes consumed in this row
+      trackIdx -= S;
+
       let minX = rowNodes[0].x;
       let maxX = rowNodes[rowNodes.length - 1].x;
       if (S === 1) {

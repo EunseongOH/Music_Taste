@@ -9,6 +9,7 @@ import { Trophy, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,22 +50,30 @@ export default function Home() {
 
   // Read locale on mount
   useEffect(() => {
-    const savedLocale = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("locale="))
-      ?.split("=")[1];
-    
-    if (savedLocale === "en" || savedLocale === "ko") {
-      setLocale(savedLocale as any);
-    } else {
-      // Default to ko and save cookie
-      document.cookie = "locale=ko; path=/; max-age=31536000"; // 1 year
+    try {
+      const savedLocale = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("locale="))
+        ?.split("=")[1];
+      
+      if (savedLocale === "en" || savedLocale === "ko") {
+        setLocale(savedLocale as any);
+      } else {
+        // Default to ko and save cookie
+        document.cookie = "locale=ko; path=/; max-age=31536000"; // 1 year
+      }
+    } catch (e) {
+      console.warn("Cookie access denied:", e);
     }
   }, []);
 
   const handleLanguageToggle = (lang: "ko" | "en") => {
     setLocale(lang);
-    document.cookie = `locale=${lang}; path=/; max-age=31536000`;
+    try {
+      document.cookie = `locale=${lang}; path=/; max-age=31536000`;
+    } catch (e) {
+      console.warn("Cookie setting denied:", e);
+    }
     router.refresh();
   };
 
@@ -418,7 +427,18 @@ export default function Home() {
          )}
       </div>
 
-      <LoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <LoginModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        locale={locale}
+        onSuccess={() => {
+          const activeMode = modes[activeCardIndex];
+          const isSingle = activeMode.id === "single";
+          localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+          sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+          router.push(activeMode.target);
+        }}
+      />
 
       {/* Start New Warning Modal */}
       <AnimatePresence>

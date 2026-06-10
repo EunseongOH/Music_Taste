@@ -12,6 +12,7 @@ import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeD
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 // --- DUMMY DATA STRUCTURE ---
 interface Track {
@@ -206,28 +207,65 @@ export default function TracksPage() {
           const draft = await loadActiveDraft(isSingle);
           if (draft) {
             if (draft.selected_artists && draft.selected_artists.length > 0) {
-              stored = JSON.stringify(draft.selected_artists);
+              // In single-artist mode, only keep the first (single) artist
+              const draftArtists = isSingle ? draft.selected_artists.slice(0, 1) : draft.selected_artists;
+              stored = JSON.stringify(draftArtists);
               sessionStorage.setItem('selectedArtists', stored);
               localStorage.setItem('selectedArtists', stored);
             }
             if (draft.selected_tracks && draft.selected_tracks.length > 0) {
-              // Hydrate local storages with full track metadata
-              const tracksStr = JSON.stringify(draft.selected_tracks);
-              sessionStorage.setItem("worldcup_tracks", tracksStr);
-              localStorage.setItem("worldcup_tracks", tracksStr);
+              let tracksToLoad = draft.selected_tracks;
 
-              // Set selected track IDs
-              const loadedTrackIds = draft.selected_tracks.map((t: any) => typeof t === 'string' ? t : t.id);
-              setSelectedTrackIds(new Set(loadedTrackIds));
-
-              // Load metadata cache
-              const metadataMap: Record<string, any> = {};
-              draft.selected_tracks.forEach((t: any) => {
-                if (typeof t === 'object' && t !== null) {
-                  metadataMap[t.id] = t;
+              // Build the set of valid artist IDs/names from the draft's own artist list
+              if (draft.selected_artists && draft.selected_artists.length > 0) {
+                if (isSingle) {
+                  // Single-artist mode: only tracks belonging to the one artist
+                  const singleArtistName = draft.selected_artists[0]?.name?.toLowerCase();
+                  tracksToLoad = draft.selected_tracks.filter((t: any) =>
+                    typeof t === 'object' && t !== null &&
+                    (t.artistName?.toLowerCase() === singleArtistName)
+                  );
+                } else {
+                  // Multi-artist mode: only tracks whose artist is in the selected list
+                  const validArtistIds = new Set(
+                    draft.selected_artists.map((a: any) => a.id?.toLowerCase()).filter(Boolean)
+                  );
+                  const validArtistNames = new Set(
+                    draft.selected_artists.map((a: any) => a.name?.toLowerCase()).filter(Boolean)
+                  );
+                  tracksToLoad = draft.selected_tracks.filter((t: any) => {
+                    if (typeof t !== 'object' || t === null) return false;
+                    // Match by artistId first, fall back to artistName
+                    const byId = t.artistId && validArtistIds.has(t.artistId.toLowerCase());
+                    const byName = t.artistName && validArtistNames.has(t.artistName.toLowerCase());
+                    return byId || byName;
+                  });
                 }
-              });
-              setSelectedTracksMetadata(metadataMap);
+              }
+
+              if (tracksToLoad.length > 0) {
+                // Hydrate local storages with full track metadata
+                const tracksStr = JSON.stringify(tracksToLoad);
+                sessionStorage.setItem("worldcup_tracks", tracksStr);
+                localStorage.setItem("worldcup_tracks", tracksStr);
+
+                // Set selected track IDs
+                const loadedTrackIds = tracksToLoad.map((t: any) => typeof t === 'string' ? t : t.id);
+                setSelectedTrackIds(new Set(loadedTrackIds));
+
+                // Load metadata cache
+                const metadataMap: Record<string, any> = {};
+                tracksToLoad.forEach((t: any) => {
+                  if (typeof t === 'object' && t !== null) {
+                    metadataMap[t.id] = t;
+                  }
+                });
+                setSelectedTracksMetadata(metadataMap);
+              } else {
+                // No valid tracks for this mode — clear any stale storage
+                sessionStorage.removeItem("worldcup_tracks");
+                localStorage.removeItem("worldcup_tracks");
+              }
             }
           }
         } catch (err) {
@@ -238,7 +276,8 @@ export default function TracksPage() {
       // Fallback to user_metadata from Supabase
       if (!stored && user?.user_metadata?.selected_artists) {
         const artistsData = user.user_metadata.selected_artists;
-        stored = JSON.stringify(artistsData);
+        const normalizedArtists = isSingle ? artistsData.slice(0, 1) : artistsData;
+        stored = JSON.stringify(normalizedArtists);
         sessionStorage.setItem('selectedArtists', stored);
         localStorage.setItem('selectedArtists', stored);
       }
@@ -247,16 +286,54 @@ export default function TracksPage() {
       const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
       if (storedTracksStr) {
         try {
-          const previouslyLoadedTracks = JSON.parse(storedTracksStr);
-          const metadataMap: Record<string, any> = {};
-          const loadedTrackIds: string[] = [];
-          previouslyLoadedTracks.forEach((t: any) => {
-            metadataMap[t.id] = t;
-            loadedTrackIds.push(t.id);
-          });
-          setSelectedTracksMetadata(prev => ({ ...prev, ...metadataMap }));
-          if (selectedTrackIds.size === 0 && loadedTrackIds.length > 0) {
-            setSelectedTrackIds(new Set(loadedTrackIds));
+          const previouslyLoadedTracks: any[] = JSON.parse(storedTracksStr);
+
+          // Validate stored tracks match the current artist selection
+          let validTracks = previouslyLoadedTracks;
+          if (stored) {
+            try {
+              const parsedArtists: { id?: string; name?: string }[] = JSON.parse(stored);
+              if (isSingle) {
+                const singleArtistName = parsedArtists[0]?.name?.toLowerCase();
+                if (singleArtistName) {
+                  validTracks = previouslyLoadedTracks.filter((t: any) =>
+                    t.artistName?.toLowerCase() === singleArtistName
+                  );
+                }
+              } else {
+                // Multi-artist mode: keep only tracks that belong to a selected artist
+                const validIds = new Set(
+                  parsedArtists.map(a => a.id?.toLowerCase()).filter(Boolean)
+                );
+                const validNames = new Set(
+                  parsedArtists.map(a => a.name?.toLowerCase()).filter(Boolean)
+                );
+                validTracks = previouslyLoadedTracks.filter((t: any) => {
+                  const byId = t.artistId && validIds.has(t.artistId.toLowerCase());
+                  const byName = t.artistName && validNames.has(t.artistName.toLowerCase());
+                  return byId || byName;
+                });
+              }
+              // If filtering changed the list, update storage to remove stale tracks
+              if (validTracks.length !== previouslyLoadedTracks.length) {
+                const cleanStr = JSON.stringify(validTracks);
+                sessionStorage.setItem("worldcup_tracks", cleanStr);
+                localStorage.setItem("worldcup_tracks", cleanStr);
+              }
+            } catch (e) {}
+          }
+
+          if (validTracks.length > 0) {
+            const metadataMap: Record<string, any> = {};
+            const loadedTrackIds: string[] = [];
+            validTracks.forEach((t: any) => {
+              metadataMap[t.id] = t;
+              loadedTrackIds.push(t.id);
+            });
+            setSelectedTracksMetadata(prev => ({ ...prev, ...metadataMap }));
+            if (selectedTrackIds.size === 0 && loadedTrackIds.length > 0) {
+              setSelectedTrackIds(new Set(loadedTrackIds));
+            }
           }
         } catch (e) {}
       }
@@ -267,8 +344,10 @@ export default function TracksPage() {
       }
       try {
         const parsed = JSON.parse(stored);
-        if (parsed.length > 0) {
-          const initialData = parsed.map((a: any) => ({
+        // In single-artist mode: strictly enforce only 1 artist
+        const artistsToLoad = isSingle ? parsed.slice(0, 1) : parsed;
+        if (artistsToLoad.length > 0) {
+          const initialData = artistsToLoad.map((a: any) => ({
             id: a.id,
             name: a.name,
             image: a.image,

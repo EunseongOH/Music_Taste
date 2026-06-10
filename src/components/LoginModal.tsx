@@ -2,20 +2,22 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Mail, Lock, User, Phone, Globe, MessageCircle } from "lucide-react";
+import { X, Mail, Lock, User, Phone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  locale?: "ko" | "en";
 }
 
 type Mode = "login" | "signup" | "guest-warning";
 
-export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }: LoginModalProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
 
@@ -48,6 +50,49 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
       }, 300);
     }
   }, [isOpen]);
+
+  // Centered Popup Google Auth Message Listener
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
+      const { type, session, error } = event.data || {};
+      
+      if (type === "AUTH_SUCCESS" && session) {
+        setIsLoading(true);
+        try {
+          // 1. Set the session in the client's in-memory Supabase client
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token
+          });
+
+          if (sessionError) throw sessionError;
+
+          // 2. Save necessary info to storage
+          sessionStorage.setItem("isGuest", "false");
+          sessionStorage.setItem("userNickname", session.user?.user_metadata?.nickname || "User");
+          
+          handleSuccess();
+        } catch (err: any) {
+          console.error("Failed to apply popup session:", err);
+          setLoginError(`로그인 처리 중 오류: ${err.message}`);
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (type === "AUTH_ERROR") {
+        setLoginError(error || "구글 로그인 중 오류가 발생했습니다.");
+        setIsLoading(false);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [isOpen, supabase]);
 
   const validatePassword = (pw: string) => {
     if (pw.length > 14) return "비밀번호는 14자리 이내여야 합니다.";
@@ -98,23 +143,24 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
     handleSuccess();
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     setIsLoading(true);
     setLoginError("");
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) {
-        setLoginError(`구글 로그인 오류: ${error.message}`);
-      }
-    } catch (err) {
-      setLoginError("구글 로그인 중 오류가 발생했습니다.");
-      console.error(err);
-    } finally {
+    
+    // Open the popup login page in a centered window
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    const popup = window.open(
+      "/auth/popup-login",
+      "Google Login",
+      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      setLoginError("팝업 차단이 감지되었습니다. 팝업 허용 후 다시 시도해주세요.");
       setIsLoading(false);
     }
   };
@@ -274,21 +320,119 @@ export default function LoginModal({ isOpen, onClose, onSuccess }: LoginModalPro
                   </div>
 
                   <div className="flex flex-col gap-2.5">
+                    {/* Google Login Button — Official Brand Guideline (Light Theme) */}
                     <button 
                       type="button"
                       onClick={handleGoogleLogin}
                       disabled={isLoading}
-                      className="w-full py-3 bg-white border-2 border-navy/10 text-navy font-semibold rounded-xl hover:border-navy/30 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                      className="gsi-material-button w-full disabled:opacity-50"
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #747775",
+                        borderRadius: "4px",
+                        boxSizing: "border-box",
+                        color: "#1F1F1F",
+                        cursor: "pointer",
+                        fontFamily: "'Roboto', Arial, sans-serif",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        height: "40px",
+                        letterSpacing: "0.25px",
+                        outline: "none",
+                        overflow: "hidden",
+                        padding: "0 12px",
+                        position: "relative",
+                        textAlign: "center",
+                        transition: "background-color .218s, border-color .218s, box-shadow .218s",
+                        verticalAlign: "middle",
+                        whiteSpace: "nowrap",
+                        width: "100%",
+                        userSelect: "none",
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15)";
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLButtonElement).style.boxShadow = "";
+                      }}
                     >
-                      <Globe size={18} className="text-[#EA4335]" />
-                      구글 간편 로그인
+                      <div style={{
+                        alignItems: "center",
+                        display: "flex",
+                        flexDirection: "row",
+                        flexWrap: "nowrap",
+                        height: "100%",
+                        justifyContent: "center",
+                        position: "relative",
+                        width: "100%",
+                        gap: "10px",
+                      }}>
+                        {/* Official Google G logo SVG */}
+                        <div style={{ height: "20px", minWidth: "20px", width: "20px", flexShrink: 0 }}>
+                          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style={{ display: "block" }}>
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                            <path fill="none" d="M0 0h48v48H0z" />
+                          </svg>
+                        </div>
+                        <span style={{
+                          flexGrow: 1,
+                          fontFamily: "'Roboto', Arial, sans-serif",
+                          fontWeight: 500,
+                          fontSize: "14px",
+                          letterSpacing: "0.25px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          textAlign: "center",
+                        }}>
+                          {locale === "ko" ? "Google 계정으로 로그인" : "Sign in with Google"}
+                        </span>
+                      </div>
                     </button>
+
+                    {/* Kakao Login Button — Official Brand Guideline */}
                     <button 
                       type="button"
-                      className="w-full py-3 bg-[#FEE500] border-2 border-[#FEE500] text-black/80 font-semibold rounded-xl hover:brightness-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+                      className="w-full flex items-center justify-center bg-[#FEE500] text-[#000000D9] font-bold hover:brightness-95 active:brightness-90 transition-all disabled:opacity-50 shadow-sm"
+                      style={{
+                        borderRadius: "12px",
+                        height: "48px",
+                        border: "none",
+                        padding: "0 16px",
+                        fontSize: "16px",
+                        letterSpacing: "0",
+                        cursor: "pointer",
+                      }}
                     >
-                      <MessageCircle size={18} className="fill-black/80" />
-                      카카오 간편 로그인
+                      {/* Kakao official speech-bubble symbol SVG */}
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          flexShrink: 0,
+                          marginRight: "8px",
+                        }}
+                        aria-hidden="true"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          width="24"
+                          height="24"
+                          fill="#000000"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.747 1.655 5.158 4.125 6.593L5.1 21l4.492-2.196c.786.148 1.58.224 2.408.224 5.523 0 10-3.477 10-7.778C22 6.95 17.523 3 12 3z" />
+                        </svg>
+                      </span>
+                      <span style={{ fontFamily: "inherit" }}>
+                        {locale === "ko" ? "카카오 로그인" : "Login with Kakao"}
+                      </span>
                     </button>
                   </div>
 

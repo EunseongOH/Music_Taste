@@ -82,7 +82,7 @@ export function EmotionalListTemplate({ tracks, isExport = false, pageIndex = 0,
                 {/* Track Info */}
                 <div className="flex flex-col min-w-0 text-left">
                   <span className={`text-xs font-bold text-navy line-clamp-1 ${isTop3 ? "text-[12.5px]" : ""}`}>
-                    {track.title}
+                    {track.title.length > 20 ? track.title.slice(0, 20) + "…" : track.title}
                   </span>
                   <span className="text-[10px] text-navy/60 font-medium line-clamp-1 mt-0.5">
                     {track.artistName}
@@ -219,7 +219,7 @@ export function VintageVinylTemplate({ tracks, isExport = false, pageIndex = 0, 
 
                 <div className="flex flex-col min-w-0 text-left">
                   <span className="text-[11px] font-bold text-navy line-clamp-1">
-                    {track.title}
+                    {track.title.length > 20 ? track.title.slice(0, 20) + "…" : track.title}
                   </span>
                   <span className="text-[9.5px] text-navy/50 font-medium line-clamp-1 mt-0.5">
                     {track.artistName}

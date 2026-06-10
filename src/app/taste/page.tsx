@@ -10,6 +10,7 @@ import SnakePathTimeline from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
 
@@ -95,6 +96,7 @@ export default function ResultPage() {
     
     // Add UTF-8 BOM to prevent Korean character encoding issues in MS Excel
     const csvRows = ["\uFEFFRank,Title,Artist"];
+
     winners.forEach((track, idx) => {
       const titleEscaped = track.title.replace(/"/g, '""');
       const artistEscaped = track.artistName.replace(/"/g, '""');
@@ -193,11 +195,11 @@ export default function ResultPage() {
         ? `${artistName}의 곡 Sort` 
         : `${winners[0]?.artistName || ""} 취향표`);
 
-      let dbSuccess = false;
+      let saveRes;
       if (overwrite && existingResult) {
-        dbSuccess = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic });
+        saveRes = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic });
       } else {
-        dbSuccess = await saveCompletedResult(winners, winners.slice(1), title, {
+        saveRes = await saveCompletedResult(winners, winners.slice(1), title, {
           isPublic,
           isSingleArtist: isSingleArtistMode,
           artistId,
@@ -205,7 +207,9 @@ export default function ResultPage() {
         });
       }
 
-      if (!dbSuccess) throw new Error("Database save failed");
+      if (!saveRes || !saveRes.success) {
+        throw new Error(saveRes && saveRes.error ? saveRes.error.message : "Database save failed");
+      }
 
       // Clear active progress and wipe archives from user_metadata to prevent HTTP 431 cookie bloat
       const { error } = await supabase.auth.updateUser({
@@ -221,16 +225,19 @@ export default function ResultPage() {
       setIsSaved(true);
       alert(overwrite ? "기존 기록을 성공적으로 갱신했습니다!" : "내 아카이브에 성공적으로 저장되었습니다!");
       setShowOverwriteModal(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save to archive:", err);
-      alert("아카이브 저장에 실패했습니다. 다시 시도해주세요.");
+      alert(`아카이브 저장에 실패했습니다: ${err.message || err}`);
     } finally {
       setIsSavingArchive(false);
     }
   };
 
   const handleSaveToArchive = async () => {
-    if (!user) return;
+    if (!user) {
+      alert("아카이브 저장 기능은 로그인(회원가입) 후에 이용하실 수 있습니다.\n\n로그인하여 소중한 음악 취향표를 보관하고, 취향 매칭 피드를 확인해 보세요! 🎵");
+      return;
+    }
     setIsSavingArchive(true);
 
     try {

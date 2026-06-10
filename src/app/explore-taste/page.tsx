@@ -11,6 +11,7 @@ import Image from "next/image";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
 
@@ -222,23 +223,38 @@ export default function ExploreTastePage() {
     const artistMates: TournamentResult[] = [];
     const highSyncMates: { result: TournamentResult; score: number }[] = [];
 
+    // Track seen user IDs per category to deduplicate (otherUsersResults is ordered by
+    // created_at desc, so the first hit per user_id is always their most recent result)
+    const seenSongMateUsers = new Set<string>();
+    const seenArtistMateUsers = new Set<string>();
+    const seenHighSyncUsers = new Set<string>();
+
     otherUsersResults.forEach(other => {
       // 1. Same winner song mate
-      if (other.winner_track_id === baseResult.winner_track_id) {
+      if (
+        other.winner_track_id === baseResult.winner_track_id &&
+        !seenSongMateUsers.has(other.user_id)
+      ) {
+        seenSongMateUsers.add(other.user_id);
         songMates.push(other);
       }
 
       // 2. Same winner artist mate
       if (
-        other.winner_track_artist.toLowerCase().trim() === baseResult.winner_track_artist.toLowerCase().trim()
+        other.winner_track_artist.toLowerCase().trim() === baseResult.winner_track_artist.toLowerCase().trim() &&
+        !seenArtistMateUsers.has(other.user_id)
       ) {
+        seenArtistMateUsers.add(other.user_id);
         artistMates.push(other);
       }
 
-      // 3. High Jaccard Sync score
-      const syncScore = getJaccardSimilarity(baseResult, other);
-      if (syncScore > 0) {
-        highSyncMates.push({ result: other, score: syncScore });
+      // 3. High Jaccard Sync score (use the most recent result per user)
+      if (!seenHighSyncUsers.has(other.user_id)) {
+        const syncScore = getJaccardSimilarity(baseResult, other);
+        if (syncScore > 0) {
+          seenHighSyncUsers.add(other.user_id);
+          highSyncMates.push({ result: other, score: syncScore });
+        }
       }
     });
 

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface AuthContextType {
   user: User | null;
@@ -42,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes (login, logout, token refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
+      (_event: any, newSession: any) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
         setIsLoading(false);
@@ -66,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             archives: null
           }
-        }).catch(e => console.error("Failed to self-heal archives metadata:", e));
+        }).catch((e: any) => console.error("Failed to self-heal archives metadata:", e));
       }
 
       const ensureValidNickname = async () => {
