@@ -20,7 +20,7 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleA
       selected_artists: selectedArtists,
       title,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,is_single_artist' });
+    }, { onConflict: 'user_id' });
 
   if (error) {
     console.error("[Supabase DB] Error saving artist selection draft:", error.message);
@@ -44,7 +44,7 @@ export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTr
       selected_artists: selectedArtists,
       selected_tracks: selectedTracks,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,is_single_artist' });
+    }, { onConflict: 'user_id' });
 
   if (error) {
     console.error("[Supabase DB] Error saving track selection draft:", error.message);
@@ -80,7 +80,7 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[], is
       selected_byes: null,
       title,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,is_single_artist' });
+    }, { onConflict: 'user_id' });
 
   if (error) {
     console.error("[Supabase DB] Error downgrading draft status:", error.message);
@@ -117,7 +117,7 @@ export const saveTournamentProgress = async (progressState: any, selectedArtists
 
   const { error } = await supabase
     .from('tournament_drafts')
-    .upsert(draftData, { onConflict: 'user_id,is_single_artist' });
+    .upsert(draftData, { onConflict: 'user_id' });
 
   if (error) {
     console.error("[Supabase DB] Error saving tournament progress:", error.message);
@@ -182,7 +182,7 @@ export const saveCompletedResult = async (
 ) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  if (!user) return { success: false, error: { message: "로그인 세션이 만료되었습니다. 다시 로그인 해주세요." } };
 
   const winner = finalWinners[0];
   const fullRanking = [winner, ...eliminatedTracks];
@@ -190,7 +190,13 @@ export const saveCompletedResult = async (
   let userNickname = "";
   let userProfileImage = "";
   if (typeof window !== "undefined") {
-    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || user.email || "음악팬";
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = user.user_metadata?.nickname || "";
+    }
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = "음악팬";
+    }
     userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
   }
 
@@ -200,7 +206,7 @@ export const saveCompletedResult = async (
     winner_track_id: winner.id,
     winner_track_title: winner.title,
     winner_track_artist: winner.artistName,
-    winner_track_image: winner.albumImage,
+    winner_track_image: winner.albumImage || "",
     total_candidates: fullRanking.length,
     ranking: fullRanking,
     is_public: options?.isPublic ?? true,
@@ -216,13 +222,13 @@ export const saveCompletedResult = async (
     .insert(resultData);
 
   if (insertError) {
-    console.error("[Supabase DB] Error saving tournament results:", insertError.message);
-    return false;
+    console.error("[Supabase DB] Error saving tournament results:", insertError);
+    return { success: false, error: insertError };
   }
 
   // Once saved successfully, clear the draft
   await deleteActiveDraft();
-  return true;
+  return { success: true };
 };
 
 // Fetch completed result for a specific artist (single artist mode check)
@@ -256,7 +262,7 @@ export const overwriteCompletedResult = async (
 ) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  if (!user) return { success: false, error: { message: "로그인 세션이 만료되었습니다. 다시 로그인 해주세요." } };
 
   const winner = finalWinners[0];
   const fullRanking = [winner, ...eliminatedTracks];
@@ -264,7 +270,13 @@ export const overwriteCompletedResult = async (
   let userNickname = "";
   let userProfileImage = "";
   if (typeof window !== "undefined") {
-    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || user.email || "음악팬";
+    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = user.user_metadata?.nickname || "";
+    }
+    if (!userNickname || userNickname.includes("@")) {
+      userNickname = "음악팬";
+    }
     userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
   }
 
@@ -273,7 +285,7 @@ export const overwriteCompletedResult = async (
     winner_track_id: winner.id,
     winner_track_title: winner.title,
     winner_track_artist: winner.artistName,
-    winner_track_image: winner.albumImage,
+    winner_track_image: winner.albumImage || "",
     total_candidates: fullRanking.length,
     ranking: fullRanking,
     is_public: options?.isPublic ?? true,
@@ -288,11 +300,11 @@ export const overwriteCompletedResult = async (
     .eq('id', resultId);
 
   if (error) {
-    console.error("[Supabase DB] Error overwriting tournament result:", error.message);
-    return false;
+    console.error("[Supabase DB] Error overwriting tournament result:", error);
+    return { success: false, error };
   }
 
   // Once saved successfully, clear the draft
   await deleteActiveDraft();
-  return true;
+  return { success: true };
 };

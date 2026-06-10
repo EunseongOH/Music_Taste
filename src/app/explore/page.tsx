@@ -12,6 +12,7 @@ import { searchSpotifyArtists, getInitialArtists, getRelatedArtists } from "@/ut
 import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
 
 interface Artist {
   id: string;
@@ -295,7 +296,7 @@ export default function ExplorePage() {
     }
   };
 
-  const [sortOrder, setSortOrder] = useState<"추천순" | "가나다순" | "선택순">("추천순");
+
 
   if (isSearching && defaultArtists.length === 0) {
     return (
@@ -448,19 +449,7 @@ export default function ExplorePage() {
           />
         </div>
 
-        {/* Sorting Tags */}
-        <div className="flex overflow-x-auto gap-2 scrollbar-none py-1 mt-1 px-1">
-          {["추천순", "가나다순", "선택순"].map((sort) => (
-            <button
-              key={sort}
-              onClick={() => setSortOrder(sort as any)}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full border-2 transition-all font-sans text-[0.8rem] font-bold ${sortOrder === sort ? 'border-point text-point bg-point/5 shadow-sm' : 'border-navy/10 text-charcoal/70 hover:border-navy/30 hover:bg-navy/5'}`}
-            >
-              {sort}
-            </button>
-          ))}
         </div>
-      </div>
 
       {/* Grids Container */}
       <div className="flex flex-col mt-6 px-1 gap-10">
@@ -487,10 +476,6 @@ export default function ExplorePage() {
 
             {/* 2. Recommended Section (Separated below with visual gap) */}
             <div className="flex flex-col border-t border-navy/5 pt-8">
-              <h2 className="font-serif text-lg text-navy/60 font-bold mb-4 flex items-center justify-between">
-                오늘의 추천 아티스트
-                <span className="text-[10px] font-sans text-charcoal/40 font-medium">기존 추천 목록도 함께 살펴보세요</span>
-              </h2>
               <motion.div 
                 layout 
                 className="grid grid-cols-3 gap-x-3 gap-y-8 opacity-75 hover:opacity-100 transition-opacity duration-300"
@@ -504,10 +489,6 @@ export default function ExplorePage() {
         ) : (
           /* 3. Recommended Section Only (When no search active) */
           <div className="flex flex-col">
-            <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
-              오늘의 추천 아티스트
-              <span className="text-xs font-sans text-charcoal/60 font-medium">매일 새로운 아티스트를 소개해드려요</span>
-            </h2>
             <motion.div layout className="grid grid-cols-3 gap-x-3 gap-y-8">
               <AnimatePresence>
                 {defaultArtists.map(renderArtistCard)}
@@ -599,10 +580,30 @@ export default function ExplorePage() {
                 >
                   <button 
                     onClick={async () => {
+                      // Check if artist selection changed from what was previously stored
+                      const prevStoredStr = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
+                      let artistsChanged = true;
+                      if (prevStoredStr) {
+                        try {
+                          const prevArtists: { id: string }[] = JSON.parse(prevStoredStr);
+                          const prevIds = new Set(prevArtists.map(a => a.id));
+                          const curIds = new Set(selectedArtists.map(a => a.id));
+                          artistsChanged =
+                            prevIds.size !== curIds.size ||
+                            selectedArtists.some(a => !prevIds.has(a.id));
+                        } catch (e) {}
+                      }
+
                       sessionStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
                       localStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
                       localStorage.setItem('worldcup_is_single_artist', 'false');
                       sessionStorage.setItem('worldcup_is_single_artist', 'false');
+
+                      // If the artist lineup changed, discard stale track selections
+                      if (artistsChanged) {
+                        sessionStorage.removeItem('worldcup_tracks');
+                        localStorage.removeItem('worldcup_tracks');
+                      }
                       
                       if (user) {
                         try {
@@ -748,6 +749,10 @@ export default function ExplorePage() {
                       localStorage.setItem('selectedArtists', JSON.stringify(selected));
                       localStorage.setItem('worldcup_is_single_artist', 'true');
                       sessionStorage.setItem('worldcup_is_single_artist', 'true');
+
+                      // Clear any stale track selections — a new single artist means fresh start
+                      sessionStorage.removeItem('worldcup_tracks');
+                      localStorage.removeItem('worldcup_tracks');
                       
                       if (user) {
                         try {
