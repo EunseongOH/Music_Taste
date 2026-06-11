@@ -8,7 +8,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -25,6 +25,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<"profile" | "archive">("profile");
   const [selectedArchive, setSelectedArchive] = useState<any | null>(null);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
   
   const { signOut, user } = useAuth();
   const archives = user?.user_metadata?.archives || [];
@@ -158,6 +159,8 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       const savedPhone = sessionStorage.getItem("userPhone");
       if (savedPhone) setPhone(savedPhone);
       
+      setLocale(getSafeLocale());
+
       // Reset tab and selection on reopen
       setActiveTab("profile");
       setSelectedArchive(null);
@@ -170,7 +173,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
     e.preventDefault();
     const trimmedNickname = nickname.trim();
     if (!trimmedNickname) {
-      setUpdateError("닉네임을 입력해 주세요.");
+      setUpdateError(locale === "ko" ? "닉네임을 입력해 주세요." : "Please enter a nickname.");
       return;
     }
 
@@ -193,7 +196,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
         }
 
         if (dupData && dupData.length > 0) {
-          setUpdateError("이미 사용 중인 닉네임입니다.");
+          setUpdateError(locale === "ko" ? "이미 사용 중인 닉네임이에요." : "This nickname is already taken.");
           setIsUpdating(false);
           return;
         }
@@ -207,7 +210,11 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
         });
 
         if (authError) {
-          setUpdateError(`프로필 업데이트 실패: ${authError.message}`);
+          setUpdateError(
+            locale === "ko" 
+              ? `프로필 업데이트에 실패했어요. 다시 시도해 주세요.` 
+              : `Failed to update profile. Please try again.`
+          );
           setIsUpdating(false);
           return;
         }
@@ -233,7 +240,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       onClose();
     } catch (err) {
       console.error("Failed to update profile:", err);
-      setUpdateError("업데이트 중 오류가 발생했습니다.");
+      setUpdateError(locale === "ko" ? "업데이트 중 오류가 발생했어요. 다시 시도해 주세요." : "An error occurred during update. Please try again.");
     } finally {
       setIsUpdating(false);
     }
@@ -247,6 +254,57 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   };
 
   if (!isOpen) return null;
+
+  const t = {
+    ko: {
+      title: "마이페이지",
+      profileTab: "프로필 수정",
+      archiveTab: "내 취향 스페이스",
+      nicknameLabel: "닉네임",
+      phoneLabel: "전화번호",
+      placeholderNickname: "내 닉네임",
+      placeholderPhone: "010-0000-0000",
+      logoutBtn: "로그아웃",
+      saveBtn: "저장하기",
+      savingBtn: "저장 중...",
+      loadingArchives: "취향 기록을 불러오는 중...",
+      noArchives: "아직 저장된 취향 기록이나 진행 중인 곡들이 없어요.",
+      noArchivesSub: "나만의 멋진 취향을 완성하거나 진행 중인 곡들을 저장해 보세요!",
+      draftTitle: "[이어하기]",
+      draftStatus: "진행 중",
+      completedStatus: "완료됨",
+      stageArtist: "아티스트 선택 단계",
+      stageTrack: "곡 선택 단계",
+      stageWorldCup: "취향 기록 진행 중",
+      firstPlace: "1위",
+      archiveRecord: "기록",
+      loadAndShare: "이 취향표 불러오기 & 공유",
+    },
+    en: {
+      title: "My Page",
+      profileTab: "Edit Profile",
+      archiveTab: "My Taste Space",
+      nicknameLabel: "Nickname",
+      phoneLabel: "Phone Number",
+      placeholderNickname: "My nickname",
+      placeholderPhone: "Phone number",
+      logoutBtn: "Log Out",
+      saveBtn: "Save",
+      savingBtn: "Saving...",
+      loadingArchives: "Loading my space...",
+      noArchives: "You don't have any saved taste records or drafts yet.",
+      noArchivesSub: "Line up your favorite tracks and save your progress!",
+      draftTitle: "[Resume]",
+      draftStatus: "In Progress",
+      completedStatus: "Completed",
+      stageArtist: "Artist Selection",
+      stageTrack: "Track Selection",
+      stageWorldCup: "In Progress",
+      firstPlace: "#1",
+      archiveRecord: "Record",
+      loadAndShare: "Load & Share Taste Card",
+    }
+  }[locale];
 
   return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
@@ -274,7 +332,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
               <X size={20} strokeWidth={2.5} />
             </button>
             
-            <h2 className="font-serif text-2xl text-navy mb-4 tracking-tight">마이페이지</h2>
+            <h2 className="font-serif text-2xl text-navy mb-4 tracking-tight">{t.title}</h2>
             
             {/* Tabs Header - Only visible if not looking at detailed archive */}
             {!selectedArchive && (
@@ -288,7 +346,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                       : "border-transparent text-navy/40 hover:text-navy/60"
                   }`}
                 >
-                  프로필 수정
+                  {t.profileTab}
                 </button>
                 <button
                   type="button"
@@ -300,7 +358,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   }`}
                 >
                   <Archive size={15} />
-                  내 아카이브 ({completedResults.length + activeDrafts.length})
+                  {t.archiveTab} ({completedResults.length + activeDrafts.length})
                 </button>
               </div>
             )}
@@ -325,7 +383,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                 {/* Edit Fields */}
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="font-sans text-xs font-bold text-navy ml-1">닉네임</label>
+                    <label className="font-sans text-xs font-bold text-navy ml-1">{t.nicknameLabel}</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                         <User size={16} />
@@ -334,14 +392,14 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                         type="text" 
                         value={nickname}
                         onChange={e => setNickname(e.target.value)}
-                        placeholder="내 닉네임"
+                        placeholder={t.placeholderNickname}
                         className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
                       />
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="font-sans text-xs font-bold text-navy ml-1">전화번호</label>
+                    <label className="font-sans text-xs font-bold text-navy ml-1">{t.phoneLabel}</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                         <Phone size={16} />
@@ -350,7 +408,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                         type="tel" 
                         value={phone}
                         onChange={e => setPhone(e.target.value)}
-                        placeholder="010-0000-0000"
+                        placeholder={t.placeholderPhone}
                         className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
                       />
                     </div>
@@ -370,14 +428,14 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                     disabled={isUpdating}
                     className="flex-1 py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 hover:border-red-200 font-bold text-base rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
                   >
-                    로그아웃
+                    {t.logoutBtn}
                   </button>
                   <button 
                     type="submit"
                     disabled={isUpdating}
                     className="flex-[2] py-3.5 bg-navy text-cream font-bold text-base rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isUpdating ? "저장 중..." : "저장하기"}
+                    {isUpdating ? t.savingBtn : t.saveBtn}
                   </button>
                 </div>
               </form>
@@ -389,21 +447,21 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                 {isLoadingArchives ? (
                   <div className="py-12 text-center flex flex-col items-center gap-2">
                     <Disc className="animate-spin text-point/80" size={24} />
-                    <p className="font-sans text-xs text-navy/60 font-medium">아카이브를 불러오는 중...</p>
+                    <p className="font-sans text-xs text-navy/60 font-medium">{t.loadingArchives}</p>
                   </div>
                 ) : completedResults.length === 0 && activeDrafts.length === 0 ? (
                   <div className="py-12 px-4 text-center">
                     <Archive size={40} className="text-navy/20 mx-auto mb-3" />
-                    <p className="font-sans text-sm text-navy/50 font-medium">아직 저장된 취향표나 초안이 없습니다.</p>
-                    <p className="font-sans text-xs text-navy/40 mt-1">월드컵을 완료하거나 중간에 이탈하여 저장해보세요!</p>
+                    <p className="font-sans text-sm text-navy/50 font-medium">{t.noArchives}</p>
+                    <p className="font-sans text-xs text-navy/40 mt-1">{t.noArchivesSub}</p>
                   </div>
                 ) : (
                   <div className="w-full max-h-[300px] overflow-y-auto flex flex-col gap-2.5 pr-1">
                     {/* Active Drafts */}
                     {activeDrafts.map((draft: any) => {
-                      let stepText = "아티스트 선택 단계";
-                      if (draft.status === "track_selection") stepText = "곡 선택 단계";
-                      else if (draft.status === "pre_tournament" || draft.status === "playing") stepText = "LP 월드컵 진행 중";
+                      let stepText = t.stageArtist;
+                      if (draft.status === "track_selection") stepText = t.stageTrack;
+                      else if (draft.status === "pre_tournament" || draft.status === "playing") stepText = t.stageWorldCup;
                       
                       return (
                         <button
@@ -416,16 +474,16 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                             <div className="flex items-center gap-1.5">
                               <Calendar size={13} className="text-point/70" />
                               <span className="font-sans font-bold text-[10px] text-point">
-                                {new Date(draft.updated_at).toLocaleDateString('ko-KR', {
+                                {new Date(draft.updated_at).toLocaleDateString(locale === "ko" ? 'ko-KR' : 'en-US', {
                                   year: 'numeric',
                                   month: '2-digit',
                                   day: '2-digit'
-                                })} [이어하기]
+                                })} {t.draftTitle}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="px-2 py-0.5 rounded-full bg-point text-cream font-sans font-bold text-[9px] shrink-0">
-                                진행 중
+                                {t.draftStatus}
                               </span>
                               <span className="font-sans font-bold text-sm text-navy truncate">
                                 {draft.title} ({stepText})
@@ -450,7 +508,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                             <div className="flex items-center gap-1.5">
                               <Calendar size={13} className="text-navy/50" />
                               <span className="font-sans font-bold text-xs text-navy">
-                                {new Date(result.created_at).toLocaleDateString('ko-KR', {
+                                {new Date(result.created_at).toLocaleDateString(locale === "ko" ? 'ko-KR' : 'en-US', {
                                   year: 'numeric',
                                   month: '2-digit',
                                   day: '2-digit'
@@ -459,10 +517,10 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                             </div>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="px-2 py-0.5 rounded-full bg-navy text-cream font-sans font-bold text-[9px] shrink-0">
-                                완료됨
+                                {t.completedStatus}
                               </span>
                               <span className="font-sans font-bold text-sm text-navy truncate">
-                                1위: {result.winner_track_title} - {result.winner_track_artist}
+                                {t.firstPlace}: {result.winner_track_title} - {result.winner_track_artist}
                               </span>
                             </div>
                           </div>
@@ -490,13 +548,13 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                       <ArrowLeft size={16} />
                     </button>
                     <span className="font-sans text-sm text-navy font-bold">
-                      {new Date(selectedArchive.saved_at).toLocaleDateString('ko-KR', {
+                      {new Date(selectedArchive.saved_at || selectedArchive.created_at).toLocaleDateString(locale === "ko" ? 'ko-KR' : 'en-US', {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',
                         hour: '2-digit',
                         minute: '2-digit'
-                      })} 기록
+                      })} {t.archiveRecord}
                     </span>
                   </div>
 
@@ -531,7 +589,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                       }}
                       className="w-full py-3 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-1.5"
                     >
-                      이 취향표 불러오기 & 공유
+                      {t.loadAndShare}
                     </button>
                   </div>
                 </div>

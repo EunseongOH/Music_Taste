@@ -23,6 +23,7 @@ const CACHE_TTL = 3600 * 1000; // 1 hour in ms
 const albumsCache = new Map<string, { data: any; timestamp: number }>();
 const tracksCache = new Map<string, { data: any; timestamp: number }>();
 const relatedArtistsCache = new Map<string, { data: any; timestamp: number }>();
+const RELATED_ARTISTS_TTL = 10 * 60 * 1000; // 10 minutes — shorter so new fallback logic is used sooner
 const searchCache = new Map<string, { data: any; timestamp: number }>();
 
 let cachedInitialArtists: any[] | null = null;
@@ -155,92 +156,181 @@ async function spotifyFetch(
   return response;
 }
 
+export interface SpotifyQuery {
+  q: string;
+  market?: string;
+}
+
+// Map app genre ID to Spotify-optimized query and market
+export const getSpotifyGenreQuery = async (genreId: string): Promise<SpotifyQuery> => {
+  switch (genreId) {
+    case "k-pop":
+      return { q: "genre:k-pop", market: "KR" };
+    case "pop":
+      return { q: "genre:pop", market: "US" }; // Global Pop (US market to avoid Korean pop dominant results)
+    case "korean hip hop":
+      return { q: "korean hip hop", market: "KR" };
+    case "hip hop":
+      return { q: "hip hop", market: "US" }; // Global Hip Hop (raw text search yields better results)
+    case "korean r&b":
+      return { q: "korean r&b", market: "KR" };
+    case "r&b":
+      return { q: "genre:r-b", market: "US" }; // Global R&B
+    case "korean rock":
+      return { q: "korean rock", market: "KR" };
+    case "rock":
+      return { q: "genre:rock", market: "US" }; // Global Rock
+    case "korean indie":
+      return { q: "korean indie", market: "KR" };
+    case "indie":
+      return { q: "genre:indie", market: "US" }; // Global Indie
+    case "electronic":
+      return { q: "genre:electronic", market: "US" };
+    case "jazz":
+      return { q: "genre:jazz", market: "US" };
+    case "ballad":
+      return { q: "korean ballad", market: "KR" };
+    case "trot":
+      return { q: "korean trot", market: "KR" };
+    case "j-pop":
+      return { q: "genre:j-pop", market: "JP" };
+    case "classical":
+      return { q: "genre:classical", market: "US" };
+    default:
+      return { q: `genre:${genreId}` };
+  }
+};
+
 // Search for artists
-export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0) => {
+export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0, market?: string) => {
   if (!query) return [];
 
   const trimmedQuery = query.trim().toLowerCase();
   const lang = await getLocaleCookie();
-  const cacheKey = `${trimmedQuery}_${lang}_limit_${limit}_offset_${offset}`;
+  const cacheKey = `${trimmedQuery}_${lang}_limit_${limit}_offset_${offset}_market_${market || "default"}`;
   
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 300 * 1000) { // 5 minutes cache for search
     return cached.data;
   }
   
-  const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=${limit}&offset=${offset}`;
-  const response = await spotifyFetch(url);
+  const performLocalSearch = () => {
+    const lowercaseQuery = trimmedQuery;
+    const matchedArtists = new Map<string, any>();
 
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error("Spotify Search Error:", errText);
-    lastSpotifyError = `Search API Error (URL: ${url}) (Status ${response.status}): ${errText}`;
-    return []; // Return empty instead of throwing to prevent crashing UI
+    // 1. Search in curatedArtists
+    const allCurated = Object.values(curatedArtists).flat();
+    for (const artist of allCurated) {
+      if (artist.name.toLowerCase().includes(lowercaseQuery)) {
+        matchedArtists.set(artist.id, {
+          id: artist.id,
+          name: artist.name,
+          images: [{ url: artist.image }],
+          popularity: 50
+        });
+      }
+    }
+
+    // 2. Search in temp_artists.json
+    try {
+      const tempArtists = require("../../temp_artists.json");
+      for (const artist of tempArtists) {
+        if (artist.name.toLowerCase().includes(lowercaseQuery)) {
+          matchedArtists.set(artist.id, {
+            id: artist.id,
+            name: artist.name,
+            images: artist.images,
+            popularity: artist.popularity || 50
+          });
+        }
+      }
+    } catch (e) {}
+
+    const results = Array.from(matchedArtists.values());
+    return results.slice(offset, offset + limit);
+  };
+
+  const maxLimitPerRequest = 10;
+  const allItems: any[] = [];
+  let succeeded = false;
+
+  for (let fetched = 0; fetched < limit; fetched += maxLimitPerRequest) {
+    const chunkLimit = Math.min(limit - fetched, maxLimitPerRequest);
+    const chunkOffset = offset + fetched;
+
+    try {
+      let url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=${chunkLimit}&offset=${chunkOffset}`;
+      if (market) {
+        url += `&market=${market}`;
+      }
+      const response = await spotifyFetch(url);
+
+      if (response.ok) {
+        succeeded = true;
+        const data = await response.json();
+        const items = data.artists?.items || [];
+        allItems.push(...items);
+        if (items.length < chunkLimit) {
+          break;
+        }
+      } else {
+        const errText = await response.text();
+        console.warn(`[Spotify API] Search chunk failed with status ${response.status}: ${errText}.`);
+        break;
+      }
+    } catch (e) {
+      console.error("[Spotify API] Search chunk failed with exception:", e);
+      break;
+    }
+    await delay(50);
   }
 
-  const data = await response.json();
-  const items = data.artists?.items || [];
-  if (items.length > 0) {
-    searchCache.set(cacheKey, { data: items, timestamp: Date.now() });
+  if (succeeded && allItems.length > 0) {
+    searchCache.set(cacheKey, { data: allItems, timestamp: Date.now() });
+    return allItems;
   }
-  return items; // Array of artist objects
+
+  // Fallback to local search if API failed or returned empty results
+  const localItems = performLocalSearch();
+  if (localItems.length > 0) {
+    searchCache.set(cacheKey, { data: localItems, timestamp: Date.now() });
+  }
+  return localItems;
 };
 
+import { curatedArtists } from "./curatedArtists";
+
 // Fetch initial popular artists dynamically using Spotify Search API by genres
+// Fallback/Use curated database to avoid parallel API rate limiting and K-Pop dominance
 export const getInitialArtists = async () => {
   if (cachedInitialArtists && cachedInitialArtists.length > 0 && Date.now() < initialArtistsExpirationTime) {
     return cachedInitialArtists;
   }
 
-  // Diverse genre and trending queries (including 2025/2026 and more genres)
-  const queries = [
-    'genre:k-pop', 'genre:pop', 'genre:hip-hop', 'genre:rock', 
-    'genre:r-b', 'genre:indie', 'genre:electronic', 'genre:jazz', 
-    'genre:ballad', 'genre:trot', 'year:2026', 'year:2025'
-  ];
+  // Combine all curated artists from our database
+  const allCurated = Object.values(curatedArtists).flat();
   
-  // Pick 10 random queries to build a diverse pool while keeping limit at 10
-  const selectedQueries = queries.sort(() => 0.5 - Math.random()).slice(0, 10);
+  // Deduplicate by ID
+  const uniqueArtists = Array.from(new Map(allCurated.map(a => [a.id, a])).values());
 
-  // Fetch 10 artists for each query (strictly complying with Spotify Client Credentials search limit of 10)
-  const results = await Promise.all(selectedQueries.map(async (query) => {
-    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=10`;
-    try {
-      const response = await spotifyFetch(url);
-      if (!response.ok) {
-        const errText = await response.text();
-        lastSpotifyError = `Initial Query ${query} Error (URL: ${url}) (Status ${response.status}): ${errText}`;
-        return [];
-      }
-      const data = await response.json();
-      return data.artists?.items || [];
-    } catch (e: any) {
-      console.warn(`Search failed for ${query}`, e);
-      lastSpotifyError = `Initial Query ${query} Exception (URL: ${url}): ${e.message}`;
-      return [];
-    }
+  // Format as Spotify Artist objects
+  const results = uniqueArtists.map(a => ({
+    id: a.id,
+    name: a.name,
+    images: [{ url: a.image }],
+    popularity: 50
   }));
 
-  // Flatten and filter duplicates
-  const allArtists = results.flat();
-  const uniqueArtists = Array.from(new Map(allArtists.map(a => [a.id, a])).values());
-
   // Shuffle the results
-  for (let i = uniqueArtists.length - 1; i > 0; i--) {
+  for (let i = results.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [uniqueArtists[i], uniqueArtists[j]] = [uniqueArtists[j], uniqueArtists[i]];
+    [results[i], results[j]] = [results[j], results[i]];
   }
 
-  // Slice to 120 artists to give a large pool for client-side pagination, cached for 1 hour
-  const sliced = uniqueArtists.slice(0, 120);
-  if (sliced.length > 0) {
-    cachedInitialArtists = sliced;
-    initialArtistsExpirationTime = Date.now() + CACHE_TTL; // Cache for 1 hour
-  } else {
-    cachedInitialArtists = null;
-  }
+  cachedInitialArtists = results;
+  initialArtistsExpirationTime = Date.now() + CACHE_TTL;
 
-  return sliced;
+  return results;
 };
 
 // Fetch artist's albums (Paged to prevent excessive rate limiting)
@@ -342,37 +432,224 @@ export const getRelatedArtists = async (artistId: string) => {
   }
 
   const cached = relatedArtistsCache.get(artistId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (cached && Date.now() - cached.timestamp < RELATED_ARTISTS_TTL) {
     return cached.data;
   }
 
-  const queries = ['genre:k-pop', 'genre:pop', 'genre:hip-hop', 'genre:rock', 'genre:indie', 'genre:r-b', 'year:2024'];
-  const randomQuery = queries[Math.floor(Math.random() * queries.length)];
-  
+  // 1. Try Spotify /related-artists endpoint (requires OAuth for some accounts, may 403)
   try {
-    const response = await spotifyFetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(randomQuery)}&type=artist&limit=10`);
+    const response = await spotifyFetch(`https://api.spotify.com/v1/artists/${artistId}/related-artists`);
     
-    if (!response.ok) return [];
-    const data = await response.json();
-    const items = data.artists?.items || [];
-    
-    // Filter out the clicked artist
-    const filtered = items.filter((a: any) => a.id !== artistId);
-    
-    // Shuffle
-    for (let i = filtered.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+    if (response.ok) {
+      const data = await response.json();
+      const items = data.artists || [];
+      
+      if (items.length > 0) {
+        const filtered = items.filter((a: any) => a.id !== artistId);
+        for (let i = filtered.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+        }
+        const result = filtered.slice(0, 3);
+        relatedArtistsCache.set(artistId, { data: result, timestamp: Date.now() });
+        return result;
+      }
+    } else {
+      console.warn(`[Spotify API] getRelatedArtists failed with status ${response.status}. Falling back to genre search.`);
     }
-    
-    const result = filtered.slice(0, 3);
-    relatedArtistsCache.set(artistId, { data: result, timestamp: Date.now() });
-    return result;
   } catch (e) {
-    console.error("Failed to fetch related artists fallback", e);
-    return [];
+    console.error("Failed to fetch related artists from Spotify API, using genre search fallback", e);
   }
+
+  // 2. Find artist's genre from curated list
+  let artistGenre: string | null = null;
+  for (const [genre, artists] of Object.entries(curatedArtists)) {
+    if (artists.some((a: any) => a.id === artistId)) {
+      artistGenre = genre;
+      break;
+    }
+  }
+
+  // 3. Try Spotify genre search with a random offset to surface non-curated artists
+  if (artistGenre) {
+    try {
+      const genreQuery = await getSpotifyGenreQuery(artistGenre);
+      // Use a random offset between 20-100 to go beyond the first page of popular artists
+      const randomOffset = Math.floor(Math.random() * 80) + 20;
+      const results = await searchSpotifyArtists(genreQuery.q, 10, randomOffset, genreQuery.market);
+      if (results.length > 0) {
+        const filtered = results.filter((r: any) => r.id !== artistId);
+        const shuffled = [...filtered].sort(() => Math.random() - 0.5);
+        const count = Math.floor(Math.random() * 3) + 1;
+        const result = shuffled.slice(0, count).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          images: r.images || [],
+          popularity: r.popularity || 0,
+        }));
+        relatedArtistsCache.set(artistId, { data: result, timestamp: Date.now() });
+        return result;
+      }
+    } catch (e) {
+      console.warn("[Spotify API] Genre search fallback failed for related artists:", e);
+    }
+  }
+
+  // 4. Last resort: use curated list (may overlap with visible artists, but better than nothing)
+  const allCurated = Object.entries(curatedArtists);
+  let matchingArtists: any[] = [];
+  for (const [_, artists] of allCurated) {
+    if (artists.some((a: any) => a.id === artistId)) {
+      matchingArtists = artists;
+      break;
+    }
+  }
+  if (matchingArtists.length === 0) {
+    matchingArtists = Object.values(curatedArtists).flat();
+  }
+  const filtered = matchingArtists.filter((a: any) => a.id !== artistId);
+  const shuffled = [...filtered];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const count = Math.floor(Math.random() * 3) + 1;
+  const fallbackResult = shuffled.slice(0, count).map((a: any) => ({
+    id: a.id,
+    name: a.name,
+    images: [{ url: a.image }],
+    popularity: 50,
+  }));
+  relatedArtistsCache.set(artistId, { data: fallbackResult, timestamp: Date.now() });
+  return fallbackResult;
 };
+
+// Local-only genre search: looks up artists directly from curatedArtists by genre keys.
+// When offset exceeds total, cycles through with a reshuffled order so the list never stops.
+const searchArtistsByGenresLocal = (genres: string[], limit: number, offset: number): any[] => {
+  const genreKey: Record<string, string> = {
+    "k-pop": "k-pop", "pop": "pop", "hip-hop": "hip hop", "r-b": "r&b",
+    "rock": "rock", "indie": "indie", "electronic": "electronic",
+    "jazz": "jazz", "ballad": "ballad", "trot": "trot", "j-pop": "j-pop",
+    "classical": "classical",
+  };
+  const seen = new Set<string>();
+  const all: any[] = [];
+  for (const genreId of genres) {
+    const key = genreKey[genreId] || genreId;
+    const artists = (curatedArtists as any)[key] || [];
+    for (const a of artists) {
+      if (!seen.has(a.id)) {
+        seen.add(a.id);
+        all.push({ id: a.id, name: a.name, images: [{ url: a.image }], popularity: 50 });
+      }
+    }
+  }
+
+  if (all.length === 0) return [];
+
+  // Cycle: wrap offset, then reshuffle each cycle pass so order feels fresh
+  const cycle = Math.floor(offset / all.length);
+  const wrappedOffset = offset % all.length;
+
+  // Deterministic shuffle per cycle using cycle index as seed
+  const shuffled = [...all];
+  let seed = cycle * 31337;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+    const j = Math.abs(seed) % (i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  // If a page would span two cycles, concat the next cycle's start
+  const slice = shuffled.slice(wrappedOffset, wrappedOffset + limit);
+  if (slice.length < limit && wrappedOffset + limit > shuffled.length) {
+    const nextCycleShuffled = [...all].reverse(); // simple variation
+    slice.push(...nextCycleShuffled.slice(0, limit - slice.length));
+  }
+  return slice;
+};
+
+// Search artists in bulk for multiple selected genres with a single rate-limit safe query.
+// Offset is automatically wrapped at 950 (Spotify API max) to enable endless pagination.
+export const searchArtistsByGenres = async (genres: string[], limit = 20, offset = 0) => {
+  if (!genres || genres.length === 0) return [];
+
+  // Optimization query mapping for each genre ID (standard text queries to maximize results)
+  const genreSearchQuery: Record<string, { query: string; market?: string }> = {
+    "k-pop":         { query: 'k-pop', market: 'KR' },
+    "pop":           { query: 'pop', market: 'US' },
+    "korean hip hop":{ query: 'korean hip hop', market: 'KR' },
+    "hip hop":       { query: 'hip hop', market: 'US' },
+    "korean r&b":    { query: 'korean r&b', market: 'KR' },
+    "r&b":           { query: 'r&b', market: 'US' },
+    "korean rock":   { query: 'korean rock', market: 'KR' },
+    "rock":          { query: 'rock', market: 'US' },
+    "korean indie":  { query: 'korean indie', market: 'KR' },
+    "indie":         { query: 'indie', market: 'US' },
+    "electronic":    { query: 'electronic', market: 'US' },
+    "jazz":          { query: 'jazz', market: 'US' },
+    "ballad":        { query: 'korean ballad', market: 'KR' },
+    "trot":          { query: 'trot OR 트로트', market: 'KR' },
+    "j-pop":         { query: 'j-pop', market: 'JP' },
+    "classical":     { query: 'classical', market: 'US' },
+    // legacy IDs
+    "hip-hop":       { query: 'hip hop', market: 'US' },
+    "r-b":           { query: 'r&b', market: 'US' },
+  };
+
+  // Determine limit per genre
+  const limitPerGenre = Math.ceil(limit / genres.length);
+  const allResultsMap = new Map<string, any>();
+  let anySucceeded = false;
+
+  const fetchPromises = genres.map(async (genreId) => {
+    const config = genreSearchQuery[genreId.toLowerCase()] || { query: genreId };
+    const maxLimitPerRequest = 10;
+    const chunkLimit = Math.min(limitPerGenre, maxLimitPerRequest);
+    const safeOffset = offset % 950;
+
+    try {
+      let url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(config.query)}&type=artist&limit=${chunkLimit}&offset=${safeOffset}`;
+      if (config.market) {
+        url += `&market=${config.market}`;
+      }
+      const response = await spotifyFetch(url);
+      if (response.ok) {
+        anySucceeded = true;
+        const data = await response.json();
+        const items = data.artists?.items || [];
+        return items;
+      } else {
+        const errText = await response.text();
+        console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with status ${response.status}: ${errText}`);
+        return [];
+      }
+    } catch (err) {
+      console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with exception:`, err);
+      return [];
+    }
+  });
+
+  try {
+    const genreResults = await Promise.all(fetchPromises);
+    genreResults.forEach((items) => {
+      items.forEach((item: any) => {
+        allResultsMap.set(item.id, item);
+      });
+    });
+  } catch (e) {
+    console.error("[Spotify API] Promise.all failed in searchArtistsByGenres:", e);
+  }
+
+  if (anySucceeded && allResultsMap.size > 0) {
+    return Array.from(allResultsMap.values());
+  }
+
+  // Fallback to local genre search cycle
+  return searchArtistsByGenresLocal(genres, limit, offset);
+};
+
 // Search tracks by query string (returns raw Spotify track objects, up to 10 due to Feb 2026 updates)
 // The caller is responsible for filtering by artist IDs.
 export const searchTracksByQuery = async (query: string): Promise<any[]> => {

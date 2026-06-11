@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { getSafeLocale } from "@/utils/storage";
 
 type Provider = "google" | "kakao";
 
 export default function PopupLogin() {
   const [provider, setProvider] = useState<Provider>("google");
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
     // Read ?provider= from URL
@@ -15,6 +17,9 @@ export default function PopupLogin() {
     const resolvedProvider: Provider =
       raw === "kakao" ? "kakao" : "google";
     setProvider(resolvedProvider);
+
+    // Read locale
+    setLocale(getSafeLocale());
 
     const supabase = createClient();
     supabase.auth
@@ -49,12 +54,14 @@ export default function PopupLogin() {
         />
       </div>
       <h3 className="font-serif text-2xl font-bold mb-2">
-        {isKakao ? "카카오 로그인" : "구글 로그인"}
+        {isKakao 
+          ? (locale === "en" ? "Kakao Login" : "카카오 로그인")
+          : (locale === "en" ? "Google Login" : "구글 로그인")}
       </h3>
       <p className="font-sans text-sm text-charcoal/60">
         {isKakao
-          ? "카카오 로그인 화면으로 이동 중입니다..."
-          : "구글 로그인 화면으로 이동 중입니다..."}
+          ? (locale === "en" ? "Redirecting to Kakao login screen..." : "카카오 로그인 화면으로 이동하고 있어요...")
+          : (locale === "en" ? "Redirecting to Google login screen..." : "구글 로그인 화면으로 이동하고 있어요...")}
       </p>
     </div>
   );

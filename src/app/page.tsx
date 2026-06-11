@@ -9,7 +9,7 @@ import { Trophy, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale, setSafeLocale } from "@/utils/storage";
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,21 +28,21 @@ export default function Home() {
     {
       id: "multi",
       title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
-      desc: locale === "ko" ? "좋아하는 여러 아티스트의 명곡을 섞어 최종 우승곡을 가려냅니다." : "Select multiple favorite artists, mix their top songs, and find your absolute #1 track.",
+      desc: locale === "ko" ? "좋아하는 아티스트들의 명곡을 한데 모아 토너먼트로 즐기고, 내가 가장 사랑하는 단 한 곡을 찾아보세요." : "Select multiple favorite artists, mix their top songs, and find your absolute #1 track.",
       btnText: locale === "ko" ? "시작하기" : "Start",
-      target: "/explore"
+      target: "/genres"
     },
     {
       id: "single",
-      title: locale === "ko" ? "아티스트 싹쓸이" : "Artist Catalog Sort",
-      desc: locale === "ko" ? "단 한 명의 아티스트를 선택하고 그들의 전곡 순위를 매겨볼 수 있습니다." : "Select exactly one artist and sort their entire catalog of songs.",
+      title: locale === "ko" ? "최애 곡 줄 세우기" : "Favorite Songs Lineup",
+      desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "Select a single artist and line up all of their tracks in the order of your choice.",
       btnText: locale === "ko" ? "시작하기" : "Start",
-      target: "/explore?mode=single"
+      target: "/genres?mode=single"
     },
     {
       id: "archive",
       title: locale === "ko" ? "내 취향 스페이스" : "My Taste Space",
-      desc: locale === "ko" ? "내 아카이빙 결과와 나와 곡취향이 통하는 취향 매칭 피드를 확인해보세요." : "Explore your saved archives and find users matching your musical soul.",
+      desc: locale === "ko" ? "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요." : "Explore your saved music tastes and browse the feeds of friends who share similar tastes.",
       btnText: locale === "ko" ? "확인하기" : "Check",
       target: "/explore-taste"
     }
@@ -50,30 +50,12 @@ export default function Home() {
 
   // Read locale on mount
   useEffect(() => {
-    try {
-      const savedLocale = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("locale="))
-        ?.split("=")[1];
-      
-      if (savedLocale === "en" || savedLocale === "ko") {
-        setLocale(savedLocale as any);
-      } else {
-        // Default to ko and save cookie
-        document.cookie = "locale=ko; path=/; max-age=31536000"; // 1 year
-      }
-    } catch (e) {
-      console.warn("Cookie access denied:", e);
-    }
+    setLocale(getSafeLocale());
   }, []);
 
   const handleLanguageToggle = (lang: "ko" | "en") => {
     setLocale(lang);
-    try {
-      document.cookie = `locale=${lang}; path=/; max-age=31536000`;
-    } catch (e) {
-      console.warn("Cookie setting denied:", e);
-    }
+    setSafeLocale(lang);
     router.refresh();
   };
 
@@ -83,7 +65,7 @@ export default function Home() {
       tagline2: "당신의 음악 취향을 나열하고, 나만의 색깔로 증폭시켜 보세요.",
       start: "시작하기",
       continue: "이어서 진행하기",
-      startNewTitle: "새로 시작하시겠습니까?",
+      startNewTitle: "새로 시작할까요?",
       startNewDesc: "이전의 완료되지 않은 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?",
       cancel: "취소",
       startNewBtn: "새로 시작",
@@ -94,7 +76,7 @@ export default function Home() {
       start: "Start",
       continue: "Continue Progress",
       startNewTitle: "Start New?",
-      startNewDesc: "All uncompleted progress (selected artists and track details) will be deleted. Do you really want to start a new World Cup?",
+      startNewDesc: "Your previous unsaved progress (selected artists and songs) will be deleted. Do you want to start a new lineup?",
       cancel: "Cancel",
       startNewBtn: "Start New",
     }

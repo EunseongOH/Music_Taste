@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Loader2, Disc, X, Check } from "lucide-react";
+import { Search, Loader2, Disc, X, Check, ChevronUp } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
-import { searchSpotifyArtists, getInitialArtists, getRelatedArtists } from "@/utils/spotify";
+import { searchSpotifyArtists, getInitialArtists, getRelatedArtists, getSpotifyGenreQuery, searchArtistsByGenres } from "@/utils/spotify";
 import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { curatedArtists } from "@/utils/curatedArtists";
 
 interface Artist {
   id: string;
@@ -22,6 +23,22 @@ interface Artist {
   parentId?: string;
   popularity?: number;
 }
+
+const GENRES = [
+  { id: "all", name: "전체" },
+  { id: "k-pop", name: "K-Pop" },
+  { id: "pop", name: "Pop" },
+  { id: "hip-hop", name: "Hip-Hop" },
+  { id: "rock", name: "Rock" },
+  { id: "r-b", name: "R&B" },
+  { id: "indie", name: "Indie" },
+  { id: "electronic", name: "Electronic" },
+  { id: "jazz", name: "Jazz" },
+  { id: "ballad", name: "Ballad" },
+  { id: "trot", name: "Trot" },
+  { id: "j-pop", name: "J-Pop" },
+  { id: "classical", name: "Classical" },
+];
 
 export default function ExplorePage() {
   const { user } = useAuth();
@@ -40,12 +57,100 @@ export default function ExplorePage() {
   const [searchOffset, setSearchOffset] = useState(0);
   const [hasMoreSearch, setHasMoreSearch] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // observerInstanceRef holds the active IntersectionObserver so we can disconnect on cleanup
+  const observerInstanceRef = useRef<IntersectionObserver | null>(null);
+  // observerRef is kept as a regular ref so other code can read the DOM node if needed
   const observerRef = useRef<HTMLDivElement | null>(null);
+
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Always-fresh ref of ALL loaded artist IDs (for deduplication in recommendations)
+  const allArtistIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    allArtistIdsRef.current = new Set(defaultArtists.map(a => a.id));
+  }, [defaultArtists]);
+
+  // ─── Direct refs (not synced from state) to avoid stale-closure in observer ───
+  // These are the ONLY source of truth for the observer callback.
+  const searchQueryRef = useRef("");
+  const isLoadingMoreRef = useRef(false);
+  const isSearchingRef = useRef(true);
+  // genre pagination: managed ONLY via ref so observer always reads latest value
+  const genreOffsetRef = useRef(0);
+  const selectedGenresRef = useRef<string[]>([]);
+  // search pagination
+  const searchOffsetRef = useRef(0);
+  const hasMoreSearchRef = useRef(true);
+  const hasMoreGenreRef = useRef(true);
+
+  // Keep search-related refs in sync (search still uses state + ref)
+  useEffect(() => { searchQueryRef.current = searchQuery; }, [searchQuery]);
+  useEffect(() => { isSearchingRef.current = isSearching; }, [isSearching]);
+
+  // Pre-selected genres from the previous step
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [hasMoreGenre, setHasMoreGenre] = useState(true);
+  // selectedGenres ref stays in sync
+  useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
+
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
+
+  const t = {
+    ko: {
+      title: isSingleArtistMode ? "최애 아티스트를 선택해 주세요" : "어떤 아티스트를 좋아하시나요?",
+      desc: isSingleArtistMode ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "최소 3명의 아티스트를 선택해 주세요.",
+      genreLabel: "선택 장르:",
+      placeholder: "아티스트 검색 (예: The Beatles)...",
+      searchResult: "검색 결과",
+      searchResultSub: `"${searchQuery}" 검색 결과예요`,
+      noResults: "검색 결과가 없어요. 다른 검색어로 검색해 볼까요?",
+      loadingMore: "아티스트 더 불러오는 중...",
+      selectedLabel: "선택한 아티스트",
+      countLabel: "명",
+      nextBtn: "다음으로 넘어가기",
+      saveExitTitle: "진행 내역을 저장할까요?",
+      saveExitDesc: "선택한 아티스트 목록이 있어요. 지금까지 진행한 내역을 보관하고 나갈까요?\n(보관한 내역은 프로필의 '내 취향 스페이스'에서 언제든 이어할 수 있어요.)",
+      saveExitConfirm: "저장하고 나가기",
+      saveExitDiscard: "저장하지 않고 나가기",
+      cancel: "취소",
+      singleConfirmTitle: "곡들을 채워볼까요?",
+      singleConfirmDesc: `'${pendingSingleArtist?.name}'의 모든 발표곡을 내 마음에 드는 순서대로 정렬해볼까요?`,
+      proceed: "시작할게요",
+      loadingTitle: "아티스트 탐색 중...",
+      loadingDesc: "오늘의 추천 아티스트를 찾고 있어요",
+      artistLabel: "아티스트",
+    },
+    en: {
+      title: isSingleArtistMode ? "Select your favorite artist" : "Who are your favorite artists?",
+      desc: isSingleArtistMode ? "Select a single artist and line up all of their tracks in the order of your choice." : "Please select at least 3 artists.",
+      genreLabel: "Selected Genres:",
+      placeholder: "Search artists (e.g., The Beatles)...",
+      searchResult: "Search Results",
+      searchResultSub: `Results for "${searchQuery}"`,
+      noResults: "No results found. Let's try searching for something else.",
+      loadingMore: "Loading more artists...",
+      selectedLabel: "Selected Artists",
+      countLabel: "",
+      nextBtn: "Next Step",
+      saveExitTitle: "Save progress?",
+      saveExitDesc: "You have selected artists. Would you like to save your choice and exit?\n(You can pick up right where you left off from 'My Taste Space'.)",
+      saveExitConfirm: "Save and Exit",
+      saveExitDiscard: "Exit without Saving",
+      cancel: "Cancel",
+      singleConfirmTitle: "Line up songs?",
+      singleConfirmDesc: `Would you like to line up all songs by '${pendingSingleArtist?.name}' in your preferred order?`,
+      proceed: "Start",
+      loadingTitle: "Searching artists...",
+      loadingDesc: "Finding recommended artists for you",
+      artistLabel: "Artist",
+    }
+  }[locale];
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       setIsSingleArtistMode(params.get("mode") === "single");
+      setLocale(getSafeLocale());
     }
   }, []);
 
@@ -59,6 +164,13 @@ export default function ExplorePage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [selectedIds.size]);
+
+  // Scroll-to-top button visibility — show after any meaningful scroll (50px)
+  useEffect(() => {
+    const handleScroll = () => setShowScrollTop(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Back button interception
   const handleBackClick = (e: React.MouseEvent) => {
@@ -96,12 +208,104 @@ export default function ExplorePage() {
       try {
         const params = new URLSearchParams(window.location.search);
         const isSingle = params.get("mode") === "single";
+
+        // Load selected genres — priority: URL params > storage > all curated (fallback)
+        let genresList: string[] = [];
+
+        // 1. Try URL query param first (most reliable — survives storage sandbox)
+        const genresParam = params.get("genres");
+        if (genresParam) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(genresParam));
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              genresList = parsed;
+              // Sync back to storage so later reads work
+              sessionStorage.setItem("selected_genres", JSON.stringify(genresList));
+              localStorage.setItem("selected_genres", JSON.stringify(genresList));
+            }
+          } catch (e) {}
+        }
+
+        // 2. Fall back to storage if URL param was absent
+        if (genresList.length === 0) {
+          const storedGenres = sessionStorage.getItem("selected_genres") || localStorage.getItem("selected_genres");
+          if (storedGenres) {
+            try {
+              const parsed = JSON.parse(storedGenres);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                genresList = parsed;
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (genresList.length > 0) {
+          setSelectedGenres(genresList);
+        }
+
         
-        const results = await getInitialArtists();
+        let results: any[] = [];
+        if (genresList && genresList.length > 0) {
+          // Step 1: Load curated artists (offline, instant)
+          const allCurated: any[] = [];
+          genresList.forEach((genreId) => {
+            const artistsInGenre = curatedArtists[genreId.toLowerCase()];
+            if (artistsInGenre) {
+              artistsInGenre.forEach((a) => {
+                allCurated.push({
+                  id: a.id,
+                  name: a.name,
+                  image: a.image,
+                  popularity: 50
+                });
+              });
+            }
+          });
+          
+          // Remove duplicates from curated list
+          const curatedUnique = Array.from(new Map(allCurated.map((a: any) => [a.id, a])).values());
+
+          // Step 2: Fetch additional artists from Spotify API to supplement curated list
+          // We do ONE API call with limit=50 and offset=0 to get fresh artists
+          let apiArtists: any[] = [];
+          try {
+            const apiResults = await searchArtistsByGenres(genresList, 50, 0);
+            const curatedIds = new Set(curatedUnique.map((a: any) => a.id));
+            // Only add artists not already in curated list
+            apiArtists = apiResults
+              .filter((a: any) => !curatedIds.has(a.id) && a.images?.[0]?.url)
+              .map((a: any) => ({
+                id: a.id,
+                name: a.name,
+                image: a.images[0].url,
+                popularity: a.popularity || 50
+              }));
+          } catch (e) {
+            console.warn("[explore] Initial API fetch for genres failed, using curated only:", e);
+          }
+
+          // Merge: curated first (familiar names), then API extras
+          const merged = [...curatedUnique, ...apiArtists];
+          
+          // Shuffle the consolidated results
+          for (let i = merged.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [merged[i], merged[j]] = [merged[j], merged[i]];
+          }
+          results = merged;
+          // Set genre offset to 50 (past the initial API batch) — write DIRECTLY to ref
+          genreOffsetRef.current = 50;
+          setHasMoreGenre(true);
+          hasMoreGenreRef.current = true;
+        } else {
+          // Fallback to getInitialArtists if no genres selected
+          results = await getInitialArtists();
+        }
+
         const mappedArtists: Artist[] = results.map((artist: any) => ({
           id: artist.id,
           name: artist.name,
-          image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+          image: artist.image || artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
           type: "main",
           popularity: artist.popularity || 0,
         }));
@@ -184,18 +388,25 @@ export default function ExplorePage() {
     return () => clearTimeout(timer);
   }, [selectedArtists, user, isSingleArtistMode]);
 
+  // Pre-selected genre search effect removed
+
   // Handle Search
+  const prevSearchQueryRef = React.useRef("");
   useEffect(() => {
+    // Only re-run the search if the query itself changed (not just selection state)
+    const queryChanged = prevSearchQueryRef.current !== searchQuery;
+    prevSearchQueryRef.current = searchQuery;
+
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length === 0) {
-        if (selectedIds.size === 0 && defaultArtists.length > 0) {
-          setArtists(defaultArtists);
-        }
+        setArtists(defaultArtists);
         setIsSearching(false);
         setSearchOffset(0);
         setHasMoreSearch(true);
         return;
       }
+
+      if (!queryChanged) return; // Don't re-search if only selected artists changed
 
       setIsSearching(true);
       setSearchOffset(0);
@@ -221,65 +432,135 @@ export default function ExplorePage() {
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedIds.size, defaultArtists]);
+  }, [searchQuery, defaultArtists]);
 
-  const handleLoadMore = async () => {
-    const isSearchingActive = searchQuery.trim().length > 0;
-    
+  // Stable callback using refs to avoid stale closures in IntersectionObserver.
+  // IMPORTANT: genreOffsetRef is updated DIRECTLY (not via setState) so this
+  // closure always reads the current offset without stale-value issues.
+  const handleLoadMore = useCallback(async () => {
+    const isSearchingActive = searchQueryRef.current.trim().length > 0;
+
     if (isSearchingActive) {
-      if (!hasMoreSearch || isLoadingMore || isSearching) return;
-      
+      // ── Search mode ──────────────────────────────────────────────────────
+      if (!hasMoreSearchRef.current || isLoadingMoreRef.current || isSearchingRef.current) return;
+
+      isLoadingMoreRef.current = true;
       setIsLoadingMore(true);
       try {
-        const nextOffset = searchOffset + 10;
-        const results = await searchSpotifyArtists(searchQuery, 10, nextOffset);
+        const nextOffset = searchOffsetRef.current + 10;
+        const results = await searchSpotifyArtists(searchQueryRef.current, 10, nextOffset);
         if (results.length === 0) {
           setHasMoreSearch(false);
+          hasMoreSearchRef.current = false;
         } else {
-          const mappedArtists: Artist[] = results.map((artist: any) => ({
-            id: artist.id,
-            name: artist.name,
-            image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+          const mapped: Artist[] = results.map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            image: a.images?.[0]?.url || `https://picsum.photos/seed/${a.id}/300/300`,
             type: "main",
-            popularity: artist.popularity || 0,
+            popularity: a.popularity || 0,
           }));
-          
           setArtists(prev => {
             const prevIds = new Set(prev.map(a => a.id));
-            const filteredNew = mappedArtists.filter(a => !prevIds.has(a.id));
-            return [...prev, ...filteredNew];
+            return [...prev, ...mapped.filter(a => !prevIds.has(a.id))];
           });
-          setSearchOffset(nextOffset);
+          searchOffsetRef.current = nextOffset;
           if (results.length < 10) {
             setHasMoreSearch(false);
+            hasMoreSearchRef.current = false;
           }
         }
       } catch (e) {
-        console.error("Failed to load more searched artists:", e);
+        console.error("[explore] Failed to load more search results:", e);
       } finally {
         setIsLoadingMore(false);
+        isLoadingMoreRef.current = false;
       }
-    } else {
-      if (visibleDefaultCount >= defaultArtists.length) return;
-      setVisibleDefaultCount(prev => Math.min(defaultArtists.length, prev + 20));
-    }
-  };
 
+    } else if (selectedGenresRef.current.length > 0) {
+      // ── Genre mode: fetch fresh artists from Spotify API on every scroll ──
+      if (!hasMoreGenreRef.current || isLoadingMoreRef.current) return;
+
+      isLoadingMoreRef.current = true;
+      setIsLoadingMore(true);
+      try {
+        // Read offset DIRECTLY from ref — never stale
+        const currentOffset = genreOffsetRef.current;
+        const nextOffset = currentOffset + 20;
+
+        console.log(`[explore] Loading genre artists: offset=${currentOffset} → ${nextOffset}`);
+        const results = await searchArtistsByGenres(selectedGenresRef.current, 20, nextOffset);
+
+        if (results.length === 0) {
+          setHasMoreGenre(false);
+          hasMoreGenreRef.current = false;
+        } else {
+          const mapped: Artist[] = results
+            .filter((a: any) => a.images?.[0]?.url)
+            .map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              image: a.images[0].url,
+              type: "main" as const,
+              popularity: a.popularity || 0,
+            }));
+
+          setDefaultArtists(prev => {
+            const prevIds = new Set(prev.map(a => a.id));
+            const fresh = mapped.filter(a => !prevIds.has(a.id));
+            return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          });
+          setVisibleDefaultCount(prev => prev + 20);
+
+          // Advance offset directly in ref — no setState, no stale value
+          genreOffsetRef.current = nextOffset;
+        }
+      } catch (e) {
+        console.error("[explore] Failed to load more genre artists:", e);
+      } finally {
+        setIsLoadingMore(false);
+        isLoadingMoreRef.current = false;
+      }
+
+    } else {
+      // ── No genre: just reveal more of the already-loaded list ──────────
+      setVisibleDefaultCount(prev => prev + 20);
+    }
+  }, []); // empty deps — all mutable values are read via refs
+
+
+  // A stable ref to the latest handleLoadMore for the IntersectionObserver
+  const handleLoadMoreRef = useRef(handleLoadMore);
   useEffect(() => {
-    if (!observerRef.current) return;
-    
+    handleLoadMoreRef.current = handleLoadMore;
+  }, [handleLoadMore]);
+
+  // Callback ref for the infinite-scroll sentinel.
+  // Using a callback ref (instead of useRef + useEffect[]) ensures the observer
+  // is set up the moment the sentinel div actually enters the DOM — even if that
+  // happens after the initial loading-spinner render (which returns early and
+  // never renders the sentinel, leaving a plain useRef null).
+  const setSentinelRef = useCallback((node: HTMLDivElement | null) => {
+    // Disconnect any previous observer
+    if (observerInstanceRef.current) {
+      observerInstanceRef.current.disconnect();
+      observerInstanceRef.current = null;
+    }
+    observerRef.current = node;
+    if (!node) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          handleLoadMore();
+          handleLoadMoreRef.current();
         }
       },
-      { threshold: 0.1 }
+      // rootMargin pre-loads 300px before the user actually hits the bottom
+      { threshold: 0.1, rootMargin: '0px 0px 300px 0px' }
     );
-    
-    observer.observe(observerRef.current);
-    return () => observer.disconnect();
-  }, [searchQuery, searchOffset, hasMoreSearch, isLoadingMore, isSearching, defaultArtists.length, visibleDefaultCount]);
+    observer.observe(node);
+    observerInstanceRef.current = observer;
+  }, []); // stable — recreated only if deps change (none here)
 
   const handleArtistClick = async (artist: Artist) => {
     if (isSingleArtistMode) {
@@ -287,7 +568,7 @@ export default function ExplorePage() {
       return;
     }
 
-    // If it's a similar artist, just toggle selection without spawning more
+    // If it's a similar/recommended artist, just toggle selection without spawning more
     if (artist.type === "similar") {
       setSelectedArtists(prev => {
         if (prev.some(a => a.id === artist.id)) {
@@ -300,20 +581,58 @@ export default function ExplorePage() {
     }
 
     const isSearchedArtist = searchQuery.trim().length > 0 && artists.some(a => a.id === artist.id);
+    const isInDefault = defaultArtists.some(a => a.id === artist.id);
 
     if (isSearchedArtist) {
-      // Toggle selection only, do NOT load similar related artists for searched selections
-      setSelectedArtists(prev => {
-        if (prev.some(a => a.id === artist.id)) {
-          return prev.filter(a => a.id !== artist.id);
-        } else {
+      if (selectedIds.has(artist.id)) {
+        // Deselect searched artist: remove its recommendations
+        setSelectedArtists(prev => prev.filter(a => a.id !== artist.id));
+        setArtists(prev => prev.filter(a => a.parentId !== artist.id));
+      } else {
+        // Select searched artist
+        setSelectedArtists(prev => {
+          if (prev.some(a => a.id === artist.id)) return prev;
           return [...prev, artist];
+        });
+
+        try {
+          const related = await getRelatedArtists(artist.id);
+          
+          setArtists(prev => {
+            const index = prev.findIndex(a => a.id === artist.id);
+            if (index === -1) return prev;
+            
+            // Deduplicate: exclude anything already in default list OR current search list
+            const allExistingIds = new Set([
+              ...allArtistIdsRef.current,
+              ...prev.map((a: any) => a.id)
+            ]);
+            const filteredRelated = related.filter((r: any) => !allExistingIds.has(r.id));
+            const topRelated = filteredRelated.slice(0, 3);
+            
+            if (topRelated.length === 0) return prev;
+
+            const similar: Artist[] = topRelated.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
+              type: "similar" as const,
+              parentId: artist.id,
+              popularity: r.popularity || 0,
+            }));
+
+            return [
+              ...prev.slice(0, index + 1),
+              ...similar,
+              ...prev.slice(index + 1)
+            ];
+          });
+        } catch (error) {
+          console.error("Failed to fetch related artists in search:", error);
         }
-      });
+      }
       return;
     }
-
-    const isInDefault = defaultArtists.some(a => a.id === artist.id);
 
     if (selectedIds.has(artist.id)) {
       // Collapse / Deselect for main artists
@@ -321,10 +640,16 @@ export default function ExplorePage() {
       
       // Remove the generated similar items for this artist
       if (isInDefault) {
-        setDefaultArtists(prev => prev.filter(a => a.parentId !== artist.id));
+        setDefaultArtists(prev => {
+          const removedCount = prev.filter(a => a.parentId === artist.id).length;
+          if (removedCount > 0) {
+            setVisibleDefaultCount(curr => Math.max(30, curr - removedCount));
+          }
+          return prev.filter(a => a.parentId !== artist.id);
+        });
       }
     } else {
-      // Expand / Select for main artists
+      // Expand / Select for main artists — fetch recommendations
       setSelectedArtists(prev => {
         if (prev.some(a => a.id === artist.id)) return prev;
         return [...prev, artist];
@@ -333,32 +658,39 @@ export default function ExplorePage() {
       try {
         const related = await getRelatedArtists(artist.id);
         
-        const getExpandedList = (prev: Artist[]) => {
-          const index = prev.findIndex(a => a.id === artist.id);
-          if (index === -1) return prev;
-          
-          // Filter out related artists that are already in the list to prevent duplicates
-          const uniqueRelated = related.filter((r: any) => !prev.some((a: any) => a.id === r.id));
-          const topRelated = uniqueRelated.slice(0, 3); // top 3 unique similar
-          
-          const similar: Artist[] = topRelated.map((r: any) => ({
-            id: r.id,
-            name: r.name,
-            image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
-            type: "similar" as const,
-            parentId: artist.id,
-            popularity: r.popularity || 0,
-          }));
-
-          return [
-            ...prev.slice(0, index + 1),
-            ...similar,
-            ...prev.slice(index + 1)
-          ];
-        };
-
         if (isInDefault) {
-          setDefaultArtists(prev => getExpandedList(prev));
+          setDefaultArtists(prev => {
+            const index = prev.findIndex(a => a.id === artist.id);
+            if (index === -1) return prev;
+            
+            // Deduplicate against the FULL list (ref) + already-injected similar artists in prev
+            const allExistingIds = new Set([
+              ...allArtistIdsRef.current,
+              ...prev.map((a: any) => a.id)
+            ]);
+            const filteredRelated = related.filter((r: any) => !allExistingIds.has(r.id));
+            const topRelated = filteredRelated.slice(0, 3);
+
+            if (topRelated.length === 0) return prev;
+            
+            const similar: Artist[] = topRelated.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
+              type: "similar" as const,
+              parentId: artist.id,
+              popularity: r.popularity || 0,
+            }));
+
+            const addedCount = similar.length;
+            setVisibleDefaultCount(curr => curr + addedCount);
+
+            return [
+              ...prev.slice(0, index + 1),
+              ...similar,
+              ...prev.slice(index + 1)
+            ];
+          });
         }
       } catch (error) {
         console.error("Failed to fetch related artists", error);
@@ -372,14 +704,15 @@ export default function ExplorePage() {
     return (
       <main className="flex flex-col min-h-screen relative z-10 w-full items-center justify-center bg-[var(--app-bg)]">
         <Loader2 className="animate-spin text-point mb-6" size={48} strokeWidth={2.5} />
-        <h1 className="font-serif text-2xl text-navy font-bold">아티스트 탐색 중...</h1>
-        <p className="font-sans text-sm text-charcoal/70 mt-2">오늘의 추천 아티스트를 찾고 있어요</p>
+        <h1 className="font-serif text-2xl text-navy font-bold">{t.loadingTitle}</h1>
+        <p className="font-sans text-sm text-charcoal/70 mt-2">{t.loadingDesc}</p>
       </main>
     );
   }
 
   const renderSearchArtistRow = (artist: Artist) => {
     const isSelected = selectedIds.has(artist.id);
+    const isSimilar = artist.type === "similar";
     
     return (
       <motion.div
@@ -387,16 +720,18 @@ export default function ExplorePage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
-        key={artist.id}
+        key={isSimilar ? `${artist.parentId}-${artist.id}` : artist.id}
         onClick={() => handleArtistClick(artist)}
         className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer select-none transition-all duration-300 ${
           isSelected 
             ? "bg-point/10 border-2 border-point shadow-[0_4px_12px_rgba(230,126,34,0.15)]" 
-            : "bg-white/50 hover:bg-white border-2 border-navy/5 hover:border-navy/10"
+            : isSimilar
+              ? "bg-point/5 border-2 border-point border-dashed opacity-90 scale-[0.98]"
+              : "bg-white/50 hover:bg-white border-2 border-navy/5 hover:border-navy/10"
         }`}
       >
         <div className="flex items-center gap-4">
-          <div className={`relative w-14 h-14 rounded-full overflow-hidden border-2 ${isSelected ? "border-point" : "border-navy/10"}`}>
+          <div className={`relative w-14 h-14 rounded-full overflow-hidden border-2 ${isSelected ? "border-point" : isSimilar ? "border-point border-dashed" : "border-navy/10"}`}>
             <Image 
               src={artist.image} 
               alt={artist.name} 
@@ -406,11 +741,11 @@ export default function ExplorePage() {
             />
           </div>
           <div className="flex flex-col">
-            <span className={`font-sans font-bold text-base ${isSelected ? "text-navy" : "text-charcoal"}`}>
+            <span className={`font-sans font-bold text-base ${isSelected ? "text-navy" : isSimilar ? "text-point" : "text-charcoal"}`}>
               {artist.name}
             </span>
             <span className="font-sans text-[11px] text-charcoal/50 font-medium">
-              아티스트
+              {isSimilar ? (locale === "ko" ? "추천 아티스트" : "Recommended Artist") : t.artistLabel}
             </span>
           </div>
         </div>
@@ -425,7 +760,7 @@ export default function ExplorePage() {
               <Check size={14} className="text-cream" strokeWidth={3} />
             </motion.div>
           ) : (
-            <div className="w-6 h-6 rounded-full border-2 border-navy/15 hover:border-point transition-colors" />
+            <div className={`w-6 h-6 rounded-full border-2 ${isSimilar ? "border-point/40" : "border-navy/15"} hover:border-point transition-colors`} />
           )}
         </div>
       </motion.div>
@@ -443,7 +778,7 @@ export default function ExplorePage() {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.8 }}
         transition={{ duration: 0.4, type: "spring", bounce: 0.25 }}
-        key={artist.id}
+        key={isSimilar ? `${artist.parentId}-${artist.id}` : artist.id}
         onClick={() => handleArtistClick(artist)}
         className="flex flex-col items-center gap-3 cursor-pointer group select-none"
       >
@@ -494,11 +829,26 @@ export default function ExplorePage() {
 
         <div className="text-left mt-1 mb-2 px-1">
           <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">
-            {isSingleArtistMode ? "최애 아티스트를 선택해 주세요" : "어떤 아티스트를 좋아하시나요?"}
+            {t.title}
           </h1>
           <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">
-            {isSingleArtistMode ? "1명의 아티스트를 골라 모든 곡을 정렬해봅니다." : "최소 3명의 아티스트를 선택해주세요."}
+            {t.desc}
           </p>
+          
+          {/* Pre-selected genres badges */}
+          {selectedGenres.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              <span className="font-sans text-[10px] text-navy/40 font-bold self-center mr-1">{t.genreLabel}</span>
+              {selectedGenres.map(genreId => {
+                const label = genreId.toUpperCase();
+                return (
+                  <span key={genreId} className="px-2.5 py-0.5 bg-navy/5 border border-navy/10 rounded-full font-sans text-[10px] text-navy font-semibold">
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Search Bar */}
@@ -514,7 +864,7 @@ export default function ExplorePage() {
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="아티스트 검색 (예: The Beatles)..." 
+            placeholder={t.placeholder} 
             className="w-full py-2.5 pl-11 pr-4 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
           />
         </div>
@@ -527,12 +877,12 @@ export default function ExplorePage() {
           /* 1. Search Results Section */
           <div className="flex flex-col">
             <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
-              검색 결과
-              <span className="text-xs font-sans text-point font-medium">"{searchQuery}" 검색 결과입니다</span>
+              {t.searchResult}
+              <span className="text-xs font-sans text-point font-medium">{t.searchResultSub}</span>
             </h2>
             {artists.length === 0 ? (
               <div className="py-12 text-center font-sans text-sm text-charcoal/50 bg-white/20 border border-dashed border-navy/10 rounded-3xl">
-                검색 결과가 없습니다. 다른 검색어를 입력해 보세요.
+                {t.noResults}
               </div>
             ) : (
               <motion.div layout className="flex flex-col gap-2.5">
@@ -554,13 +904,13 @@ export default function ExplorePage() {
         )}
       </div>
 
-      {/* Infinite Scroll Sentinel */}
-      <div ref={observerRef} className="h-16 w-full flex items-center justify-center mt-6">
+      {/* Infinite Scroll Sentinel — callback ref ensures observer attaches when this element mounts */}
+      <div ref={setSentinelRef} className="h-20 w-full flex items-center justify-center mt-4">
         {((searchQuery.trim().length > 0 && hasMoreSearch) || 
-          (searchQuery.trim().length === 0 && visibleDefaultCount < defaultArtists.length)) && (
+          (searchQuery.trim().length === 0 && selectedGenres.length > 0 && hasMoreGenre)) && (
           <div className="flex flex-col items-center gap-1.5 py-4">
             <Loader2 className="animate-spin text-point/60" size={24} />
-            <span className="font-sans text-[10px] text-navy/40 font-bold">아티스트 더 불러오는 중...</span>
+            <span className="font-sans text-[10px] text-navy/40 font-bold">{t.loadingMore}</span>
           </div>
         )}
       </div>
@@ -578,8 +928,8 @@ export default function ExplorePage() {
             {/* 1. Selection Horizontal Bar */}
             <div className="flex flex-col gap-1.5 w-full max-w-[380px] mx-auto">
               <div className="flex items-center justify-between px-1">
-                <span className="font-sans text-[11px] font-bold text-navy/70 tracking-tight">선택한 아티스트</span>
-                <span className="bg-point text-white text-[9px] px-2 py-0.5 rounded-full font-bold">{selectedIds.size}명</span>
+                <span className="font-sans text-[11px] font-bold text-navy/70 tracking-tight">{t.selectedLabel}</span>
+                <span className="bg-point text-white text-[9px] px-2 py-0.5 rounded-full font-bold">{selectedIds.size}{t.countLabel}</span>
               </div>
               
               <div className="flex overflow-x-auto gap-3 scrollbar-none py-1.5 w-full">
@@ -692,7 +1042,7 @@ export default function ExplorePage() {
                     }}
                     className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
                   >
-                    다음으로 넘어가기
+                    {t.nextBtn}
                     <span className="bg-point text-white text-xs px-2.5 py-0.5 rounded-full font-bold">{selectedIds.size}</span>
                   </button>
                 </motion.div>
@@ -704,6 +1054,24 @@ export default function ExplorePage() {
 
       {/* Spacing bottom padding adjusted for taller Bottom Dock */}
       <div className={selectedIds.size > 0 && !isSingleArtistMode ? "h-64" : "h-32"} />
+
+      {/* Scroll-to-Top Floating Button */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            key="scroll-top-btn"
+            initial={{ opacity: 0, scale: 0.7, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.7, y: 20 }}
+            transition={{ type: "spring", stiffness: 400, damping: 28 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className={`fixed right-5 z-50 w-12 h-12 rounded-full bg-navy shadow-[0_6px_24px_rgba(26,42,108,0.28)] flex items-center justify-center hover:bg-navy/90 active:scale-95 transition-all cursor-pointer ${selectedIds.size > 0 && !isSingleArtistMode ? "bottom-56" : "bottom-6"}`}
+            aria-label="맨 위로 이동"
+          >
+            <ChevronUp size={22} className="text-cream" strokeWidth={2.5} />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Save Exit Confirmation Warning Modal */}
       <AnimatePresence>
@@ -734,10 +1102,9 @@ export default function ExplorePage() {
                   <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
                 </motion.div>
 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-3 tracking-tight">진행 내역을 저장할까요?</h2>
+                <h2 className="font-serif text-2xl font-bold text-navy mb-3 tracking-tight">{t.saveExitTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  선택한 아티스트 목록이 있습니다. 지금까지의 진행 내역을 보관하고 나갈까요?<br/>
-                  <span className="text-point font-medium">(보관한 내역은 프로필의 내 아카이브에서 언제든 이어할 수 있습니다.)</span>
+                  {t.saveExitDesc}
                 </p>
                 
                 <div className="flex flex-col gap-2.5 w-full">
@@ -747,7 +1114,7 @@ export default function ExplorePage() {
                     onClick={handleConfirmSaveExit}
                     className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
                   >
-                    저장하고 나가기
+                    {t.saveExitConfirm}
                   </motion.button>
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
@@ -755,7 +1122,7 @@ export default function ExplorePage() {
                     onClick={handleDiscardExit}
                     className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
                   >
-                    저장하지 않고 나가기
+                    {t.saveExitDiscard}
                   </motion.button>
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
@@ -763,7 +1130,7 @@ export default function ExplorePage() {
                     onClick={() => setShowSaveWarning(false)}
                     className="w-full py-3.5 bg-white border-2 border-navy/10 text-charcoal font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
                   >
-                    취소
+                    {t.cancel}
                   </motion.button>
                 </div>
               </motion.div>
@@ -802,9 +1169,9 @@ export default function ExplorePage() {
                   />
                 </div>
                 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">Sort 진행할까요?</h2>
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.singleConfirmTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-2">
-                  <span className="font-bold text-point">'{pendingSingleArtist.name}'</span>의 전곡으로 음악 취향 순위를 정하는 월드컵을 진행하시겠습니까?
+                  {t.singleConfirmDesc}
                 </p>
                 
                 <div className="flex flex-col gap-2 w-full">
@@ -839,13 +1206,13 @@ export default function ExplorePage() {
                     }}
                     className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
                   >
-                    진행하기
+                    {t.proceed}
                   </button>
                   <button 
                     onClick={() => setPendingSingleArtist(null)}
                     className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 active:scale-[0.98] transition-all cursor-pointer"
                   >
-                    취소
+                    {t.cancel}
                   </button>
                 </div>
               </motion.div>

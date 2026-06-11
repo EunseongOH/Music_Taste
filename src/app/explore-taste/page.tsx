@@ -11,7 +11,7 @@ import Image from "next/image";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
 
@@ -45,8 +45,109 @@ interface TournamentResult {
   created_at: string;
 }
 
-const formatNickname = (name: string): string => {
-  if (!name) return "음악팬";
+const translations = {
+  ko: {
+    title: "내 취향 스페이스",
+    bannerTitle: "취향 레코드 저장소",
+    bannerSub: "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요.",
+    tabArchive: "내 보관함",
+    tabSocial: "친구들의 피드",
+    syncing: "데이터를 안전하게 동기화 중...",
+    guestTitle: "취향 잠금 해제",
+    guestDesc: "로그인하지 않으면 내 취향 스페이스에 음악들을 저장하거나 친구들의 피드를 구경할 수 없어요. 로그인해서 내 취향을 편안하게 남기고, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요!",
+    guestBtn: "로그인 및 회원가입",
+    emptyArchiveTitle: "아직 비어있어요",
+    emptyArchiveDesc: "아직 완성한 취향표가 없어요. 홈 화면에서 내가 좋아하는 아티스트의 곡들로 첫 취향을 기록해 보세요!",
+    playWorldCupBtn: "취향 채우러 가기",
+    dateLabel: "작성일",
+    singleDiscography: "최애 곡 줄 세우기",
+    deleteBtnTitle: "기록 삭제",
+    deleteConfirm: "정말 이 취향표 기록을 취향 스페이스에서 삭제할까요? 삭제 후에는 복구할 수 없어요.",
+    deleteSuccess: "기록을 삭제했어요.",
+    deleteFailed: "기록을 삭제하지 못했어요. 다시 시도해 주세요.",
+    togglePublicFailed: "공개 여부를 변경하지 못했어요. 다시 시도해 주세요.",
+    publicLabel: "전체 공개",
+    privateLabel: "나만 보기",
+    viewDetails: "자세히 보기",
+    loadAndShare: "이 취향표 불러오기 & 공유하기",
+    selectMatchBase: "기준이 될 취향표 선택",
+    baseData: "기준 데이터",
+    matchBaseDesc: "선택한 취향표의 1위 곡, 최애 아티스트, 그리고 Top 10 순위를 기준으로 나와 음악 취향이 비슷한 메이트를 찾아요.",
+    myWinnerTrack: "나의 기준 1위",
+    matesSameWinner: "1위 곡이 같은 메이트",
+    matesSameArtist: "1위 아티스트가 같은 메이트",
+    matesHighSync: "취향 싱크로율 높은 메이트",
+    noMateSameWinner: "아직 나와 1위 최애 곡이 같은 메이트를 찾지 못했어요.",
+    noMateSameArtist: "아직 나와 최애 아티스트가 같은 메이트를 찾지 못했어요.",
+    noMateSync: "아직 나와 취향이 겹치는 메이트가 없어요.",
+    syncLabel: "TASTE SYNC",
+    mateTasteRecord: "메이트 취향 리스트",
+    mateRecordTitle: "{nickname}님의 LP 레코드",
+    syncScoreLabel: "나와의 취향 싱크로율",
+    completedViewing: "아름다운 취향 감상 완료",
+    mateInspired: "메이트의 멋진 취향을 구경했어요!",
+    nicknameDefault: "음악팬",
+    guestMatchGuideTitle: "피드 가이드",
+    guestMatchGuideDesc: "친구들의 피드를 보려면 내가 완성한 음악 취향표가 적어도 1개 이상 있어야 해요. 지금 첫 취향을 기록하러 가볼까요?",
+    firstWorldCupBtn: "첫 취향 기록하기",
+    winnerLabel: "최애 곡 1위",
+    sameWinnerLabel: "같은 1위:",
+    favoriteLabel: "최애:",
+    rankLabel: "1위:",
+  },
+  en: {
+    title: "My Taste Space",
+    bannerTitle: "My Taste Space",
+    bannerSub: "Browse the music you've gathered and explore the feeds of friends who share similar tastes.",
+    tabArchive: "My Tastes",
+    tabSocial: "Friends' Feeds",
+    syncing: "Loading your music space...",
+    guestTitle: "Unlock Your Taste",
+    guestDesc: "Without logging in, you cannot save your tracks to My Taste Space or view friends' feeds. Log in to store your tastes and browse others' feeds!",
+    guestBtn: "Log In & Sign Up",
+    emptyArchiveTitle: "It's Empty Here",
+    emptyArchiveDesc: "You haven't completed any lists yet. Line up your favorite songs and record your first taste!",
+    playWorldCupBtn: "Go Choose Songs",
+    dateLabel: "Created",
+    singleDiscography: "Favorite Songs Lineup",
+    deleteBtnTitle: "Delete Record",
+    deleteConfirm: "Are you sure you want to delete this taste card from your taste space? This cannot be undone.",
+    deleteSuccess: "Deleted successfully.",
+    deleteFailed: "Failed to delete. Please try again.",
+    togglePublicFailed: "Failed to change visibility. Please try again.",
+    publicLabel: "Public",
+    privateLabel: "Private",
+    viewDetails: "View Details",
+    loadAndShare: "Load & Share this Taste Card",
+    selectMatchBase: "Choose Taste Card to Compare",
+    baseData: "Base Card",
+    matchBaseDesc: "Find friends with similar music preferences based on your favorite artist and Top 10 songs.",
+    myWinnerTrack: "My #1 Song",
+    matesSameWinner: "Friends with the Same #1 Song",
+    matesSameArtist: "Friends with the Same Favorite Artist",
+    matesHighSync: "Friends with High Taste Sync",
+    noMateSameWinner: "No friends with the same #1 favorite track found yet.",
+    noMateSameArtist: "No friends with the same favorite artist found yet.",
+    noMateSync: "No friends with matching track preferences found yet.",
+    syncLabel: "TASTE SYNC",
+    mateTasteRecord: "Friend's Taste List",
+    mateRecordTitle: "{nickname}'s LP Record",
+    syncScoreLabel: "Taste Sync Score",
+    completedViewing: "Completed viewing",
+    mateInspired: "Inspected the friend's awesome taste!",
+    nicknameDefault: "Music Fan",
+    guestMatchGuideTitle: "Feed Guide",
+    guestMatchGuideDesc: "To view friends' feeds, you must have at least 1 completed taste card. Go complete one now!",
+    firstWorldCupBtn: "Record My Tastes",
+    winnerLabel: "1ST PLACE WINNER",
+    sameWinnerLabel: "Same #1:",
+    favoriteLabel: "Favorite:",
+    rankLabel: "1st:",
+  }
+};
+
+const formatNickname = (name: string, defaultName: string): string => {
+  if (!name) return defaultName;
   if (name.includes("@")) {
     const [localPart] = name.split("@");
     if (localPart.length <= 3) {
@@ -67,6 +168,13 @@ export default function ExploreTastePage() {
   const [otherUsersResults, setOtherUsersResults] = useState<TournamentResult[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setLocale(getSafeLocale());
+    }
+  }, []);
 
   // Selected result for matching criteria
   const [selectedMatchBaseResultId, setSelectedMatchBaseResultId] = useState<string>("");
@@ -138,13 +246,13 @@ export default function ExploreTastePage() {
       console.error("[ExploreTaste] Toggle public state error:", err);
       // Revert on error
       setCompletedResults(prev => prev.map(r => r.id === resultId ? { ...r, is_public: currentStatus } : r));
-      alert("공개 여부 변경에 실패했습니다. 다시 시도해 주세요.");
+      alert(locale === "en" ? translations.en.togglePublicFailed : translations.ko.togglePublicFailed);
     }
   };
 
   // Delete completed result
   const handleDeleteResult = async (resultId: string) => {
-    const confirmDelete = window.confirm("정말 이 취향표 기록을 아카이브에서 완전히 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.");
+    const confirmDelete = window.confirm(locale === "en" ? translations.en.deleteConfirm : translations.ko.deleteConfirm);
     if (!confirmDelete) return;
 
     try {
@@ -160,10 +268,10 @@ export default function ExploreTastePage() {
         const remaining = completedResults.filter(r => r.id !== resultId);
         setSelectedMatchBaseResultId(remaining.length > 0 ? remaining[0].id : "");
       }
-      alert("성공적으로 삭제되었습니다.");
+      alert(locale === "en" ? translations.en.deleteSuccess : translations.ko.deleteSuccess);
     } catch (err) {
       console.error("[ExploreTaste] Error deleting result:", err);
-      alert("삭제에 실패했습니다. 다시 시도해 주세요.");
+      alert(locale === "en" ? translations.en.deleteFailed : translations.ko.deleteFailed);
     }
   };
 
@@ -266,6 +374,7 @@ export default function ExploreTastePage() {
 
   const { songMates, artistMates, highSyncMates } = getMatesData();
   const currentBaseResult = completedResults.find(r => r.id === selectedMatchBaseResultId);
+  const t = locale === "en" ? translations.en : translations.ko;
 
   return (
     <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
@@ -276,7 +385,7 @@ export default function ExploreTastePage() {
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
-          <h1 className="font-serif text-2xl text-navy tracking-tight">내 취향 스페이스</h1>
+          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
           <ProfileHeader />
@@ -289,9 +398,9 @@ export default function ExploreTastePage() {
           <span className="inline-block px-3 py-1 bg-navy/5 text-navy font-bold font-sans text-[10px] uppercase tracking-wider rounded-full mb-2">
             My Taste Archiving Space
           </span>
-          <h2 className="font-serif text-3xl text-navy tracking-tight leading-tight">취향 레코드 저장소</h2>
+          <h2 className="font-serif text-3xl text-navy tracking-tight leading-tight">{t.bannerTitle}</h2>
           <p className="font-sans text-xs text-charcoal/70 mt-1.5 px-4 leading-relaxed break-keep">
-            내가 완료했던 LP 월드컵 순위와 결과를 안전하게 보관하고,<br />나와 음악 취향이 꼭 닮은 운명의 음악 소울메이트를 찾아보세요.
+            {t.bannerSub}
           </p>
         </div>
 
@@ -306,7 +415,7 @@ export default function ExploreTastePage() {
                   : "text-navy/60 hover:text-navy"
               }`}
             >
-              내 아카이브 ({isLoadingData ? "..." : completedResults.length})
+              {t.tabArchive} ({isLoadingData ? "..." : completedResults.length})
             </button>
             <button
               onClick={() => setActiveTab("social")}
@@ -317,7 +426,7 @@ export default function ExploreTastePage() {
               }`}
             >
               <Sparkles size={13} className={activeTab === "social" ? "text-point animate-pulse" : ""} />
-              취향 매칭 피드
+              {t.tabSocial}
             </button>
           </div>
         </div>
@@ -326,7 +435,7 @@ export default function ExploreTastePage() {
         {isLoadingData && (
           <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
             <Disc className="animate-spin text-point/85" size={32} />
-            <p className="font-sans text-xs text-navy/60 font-medium">데이터를 안전하게 동기화 중...</p>
+            <p className="font-sans text-xs text-navy/60 font-medium">{t.syncing}</p>
           </div>
         )}
 
@@ -337,15 +446,15 @@ export default function ExploreTastePage() {
             <div className="w-14 h-14 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 bg-point/5 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
               <Disc className="text-point animate-bounce" size={26} />
             </div>
-            <h3 className="font-serif text-2xl text-navy font-bold mb-2">취향 잠금 해제</h3>
+            <h3 className="font-serif text-2xl text-navy font-bold mb-2">{t.guestTitle}</h3>
             <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-6 px-2 break-keep whitespace-pre-wrap">
-              게스트 모드에서는 아카이브 저장 및 취향 매칭 피드를 이용하실 수 없습니다. 로그인하여 내 취향을 서버에 안전하게 저장하고 소울메이트를 찾아보세요!
+              {t.guestDesc}
             </p>
             <button
               onClick={() => setIsLoginModalOpen(true)}
               className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all shadow-[0_4px_12px_rgba(26,42,108,0.25)] cursor-pointer"
             >
-              간편 로그인 및 회원가입
+              {t.guestBtn}
             </button>
           </div>
         )}
@@ -356,21 +465,21 @@ export default function ExploreTastePage() {
             {completedResults.length === 0 ? (
               <div className="py-16 text-center border-2 border-dashed border-navy/20 rounded-[2rem] px-6 bg-white/30">
                 <Archive size={48} className="text-navy/20 mx-auto mb-4" />
-                <h3 className="font-serif text-lg text-navy font-bold mb-1">비어있는 아카이브</h3>
+                <h3 className="font-serif text-lg text-navy font-bold mb-1">{t.emptyArchiveTitle}</h3>
                 <p className="font-sans text-xs text-navy/50 leading-relaxed mb-6 px-4 break-keep">
-                  아직 완료된 월드컵 결과가 없습니다. 홈 화면에서 LP 월드컵을 플레이하고 첫 취향 기록을 저장해보세요!
+                  {t.emptyArchiveDesc}
                 </p>
                 <button
                   onClick={() => router.push("/")}
                   className="px-6 py-3 bg-navy text-cream font-bold text-xs rounded-full hover:bg-navy/90 active:scale-95 transition-all shadow-sm"
                 >
-                  LP 월드컵 플레이하러 가기
+                  {t.playWorldCupBtn}
                 </button>
               </div>
             ) : (
               completedResults.map((result) => {
                 const isSingle = result.is_single_artist;
-                const formattedDate = new Date(result.created_at).toLocaleDateString("ko-KR", {
+                const formattedDate = new Date(result.created_at).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR", {
                   year: "numeric",
                   month: "2-digit",
                   day: "2-digit",
@@ -394,7 +503,7 @@ export default function ExploreTastePage() {
                           </span>
                           {isSingle && (
                             <span className="px-1.5 py-0.5 rounded-md bg-point/10 text-point font-sans font-bold text-[8px] tracking-tight shrink-0">
-                              아티스트 싹쓸이
+                              {t.singleDiscography}
                             </span>
                           )}
                         </div>
@@ -407,7 +516,7 @@ export default function ExploreTastePage() {
                       <button
                         onClick={() => handleDeleteResult(result.id)}
                         className="p-2 rounded-full hover:bg-red-50 text-navy/40 hover:text-red-500 transition-colors cursor-pointer shrink-0"
-                        title="기록 삭제"
+                        title={t.deleteBtnTitle}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -436,7 +545,7 @@ export default function ExploreTastePage() {
                       </div>
                       <div className="flex-1 min-w-0 leading-tight">
                         <span className="font-sans font-bold text-[9px] uppercase tracking-wider text-point flex items-center gap-1">
-                          <Award size={10} /> 1ST PLACE WINNER
+                          <Award size={10} /> {t.winnerLabel}
                         </span>
                         <div className="font-sans font-bold text-xs text-navy truncate mt-0.5">
                           {result.winner_track_title}
@@ -452,7 +561,7 @@ export default function ExploreTastePage() {
                       {/* Premium Visibility Selector Toggle */}
                       <div className="flex items-center gap-2 select-none">
                         <span className="font-sans font-bold text-[10px] text-navy">
-                          {result.is_public ? "전체 공개 중" : "나만 보기"}
+                          {result.is_public ? t.publicLabel : t.privateLabel}
                         </span>
                         <button
                           type="button"
@@ -481,7 +590,7 @@ export default function ExploreTastePage() {
                         onClick={() => setSelectedArchiveDetail(result)}
                         className="py-1.5 px-3 bg-white border border-navy/20 rounded-xl font-sans font-bold text-[10px] text-navy hover:bg-navy/5 active:scale-95 transition-all cursor-pointer flex items-center gap-1 shadow-sm"
                       >
-                        자세히 보기
+                        {t.viewDetails}
                       </button>
                     </div>
                   </motion.div>
@@ -497,15 +606,15 @@ export default function ExploreTastePage() {
             {completedResults.length === 0 ? (
               <div className="py-16 text-center border-2 border-dashed border-navy/20 rounded-[2rem] px-6 bg-white/30">
                 <Sparkles size={48} className="text-point/40 mx-auto mb-4 animate-pulse" />
-                <h3 className="font-serif text-lg text-navy font-bold mb-1">매칭 가이드</h3>
+                <h3 className="font-serif text-lg text-navy font-bold mb-1">{t.guestMatchGuideTitle}</h3>
                 <p className="font-sans text-xs text-navy/50 leading-relaxed mb-6 px-4 break-keep">
-                  취향을 매칭하려면 본인의 음악 순위표(아카이브)가 적어도 1개 이상 존재해야 합니다. 지금 첫 LP 월드컵을 플레이하여 내 음악을 순위매겨보세요!
+                  {t.guestMatchGuideDesc}
                 </p>
                 <button
                   onClick={() => router.push("/")}
                   className="px-6 py-3 bg-navy text-cream font-bold text-xs rounded-full hover:bg-navy/90 active:scale-95 transition-all shadow-sm"
                 >
-                  첫 월드컵 시작하기
+                  {t.firstWorldCupBtn}
                 </button>
               </div>
             ) : (
@@ -515,10 +624,10 @@ export default function ExploreTastePage() {
                   <div className="flex items-center justify-between">
                     <label className="font-sans text-xs font-bold text-navy flex items-center gap-2">
                       <Disc size={14} className="text-point animate-spin" style={{ animationDuration: "4s" }} />
-                      매칭 기준 취향표 선택
+                      {t.selectMatchBase}
                     </label>
                     <span className="font-sans font-bold text-[8px] text-point bg-point/10 px-2 py-0.5 rounded-full border border-point/15">
-                      기준 데이터
+                      {t.baseData}
                     </span>
                   </div>
 
@@ -530,7 +639,7 @@ export default function ExploreTastePage() {
                     >
                       {completedResults.map(r => (
                         <option key={r.id} value={r.id}>
-                          {r.title} ({new Date(r.created_at).toLocaleDateString("ko-KR")})
+                          {r.title} ({new Date(r.created_at).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")})
                         </option>
                       ))}
                     </select>
@@ -540,7 +649,7 @@ export default function ExploreTastePage() {
                   </div>
 
                   <p className="font-sans text-[10px] text-navy/50 leading-relaxed">
-                    선택한 취향표의 1위 곡, 최애 아티스트 및 Top 10 순위를 기준으로 나와 음악 성향이 비슷한 소울메이트를 탐색합니다.
+                    {t.matchBaseDesc}
                   </p>
                 </div>
 
@@ -557,7 +666,7 @@ export default function ExploreTastePage() {
                       />
                     </div>
                     <div className="flex-1 leading-tight min-w-0">
-                      <span className="font-sans font-bold text-[8px] text-point uppercase tracking-wider">나의 기준 1위</span>
+                      <span className="font-sans font-bold text-[8px] text-point uppercase tracking-wider">{t.myWinnerTrack}</span>
                       <div className="font-sans font-bold text-xs text-navy truncate mt-0.5">
                         {currentBaseResult.winner_track_title}
                       </div>
@@ -571,7 +680,7 @@ export default function ExploreTastePage() {
                 {/* Category 1: 1위 곡이 같은 메이트 */}
                 <div className="flex flex-col gap-3">
                   <h3 className="font-serif text-lg text-navy font-bold flex items-center gap-1.5 border-b border-navy/10 pb-1.5">
-                    <span>🎧</span> 1위 곡이 같은 메이트
+                    <span>🎧</span> {t.matesSameWinner}
                     <span className="font-sans font-bold text-xs bg-navy text-cream px-2 py-0.5 rounded-full shrink-0 ml-1">
                       {songMates.length}
                     </span>
@@ -580,7 +689,7 @@ export default function ExploreTastePage() {
                   {songMates.length === 0 ? (
                     <div className="py-8 text-center bg-white/20 border border-dashed border-navy/10 rounded-2xl px-4">
                       <p className="font-sans text-xs text-navy/40">
-                        아직 나와 1위 최애 곡이 일치하는 이용자가 발견되지 않았습니다.
+                        {t.noMateSameWinner}
                       </p>
                     </div>
                   ) : (
@@ -601,7 +710,7 @@ export default function ExploreTastePage() {
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
                               src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                              alt={formatNickname(mate.user_nickname)}
+                              alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                               width={64}
                               height={64}
                               className="object-cover w-full h-full"
@@ -612,13 +721,13 @@ export default function ExploreTastePage() {
                             </div>
                           </div>
                           <span className="font-serif text-sm text-navy font-bold truncate w-full mt-3">
-                            {formatNickname(mate.user_nickname)}
+                            {formatNickname(mate.user_nickname, t.nicknameDefault)}
                           </span>
                           <span className="font-sans text-[9px] text-charcoal/50 leading-none mt-1">
-                            {new Date(mate.created_at).toLocaleDateString("ko-KR")}
+                            {new Date(mate.created_at).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}
                           </span>
                           <div className="mt-3.5 bg-point/10 text-point px-2 py-1 rounded-xl text-[9px] font-sans font-bold w-full truncate border border-point/15">
-                            같은 1위: {mate.winner_track_title}
+                            {t.sameWinnerLabel} {mate.winner_track_title}
                           </div>
                         </div>
                       ))}
@@ -629,7 +738,7 @@ export default function ExploreTastePage() {
                 {/* Category 2: 1위 아티스트가 같은 메이트 */}
                 <div className="flex flex-col gap-3">
                   <h3 className="font-serif text-lg text-navy font-bold flex items-center gap-1.5 border-b border-navy/10 pb-1.5">
-                    <span>✨</span> 1위 아티스트가 같은 메이트
+                    <span>✨</span> {t.matesSameArtist}
                     <span className="font-sans font-bold text-xs bg-navy text-cream px-2 py-0.5 rounded-full shrink-0 ml-1">
                       {artistMates.length}
                     </span>
@@ -638,7 +747,7 @@ export default function ExploreTastePage() {
                   {artistMates.length === 0 ? (
                     <div className="py-8 text-center bg-white/20 border border-dashed border-navy/10 rounded-2xl px-4">
                       <p className="font-sans text-xs text-navy/40">
-                        나의 최애 아티스트와 일치하는 아티스트 메이트가 발견되지 않았습니다.
+                        {t.noMateSameArtist}
                       </p>
                     </div>
                   ) : (
@@ -659,7 +768,7 @@ export default function ExploreTastePage() {
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
                               src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                              alt={formatNickname(mate.user_nickname)}
+                              alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                               width={64}
                               height={64}
                               className="object-cover w-full h-full"
@@ -669,13 +778,13 @@ export default function ExploreTastePage() {
                             </div>
                           </div>
                           <span className="font-serif text-sm text-navy font-bold truncate w-full mt-3">
-                            {formatNickname(mate.user_nickname)}
+                            {formatNickname(mate.user_nickname, t.nicknameDefault)}
                           </span>
                           <span className="font-sans text-[9px] text-charcoal/50 leading-none mt-1">
-                            {new Date(mate.created_at).toLocaleDateString("ko-KR")}
+                            {new Date(mate.created_at).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}
                           </span>
                           <div className="mt-3.5 bg-navy/5 text-navy px-2 py-1 rounded-xl text-[9px] font-sans font-bold w-full truncate border border-navy/10">
-                            최애: {mate.winner_track_artist}
+                            {t.favoriteLabel} {mate.winner_track_artist}
                           </div>
                         </div>
                       ))}
@@ -686,7 +795,7 @@ export default function ExploreTastePage() {
                 {/* Category 3: 취향 싱크로율 높은 메이트 */}
                 <div className="flex flex-col gap-3">
                   <h3 className="font-serif text-lg text-navy font-bold flex items-center gap-1.5 border-b border-navy/10 pb-1.5">
-                    <span>💖</span> 취향 싱크로율 높은 메이트
+                    <span>💖</span> {t.matesHighSync}
                     <span className="font-sans font-bold text-xs bg-navy text-cream px-2 py-0.5 rounded-full shrink-0 ml-1">
                       {highSyncMates.length}
                     </span>
@@ -695,7 +804,7 @@ export default function ExploreTastePage() {
                   {highSyncMates.length === 0 ? (
                     <div className="py-8 text-center bg-white/20 border border-dashed border-navy/10 rounded-2xl px-4">
                       <p className="font-sans text-xs text-navy/40">
-                        나와 상위 10곡의 유사성(싱크로율)이 겹치는 메이트가 없습니다.
+                        {t.noMateSync}
                       </p>
                     </div>
                   ) : (
@@ -714,7 +823,7 @@ export default function ExploreTastePage() {
                             <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300">
                               <Image
                                 src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                                alt={formatNickname(mate.user_nickname)}
+                                alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                                 width={48}
                                 height={48}
                                 className="object-cover w-full h-full"
@@ -722,17 +831,17 @@ export default function ExploreTastePage() {
                             </div>
                             <div className="leading-tight min-w-0 text-left">
                               <h4 className="font-serif text-sm text-navy font-bold truncate">
-                                {formatNickname(mate.user_nickname)}
+                                {formatNickname(mate.user_nickname, t.nicknameDefault)}
                               </h4>
                               <p className="font-sans text-[10px] text-charcoal/50 mt-0.5 truncate">
-                                1위: {mate.winner_track_title} - {mate.winner_track_artist}
+                                {t.rankLabel} {mate.winner_track_title} - {mate.winner_track_artist}
                               </p>
                             </div>
                           </div>
 
                           {/* Sync score badge */}
                           <div className="flex flex-col items-end shrink-0 pl-2">
-                            <span className="font-serif text-[10px] uppercase text-point font-bold tracking-widest leading-none">TASTE SYNC</span>
+                            <span className="font-serif text-[10px] uppercase text-point font-bold tracking-widest leading-none">{t.syncLabel}</span>
                             <span className="font-sans font-bold text-lg text-navy mt-1 leading-none">
                               {score.toFixed(1)}%
                             </span>
@@ -848,7 +957,7 @@ export default function ExploreTastePage() {
                       className="w-full py-3.5 bg-navy text-cream font-bold text-xs rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <Disc size={13} className="animate-spin" style={{ animationDuration: "5s" }} />
-                      이 취향표 불러오기 & 공유하기
+                      {t.loadAndShare}
                     </button>
                   </div>
                 </motion.div>
@@ -862,7 +971,7 @@ export default function ExploreTastePage() {
       <AnimatePresence>
         {selectedMateDetail && (() => {
           const tracks = getNormalizedTracks(selectedMateDetail);
-          const formattedDate = new Date(selectedMateDetail.created_at).toLocaleDateString("ko-KR", {
+          const formattedDate = new Date(selectedMateDetail.created_at).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR", {
             year: "numeric",
             month: "2-digit",
             day: "2-digit"
@@ -897,7 +1006,7 @@ export default function ExploreTastePage() {
                     <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm">
                       <Image
                         src={selectedMateDetail.user_profile_image || "https://picsum.photos/seed/user/80/80"}
-                        alt={formatNickname(selectedMateDetail.user_nickname)}
+                        alt={formatNickname(selectedMateDetail.user_nickname, t.nicknameDefault)}
                         width={48}
                         height={48}
                         className="object-cover w-full h-full"
@@ -905,10 +1014,10 @@ export default function ExploreTastePage() {
                     </div>
                     <div className="leading-tight min-w-0 text-left">
                       <span className="font-sans text-[9px] text-charcoal/50 leading-none">
-                        {formattedDate} • 메이트 취향 리스트
+                        {formattedDate} • {t.mateTasteRecord}
                       </span>
                       <h3 className="font-serif text-lg text-navy font-bold truncate mt-0.5">
-                        {formatNickname(selectedMateDetail.user_nickname)}님의 LP 레코드
+                        {t.mateRecordTitle.replace("{nickname}", formatNickname(selectedMateDetail.user_nickname, t.nicknameDefault))}
                       </h3>
                     </div>
                   </div>
@@ -918,7 +1027,7 @@ export default function ExploreTastePage() {
                     <div className="p-3 bg-point/5 border border-point/15 rounded-2xl mb-4 flex items-center justify-between text-left">
                       <div className="flex items-center gap-1.5 text-point">
                         <Sparkles size={14} className="animate-pulse" />
-                        <span className="font-sans font-bold text-xs">나와의 취향 매칭 싱크</span>
+                        <span className="font-sans font-bold text-xs">{t.syncScoreLabel}</span>
                       </div>
                       <span className="font-sans font-bold text-sm text-navy bg-white px-2 py-0.5 rounded-lg border border-navy/10">
                         {mateDetailJaccard.toFixed(1)}%
@@ -969,11 +1078,11 @@ export default function ExploreTastePage() {
                     <button
                       onClick={() => {
                         setSelectedMateDetail(null);
-                        alert("소울메이트의 취향이 아카이브에 영감을 주었습니다!");
+                        alert(locale === "en" ? translations.en.mateInspired : translations.ko.mateInspired);
                       }}
                       className="w-full py-3 bg-navy text-cream font-bold text-xs rounded-xl hover:bg-navy/90 active:scale-95 transition-all shadow-md cursor-pointer"
                     >
-                      아름다운 취향 감상 완료
+                      {t.completedViewing}
                     </button>
                   </div>
                 </motion.div>
