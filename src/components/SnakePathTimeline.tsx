@@ -379,9 +379,9 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                     <div className={`absolute inset-0 m-auto ${dims.holeClass} border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20`} />
                   </div>
                   
-                  {/* 충분히 보장된 가로 너비(safeWidth) 할당 & 16자 텍스트 생략 없이 줄바꿈 */}
+                  {/* 텍스트 영역을 absolute로 분리해 정렬 왜곡 원천 차단 */}
                   <div 
-                    className={`mt-2 flex flex-col items-center transition-all ${isWinner ? 'scale-110' : 'scale-100'}`}
+                    className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 flex flex-col items-center transition-all ${isWinner ? 'scale-110' : 'scale-100'}`}
                     style={{ width: dims.safeWidth }}
                   >
                     <p className={`${dims.titleClass} line-clamp-3 break-all leading-[1.15] text-center w-full`}>{pt.track.title}</p>
