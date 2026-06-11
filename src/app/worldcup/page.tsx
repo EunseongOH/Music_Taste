@@ -12,7 +12,7 @@ import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
 import { saveTournamentProgress, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 
 interface Track {
   id: string;
@@ -54,6 +54,35 @@ export default function WorldCupPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAnyLpActive, setIsAnyLpActive] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setLocale(getSafeLocale());
+    }
+  }, []);
+
+  function getLocalizedRoundName(name: string, targetLocale: "ko" | "en"): string {
+    if (!name) return "";
+    if (targetLocale === "ko") {
+      if (name.includes("Final") && !name.includes("결승")) return "결승전";
+      if (name.includes("Semifinal") || name.includes("준결승") || name.includes("4강")) return "준결승 (4강)";
+      if (name.endsWith("강")) return name;
+      const matchRoundN = name.match(/Round of (\d+)/i);
+      if (matchRoundN) return `${matchRoundN[1]}강`;
+      const matchPlayin = name.match(/Play-in for Round of (\d+)/i);
+      if (matchPlayin) return `${matchPlayin[1]}강 진출 예선전`;
+      return name;
+    } else {
+      if (name.includes("결승") || name === "Final") return "Final";
+      if (name.includes("준결승") || name.includes("4강") || name.includes("Semifinal")) return "Semifinal (Top 4)";
+      const matchRoundKo = name.match(/(\d+)강$/);
+      if (matchRoundKo) return `Round of ${matchRoundKo[1]}`;
+      const matchPlayinKo = name.match(/(\d+)강 진출 예선전/);
+      if (matchPlayinKo) return `Play-in for Round of ${matchPlayinKo[1]}`;
+      return name;
+    }
+  }
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -123,7 +152,7 @@ export default function WorldCupPage() {
         } else {
           setTracks(parsedTracks);
           if (parsedTracks.length < 4) {
-               alert('최소 4개의 트랙이 필요합니다.');
+               alert(getSafeLocale() === "en" ? 'You need at least 4 tracks to start the World Cup.' : '월드컵을 하려면 최소 4곡을 골라야 해요.');
                router.replace("/tracks");
                return;
           }
@@ -272,14 +301,14 @@ export default function WorldCupPage() {
     }, 1500);
   };
 
-  if (phase === "loading") return <div className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center">Loading...</div>;
+  if (phase === "loading") return <div className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center font-sans text-sm text-navy">{locale === "en" ? "Loading..." : "불러오는 중..."}</div>;
 
   if (phase === "finished") {
     return (
       <main className="flex flex-col min-h-screen items-center justify-center bg-[var(--app-bg)] p-6">
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
           <Trophy size={64} className="text-point mb-6" />
-          <h1 className="font-serif text-3xl text-navy mb-2">My Favorite is...</h1>
+          <h1 className="font-serif text-3xl text-navy mb-2">{locale === "en" ? "My Favorite is..." : "내가 꼽은 최고의 명곡은..."}</h1>
           <div className="w-64 h-64 relative rounded-xl border-4 border-point shadow-lg overflow-hidden mt-6">
              <Image src={winners[0].albumImage} alt={winners[0].title} fill className="object-cover" />
           </div>
@@ -292,7 +321,7 @@ export default function WorldCupPage() {
             }}
             className="mt-12 px-8 py-3 rounded-full bg-navy text-cream font-bold hover:bg-navy/90 hover:scale-105 transition-all shadow-[0_10px_30px_rgba(26,42,108,0.3)] cursor-pointer"
           >
-            내 음악 취향표 굽기 (FUNC-04)
+            {locale === "en" ? "Bake my music taste card" : "나만의 취향표 구워보기"}
           </button>
         </motion.div>
       </main>
@@ -306,7 +335,7 @@ export default function WorldCupPage() {
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
           <h1 className="font-serif text-2xl text-navy tracking-tight">
-            LP 월드컵
+            {locale === "en" ? "LP World Cup" : "LP 월드컵"}
           </h1>
         </div>
         <ProfileHeader />
@@ -320,10 +349,16 @@ export default function WorldCupPage() {
             <div className="text-center mt-2 mb-2 xs:mb-3 sm:mb-4 w-full relative">
                <div className="inline-block bg-navy/5 px-3 py-1 rounded-full mb-3 shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)]">
                  <p className="font-sans text-xs font-bold text-navy/70 tracking-wide">
-                   총 {matches.length}매치 중 <span className="text-point">{currentMatchIndex + 1}번째</span>
+                   {locale === "en" ? (
+                     <>Match <span className="text-point">{currentMatchIndex + 1}</span> of {matches.length}</>
+                   ) : (
+                     <>총 {matches.length}매치 중 <span className="text-point">{currentMatchIndex + 1}번째</span></>
+                   )}
                  </p>
                </div>
-               <h2 className="font-serif text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none">{currentRoundName}</h2>
+               <h2 className="font-serif text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none">
+                 {getLocalizedRoundName(currentRoundName, locale)}
+               </h2>
             </div>
 
             {/* Spacing to lower the candidate container and avoid overlap on short viewports */}
@@ -383,9 +418,15 @@ export default function WorldCupPage() {
                     ${isAnyLpActive ? "bg-point text-white" : "bg-navy/5 text-navy/70"}`}
                 >
                   {isAnyLpActive ? (
-                     <span>턴테이블 위로 옮겨주세요 ↓</span>
+                     <span>{locale === "en" ? "Drag it onto the turntable ↓" : "턴테이블 위로 옮겨주세요 ↓"}</span>
                   ) : (
-                     <span>더 좋아하는 곡의 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러주세요</span>
+                     <span>
+                       {locale === "en" ? (
+                         <>Hold and select the cover of your preferred song</>
+                       ) : (
+                         <>더 좋아하는 곡의 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러 선택해 주세요</>
+                       )}
+                     </span>
                   )}
                 </motion.div>
             )}

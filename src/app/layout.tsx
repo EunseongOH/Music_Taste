@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
+import { cookies } from "next/headers";
 
 const pretendard = localFont({
   src: "./fonts/PretendardVariable.woff2",
@@ -21,13 +22,17 @@ export const metadata: Metadata = {
   description: "당신의 음악적 온도를 확인해보세요",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const lang = cookieStore.get("locale")?.value || "ko";
+
   return (
-    <html lang="ko" suppressHydrationWarning className={`${pretendard.variable} ${playfair.variable} h-full antialiased`}>
+    <html lang={lang} suppressHydrationWarning className={`${pretendard.variable} ${playfair.variable} h-full antialiased`}>
+
       <head>
         <script
           dangerouslySetInnerHTML={{

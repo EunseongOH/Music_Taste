@@ -1,4 +1,10 @@
 import { createClient } from "./supabase/client";
+import { getSafeLocale } from "./storage";
+
+const getSessionExpiredMessage = () => {
+  const isEn = getSafeLocale() === "en";
+  return isEn ? "Login session expired. Please log in again." : "로그인 세션이 만료되었어요. 다시 로그인해 주세요.";
+};
 
 // Stage 1: Save artist selection
 export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleArtist?: boolean) => {
@@ -182,7 +188,7 @@ export const saveCompletedResult = async (
 ) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: { message: "로그인 세션이 만료되었습니다. 다시 로그인 해주세요." } };
+  if (!user) return { success: false, error: { message: getSessionExpiredMessage() } };
 
   const winner = finalWinners[0];
   const fullRanking = [winner, ...eliminatedTracks];
@@ -262,7 +268,7 @@ export const overwriteCompletedResult = async (
 ) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: { message: "로그인 세션이 만료되었습니다. 다시 로그인 해주세요." } };
+  if (!user) return { success: false, error: { message: getSessionExpiredMessage() } };
 
   const winner = finalWinners[0];
   const fullRanking = [winner, ...eliminatedTracks];

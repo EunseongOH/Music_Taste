@@ -12,7 +12,112 @@ import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeD
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+
+const translations = {
+  ko: {
+    loadingTitle: "트랙 정리 중...",
+    loadingDesc: "아티스트의 발매곡 정보를 받아오고 있어요",
+    title: "트랙 디깅하기",
+    subtitle: "앨범 커버를 탭해서 수록곡을 파헤쳐보세요",
+    searchPlaceholder: "선택한 아티스트의 곡 제목 검색...",
+    searchResults: "검색 결과",
+    searching: "트랙을 검색하는 중...",
+    noSearchResults: "선택한 아티스트 범위에 일치하는 트랙이 없어요. 🔍",
+    albumLoading: "앨범 로딩 중...",
+    openAlbums: "앨범 및 트랙 목록 열기",
+    loadingFromSpotify: "스포티파이에서 앨범을 불러오고 있어요...",
+    selectAll: "전체 선택",
+    clearAll: "전체 해제",
+    loadingTracks: "트랙을 불러오는 중...",
+    close: "닫기",
+    prev: "이전",
+    next: "다음",
+    unreleased: "미발매곡",
+    addUnreleasedBtn: "미발매곡 추가",
+    createWorldCup: "월드컵 대진 만드는 중",
+    selectMore: "최소 {count}곡을 더 골라주세요 🔥",
+    addUnreleasedModalTitle: "미발매곡 추가",
+    trackTitleLabel: "곡 제목",
+    trackTitlePlaceholder: "예: 미공개 자작곡 1번",
+    videoUrlLabel: "공연 영상 링크",
+    videoUrlPlaceholder: "유튜브 링크 등",
+    dateLabel: "공연 날짜",
+    infoText1: "공연 영상을 등록하면 유튜브 썸네일이 앨범 커버로 자동 적용돼요.",
+    infoText2: "공식 승인 전이라도 ",
+    infoText3: "월드컵 대진에 바로 넣을 수 있어요.",
+    infoText4: "",
+    submitAdd: "추가하기",
+    unreleasedSavedDb: "미발매곡 등록을 요청했어요. 승인 대기 중이라도 월드컵 대진에 바로 쓸 수 있어요!",
+    unreleasedSavedTemp: "아쉽게도 저장 과정에 문제가 생겼지만, 지금 바로 사용할 수 있어요!",
+    unreleasedGuest: "로그인하지 않은 상태예요. 임시로 추가되어 바로 쓸 수 있지만, 브라우저를 닫으면 사라질 수 있어요.",
+    exitTitle: "돌아갈까요?",
+    exitDesc: "이전 단계로 가서 아티스트를 다시 고르거나, 지금 취향표 만들기를 종료할 수 있어요.",
+    reselectArtists: "아티스트 다시 고르기",
+    exitTest: "취향표 만들기 종료하고 나가기",
+    continueTest: "계속 곡 고르기",
+    saveTitle: "진행 내역을 저장할까요?",
+    saveDesc: "지금까지 고른 곡들이 있어요. 진행 내역을 보관해 두고 나갈까요?",
+    saveDescSub: "(보관한 내역은 프로필의 '내 취향 스페이스'에서 언제든 이어할 수 있어요.)",
+    saveAndExit: "저장하고 나갈게요",
+    discardAndExit: "저장하지 않고 나갈게요",
+    returnToPrevStep: "돌아가기",
+    alertTitle: "확인해 주세요",
+    confirm: "확인",
+    needAtLeast4: "월드컵을 하려면 최소 4곡을 골라야 해요.",
+  },
+  en: {
+    loadingTitle: "Organizing Tracks...",
+    loadingDesc: "Fetching release information from the artists",
+    title: "Digging Tracks",
+    subtitle: "Tap album covers to explore their tracks",
+    searchPlaceholder: "Search track titles of selected artists...",
+    searchResults: "Search Results",
+    searching: "Searching tracks...",
+    noSearchResults: "No matching tracks found for the selected artists. 🔍",
+    albumLoading: "Loading albums...",
+    openAlbums: "Open albums & tracks list",
+    loadingFromSpotify: "Loading albums from Spotify...",
+    selectAll: "Select All",
+    clearAll: "Deselect All",
+    loadingTracks: "Loading tracks...",
+    close: "Close",
+    prev: "Prev",
+    next: "Next",
+    unreleased: "Unreleased Tracks",
+    addUnreleasedBtn: "Add Unreleased Track",
+    createWorldCup: "Preparing your lineup...",
+    selectMore: "Please select {count} more tracks 🔥",
+    addUnreleasedModalTitle: "Add Unreleased Track",
+    trackTitleLabel: "Track Title",
+    trackTitlePlaceholder: "e.g., Unreleased Song #1",
+    videoUrlLabel: "Performance Video Link",
+    videoUrlPlaceholder: "YouTube link, etc.",
+    dateLabel: "Performance Date",
+    infoText1: "Registering a video automatically uses the YouTube thumbnail as custom album art.",
+    infoText2: "Even before official approval, you can ",
+    infoText3: "immediately include it",
+    infoText4: " in your song lineup.",
+    submitAdd: "Add",
+    unreleasedSavedDb: "Track submission requested. You can use it in your song lineup right away!",
+    unreleasedSavedTemp: "Failed to save to database, but it has been added temporarily for now!",
+    unreleasedGuest: "Using guest mode. The track is added temporarily but may be lost when the browser closes.",
+    exitTitle: "Go back or exit?",
+    exitDesc: "You can go back to choose artists, or exit now.",
+    reselectArtists: "Select Artists Again",
+    exitTest: "Exit Selection",
+    continueTest: "Keep Selecting",
+    saveTitle: "Save progress?",
+    saveDesc: "You have selected tracks. Would you like to save your draft and exit?",
+    saveDescSub: "(You can resume anytime from 'My Taste Space' in your profile.)",
+    saveAndExit: "Save and Exit",
+    discardAndExit: "Discard & Exit",
+    returnToPrevStep: "Go back to previous choice",
+    alertTitle: "Oops, check this!",
+    confirm: "Okay",
+    needAtLeast4: "You need at least 4 tracks.",
+  }
+};
 
 // --- DUMMY DATA STRUCTURE ---
 interface Track {
@@ -75,11 +180,13 @@ export default function TracksPage() {
   const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
   const [customAlert, setCustomAlert] = useState<string | null>(null);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       setIsSingleArtistMode(params.get("mode") === "single");
+      setLocale(getSafeLocale());
     }
   }, []);
 
@@ -922,12 +1029,12 @@ export default function TracksPage() {
     // 4. Custom notification based on login state
     if (user) {
       if (persistSuccess) {
-        setNotification("미발매곡 등록이 요청되었습니다. 승인 대기 중이라도 월드컵 대진에는 즉시 사용 가능합니다!");
+        setNotification(locale === "en" ? translations.en.unreleasedSavedDb : translations.ko.unreleasedSavedDb);
       } else {
-        setNotification("DB 저장에 실패했으나, 임시 추가되어 현재 세션에서 즉시 사용 가능합니다!");
+        setNotification(locale === "en" ? translations.en.unreleasedSavedTemp : translations.ko.unreleasedSavedTemp);
       }
     } else {
-      setNotification("로그인하지 않은 상태입니다. 임시 추가되어 즉시 사용 가능하지만, 브라우저 종료 시 유실될 수 있습니다.");
+      setNotification(locale === "en" ? translations.en.unreleasedGuest : translations.ko.unreleasedGuest);
     }
     setTimeout(() => setNotification(null), 5000);
   };
@@ -984,7 +1091,7 @@ export default function TracksPage() {
     }
 
     if (selectedTracksData.length < 4) {
-      setCustomAlert("최소 4개의 트랙이 필요합니다.");
+      setCustomAlert(locale === "en" ? translations.en.needAtLeast4 : translations.ko.needAtLeast4);
       return;
     }
 
@@ -1008,6 +1115,8 @@ export default function TracksPage() {
     router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
   };
 
+  const t = locale === "en" ? translations.en : translations.ko;
+
   if (!isLoaded) {
     return (
       <main className="flex flex-col min-h-screen relative z-10 w-full items-center justify-center bg-[var(--app-bg)]">
@@ -1018,8 +1127,8 @@ export default function TracksPage() {
         >
           <Disc size={80} strokeWidth={1} />
         </motion.div>
-        <h1 className="font-serif text-2xl text-navy font-bold tracking-tight">트랙 정리 중...</h1>
-        <p className="font-sans text-sm text-charcoal/70 mt-2 font-medium">아티스트의 발매곡 정보를 받아오고 있어요</p>
+        <h1 className="font-serif text-2xl text-navy font-bold tracking-tight">{t.loadingTitle}</h1>
+        <p className="font-sans text-sm text-charcoal/70 mt-2 font-medium">{t.loadingDesc}</p>
       </main>
     );
   }
@@ -1031,13 +1140,13 @@ export default function TracksPage() {
         <div className="flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
-            <h1 className="font-serif text-2xl text-navy tracking-tight">트랙 디깅하기</h1>
+            <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
           </div>
           <ProfileHeader className="" />
         </div>
 
         <p className="font-sans text-sm text-charcoal/80 px-6">
-          앨범 커버를 탭해서 수록곡을 파헤쳐보세요
+          {t.subtitle}
         </p>
 
         {/* Search Bar */}
@@ -1049,7 +1158,7 @@ export default function TracksPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="선택한 아티스트의 곡 제목 검색..."
+            placeholder={t.searchPlaceholder}
             className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
           />
           {searchQuery && (
@@ -1067,16 +1176,16 @@ export default function TracksPage() {
       {searchQuery.trim() !== "" ? (
         <div className="py-6 pb-32 px-3 flex flex-col gap-4">
           <div className="flex items-center justify-between px-2 mb-2">
-            <h2 className="font-serif text-xl text-navy">검색 결과 ({searchResults.length})</h2>
+            <h2 className="font-serif text-xl text-navy">{t.searchResults} ({searchResults.length})</h2>
           </div>
           {isSearching ? (
             <div className="py-20 flex flex-col items-center justify-center text-navy/50 gap-3">
               <Disc className="animate-spin text-point/70" size={28} />
-              <p className="font-sans text-sm">트랙을 검색하는 중...</p>
+              <p className="font-sans text-sm">{t.searching}</p>
             </div>
           ) : searchResults.length === 0 ? (
             <div className="py-20 text-center font-sans text-charcoal/50 text-sm">
-              선택하신 아티스트 범위 내에 일치하는 트랙이 없습니다. 🔍
+              {t.noSearchResults}
             </div>
           ) : (
             <div className="flex flex-col gap-2.5">
@@ -1149,10 +1258,10 @@ export default function TracksPage() {
                          <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
                          <p className="font-sans text-xs text-charcoal/60 mt-0.5">
                            {loadingAlbums.has(`artist_${artist.id}`)
-                             ? "앨범 로딩 중..."
+                             ? t.albumLoading
                              : artist.albumsLoaded
                                ? `${artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)} Tracks • ${artist.totalReleases || artist.albums.length} Releases`
-                               : "앨범 및 트랙 목록 열기"}
+                               : t.openAlbums}
                          </p>
                       </div>
                     </div>
@@ -1171,7 +1280,7 @@ export default function TracksPage() {
                        {loadingAlbums.has(`artist_${artist.id}`) && artist.albums.length === 0 ? (
                           <div className="py-10 flex flex-col items-center justify-center text-navy/50 gap-3">
                              <Disc className="animate-spin text-point/70" size={28} />
-                             <p className="font-sans text-sm">스포티파이에서 앨범을 불러오고 있어요...</p>
+                             <p className="font-sans text-sm">{t.loadingFromSpotify}</p>
                           </div>
                        ) : (
                          <>
@@ -1220,7 +1329,7 @@ export default function TracksPage() {
                                  }}
                                  className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer"
                                >
-                                 전체 선택
+                                 {t.selectAll}
                                </button>
                                <button
                                  type="button"
@@ -1244,7 +1353,7 @@ export default function TracksPage() {
                                  }}
                                  className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-point hover:text-point text-xs font-sans font-bold text-navy bg-white hover:bg-point/5 shadow-sm active:scale-95 transition-all cursor-pointer"
                                >
-                                 전체 해제
+                                 {t.clearAll}
                                </button>
                              </div>
                            )}
@@ -1377,7 +1486,7 @@ export default function TracksPage() {
                                             {loadingAlbums.has(album.id) ? (
                                               <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
                                                 <Disc className="animate-spin text-point/70" size={20} />
-                                                <span>트랙을 불러오는 중...</span>
+                                                <span>{t.loadingTracks}</span>
                                               </div>
                                             ) : (
                                               album.tracks.map((track, idx) => {
@@ -1417,7 +1526,7 @@ export default function TracksPage() {
                                               onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
                                               className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
                                             >
-                                              닫기
+                                              {t.close}
                                             </button>
                                          </motion.div>
                                       )}
@@ -1431,28 +1540,28 @@ export default function TracksPage() {
                            {artist.totalReleases && artist.totalReleases > 10 && (
                              <div className="flex items-center justify-center gap-4 mt-6 py-2 border-t border-b border-navy/5 font-sans">
                                <button
-                                 disabled={(artist.albumsPage || 0) === 0}
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   handleArtistAlbumsPageChange(artist.id, (artist.albumsPage || 0) - 1);
-                                 }}
-                                 className="px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                               >
-                                 이전
-                               </button>
-                               <span className="text-xs font-medium text-navy/70">
-                                 {(artist.albumsPage || 0) + 1} / {Math.ceil(artist.totalReleases / 10)}
-                               </span>
-                               <button
-                                 disabled={(artist.albumsPage || 0) >= Math.ceil(artist.totalReleases / 10) - 1}
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   handleArtistAlbumsPageChange(artist.id, (artist.albumsPage || 0) + 1);
-                                 }}
-                                 className="px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                               >
-                                 다음
-                               </button>
+                                                 disabled={(artist.albumsPage || 0) === 0}
+                                                 onClick={(e) => {
+                                                   e.stopPropagation();
+                                                   handleArtistAlbumsPageChange(artist.id, (artist.albumsPage || 0) - 1);
+                                                 }}
+                                                 className="px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                                               >
+                                                 {t.prev}
+                                               </button>
+                                               <span className="text-xs font-medium text-navy/70">
+                                                 {(artist.albumsPage || 0) + 1} / {Math.ceil(artist.totalReleases / 10)}
+                                               </span>
+                                               <button
+                                                 disabled={(artist.albumsPage || 0) >= Math.ceil(artist.totalReleases / 10) - 1}
+                                                 onClick={(e) => {
+                                                   e.stopPropagation();
+                                                   handleArtistAlbumsPageChange(artist.id, (artist.albumsPage || 0) + 1);
+                                                 }}
+                                                 className="px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                                               >
+                                                 {t.next}
+                                               </button>
                              </div>
                            )}
 
@@ -1461,7 +1570,7 @@ export default function TracksPage() {
                              <div className="mt-8 pt-6 border-t border-dashed border-navy/10 text-left">
                                <h3 className="font-serif text-lg text-navy mb-4 flex items-center gap-2">
                                  <Compass size={18} className="text-point shrink-0" />
-                                 미발매곡
+                                 {t.unreleased}
                                </h3>
                                <div className="grid grid-cols-2 gap-4">
                                   {artist.unreleasedAlbums.map(album => {
@@ -1623,7 +1732,7 @@ export default function TracksPage() {
                                                    onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
                                                    className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
                                                  >
-                                                   닫기
+                                                   {t.close}
                                                  </button>
                                               </motion.div>
                                            )}
@@ -1666,7 +1775,7 @@ export default function TracksPage() {
                 className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-[0_10px_30px_rgba(26,42,108,0.3)] border border-navy/20 flex items-center justify-center gap-2 hover:bg-navy/90 transition-all active:scale-[0.98]"
               >
                 <Compass size={20} className="mr-1" />
-                월드컵 대진 생성중
+                {t.createWorldCup}
                 <span className="ml-2 bg-point text-white text-xs px-2.5 py-1 rounded-full font-bold">{selectedTrackIds.size}</span>
               </motion.button>
             )}
@@ -1679,7 +1788,7 @@ export default function TracksPage() {
                  exit={{ y: 50, opacity: 0 }}
                  className="mx-auto w-max px-6 py-3 rounded-full bg-cream/90 backdrop-blur-md text-navy font-sans font-bold text-sm shadow-[0_4px_15px_rgba(0,0,0,0.1)] border border-navy/20 flex items-center justify-center"
                >
-                 최소 {4 - selectedTrackIds.size}곡을 더 골라주세요 🔥
+                 {t.selectMore.replace("{count}", String(4 - selectedTrackIds.size))}
                </motion.div>
             )}
           </AnimatePresence>
@@ -1702,19 +1811,19 @@ export default function TracksPage() {
               className="bg-[#F5F2ED] w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden border border-navy/10 flex flex-col"
             >
               <div className="p-6 pb-4 border-b border-navy/5 flex items-center justify-between">
-                <h3 className="font-serif text-xl text-navy">미발매곡 추가</h3>
+                <h3 className="font-serif text-xl text-navy">{t.addUnreleasedModalTitle}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 -mr-2 text-navy/50 hover:text-navy hover:bg-navy/5 rounded-full transition-colors">
                   <X size={20} />
                 </button>
               </div>
               <form onSubmit={handleAddUnreleased} className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[60vh]">
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">곡 제목 <span className="text-point">*</span></label>
-                  <input required value={unreleasedForm.title} onChange={e => setUnreleasedForm({...unreleasedForm, title: e.target.value})} type="text" placeholder="예: 미공개 자작곡 1번" className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
+                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">{t.trackTitleLabel} <span className="text-point">*</span></label>
+                  <input required value={unreleasedForm.title} onChange={e => setUnreleasedForm({...unreleasedForm, title: e.target.value})} type="text" placeholder={t.trackTitlePlaceholder} className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">공연 영상 링크 <span className="text-point">*</span></label>
-                  <input required value={unreleasedForm.videoUrl} onChange={e => setUnreleasedForm({...unreleasedForm, videoUrl: e.target.value})} type="url" placeholder="유튜브 링크 등" className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
+                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">{t.videoUrlLabel} <span className="text-point">*</span></label>
+                  <input required value={unreleasedForm.videoUrl} onChange={e => setUnreleasedForm({...unreleasedForm, videoUrl: e.target.value})} type="url" placeholder={t.videoUrlPlaceholder} className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
                   {unreleasedForm.videoUrl && getYouTubeVideoId(unreleasedForm.videoUrl) && (
                     <div className="mt-2 w-full rounded-xl overflow-hidden border border-navy/10 relative aspect-video bg-navy/5 flex items-center justify-center">
                       <Image
@@ -1727,20 +1836,20 @@ export default function TracksPage() {
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">공연 날짜</label>
+                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">{t.dateLabel}</label>
                   <input value={unreleasedForm.date} onChange={e => setUnreleasedForm({...unreleasedForm, date: e.target.value})} type="date" className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy" />
                 </div>
                 <div className="flex flex-col gap-1.5 mt-2">
                   <div className="flex items-start gap-2 bg-navy/5 p-3 rounded-xl">
                     <Info size={16} className="text-navy/60 shrink-0 mt-0.5" />
                     <p className="font-sans text-[11px] leading-relaxed text-charcoal/70">
-                      공연 영상 등록 시 유튜브 썸네일이 고유 앨범 아트로 자동 적용됩니다.<br/>
-                      공식 승인 전이라도 <span className="font-bold text-point">월드컵 대진에 즉시 포함</span>할 수 있습니다.
+                      {t.infoText1}<br/>
+                      {t.infoText2}<span className="font-bold text-point">{t.infoText3}</span>{t.infoText4}
                     </p>
                   </div>
                 </div>
                 <button type="submit" className="mt-2 w-full py-3.5 bg-navy text-cream font-sans font-medium rounded-xl shadow-md hover:bg-navy/90 active:scale-[0.98] transition-all">
-                  추가하기
+                  {t.submitAdd}
                 </button>
               </form>
             </motion.div>
@@ -1795,9 +1904,9 @@ export default function TracksPage() {
 
                 {exitWizardStep === 'main' ? (
                   <>
-                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">테스트를 이동할까요?</h2>
+                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.exitTitle}</h2>
                     <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                      이전 단계로 돌아가 아티스트를 다시 선택하거나, 지금 테스트를 종료하고 나갈 수 있습니다.
+                      {t.exitDesc}
                     </p>
                     
                     <div className="flex flex-col gap-2.5 w-full">
@@ -1807,7 +1916,7 @@ export default function TracksPage() {
                         onClick={handleReturnToArtists}
                         className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
                       >
-                        아티스트 다시 고르기
+                        {t.reselectArtists}
                       </motion.button>
                       <motion.button 
                         whileHover={{ scale: 1.02 }}
@@ -1815,23 +1924,23 @@ export default function TracksPage() {
                         onClick={() => setExitWizardStep('exit_confirm')}
                         className="w-full py-3.5 bg-white border-2 border-navy/15 text-navy font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
                       >
-                        테스트 종료하고 나가기
+                        {t.exitTest}
                       </motion.button>
                       
                       <button 
                         onClick={() => setExitWizardStep(null)}
                         className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
                       >
-                        이대로 계속하기 (취소)
+                        {t.continueTest}
                       </button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">진행 내역을 보관할까요?</h2>
+                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.saveTitle}</h2>
                     <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                      선택한 수록곡 목록이 있습니다. 진행 내역을 보관하고 나갈까요?<br/>
-                      <span className="text-point font-medium">(보관한 내역은 프로필의 내 아카이브에서 이어할 수 있습니다.)</span>
+                      {t.saveDesc}<br/>
+                      <span className="text-point font-medium">{t.saveDescSub}</span>
                     </p>
                     
                     <div className="flex flex-col gap-2.5 w-full">
@@ -1841,7 +1950,7 @@ export default function TracksPage() {
                         onClick={handleConfirmSaveExit}
                         className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
                       >
-                        보관하고 종료하기
+                        {t.saveAndExit}
                       </motion.button>
                       <motion.button 
                         whileHover={{ scale: 1.02 }}
@@ -1849,14 +1958,14 @@ export default function TracksPage() {
                         onClick={handleDiscardExit}
                         className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
                       >
-                        보관 안 함 (진행 삭제)
+                        {t.discardAndExit}
                       </motion.button>
                       
                       <button 
                         onClick={() => setExitWizardStep('main')}
                         className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
                       >
-                        이전 선택지로 돌아가기
+                        {t.returnToPrevStep}
                       </button>
                     </div>
                   </>
@@ -1891,7 +2000,7 @@ export default function TracksPage() {
                   <AlertCircle className="text-point animate-pulse" size={32} />
                 </div>
 
-                <h3 className="font-serif text-xl font-bold text-navy mb-2 tracking-tight">앗, 확인해 주세요!</h3>
+                <h3 className="font-serif text-xl font-bold text-navy mb-2 tracking-tight">{t.alertTitle}</h3>
                 <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                   {customAlert}
                 </p>
@@ -1902,7 +2011,7 @@ export default function TracksPage() {
                   onClick={() => setCustomAlert(null)}
                   className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
                 >
-                  확인
+                  {t.confirm}
                 </motion.button>
               </motion.div>
             </div>

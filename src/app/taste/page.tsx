@@ -10,9 +10,66 @@ import SnakePathTimeline from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
+
+const translations = {
+  ko: {
+    title: "취향 기록표",
+    archiveTitleLabel: "취향 저장명",
+    archiveTitleSub: "기록될 나만의 취향표 제목을 입력해 주세요.",
+    archiveTitlePlaceholder: "제목을 입력하세요 (최대 16자)",
+    publicRankingLabel: "내 취향표 전체 공개",
+    publicRankingSub: "취향이 비슷한 친구들을 찾을 때 사용돼요.",
+    saveToArchiveBtn: "내 취향 스페이스에 저장",
+    savingToArchive: "취향 스페이스에 저장 중...",
+    savedToArchive: "취향 스페이스에 저장 완료",
+    saveExcelBtn: "Excel 저장",
+    saveInstaStoryBtn: "인스타 스토리 저장",
+    savingStory: "스토리 저장 중...",
+    templatePyramid: "📐 피라미드형",
+    templateList: "📜 감성 리스트형",
+    templateRetro: "📻 레코드형",
+    skipBtn: "스킵 Skip ⏭️",
+    confirmDownloadAll: "전체 랭킹({count}곡)을 인스타그램 스토리용 이미지 {pages}장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP {pageSize}이 있는 1페이지만 다운로드돼요.)",
+    saveImageError: "이미지를 저장하지 못했어요. 다시 시도해 주세요.",
+    loginAlert: "로그인하면 내 취향 스페이스에 취향표를 보관하고, 친구들의 피드를 확인할 수 있어요. 로그인하러 갈까요? 🎵",
+    unsavedExitConfirm: "아직 취향표를 저장하지 않았어요. 저장하지 않고 홈으로 돌아갈까요?",
+    overwriteTitle: "이미 저장된 기록이 있어요!",
+    overwriteDesc: "이 아티스트로 완료한 취향표가 이미 저장되어 있어요. 기존 기록에 덮어쓸까요, 아니면 새로운 기록으로 저장할까요?",
+    overwriteBtn: "기존 기록 덮어쓰기 (Overwrite)",
+    saveNewBtn: "새로운 기록으로 저장 (Save New)",
+    cancel: "취소",
+  },
+  en: {
+    title: "My Taste Card",
+    archiveTitleLabel: "Title",
+    archiveTitleSub: "Please enter a name for your taste card.",
+    archiveTitlePlaceholder: "Enter title (max 16 chars)",
+    publicRankingLabel: "Make My Taste Card Public",
+    publicRankingSub: "Used to find friends with similar tastes.",
+    saveToArchiveBtn: "Save to My Taste Space",
+    savingToArchive: "Saving...",
+    savedToArchive: "Saved to My Taste Space",
+    saveExcelBtn: "Save Excel",
+    saveInstaStoryBtn: "Save Insta Story",
+    savingStory: "Saving Story...",
+    templatePyramid: "📐 Pyramid",
+    templateList: "📜 Aesthetic List",
+    templateRetro: "📻 Vintage Vinyl",
+    skipBtn: "Skip ⏭️",
+    confirmDownloadAll: "Do you want to download the entire ranking of {count} tracks across {pages} images for Instagram Stories?\n\n(If canceled, only the first page with TOP {pageSize} will be downloaded.)",
+    saveImageError: "Failed to save image. Please try again.",
+    loginAlert: "Log in to safely store your taste card and view your friends' feeds! 🎵",
+    unsavedExitConfirm: "Your taste card hasn't been saved yet. Go back to Home without saving?",
+    overwriteTitle: "Previous record found!",
+    overwriteDesc: "A completed result for this artist already exists. Update the existing record or save as a new entry?",
+    overwriteBtn: "Update Existing",
+    saveNewBtn: "Save as New",
+    cancel: "Cancel",
+  }
+};
 
 interface Track {
   id: string;
@@ -42,6 +99,13 @@ export default function ResultPage() {
   const [showOverwriteModal, setShowOverwriteModal] = useState(false);
   const [existingResult, setExistingResult] = useState<any | null>(null);
   const [archiveTitle, setArchiveTitle] = useState("");
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setLocale(getSafeLocale());
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -84,9 +148,18 @@ export default function ResultPage() {
       }
     } catch (e) {}
 
-    const defaultTitle = isSingleArtistMode && artistName 
-      ? `${artistName}의 곡 Sort` 
-      : `${winners[0]?.artistName || ""} 취향표`;
+    const isEn = getSafeLocale() === "en";
+
+    let defaultTitle = "";
+    if (isSingleArtistMode && artistName) {
+      defaultTitle = isEn 
+        ? `${artistName} Song Sort` 
+        : `${artistName}의 곡 Sort`;
+    } else {
+      defaultTitle = isEn
+        ? `${winners[0]?.artistName || ""} Taste Card`
+        : `${winners[0]?.artistName || ""} 취향표`;
+    }
       
     setArchiveTitle(defaultTitle.slice(0, 16));
   }, [winners, isSingleArtistMode]);
@@ -141,7 +214,16 @@ export default function ResultPage() {
         let exportPages = [0]; // default: first page only
         
         if (totalPages > 1) {
-          const confirmAll = window.confirm(`전체 랭킹(${winners.length}곡)을 인스타그램 스토리용 9:16 이미지 ${totalPages}장으로 나누어 다운로드하시겠습니까?\n\n(취소를 누르시면 TOP ${pageSize}이 있는 1페이지만 다운로드됩니다.)`);
+          const msg = locale === "en" 
+            ? translations.en.confirmDownloadAll
+                .replace("{count}", String(winners.length))
+                .replace("{pages}", String(totalPages))
+                .replace("{pageSize}", String(pageSize))
+            : translations.ko.confirmDownloadAll
+                .replace("{count}", String(winners.length))
+                .replace("{pages}", String(totalPages))
+                .replace("{pageSize}", String(pageSize));
+          const confirmAll = window.confirm(msg);
           if (confirmAll) {
             exportPages = Array.from({ length: totalPages }, (_, i) => i);
           }
@@ -168,7 +250,7 @@ export default function ResultPage() {
       }
     } catch (err) {
       console.error('Failed to export image', err);
-      alert('이미지 저장에 실패했습니다. 다시 시도해주세요.');
+      alert(locale === "en" ? translations.en.saveImageError : translations.ko.saveImageError);
     } finally {
       setIsExporting(false);
     }
@@ -192,8 +274,8 @@ export default function ResultPage() {
       } catch (e) {}
 
       const title = archiveTitle.trim() || (isSingleArtistMode && artistName 
-        ? `${artistName}의 곡 Sort` 
-        : `${winners[0]?.artistName || ""} 취향표`);
+        ? (locale === "en" ? `${artistName} Song Sort` : `${artistName}의 곡 Sort`) 
+        : (locale === "en" ? `${winners[0]?.artistName || ""} Taste Card` : `${winners[0]?.artistName || ""} 취향표`));
 
       let saveRes;
       if (overwrite && existingResult) {
@@ -223,11 +305,19 @@ export default function ResultPage() {
       if (error) throw error;
       
       setIsSaved(true);
-      alert(overwrite ? "기존 기록을 성공적으로 갱신했습니다!" : "내 아카이브에 성공적으로 저장되었습니다!");
+      if (locale === "en") {
+        alert(overwrite ? "Successfully updated your record!" : "Successfully saved to My Taste Space!");
+      } else {
+        alert(overwrite ? "기존 기록을 성공적으로 바꿨어요!" : "내 취향 스페이스에 성공적으로 저장했어요!");
+      }
       setShowOverwriteModal(false);
     } catch (err: any) {
       console.error("Failed to save to archive:", err);
-      alert(`아카이브 저장에 실패했습니다: ${err.message || err}`);
+      if (locale === "en") {
+        alert(`Failed to save: ${err.message || err}`);
+      } else {
+        alert(`저장하지 못했어요: ${err.message || err}`);
+      }
     } finally {
       setIsSavingArchive(false);
     }
@@ -235,7 +325,9 @@ export default function ResultPage() {
 
   const handleSaveToArchive = async () => {
     if (!user) {
-      alert("아카이브 저장 기능은 로그인(회원가입) 후에 이용하실 수 있습니다.\n\n로그인하여 소중한 음악 취향표를 보관하고, 취향 매칭 피드를 확인해 보세요! 🎵");
+      alert(locale === "en" 
+        ? "Log in to safely store your taste card and view the taste matching feed! 🎵" 
+        : "로그인하면 내 취향 스페이스에 취향표를 보관하고, 친구들의 피드를 확인할 수 있어요. 로그인하러 갈까요? 🎵");
       return;
     }
     setIsSavingArchive(true);
@@ -273,7 +365,9 @@ export default function ResultPage() {
 
   const handleExit = async () => {
     if (user && !isSaved) {
-      const confirmExit = window.confirm("아직 취향표를 내 아카이브에 저장하지 않았습니다. 저장하지 않고 종료하시겠습니까?");
+      const confirmExit = window.confirm(locale === "en"
+        ? "Your taste card hasn't been saved yet. Go back to Home without saving?"
+        : "아직 취향표를 저장하지 않았어요. 저장하지 않고 홈으로 돌아갈까요?");
       if (!confirmExit) return;
     }
 
@@ -405,12 +499,14 @@ export default function ResultPage() {
     });
   }, [rawKeyframes, timelineViewBoxHeight, dimensions, winners.length]);
 
+  const t = locale === "en" ? translations.en : translations.ko;
+
   return (
     <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
-          <h1 className="font-serif text-2xl text-navy tracking-tight">취향 기록표</h1>
+          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -454,7 +550,7 @@ export default function ResultPage() {
                      : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
                  }`}
                >
-                 📐 피라미드형
+                 {t.templatePyramid}
                </button>
                <button
                  onClick={() => setTemplate("list")}
@@ -464,7 +560,7 @@ export default function ResultPage() {
                      : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
                  }`}
                >
-                 📜 감성 리스트형
+                 {t.templateList}
                </button>
                <button
                  onClick={() => setTemplate("retro")}
@@ -474,7 +570,7 @@ export default function ResultPage() {
                      : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
                  }`}
                >
-                 📻 레코드형
+                 {t.templateRetro}
                </button>
              </div>
            </div>
@@ -486,7 +582,7 @@ export default function ResultPage() {
              onClick={() => setShowButton(true)}
              className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
            >
-             스킵 Skip ⏭️
+             {t.skipBtn}
            </button>
          )}
 
@@ -557,8 +653,8 @@ export default function ResultPage() {
              {user && !isSaved && (
                 <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl p-4 flex flex-col gap-2.5 shadow-sm z-30 mb-0.5 select-none text-left">
                   <div className="flex flex-col text-left">
-                    <label htmlFor="archive-title-input" className="font-sans font-bold text-xs text-navy">아카이브 저장명</label>
-                    <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-1">기록될 나만의 취향표 제목을 입력해주세요.</span>
+                    <label htmlFor="archive-title-input" className="font-sans font-bold text-xs text-navy">{t.archiveTitleLabel}</label>
+                    <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-1">{t.archiveTitleSub}</span>
                   </div>
                   <div className="relative flex items-center">
                     <input
@@ -567,7 +663,7 @@ export default function ResultPage() {
                       maxLength={16}
                       value={archiveTitle}
                       onChange={(e) => setArchiveTitle(e.target.value)}
-                      placeholder="제목을 입력하세요 (최대 16자)"
+                      placeholder={t.archiveTitlePlaceholder}
                       className="w-full px-3.5 py-2.5 bg-white border border-navy/20 focus:border-point focus:ring-1 focus:ring-point rounded-xl font-sans text-sm text-navy placeholder-charcoal/30 transition-all pr-12 focus:outline-none"
                     />
                     <span className="absolute right-3.5 font-sans text-[10px] font-bold text-charcoal/40 select-none">
@@ -580,8 +676,8 @@ export default function ResultPage() {
              {user && (
                <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl px-4 py-2 flex items-center justify-between shadow-sm z-30 mb-1 select-none">
                  <div className="flex flex-col text-left">
-                   <span className="font-sans font-bold text-xs text-navy">취향 순위표 전체 공개</span>
-                   <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-0.5">비슷한 취향의 메이트 찾기에 사용됩니다.</span>
+                   <span className="font-sans font-bold text-xs text-navy">{t.publicRankingLabel}</span>
+                   <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-0.5">{t.publicRankingSub}</span>
                  </div>
                  <button
                    type="button"
@@ -609,12 +705,12 @@ export default function ResultPage() {
                   {isSaved ? (
                     <>
                       <Check size={18} />
-                      아카이브 저장 완료
+                      {t.savedToArchive}
                     </>
                   ) : (
                     <>
                       <Archive size={18} />
-                      {isSavingArchive ? "아카이브 저장 중..." : "내 아카이브에 저장"}
+                      {isSavingArchive ? t.savingToArchive : t.saveToArchiveBtn}
                     </>
                   )}
                 </button>
@@ -624,9 +720,9 @@ export default function ResultPage() {
                 <button 
                   onClick={handleDownloadCSV}
                   className="flex-1 py-4 bg-[#0F766E] hover:bg-[#0D625B] text-white font-sans font-bold text-xs border border-teal-800/20 rounded-l-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer"
-                  title="Microsoft Excel / Google Sheets용 CSV 파일 저장"
+                  title="CSV"
                 >
-                   Excel 저장
+                   {t.saveExcelBtn}
                 </button>
                 
                 <button 
@@ -635,7 +731,7 @@ export default function ResultPage() {
                   className={`flex-[2] py-4 bg-navy text-cream font-sans font-bold text-xs border border-navy/20 rounded-r-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer ${isExporting ? 'opacity-70' : 'hover:bg-[#111A3E]'}`}
                 >
                    <Download size={14} />
-                   {isExporting ? "스토리 저장 중..." : "인스타 스토리 저장"}
+                   {isExporting ? t.savingStory : t.saveInstaStoryBtn}
                 </button>
               </div>
             </motion.div>
@@ -665,9 +761,9 @@ export default function ResultPage() {
                   <Archive className="text-point animate-bounce" size={24} />
                 </div>
                 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">이전 기록이 있습니다!</h2>
+                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.overwriteTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  해당 아티스트로 이미 완료된 Sort 결과가 아카이브에 존재합니다. 기존 기록을 갱신하시겠습니까, 아니면 별도의 기록으로 새로 추가하여 저장하시겠습니까?
+                  {t.overwriteDesc}
                 </p>
                 
                 <div className="flex flex-col gap-2 w-full">
@@ -675,19 +771,19 @@ export default function ResultPage() {
                     onClick={() => executeSaveArchive(true)}
                     className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm"
                   >
-                    기존 기록 갱신하기 (Overwrite)
+                    {t.overwriteBtn}
                   </button>
                   <button 
                     onClick={() => executeSaveArchive(false)}
                     className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
                   >
-                    새로운 기록으로 추가 (Save New)
+                    {t.saveNewBtn}
                   </button>
                   <button 
                     onClick={() => setShowOverwriteModal(false)}
                     className="w-full py-3 bg-white border border-red-200 text-red-500 font-medium text-xs rounded-xl hover:bg-red-50/50 transition-all cursor-pointer mt-1"
                   >
-                    취소
+                    {t.cancel}
                   </button>
                 </div>
               </motion.div>

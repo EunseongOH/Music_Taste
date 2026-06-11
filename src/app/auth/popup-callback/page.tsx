@@ -1,12 +1,18 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { getSafeLocale } from "@/utils/storage";
 
 export default function PopupCallback() {
   const processedRef = useRef(false);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
+    // Read locale
+    const resolvedLocale = getSafeLocale();
+    setLocale(resolvedLocale);
+
     if (processedRef.current) return;
     processedRef.current = true;
 
@@ -50,18 +56,21 @@ export default function PopupCallback() {
         }
 
         if (!session) {
-          throw new Error("인증 세션을 찾을 수 없습니다. 다시 시도해 주세요.");
+          throw new Error(resolvedLocale === "en" ? "Failed to find authentication session. Please try again." : "인증 세션을 찾을 수 없어요. 다시 시도해 주세요.");
         }
         
         if (window.opener) {
           window.opener.postMessage({ type: "AUTH_SUCCESS", session }, window.location.origin);
         } else {
-          throw new Error("상위 창(Opener)을 찾을 수 없거나 세션이 만료되었습니다.");
+          throw new Error(resolvedLocale === "en" ? "Failed to find the parent window or the session has expired." : "상위 창을 찾을 수 없거나 세션이 만료되었어요.");
         }
       } catch (err: any) {
         console.error("Callback session exchange failed:", err);
         if (window.opener) {
-          window.opener.postMessage({ type: "AUTH_ERROR", error: err?.message || "세션 생성 중 오류가 발생했습니다." }, window.location.origin);
+          window.opener.postMessage({
+            type: "AUTH_ERROR",
+            error: err?.message || (resolvedLocale === "en" ? "An error occurred during authentication." : "로그인 중 오류가 발생했어요.")
+          }, window.location.origin);
         }
       } finally {
         window.close();
@@ -76,8 +85,12 @@ export default function PopupCallback() {
       <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-6 animate-pulse">
         <div className="w-4 h-4 bg-point rounded-full" />
       </div>
-      <h3 className="font-serif text-2xl font-bold mb-2">인증 완료 중</h3>
-      <p className="font-sans text-sm text-charcoal/60">로그인 처리를 안전하게 완료하고 있습니다...</p>
+      <h3 className="font-serif text-2xl font-bold mb-2">
+        {locale === "en" ? "Authenticating..." : "로그인을 완료하고 있어요"}
+      </h3>
+      <p className="font-sans text-sm text-charcoal/60">
+        {locale === "en" ? "Finishing login safely..." : "안전하게 로그인을 완료하고 있어요..."}
+      </p>
     </div>
   );
 }

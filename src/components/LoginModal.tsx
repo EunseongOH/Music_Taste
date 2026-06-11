@@ -78,12 +78,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
           handleSuccess();
         } catch (err: any) {
           console.error("Failed to apply popup session:", err);
-          setLoginError(`로그인 처리 중 오류: ${err.message}`);
+          setLoginError(locale === "ko" ? `로그인 중 오류가 발생했어요: ${err.message}` : `Login error occurred: ${err.message}`);
         } finally {
           setIsLoading(false);
         }
       } else if (type === "AUTH_ERROR") {
-        setLoginError(error || "구글 로그인 중 오류가 발생했습니다.");
+        setLoginError(error || (locale === "ko" ? "구글 로그인 중 오류가 발생했어요." : "An error occurred during Google login."));
         setIsLoading(false);
       }
     };
@@ -95,8 +95,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
   }, [isOpen, supabase]);
 
   const validatePassword = (pw: string) => {
-    if (pw.length > 14) return "비밀번호는 14자리 이내여야 합니다.";
-    if (!/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) return "영어와 숫자를 포함해야 합니다.";
+    if (pw.length > 14) {
+      return locale === "ko" ? "비밀번호는 14자 이내로 입력해 주세요." : "Password must be 14 characters or less.";
+    }
+    if (!/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) {
+      return locale === "ko" ? "영어와 숫자를 함께 사용해 주세요." : "Password must include both letters and numbers.";
+    }
     return "";
   };
 
@@ -134,7 +138,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     setIsLoading(false);
 
     if (error) {
-      setLoginError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      setLoginError(
+        locale === "ko" 
+          ? "이메일이나 비밀번호가 올바르지 않아요. 다시 확인해 주세요." 
+          : "Incorrect email or password. Please check again."
+      );
       return;
     }
 
@@ -160,7 +168,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     );
 
     if (!popup) {
-      setLoginError("팝업 차단이 감지되었습니다. 팝업 허용 후 다시 시도해주세요.");
+      setLoginError(
+        locale === "ko"
+          ? "팝업 창이 차단되었어요. 팝업 차단을 해제하고 다시 시도해 주세요."
+          : "Popup blocked. Please enable popups and try again."
+      );
       setIsLoading(false);
     }
   };
@@ -181,7 +193,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     );
 
     if (!popup) {
-      setLoginError("팝업 차단이 감지되었습니다. 팝업 허용 후 다시 시도해주세요.");
+      setLoginError(
+        locale === "ko"
+          ? "팝업 창이 차단되었어요. 팝업 차단을 해제하고 다시 시도해 주세요."
+          : "Popup blocked. Please enable popups and try again."
+      );
       setIsLoading(false);
     }
   };
@@ -205,7 +221,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
       .eq("user_nickname", signupNickname.trim());
 
     if (!dupError && dupData && dupData.length > 0) {
-      setSignupError("이미 사용 중인 닉네임입니다.");
+      setSignupError(
+        locale === "ko"
+          ? "이미 사용 중인 닉네임이에요."
+          : "This nickname is already taken."
+      );
       setIsLoading(false);
       return;
     }
@@ -226,9 +246,17 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
     if (error) {
       if (error.status === 422 || error.message.includes("already registered")) {
-        setSignupError("이미 가입된 이메일입니다.");
+        setSignupError(
+          locale === "ko"
+            ? "이미 가입된 이메일이에요."
+            : "This email is already registered."
+        );
       } else {
-        setSignupError("회원가입 중 오류가 발생했습니다. 다시 시도해 주세요.");
+        setSignupError(
+          locale === "ko"
+            ? "회원가입 중 문제가 발생했어요. 다시 시도해 주세요."
+            : "An error occurred during signup. Please try again."
+        );
       }
       return;
     }
@@ -249,9 +277,67 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     setMode("guest-warning");
   };
 
+  const t = {
+    ko: {
+      tagline: mode === "login" ? "가장 선명한 취향의 기록" : 
+               mode === "signup" ? "새로운 레코드 샵에 오신 것을 환영해요" :
+               "게스트로 진행 안내",
+      email: "이메일 (아이디)",
+      emailPlaceholder: "이메일 (아이디)",
+      password: "비밀번호",
+      passwordPlaceholder: "비밀번호",
+      name: "이름",
+      namePlaceholder: "홍길동",
+      nickname: "닉네임",
+      nicknamePlaceholder: "레코드 러버",
+      phone: "전화번호 (선택)",
+      phonePlaceholder: "010-0000-0000",
+      login: "로그인",
+      loggingIn: "로그인 중...",
+      or: "또는",
+      noAccount: "계정이 없으신가요? 회원가입",
+      asGuest: "가입 없이 게스트로 구경하기",
+      pwPlaceholder: "영어+숫자 포함 최대 14자",
+      signupBtn: "가입 완료하기",
+      signingUp: "가입 중...",
+      hasAccount: "이미 계정이 있으신가요?",
+      loginLink: "로그인",
+      guestText: "로그인하지 않아도 전체 트랙 디깅과\n월드컵 진행이 가능해요.\n\n원활한 진행을 위해 가급적 로그인을 권장드리며, 페이지를 벗어날 시 진행 상황이 사라질 수 있어요.",
+      guestConfirm: "게스트로 계속하기",
+      goLogin: "로그인하러 가기",
+    },
+    en: {
+      tagline: mode === "login" ? "Record your clearest taste" : 
+               mode === "signup" ? "Welcome to the Record Shop!" :
+               "Guest Mode Guide",
+      email: "Email (ID)",
+      emailPlaceholder: "Email (ID)",
+      password: "Password",
+      passwordPlaceholder: "Password",
+      name: "Name",
+      namePlaceholder: "Full Name",
+      nickname: "Nickname",
+      nicknamePlaceholder: "Record Lover",
+      phone: "Phone Number (Optional)",
+      phonePlaceholder: "010-0000-0000",
+      login: "Log In",
+      loggingIn: "Logging in...",
+      or: "or",
+      noAccount: "Don't have an account? Sign Up",
+      asGuest: "Continue as Guest",
+      pwPlaceholder: "Letters + numbers, max 14 chars",
+      signupBtn: "Complete Sign Up",
+      signingUp: "Signing up...",
+      hasAccount: "Already have an account?",
+      loginLink: "Log In",
+      guestText: "You can browse tracks and play the World Cup\nwithout logging in.\n\nHowever, your progress might be lost\nif you leave the page.",
+      guestConfirm: "Continue as Guest",
+      goLogin: "Go to Login",
+    }
+  }[locale];
+
   return (
     <AnimatePresence>
-// ... omitted unchanged part, wait, I MUST provide ALL lines between StartLine and EndLine. I will just provide the full replacement for the form.
       {isOpen && (
         <>
           <motion.div
@@ -283,9 +369,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
               
               <h2 className="font-serif text-3xl font-bold text-navy mb-1 tracking-tight">Sortify</h2>
               <p className="font-sans text-charcoal/60 mb-6 text-sm font-medium">
-                {mode === "login" ? "가장 선명한 취향의 기록" : 
-                 mode === "signup" ? "새로운 레코드 샵에 오신 것을 환영해요" :
-                 "게스트로 진행 안내"}
+                {t.tagline}
               </p>
 
               {/* Login Form */}
@@ -302,7 +386,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                       </div>
                       <input 
                         type="text" 
-                        placeholder="이메일 (아이디)" 
+                        placeholder={t.emailPlaceholder} 
                         value={loginId}
                         onChange={e => setLoginId(e.target.value)}
                         required
@@ -316,7 +400,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                       </div>
                       <input 
                         type="password" 
-                        placeholder="비밀번호" 
+                        placeholder={t.passwordPlaceholder} 
                         value={loginPw}
                         onChange={e => setLoginPw(e.target.value)}
                         required
@@ -329,19 +413,19 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                       disabled={!loginId || !loginPw || isLoading}
                       className="w-full py-3.5 mt-2 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isLoading ? "로그인 중..." : "로그인"}
+                      {isLoading ? t.loggingIn : t.login}
                     </button>
                     {loginError && <div className="text-center text-sm font-bold text-red-500 mt-1">{loginError}</div>}
                   </form>
 
                   <div className="flex items-center gap-3 my-2">
                     <div className="flex-1 h-px bg-navy/10" />
-                    <span className="font-sans text-xs text-navy/40 font-bold uppercase tracking-wider">or</span>
+                    <span className="font-sans text-xs text-navy/40 font-bold uppercase tracking-wider">{t.or}</span>
                     <div className="flex-1 h-px bg-navy/10" />
                   </div>
 
                   <div className="flex flex-col gap-2.5">
-                    {/* Google Login Button — Official Brand Guideline (Light Theme) */}
+                    {/* Google Login Button */}
                     <button 
                       type="button"
                       onClick={handleGoogleLogin}
@@ -388,7 +472,6 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                         width: "100%",
                         gap: "10px",
                       }}>
-                        {/* Official Google G logo SVG */}
                         <div style={{ height: "20px", minWidth: "20px", width: "20px", flexShrink: 0 }}>
                           <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style={{ display: "block" }}>
                             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -413,7 +496,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                       </div>
                     </button>
 
-                    {/* Kakao Login Button — Official Brand Guideline */}
+                    {/* Kakao Login Button */}
                     <button 
                       type="button"
                       onClick={handleKakaoLogin}
@@ -429,7 +512,6 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                         cursor: "pointer",
                       }}
                     >
-                      {/* Kakao official speech-bubble symbol SVG */}
                       <span
                         style={{
                           display: "flex",
@@ -461,10 +543,10 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
                   <div className="mt-4 flex flex-col gap-2 items-center text-sm font-sans">
                     <button type="button" onClick={() => setMode("signup")} className="text-navy hover:text-point font-bold underline-offset-4 hover:underline transition-all">
-                      계정이 없으신가요? 회원가입
+                      {t.noAccount}
                     </button>
                     <button type="button" onClick={handleGuest} className="text-charcoal/50 hover:text-charcoal transition-colors">
-                      가입 없이 게스트로 구경하기
+                      {t.asGuest}
                     </button>
                   </div>
                 </motion.div>
@@ -480,7 +562,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                   <form onSubmit={onSignupSubmit} className="flex flex-col gap-3">
                     {/* ID */}
                     <div className="flex flex-col gap-1">
-                      <label className="font-sans text-xs font-bold text-navy ml-1">아이디 (이메일) <span className="text-point">*</span></label>
+                      <label className="font-sans text-xs font-bold text-navy ml-1">{t.email} <span className="text-point">*</span></label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                           <Mail size={16} />
@@ -498,14 +580,14 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                     
                     {/* PW */}
                     <div className="flex flex-col gap-1">
-                      <label className="font-sans text-xs font-bold text-navy ml-1">비밀번호 <span className="text-point">*</span></label>
+                      <label className="font-sans text-xs font-bold text-navy ml-1">{t.password} <span className="text-point">*</span></label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                           <Lock size={16} />
                         </div>
                         <input 
                           type="password" 
-                          placeholder="영어+숫자 포함 최대 14자" 
+                          placeholder={t.pwPlaceholder} 
                           value={signupPw}
                           onChange={handleSignupPwChange}
                           required
@@ -518,14 +600,14 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
                     {/* Name */}
                     <div className="flex flex-col gap-1">
-                      <label className="font-sans text-xs font-bold text-navy ml-1">이름 <span className="text-point">*</span></label>
+                      <label className="font-sans text-xs font-bold text-navy ml-1">{t.name} <span className="text-point">*</span></label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                           <User size={16} />
                         </div>
                         <input 
                           type="text" 
-                          placeholder="홍길동" 
+                          placeholder={t.namePlaceholder} 
                           value={signupName}
                           onChange={e => setSignupName(e.target.value)}
                           required
@@ -536,14 +618,14 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
                     {/* Nickname */}
                     <div className="flex flex-col gap-1">
-                      <label className="font-sans text-xs font-bold text-navy ml-1">닉네임 <span className="text-point">*</span></label>
+                      <label className="font-sans text-xs font-bold text-navy ml-1">{t.nickname} <span className="text-point">*</span></label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                           <User size={16} />
                         </div>
                         <input 
                           type="text" 
-                          placeholder="레코드 러버" 
+                          placeholder={t.nicknamePlaceholder} 
                           value={signupNickname}
                           onChange={e => setSignupNickname(e.target.value)}
                           required
@@ -554,14 +636,14 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
                     {/* Phone (Optional) */}
                     <div className="flex flex-col gap-1">
-                      <label className="font-sans text-xs font-bold text-navy ml-1">전화번호 (선택)</label>
+                      <label className="font-sans text-xs font-bold text-navy ml-1">{t.phone}</label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
                           <Phone size={16} />
                         </div>
                         <input 
                           type="tel" 
-                          placeholder="010-0000-0000" 
+                          placeholder={t.phonePlaceholder} 
                           value={signupPhone}
                           onChange={e => setSignupPhone(e.target.value)}
                           className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
@@ -571,18 +653,18 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
                     <button 
                       type="submit"
-                      disabled={!signupId || !signupPw || !signupName || !!pwError || isLoading}
+                      disabled={!signupId || !signupPw || !signupName || !signupNickname || !!pwError || isLoading}
                       className="w-full py-3.5 mt-4 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isLoading ? "가입 중..." : "가입 완료하기"}
+                      {isLoading ? t.signingUp : t.signupBtn}
                     </button>
                     {signupError && <div className="text-center text-sm font-bold text-red-500 mt-1">{signupError}</div>}
                   </form>
 
                   <div className="mt-2 flex justify-center text-sm font-sans pt-2 border-t border-navy/10">
-                    <span className="text-charcoal/60 mr-2">이미 계정이 있으신가요?</span>
+                    <span className="text-charcoal/60 mr-2">{t.hasAccount}</span>
                     <button type="button" onClick={() => setMode("login")} className="text-navy hover:text-point font-bold underline-offset-4 hover:underline transition-all">
-                      로그인
+                      {t.loginLink}
                     </button>
                   </div>
                 </motion.div>
@@ -596,7 +678,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                   className="w-full flex flex-col items-center gap-6 mt-4 text-center"
                 >
                   <p className="font-sans text-charcoal/80 text-sm leading-relaxed whitespace-pre-wrap">
-                    로그인하지 않아도 전체 트랙 디깅과<br/>월드컵 진행이 가능합니다.<br/><br/>원활한 진행을 위해 가급적 로그인을 권장드리며, 페이지를 벗어날 시 진행 상황이 사라질 수 있습니다.
+                    {t.guestText}
                   </p>
                   
                   <div className="flex flex-col gap-3 w-full">
@@ -604,13 +686,13 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
                       onClick={confirmGuest}
                       className="w-full py-3.5 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-md"
                     >
-                      게스트로 계속하기
+                      {t.guestConfirm}
                     </button>
                     <button 
                       onClick={() => setMode("login")}
                       className="w-full py-3 bg-white text-navy font-bold rounded-xl border-2 border-navy/20 hover:bg-navy/5 transition-colors"
                     >
-                      로그인하러 가기
+                      {t.goLogin}
                     </button>
                   </div>
                 </motion.div>

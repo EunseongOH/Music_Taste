@@ -100,3 +100,47 @@ if (typeof window !== 'undefined') {
 
 export const safeLocalStorage = createSafeStorage('localStorage');
 export const safeSessionStorage = createSafeStorage('sessionStorage');
+
+export const getSafeLocale = (): "ko" | "en" => {
+  if (typeof window === "undefined") return "ko";
+  try {
+    // 1. Try reading cookie
+    const cookieMatch = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("locale="))
+      ?.split("=")[1];
+    if (cookieMatch === "en" || cookieMatch === "ko") {
+      return cookieMatch as "en" | "ko";
+    }
+
+    // 2. Try reading from safeLocalStorage
+    const localVal = safeLocalStorage.getItem("locale");
+    if (localVal === "en" || localVal === "ko") {
+      return localVal as "en" | "ko";
+    }
+
+    // 3. Try reading from safeSessionStorage
+    const sessionVal = safeSessionStorage.getItem("locale");
+    if (sessionVal === "en" || sessionVal === "ko") {
+      return sessionVal as "en" | "ko";
+    }
+  } catch (e) {
+    console.warn("[Locale] Failed to read locale from cookies/storage:", e);
+  }
+  return "ko";
+};
+
+export const setSafeLocale = (lang: "ko" | "en"): void => {
+  if (typeof window === "undefined") return;
+  try {
+    document.cookie = `locale=${lang}; path=/; max-age=31536000`;
+  } catch (e) {
+    console.warn("[Locale] Failed to set locale cookie:", e);
+  }
+  try {
+    safeLocalStorage.setItem("locale", lang);
+    safeSessionStorage.setItem("locale", lang);
+  } catch (e) {
+    console.warn("[Locale] Failed to set locale storage:", e);
+  }
+};
