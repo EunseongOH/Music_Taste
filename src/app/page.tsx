@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import LPPlayer from "@/components/LPPlayer";
 import LoginModal from "@/components/LoginModal";
 import { useAuth } from "@/components/AuthProvider";
@@ -278,6 +279,63 @@ export default function Home() {
 
   return (
     <main className="w-full flex flex-1 flex-col items-center justify-between py-6 relative overflow-hidden">
+      {/* JSON-LD Structured Data for Search Engine Sitelinks */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Sortify",
+            "url": "https://sortify.co.kr",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://sortify.co.kr/explore?q={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          })
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            "itemListElement": [
+              {
+                "@type": "SiteNavigationElement",
+                "position": 1,
+                "name": "믹스 매치 월드컵 (Mix & Match World Cup)",
+                "description": "여러 아티스트를 선택해 명곡들을 토너먼트로 즐기고 나만의 취향표를 만듭니다.",
+                "url": "https://sortify.co.kr/genres"
+              },
+              {
+                "@type": "SiteNavigationElement",
+                "position": 2,
+                "name": "최애 곡 줄 세우기 (Favorite Songs Lineup)",
+                "description": "한 명의 아티스트를 선택해 전곡을 내 마음에 드는 순서대로 정렬합니다.",
+                "url": "https://sortify.co.kr/genres?mode=single"
+              },
+              {
+                "@type": "SiteNavigationElement",
+                "position": 3,
+                "name": "공개 취향 아카이브 (Public Taste Archive)",
+                "description": "다른 유저들이 완성해 공개한 다양하고 개성 넘치는 음악 취향 리스트를 구경합니다.",
+                "url": "https://sortify.co.kr/archive"
+              },
+              {
+                "@type": "SiteNavigationElement",
+                "position": 4,
+                "name": "유저 취향 매칭 피드 (Explore Music Tastes)",
+                "description": "나와 음악 취향이 유사한 다른 유저들의 프로필과 취향표를 매칭해 봅니다.",
+                "url": "https://sortify.co.kr/explore-taste"
+              }
+            ]
+          })
+        }}
+      />
+
       {/* Premium Floating Profile/Login Button */}
       <div className="absolute top-6 right-6 z-50">
         <ProfileHeader />
@@ -399,12 +457,16 @@ export default function Home() {
         
         {/* Actions */}
         <div className="flex flex-col items-center gap-3 mt-2 z-20">
-          <button 
-            onClick={handleStart}
-            className="px-12 py-3 bg-navy text-cream rounded-full hover:bg-navy/90 transition-all font-semibold text-base shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer min-w-[180px]"
+          <a 
+            href={modes[activeCardIndex].target}
+            onClick={(e) => {
+              e.preventDefault();
+              handleStart();
+            }}
+            className="px-12 py-3 bg-navy text-cream rounded-full hover:bg-navy/90 transition-all font-semibold text-base shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer min-w-[180px] inline-flex justify-center items-center"
           >
             {modes[activeCardIndex].btnText}
-          </button>
+          </a>
           
           {hasPreviousProgress && (activeCardIndex === 0 || activeCardIndex === 1) && (
             <motion.button
@@ -423,15 +485,19 @@ export default function Home() {
          <LPPlayer />
          
          {user?.user_metadata?.is_admin === true && (
-           <motion.button
+           <motion.a
              initial={{ opacity: 0, y: 10 }}
              animate={{ opacity: 1, y: 0 }}
-             onClick={() => router.push("/admin")}
-             className="px-5 py-2 bg-navy/5 text-navy hover:text-point hover:bg-navy/10 rounded-full border border-navy/10 hover:border-point/20 transition-all font-sans font-bold text-xs tracking-wider cursor-pointer flex items-center gap-1.5 shadow-sm"
+             href="/admin"
+             onClick={(e) => {
+               e.preventDefault();
+               router.push("/admin");
+             }}
+             className="px-5 py-2 bg-navy/5 text-navy hover:text-point hover:bg-navy/10 rounded-full border border-navy/10 hover:border-point/20 transition-all font-sans font-bold text-xs tracking-wider cursor-pointer flex items-center gap-1.5 shadow-sm inline-flex"
            >
              <span className="h-1.5 w-1.5 rounded-full bg-point animate-pulse" />
              어드민 페이지로 이동
-           </motion.button>
+           </motion.a>
          )}
       </div>
 
@@ -495,6 +561,44 @@ export default function Home() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Semantic Sitemap Links for Search Engine Crawlers */}
+      <nav className="w-full max-w-md mx-auto mt-8 border-t border-navy/10 pt-6 px-4 pb-2 text-center select-none z-10">
+        <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-sans font-bold text-navy/40">
+          <li>
+            <Link href="/genres" className="hover:text-point transition-colors">
+              믹스매치 월드컵
+            </Link>
+          </li>
+          <li>
+            <span className="text-navy/15">•</span>
+          </li>
+          <li>
+            <Link href="/genres?mode=single" className="hover:text-point transition-colors">
+              최애 곡 줄 세우기
+            </Link>
+          </li>
+          <li>
+            <span className="text-navy/15">•</span>
+          </li>
+          <li>
+            <Link href="/explore-taste" className="hover:text-point transition-colors">
+              내 취향 스페이스
+            </Link>
+          </li>
+          <li>
+            <span className="text-navy/15">•</span>
+          </li>
+          <li>
+            <Link href="/archive" className="hover:text-point transition-colors">
+              공개 취향 아카이브
+            </Link>
+          </li>
+        </ul>
+        <p className="text-[10px] font-sans text-navy/20 mt-4">
+          © {new Date().getFullYear()} Sortify. All rights reserved.
+        </p>
+      </nav>
     </main>
   );
 }
