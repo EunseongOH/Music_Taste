@@ -21,6 +21,10 @@ body {
   overflow-x: hidden;
 }
 
+body, h1, h2, h3, h4, h5, h6, p, span, button, a, label {
+  word-break: keep-all;
+}
+
 /* Grain texture utility applied dynamically or globally */
 .bg-grain {
   position: fixed;

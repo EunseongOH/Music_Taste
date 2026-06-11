@@ -9,6 +9,7 @@ import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
+import { trackEvent } from "@/utils/gtag";
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
@@ -1111,6 +1112,10 @@ export default function TracksPage() {
 
     sessionStorage.removeItem("worldcup_progress");
     localStorage.removeItem("worldcup_progress");
+
+    // Trigger GA4 events
+    trackEvent("funnel_song_complete", { selected_songs_count: selectedTracksData.length });
+    trackEvent("tournament_start", { selected_songs_count: selectedTracksData.length });
 
     router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
   };

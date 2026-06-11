@@ -7,6 +7,7 @@ import LoginModal from "@/components/LoginModal";
 import { useAuth } from "@/components/AuthProvider";
 import { Trophy, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import ProfileHeader from "@/components/ProfileHeader";
 
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale, setSafeLocale } from "@/utils/storage";
@@ -45,6 +46,13 @@ export default function Home() {
       desc: locale === "ko" ? "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요." : "Explore your saved music tastes and browse the feeds of friends who share similar tastes.",
       btnText: locale === "ko" ? "확인하기" : "Check",
       target: "/explore-taste"
+    },
+    {
+      id: "public-archive",
+      title: locale === "ko" ? "오픈 취향 아카이브" : "Public Taste Archive",
+      desc: locale === "ko" ? "다른 음악 팬들이 완성한 다양하고 개성 넘치는 음악 취향 리스트를 구경해 보세요." : "Explore the diverse and unique music taste records shared by other music fans.",
+      btnText: locale === "ko" ? "구경하기" : "Explore",
+      target: "/archive"
     }
   ];
 
@@ -61,8 +69,8 @@ export default function Home() {
 
   const t = {
     ko: {
-      tagline1: "가장 선명한 취향의 기록.",
-      tagline2: "당신의 음악 취향을 나열하고, 나만의 색깔로 증폭시켜 보세요.",
+      tagline1: "내 손안에서 깔끔하게 정리되는 음악 취향, Sortify",
+      tagline2: "좋아하는 음악을 나열하고, 나의 색깔을 증폭시켜 보세요.",
       start: "시작하기",
       continue: "이어서 진행하기",
       startNewTitle: "새로 시작할까요?",
@@ -134,6 +142,11 @@ export default function Home() {
       } else {
         setIsModalOpen(true);
       }
+      return;
+    }
+
+    if (activeMode.id === "public-archive") {
+      router.push(activeMode.target);
       return;
     }
 
@@ -265,6 +278,11 @@ export default function Home() {
 
   return (
     <main className="w-full flex flex-1 flex-col items-center justify-between py-6 relative overflow-hidden">
+      {/* Premium Floating Profile/Login Button */}
+      <div className="absolute top-6 right-6 z-50">
+        <ProfileHeader />
+      </div>
+
       {/* Premium Floating Language Switcher */}
       <div className="absolute top-6 left-6 z-50 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300">
         <div className="flex items-center justify-center pl-2 pr-1">
@@ -298,7 +316,9 @@ export default function Home() {
             Sortify
           </h1>
           <p className="font-sans text-xs md:text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed break-keep mt-1">
-            {t.tagline1} {t.tagline2}
+            {t.tagline1}
+            <br />
+            {t.tagline2}
           </p>
         </div>
 
@@ -325,7 +345,13 @@ export default function Home() {
                 <div className="w-full bg-[#FAF7F2] border-[3px] border-navy rounded-[2.5rem] p-6 shadow-md hover:shadow-lg transition-shadow duration-300 relative flex flex-col items-center justify-between text-center min-h-[170px] select-none">
                   {/* Mode Card Header Badge */}
                   <div className="absolute -top-3 px-4 py-0.5 bg-point text-white text-[9px] font-sans font-bold uppercase tracking-wider rounded-full shadow-sm">
-                    {mode.id === "multi" ? "Mode 01" : mode.id === "single" ? "Mode 02" : "My Space"}
+                    {mode.id === "multi" 
+                      ? "Mode 01" 
+                      : mode.id === "single" 
+                        ? "Mode 02" 
+                        : mode.id === "archive" 
+                          ? "My Space" 
+                          : "Public Feed"}
                   </div>
                   
                   <div className="mt-2 w-full flex-1 flex flex-col justify-center">
@@ -380,7 +406,7 @@ export default function Home() {
             {modes[activeCardIndex].btnText}
           </button>
           
-          {hasPreviousProgress && activeCardIndex !== 2 && (
+          {hasPreviousProgress && (activeCardIndex === 0 || activeCardIndex === 1) && (
             <motion.button
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}

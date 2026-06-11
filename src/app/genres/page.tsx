@@ -7,6 +7,7 @@ import { Disc, Music, Check, ArrowRight } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { trackEvent } from "@/utils/gtag";
 
 interface GenreItem {
   id: string;
@@ -78,6 +79,17 @@ export default function GenresPage() {
   const handleNext = () => {
     if (selectedGenres.length < 3) return;
     
+    // Trigger GA4 funnel event with comma-separated genres string
+    trackEvent("funnel_genre_complete", { 
+      selected_genres_count: selectedGenres.length,
+      selected_genres: selectedGenres.join(",")
+    });
+
+    // Track each selected genre individually for aggregate bar charts in GA4
+    selectedGenres.forEach(genreId => {
+      trackEvent("select_genre", { genre_id: genreId });
+    });
+
     // Sync to storage (best-effort; may be in-memory if sandboxed)
     sessionStorage.setItem("selected_genres", JSON.stringify(selectedGenres));
     localStorage.setItem("selected_genres", JSON.stringify(selectedGenres));
@@ -119,7 +131,15 @@ export default function GenresPage() {
       {/* Main Intro */}
       <div className="text-left mt-6 mb-8">
         <h1 className="font-serif text-[1.6rem] sm:text-3xl text-navy tracking-tight leading-snug font-bold">
-          {locale === "ko" ? "선호하는 음악 장르를 골라주세요" : "Select your favorite genres"}
+          {locale === "ko" ? (
+            <>
+              선호하는 음악 장르를
+              <br />
+              골라주세요
+            </>
+          ) : (
+            "Select your favorite genres"
+          )}
         </h1>
         <p className="font-sans text-charcoal/90 font-medium text-sm sm:text-base mt-2">
           {locale === "ko" ? "최소 3개의 장르를 선택해 주세요." : "Please select at least 3 genres."}

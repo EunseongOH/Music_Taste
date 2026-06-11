@@ -4,6 +4,7 @@ import { Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { cookies } from "next/headers";
+import { GoogleAnalytics } from "@next/third-parties/google";
 
 const pretendard = localFont({
   src: "./fonts/PretendardVariable.woff2",
@@ -17,10 +18,35 @@ const playfair = Playfair_Display({
   variable: "--font-playfair",
 });
 
-export const metadata: Metadata = {
-  title: "Analog Record Shop",
-  description: "당신의 음악적 온도를 확인해보세요",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const cookieStore = await cookies();
+  const lang = cookieStore.get("locale")?.value || "ko";
+
+  if (lang === "ko") {
+    return {
+      title: "Sortify | 최애곡 순위 매기기, 나만의 음악 취향표 소트(Sort)",
+      description: "좋아하는 아티스트와 곡들을 직접 나열하고 소트(Sort)해 보세요! 월드컵 토너먼트를 거쳐 나만의 세밀한 음악 취향표와 전체 트랙 순위 리스트를 완성하고, 나와 비슷한 곡을 좋아하는 사람들이 또 어떤 곡들을 좋아하는지 함께 살펴볼 수 있습니다.",
+      openGraph: {
+        title: "Sortify | 최애곡 순위 매기기, 나만의 음악 취향표 소트(Sort)",
+        description: "좋아하는 아티스트와 곡들을 직접 나열하고 소트(Sort)해 보세요! 월드컵 토너먼트를 거쳐 나만의 세밀한 음악 취향표와 전체 트랙 순위 리스트를 완성하고, 나와 비슷한 곡을 좋아하는 사람들이 또 어떤 곡들을 좋아하는지 함께 살펴볼 수 있습니다.",
+        images: ["/og-image.png"],
+        type: "website",
+      }
+    };
+  } else {
+    return {
+      title: "Sortify | Rank Your Favorite Songs & Build Your Music Tier List",
+      description: "Select your favorite artists and tracks to sort them into your ultimate music tier list. Complete your precise track rankings through song tournaments, and explore what other music fans with similar tastes love listening to.",
+      openGraph: {
+        title: "Sortify | Rank Your Favorite Songs & Build Your Music Tier List",
+        description: "Select your favorite artists and tracks to sort them into your ultimate music tier list. Complete your precise track rankings through song tournaments, and explore what other music fans with similar tastes love listening to.",
+        images: ["/og-image.png"],
+        type: "website",
+      }
+    };
+  }
+}
+
 
 export default async function RootLayout({
   children,
@@ -190,6 +216,7 @@ export default async function RootLayout({
             {children}
           </AuthProvider>
         </div>
+        <GoogleAnalytics gaId="G-DBXJYMJRFE" />
       </body>
     </html>
   );

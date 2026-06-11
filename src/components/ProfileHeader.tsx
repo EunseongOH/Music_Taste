@@ -2,24 +2,54 @@
 
 import React, { useState, useEffect } from "react";
 import ProfileModal from "./ProfileModal";
+import LoginModal from "./LoginModal";
 import Image from "next/image";
 import { useAuth } from "@/components/AuthProvider";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 
 export default function ProfileHeader({ className = "" }: { className?: string }) {
   const { user } = useAuth();
   const [customProfileImg, setCustomProfileImg] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
-    const savedImg = sessionStorage.getItem("userProfileImg");
-    if (savedImg) setCustomProfileImg(savedImg);
+    setLocale(getSafeLocale());
   }, []);
+
+  useEffect(() => {
+    if (user?.user_metadata?.avatar_url) {
+      setCustomProfileImg(user.user_metadata.avatar_url);
+      sessionStorage.setItem("userProfileImg", user.user_metadata.avatar_url);
+    } else {
+      const savedImg = sessionStorage.getItem("userProfileImg");
+      if (savedImg) setCustomProfileImg(savedImg);
+      else setCustomProfileImg(null);
+    }
+  }, [user]);
 
   const isLoggedIn = !!user;
   const profileImg = customProfileImg || user?.user_metadata?.avatar_url || "https://picsum.photos/seed/user1/100/100";
 
-  if (!isLoggedIn) return null;
+  if (!isLoggedIn) {
+    return (
+      <>
+        <button
+          onClick={() => setIsLoginOpen(true)}
+          className={`px-4 py-1.5 border border-navy/20 text-navy hover:border-point hover:text-point bg-white/85 backdrop-blur-sm rounded-full text-xs font-sans font-bold transition-all duration-200 cursor-pointer shadow-sm hover:shadow active:scale-95 z-50 ${className}`}
+        >
+          {locale === "ko" ? "로그인" : "Log In"}
+        </button>
+
+        <LoginModal
+          isOpen={isLoginOpen}
+          onClose={() => setIsLoginOpen(false)}
+          locale={locale}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -39,3 +69,4 @@ export default function ProfileHeader({ className = "" }: { className?: string }
     </>
   );
 }
+
