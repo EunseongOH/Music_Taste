@@ -235,7 +235,7 @@ export default function TasteSharedPage() {
             {/* Creator avatar */}
             <div className="relative w-10 h-10 rounded-full overflow-hidden border border-navy/20 shadow-sm shrink-0 bg-white">
               <Image
-                src={result.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                src={result.user_profile_image || "/default-profile.png"}
                 alt={formatNickname(result.user_nickname, t.nicknameDefault)}
                 width={40}
                 height={40}

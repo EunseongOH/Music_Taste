@@ -716,7 +716,7 @@ export default function ExploreTastePage() {
                           {/* User Avatar */}
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
-                              src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                              src={mate.user_profile_image || "/default-profile.png"}
                               alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                               width={64}
                               height={64}
@@ -774,7 +774,7 @@ export default function ExploreTastePage() {
                           {/* User Avatar */}
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
-                              src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                              src={mate.user_profile_image || "/default-profile.png"}
                               alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                               width={64}
                               height={64}
@@ -829,7 +829,7 @@ export default function ExploreTastePage() {
                             {/* Avatar */}
                             <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300">
                               <Image
-                                src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                                src={mate.user_profile_image || "/default-profile.png"}
                                 alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                                 width={48}
                                 height={48}
@@ -1012,7 +1012,7 @@ export default function ExploreTastePage() {
                   <div className="flex items-center gap-3.5 mb-4 pr-6">
                     <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm">
                       <Image
-                        src={selectedMateDetail.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                        src={selectedMateDetail.user_profile_image || "/default-profile.png"}
                         alt={formatNickname(selectedMateDetail.user_nickname, t.nicknameDefault)}
                         width={48}
                         height={48}

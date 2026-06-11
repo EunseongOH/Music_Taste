@@ -213,7 +213,7 @@ export default function ArchivePage() {
                     {/* User profile image */}
                     <div className="relative w-9 h-9 rounded-full overflow-hidden border border-navy/20 shadow-sm shrink-0 bg-white">
                       <Image
-                        src={result.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                        src={result.user_profile_image || "/default-profile.png"}
                         alt={formatNickname(result.user_nickname, t.nicknameDefault)}
                         width={36}
                         height={36}

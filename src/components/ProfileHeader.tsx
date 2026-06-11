@@ -30,7 +30,7 @@ export default function ProfileHeader({ className = "" }: { className?: string }
   }, [user]);
 
   const isLoggedIn = !!user;
-  const profileImg = customProfileImg || user?.user_metadata?.avatar_url || "https://picsum.photos/seed/user1/100/100";
+  const profileImg = customProfileImg || user?.user_metadata?.avatar_url || "/default-profile.png";
 
   if (!isLoggedIn) {
     return (
