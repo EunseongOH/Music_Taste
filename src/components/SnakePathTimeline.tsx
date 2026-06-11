@@ -228,10 +228,10 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
           d += ` C ${p1x} ${p1y}, ${p2x} ${p2y}, ${p3.x} ${p3.y}`;
           
           const turnLen = getBezierLength(
-            { x: p0.x, y: p0.y * scaleY },
-            { x: p1x, y: p1y * scaleY },
-            { x: p2x, y: p2y * scaleY },
-            { x: p3.x, y: p3.y * scaleY }
+            { x: p0.x, y: p0.y },
+            { x: p1x, y: p1y },
+            { x: p2x, y: p2y },
+            { x: p3.x, y: p3.y }
           );
           accumulatedDistance += turnLen;
           pointsWithDistance.push({ ...p3, distance: accumulatedDistance });
@@ -322,8 +322,9 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
           const topPercent = `${(pt.y / viewBoxHeight) * 100}%`;
 
           const pathFraction = pt.distance / totalPathLength;
-          // 카메라가 도달하기 2.5초 전에 선명해지도록 처리 (충분한 시각적 대비 및 인지 시간 확보)
-          const lightUpDelay = isCompleted ? 0 : Math.max(0, 1.0 + pathFraction * drawDuration - 2.5);
+          // 곡 개수(즉 drawDuration)에 따라 선명해지는 선행 시간(Lead Time)을 유동적으로 계산 (30곡=약 2.5초, 200곡=약 16.8초 선행)
+          const leadTime = Math.max(2.5, drawDuration * 0.07);
+          const lightUpDelay = isCompleted ? 0 : Math.max(0, 1.0 + pathFraction * drawDuration - leadTime);
           
           const lightUpStyle: React.CSSProperties = isCompleted
             ? { opacity: 1.0, filter: "blur(0px) grayscale(0%)" }
