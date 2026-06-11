@@ -18,7 +18,8 @@ interface SnakePathTimelineProps {
   isCompleted?: boolean;
 }
 
-const getRowSizes = (n: number, maxCols: number = 4) => {
+// 1. maxCols 제한을 없애고 완벽한 피라미드 구조(1, 2, 3, 4, 5...)로 배분합니다.
+const getRowSizes = (n: number) => {
   if (n <= 0) return [];
   if (n === 1) return [1];
   
@@ -32,6 +33,7 @@ const getRowSizes = (n: number, maxCols: number = 4) => {
     current++;
   }
   
+  // 남은 곡들은 하위 줄부터 역순으로 골고루 뿌려줍니다.
   if (remaining > 0) {
     let idx = sizes.length - 1;
     while (remaining > 0) {
@@ -47,8 +49,7 @@ const getRowSizes = (n: number, maxCols: number = 4) => {
   return sizes;
 };
 
-// 좌우 겹침을 방지하기 위해 스마트폰 최소 해상도(320px)를 기준으로 
-// S(한 줄의 노드 개수)에 따라 안전한 고정 너비(safeWidth)를 수학적으로 계산하여 할당
+// 공간이 좌우로 무한 확장되므로, 하위 순위 노드들도 더 이상 작아질 필요 없이 쾌적한 사이즈를 유지합니다.
 const getNodeDimensions = (S: number, isWinner: boolean) => {
   if (isWinner) {
     return {
@@ -56,7 +57,7 @@ const getNodeDimensions = (S: number, isWinner: boolean) => {
       badgeClass: "w-8 h-8 text-sm -top-4 -left-4 bg-[#E67E22] text-white",
       titleClass: "text-[11px] sm:text-[12px] font-extrabold text-navy tracking-tight",
       artistClass: "text-[8px] sm:text-[9px] text-navy/60 font-semibold",
-      safeWidth: "130px",
+      safeWidth: "140px",
       holeClass: "w-[24%] h-[24%]"
     };
   }
@@ -67,62 +68,29 @@ const getNodeDimensions = (S: number, isWinner: boolean) => {
       badgeClass: "w-5.5 h-5.5 text-[9px] -top-2.5 -left-2.5 bg-cream text-navy",
       titleClass: "text-[9.5px] sm:text-[10.5px] font-bold text-navy tracking-tight",
       artistClass: "text-[7.5px] sm:text-[8.5px] text-navy/60",
-      safeWidth: "100px",
+      safeWidth: "110px",
       holeClass: "w-[22%] h-[22%]"
     };
   }
   
-  if (S === 3) {
+  if (S <= 4) {
     return {
       albumClass: "w-11 h-11 border-navy/20 shadow-md",
       badgeClass: "w-5 h-5 text-[8.5px] -top-2 -left-2 bg-cream text-navy",
       titleClass: "text-[8px] sm:text-[9px] font-bold text-navy tracking-tight",
       artistClass: "text-[6px] sm:text-[7px] text-navy/60",
-      safeWidth: "85px",
+      safeWidth: "90px",
       holeClass: "w-[22%] h-[22%]"
     };
   }
 
-  if (S === 4) {
-    return {
-      albumClass: "w-9 h-9 border-navy/20 shadow-sm",
-      badgeClass: "w-4 h-4 text-[7px] -top-1.5 -left-1.5 bg-cream text-navy",
-      titleClass: "text-[7px] sm:text-[7.5px] font-bold text-navy tracking-tight",
-      artistClass: "text-[5.5px] sm:text-[6px] text-navy/60",
-      safeWidth: "70px",
-      holeClass: "w-[20%] h-[20%]"
-    };
-  }
-
-  if (S === 5) {
-    return {
-      albumClass: "w-8 h-8 border-navy/15 shadow-sm",
-      badgeClass: "w-3.5 h-3.5 text-[6px] -top-1 -left-1 bg-cream text-navy",
-      titleClass: "text-[6.5px] sm:text-[7px] font-bold text-navy tracking-tighter",
-      artistClass: "text-[5px] sm:text-[5.5px] text-navy/60 tracking-tighter",
-      safeWidth: "56px",
-      holeClass: "w-[20%] h-[20%]"
-    };
-  }
-
-  if (S === 6) {
-    return {
-      albumClass: "w-7 h-7 border-navy/15 shadow-sm",
-      badgeClass: "w-3 h-3 text-[5.5px] -top-0.5 -left-0.5 bg-cream text-navy",
-      titleClass: "text-[6px] sm:text-[6.5px] font-bold text-navy tracking-tighter",
-      artistClass: "text-[4.5px] sm:text-[5px] text-navy/60 tracking-tighter",
-      safeWidth: "46px",
-      holeClass: "w-[20%] h-[20%]"
-    };
-  }
-
-  // S >= 7
+  // S가 5 이상 아무리 커져도 공간이 보장되므로, 쾌적하게 볼 수 있는 고정 사이즈를 반환합니다.
   return {
-    albumClass: "w-6 h-6 border-navy/15 shadow-sm",
-    badgeClass: "w-2.5 h-2.5 text-[4.5px] -top-0.5 -left-0.5 bg-cream text-navy",
-    titleClass: "text-[5px] sm:text-[5.5px] font-bold text-navy tracking-tighter",
-    artistClass: "text-[4px] sm:text-[4.5px] text-navy/60 tracking-tighter",
-    safeWidth: "38px",
+    albumClass: "w-9 h-9 border-navy/15 shadow-sm",
+    badgeClass: "w-4 h-4 text-[7px] -top-1.5 -left-1.5 bg-cream text-navy",
+    titleClass: "text-[7.5px] sm:text-[8px] font-bold text-navy tracking-tight",
+    artistClass: "text-[6px] sm:text-[6.5px] text-navy/60",
+    safeWidth: "80px", // 텍스트가 16자까지 들어갈 넉넉한 너비
     holeClass: "w-[20%] h-[20%]"
   };
 };
@@ -154,10 +122,15 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
   const { pathData, points, viewBoxHeight, cameraKeyframes, totalPathLength } = useMemo(() => {
     if (!tracks || tracks.length === 0) return { pathData: "", points: [], viewBoxHeight: 600, cameraKeyframes: [], totalPathLength: 1 };
 
-    const sizes = getRowSizes(tracks.length, 4); 
+    const sizes = getRowSizes(tracks.length); 
+    const maxS = sizes[sizes.length - 1]; // 가장 넓은 맨 아랫줄의 곡 개수
+    
+    // 2. 가상 좌표계 무한 확장 (Expansion Factor)
+    // 한 줄에 5곡이 들어갈 때를 기본 1배수(100%)로 보고, 노드가 늘어나면 캔버스를 강제로 좌우로 찢어 넓힙니다.
+    const expansionFactor = Math.max(1, maxS / 5); 
+
     const PADDING_Y = 80;
     const ROW_HEIGHT = 145; 
-    const VIEW_WIDTH = 100;
     const VIEW_HEIGHT = Math.max(600, (sizes.length - 1) * ROW_HEIGHT + PADDING_Y * 2);
 
     let calculatedPoints: { x: number, y: number, trackIdx: number, rank: number, track: Track, rowCapacity: number }[] = [];
@@ -171,23 +144,19 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
       const rowNodes: { x: number, y: number, trackIdx: number, rank: number, track: Track, rowCapacity: number }[] = new Array(S);
 
       for (let c = 0; c < S; c++) {
-        const x = (c + 0.5) * (VIEW_WIDTH / S);
+        // 기존 0~100 사이의 상대 비율 좌표 (정중앙은 50)
+        const p = (c + 0.5) * (100 / S);
+        
+        // 정중앙(50)을 기준으로 확장 팽창 계수(expansionFactor)를 곱하여 물리적으로 위치를 벌려줍니다.
+        // ex) 200곡일 때 좌우 끝 좌표는 -150% ~ 250% 까지 뻗어나가며, ResultPage의 카메라가 이를 알아서 스캔합니다!
+        const x = 50 + (p - 50) * expansionFactor;
+        
         const y = PADDING_Y + r * ROW_HEIGHT;
         const ti = isLeftToRight ? (trackIdx - c) : (trackIdx - (S - 1 - c));
         rowNodes[c] = { x, y, trackIdx: ti, rank: ti + 1, track: tracks[ti], rowCapacity: S };
       }
 
       trackIdx -= S;
-
-      let minX = rowNodes[0].x;
-      let maxX = rowNodes[rowNodes.length - 1].x;
-      if (S === 1) {
-        minX = 50; maxX = 50;
-      }
-      
-      let paddingX = 15;
-      let rowLeftX = Math.max(5, minX - paddingX);
-      let rowRightX = Math.min(95, maxX + paddingX);
       
       if (isLeftToRight) {
         calculatedPoints.push(...rowNodes);
@@ -198,8 +167,6 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
       rowInfos.push({
         r,
         y: PADDING_Y + r * ROW_HEIGHT,
-        leftX: rowLeftX,
-        rightX: rowRightX,
         isLeftToRight,
         nodes: isLeftToRight ? rowNodes : [...rowNodes].reverse()
       });
@@ -250,7 +217,8 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
           let p0 = row.nodes[row.nodes.length - 1];
           let p3 = nextRow.nodes[0];
           
-          let turnWidth = 14;
+          // 가상 캔버스가 확장된 만큼 곡선(Turn Width)도 비례해서 우아하게 넓혀줍니다.
+          let turnWidth = 10 * expansionFactor; 
           let isRightSide = row.isLeftToRight;
           let p1x = isRightSide ? p0.x + turnWidth : p0.x - turnWidth;
           let p1y = p0.y - 30;
@@ -316,11 +284,12 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
         .animate-winner-highlight { animation: winnerBounce 2s ease-in-out infinite; }
       `}} />
 
+      {/* overflow="visible"를 통해 마이너스 좌표나 100%를 초과하는 확장 좌표계의 선도 모두 화면에 렌더링되게 허용합니다 */}
       <svg 
         viewBox={`0 0 100 ${viewBoxHeight}`} 
         className="absolute top-0 w-full z-0 h-full drop-shadow-md"
         preserveAspectRatio="none"
-        overflow="visible"
+        overflow="visible" 
       >
         <path d={pathData} fill="none" stroke="rgba(26,42,108,0.05)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
         
@@ -347,11 +316,12 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
         {points.map((pt) => {
           const isWinner = pt.rank === 1;
           const dims = getNodeDimensions(pt.rowCapacity, isWinner);
+          
+          // 계산된 무한 확장 팽창 좌표(x%)를 그대로 left에 주입
           const leftPercent = `${pt.x}%`;
           const topPercent = `${(pt.y / viewBoxHeight) * 100}%`;
 
           const pathFraction = pt.distance / totalPathLength;
-          // 카메라가 도달하기 0.6초 전에 선명해지도록 처리 (속도감 상승)
           const lightUpDelay = isCompleted ? 0 : Math.max(0, 1.0 + pathFraction * drawDuration - 0.6);
           
           const lightUpStyle: React.CSSProperties = isCompleted
@@ -382,35 +352,38 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                       : 'scale-100 z-10 hover:z-30 hover:scale-110'
                   }`}
                 >
-                  {isWinner && (
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-30 text-yellow-500 text-base drop-shadow-md select-none animate-bounce">
-                      👑
-                    </div>
-                  )}
+                  {/* CD 커버, 뱃지, 레코드 구멍이 서로 어긋나지 않도록 강력한 래퍼(Wrapper)로 묶음 */}
+                  <div className="relative flex flex-col items-center">
+                    {isWinner && (
+                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-30 text-yellow-500 text-base drop-shadow-md select-none animate-bounce">
+                        👑
+                      </div>
+                    )}
 
-                  <div className={`absolute rounded-full flex items-center justify-center font-serif font-bold z-30 shadow-md border border-white ${dims.badgeClass}`}>
-                    {pt.rank}
+                    <div className={`absolute rounded-full flex items-center justify-center font-serif font-bold z-30 shadow-md border border-white ${dims.badgeClass}`}>
+                      {pt.rank}
+                    </div>
+                    
+                    <div 
+                      className={`relative rounded-full overflow-hidden border-2 ${dims.albumClass}`}
+                      style={{
+                        maskImage: "radial-gradient(circle, transparent 12%, black 12.5%)",
+                        WebkitMaskImage: "radial-gradient(circle, transparent 12%, black 12.5%)"
+                      }}
+                    >
+                      <Image src={pt.track.albumImage} alt={pt.track.title} fill className="object-cover" />
+                    </div>
+                    
+                    {/* 레코드 구멍 테두리가 무조건 앨범 이미지 정중앙에 고정됨 */}
+                    <div className={`absolute inset-0 m-auto ${dims.holeClass} border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20`} />
                   </div>
                   
-                  <div 
-                    className={`relative rounded-full overflow-hidden border-2 ${dims.albumClass}`}
-                    style={{
-                      maskImage: "radial-gradient(circle, transparent 12%, black 12.5%)",
-                      WebkitMaskImage: "radial-gradient(circle, transparent 12%, black 12.5%)"
-                    }}
-                  >
-                    <Image src={pt.track.albumImage} alt={pt.track.title} fill className="object-cover" />
-                  </div>
-                  
-                  <div className={`absolute inset-0 m-auto ${dims.holeClass} border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20`} />
-                  
-                  {/* 가로 겹침 완전 방지를 위한 안전 너비(safeWidth) 절대 고정 및 상단 마진 적용 */}
+                  {/* 충분히 보장된 가로 너비(safeWidth) 할당 & 16자 텍스트 생략 없이 줄바꿈 */}
                   <div 
                     className={`mt-2 flex flex-col items-center transition-all ${isWinner ? 'scale-110' : 'scale-100'}`}
                     style={{ width: dims.safeWidth }}
                   >
-                    {/* 곡이 많을 경우 공간 압축을 위해 line-clamp-3 및 break-all 적용 */}
-                    <p className={`${dims.titleClass} ${pt.rowCapacity >= 5 ? 'line-clamp-3' : 'line-clamp-2'} break-all leading-[1.15] text-center w-full`}>{pt.track.title}</p>
+                    <p className={`${dims.titleClass} line-clamp-3 break-all leading-[1.15] text-center w-full`}>{pt.track.title}</p>
                     <p className={`${dims.artistClass} mt-0.5 line-clamp-1 break-all leading-none text-center w-full`}>{pt.track.artistName}</p>
                   </div>
                 </motion.div>
