@@ -322,7 +322,8 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
           const topPercent = `${(pt.y / viewBoxHeight) * 100}%`;
 
           const pathFraction = pt.distance / totalPathLength;
-          const lightUpDelay = isCompleted ? 0 : Math.max(0, 1.0 + pathFraction * drawDuration - 0.6);
+          // 카메라가 도달하기 2.5초 전에 선명해지도록 처리 (충분한 시각적 대비 및 인지 시간 확보)
+          const lightUpDelay = isCompleted ? 0 : Math.max(0, 1.0 + pathFraction * drawDuration - 2.5);
           
           const lightUpStyle: React.CSSProperties = isCompleted
             ? { opacity: 1.0, filter: "blur(0px) grayscale(0%)" }

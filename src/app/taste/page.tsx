@@ -480,7 +480,7 @@ export default function ResultPage() {
   };
 
   const S = 3.8; // Restored 3.8x dramatic close-up zoom for immersive close-up tracking shots!
-  const panDuration = Math.max(8.0, winners.length * 0.65); // Slower, highly legible cinematic tracking speed!
+  const panDuration = Math.max(12.0, winners.length * 1.2); // 느리고 가독성 높은 슬로우 시네마틱 트래킹 속도 (곡당 약 1.2초 확보)
   const startDelay = 1.0; // Deliberate cinematic delay at the starting position to let vinyl records pop in
   const holdDuration = 1.5; // Freeze-frame focus hold on the #1 song
   const zoomOutDuration = 1.2; // Zoom out to reveal the full path
