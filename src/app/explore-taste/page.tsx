@@ -452,10 +452,17 @@ export default function ExploreTastePage() {
             </p>
             <button
               onClick={() => setIsLoginModalOpen(true)}
-              className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all shadow-[0_4px_12px_rgba(26,42,108,0.25)] cursor-pointer"
+              className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all shadow-[0_4px_12px_rgba(26,42,108,0.25)] cursor-pointer mb-2"
             >
               {t.guestBtn}
             </button>
+            <button
+              onClick={() => router.push("/archive")}
+              className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              {locale === "en" ? "Explore Public Taste Records" : "공개된 다른 유저들의 취향 구경하기"}
+            </button>
+
           </div>
         )}
 

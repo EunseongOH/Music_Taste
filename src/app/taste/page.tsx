@@ -13,6 +13,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
+import { trackEvent } from "@/utils/gtag";
 
 const translations = {
   ko: {
@@ -87,6 +88,7 @@ export default function ResultPage() {
   const [showButton, setShowButton] = useState(false);
   const [isSavingArchive, setIsSavingArchive] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineWrapperRef = useRef<HTMLDivElement>(null);
   const [cameraRig, setCameraRig] = useState<{xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[]} | null>(null);
@@ -102,37 +104,71 @@ export default function ResultPage() {
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setLocale(getSafeLocale());
-    }
+    setLocale(getSafeLocale());
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    const loadData = async () => {
+      if (typeof window === "undefined") return;
+
       const params = new URLSearchParams(window.location.search);
+      const sharedId = params.get("id");
       setIsSingleArtistMode(params.get("mode") === "single");
-    }
-  }, []);
 
-  useEffect(() => {
-    const storedRanking = sessionStorage.getItem("worldcup_ranking");
-    if (!storedRanking) {
-       router.replace("/tracks");
-       return;
-    }
+      if (sharedId) {
+        try {
+          const { data, error } = await supabase
+            .from("tournament_results")
+            .select("*")
+            .eq("id", sharedId)
+            .single();
 
-    try {
-      const parsedRanking = JSON.parse(storedRanking);
-      if (!parsedRanking || parsedRanking.length === 0) {
-         router.replace("/tracks");
-         return;
+          if (error) throw error;
+          if (data) {
+            setIsSingleArtistMode(data.is_single_artist === true);
+            const ranking = data.ranking || [];
+            const normalized = ranking.map((t: any) => ({
+              id: t.id || t.i,
+              title: t.title || t.t,
+              artistName: t.artistName || t.a,
+              albumImage: t.albumImage || (t.m ? (t.m.startsWith("http") ? t.m : `https://i.scdn.co/image/${t.m}`) : "")
+            }));
+            setWinners(normalized);
+            setArchiveTitle(data.title);
+            setIsSaved(true);
+            setSavedId(sharedId);
+            setShowButton(true);
+          } else {
+            router.replace("/tracks");
+          }
+        } catch (err) {
+          console.error("Failed to fetch shared taste card:", err);
+          router.replace("/tracks");
+        }
+      } else {
+        const storedRanking = sessionStorage.getItem("worldcup_ranking");
+        if (!storedRanking) {
+          router.replace("/tracks");
+          return;
+        }
+
+        try {
+          const parsedRanking = JSON.parse(storedRanking);
+          if (!parsedRanking || parsedRanking.length === 0) {
+            router.replace("/tracks");
+            return;
+          }
+          setWinners(parsedRanking);
+        } catch (e) {
+          console.error(e);
+          router.replace("/tracks");
+        }
       }
-      setWinners(parsedRanking);
-    } catch (e) {
-      console.error(e);
-      router.replace("/tracks");
-    }
-  }, []);
+    };
+
+    loadData();
+  }, [router, supabase]);
+
 
   useEffect(() => {
     if (winners.length === 0) return;
@@ -164,6 +200,44 @@ export default function ResultPage() {
     setArchiveTitle(defaultTitle.slice(0, 16));
   }, [winners, isSingleArtistMode]);
 
+  useEffect(() => {
+    if (winners.length > 0) {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const sharedId = params.get("id");
+        if (!sharedId) {
+          trackEvent("funnel_tournament_complete", {
+            winner_track_title: winners[0].title,
+            winner_artist_name: winners[0].artistName
+          });
+        }
+      }
+    }
+  }, [winners]);
+
+  const handleShareLink = () => {
+    if (!savedId) {
+      alert(locale === "en" 
+        ? "Please save to My Taste Space first before sharing! 🎵" 
+        : "링크를 공유하려면 먼저 '내 취향 스페이스에 저장' 버튼을 눌러 저장해 주세요! 🎵"
+      );
+      return;
+    }
+
+    const shareUrl = `${window.location.origin}/taste/${savedId}`;
+    navigator.clipboard.writeText(shareUrl)
+      .then(() => {
+        alert(locale === "en"
+          ? "Share link copied to clipboard! 🎵"
+          : "공유 링크가 클립보드에 복사되었어요! 🎵"
+        );
+        trackEvent("result_share", { share_type: "link_copy" });
+      })
+      .catch((err) => {
+        console.error("Failed to copy link:", err);
+      });
+  };
+
   const handleDownloadCSV = () => {
     if (winners.length === 0) return;
     
@@ -193,6 +267,7 @@ export default function ResultPage() {
   const handleExport = async () => {
     if (winners.length === 0) return;
     setIsExporting(true);
+    trackEvent("result_share", { share_type: "image_download" });
 
     try {
       if (template === "pyramid") {
@@ -305,6 +380,11 @@ export default function ResultPage() {
       if (error) throw error;
       
       setIsSaved(true);
+      if (saveRes && saveRes.id) {
+        setSavedId(saveRes.id);
+      }
+      trackEvent("funnel_archive_save", { is_public: isPublic });
+
       if (locale === "en") {
         alert(overwrite ? "Successfully updated your record!" : "Successfully saved to My Taste Space!");
       } else {
@@ -510,7 +590,7 @@ export default function ResultPage() {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => {}}
+            onClick={handleShareLink}
             className="w-10 h-10 rounded-full border border-navy/20 flex items-center justify-center hover:bg-navy/5 transition-colors"
             title="공유하기"
           >
@@ -543,7 +623,7 @@ export default function ResultPage() {
            <div className="relative z-30 w-full max-w-md mx-auto px-4 mt-2 mb-4 select-none">
              <div className="flex bg-[#1A2A6C]/5 p-1.5 rounded-2xl border border-[#1A2A6C]/10 backdrop-blur-sm gap-0.5">
                <button
-                 onClick={() => setTemplate("pyramid")}
+                 onClick={() => { setTemplate("pyramid"); trackEvent("change_template", { template_type: "pyramid" }); }}
                  className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
                    template === "pyramid" 
                      ? "bg-white text-navy shadow-sm" 
@@ -553,7 +633,7 @@ export default function ResultPage() {
                  {t.templatePyramid}
                </button>
                <button
-                 onClick={() => setTemplate("list")}
+                 onClick={() => { setTemplate("list"); trackEvent("change_template", { template_type: "list" }); }}
                  className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
                    template === "list" 
                      ? "bg-white text-navy shadow-sm" 
@@ -563,7 +643,7 @@ export default function ResultPage() {
                  {t.templateList}
                </button>
                <button
-                 onClick={() => setTemplate("retro")}
+                 onClick={() => { setTemplate("retro"); trackEvent("change_template", { template_type: "retro" }); }}
                  className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
                    template === "retro" 
                      ? "bg-white text-navy shadow-sm" 

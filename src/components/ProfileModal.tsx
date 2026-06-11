@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Camera, User, Phone, Archive, ChevronRight, Calendar, Award, ArrowLeft, Disc } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -18,6 +18,7 @@ interface ProfileModalProps {
 
 export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileModalProps) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileImg, setProfileImg] = useState("https://picsum.photos/seed/user1/100/100");
   const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
@@ -150,8 +151,8 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
   useEffect(() => {
     if (isOpen) {
-      const savedImg = sessionStorage.getItem("userProfileImg");
-      if (savedImg) setProfileImg(savedImg);
+      const currentImg = user?.user_metadata?.avatar_url || sessionStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user1/100/100";
+      setProfileImg(currentImg);
       
       const savedNickname = sessionStorage.getItem("userNickname");
       if (savedNickname) setNickname(savedNickname);
@@ -167,7 +168,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       setUpdateError("");
       setIsUpdating(false);
     }
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,7 +206,8 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
         const { error: authError } = await supabase.auth.updateUser({
           data: {
             nickname: trimmedNickname,
-            phone: phone.trim() || null
+            phone: phone.trim() || null,
+            avatar_url: profileImg
           }
         });
 
@@ -246,11 +248,65 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
     }
   };
 
-  const handleImageChange = () => {
-    // Mock image change by generating a new consistent random image
-    const newSeed = Math.random().toString(36).substring(7);
-    const newImg = `https://picsum.photos/seed/${newSeed}/100/100`;
-    setProfileImg(newImg);
+  const handleImageChangeClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    try {
+      const compressedImg = await resizeAndCompressImage(file);
+      setProfileImg(compressedImg);
+    } catch (err) {
+      console.error("Failed to process image file:", err);
+      setUpdateError(locale === "ko" ? "이미지 처리 중 오류가 발생했습니다." : "Failed to process image file.");
+    }
+  };
+
+  const resizeAndCompressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 128;
+          const MAX_HEIGHT = 128;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+            resolve(dataUrl);
+          } else {
+            reject(new Error("Canvas context not available"));
+          }
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
   };
 
   if (!isOpen) return null;
@@ -373,11 +429,18 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   </div>
                   <button 
                     type="button"
-                    onClick={handleImageChange}
+                    onClick={handleImageChangeClick}
                     className="absolute bottom-0 right-0 bg-point text-white p-2 rounded-full border-2 border-cream shadow-md hover:scale-110 transition-transform"
                   >
                     <Camera size={16} />
                   </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    style={{ display: "none" }}
+                  />
                 </div>
 
                 {/* Edit Fields */}

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { trackEvent } from "@/utils/gtag";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -129,6 +130,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     if (!loginId || !loginPw) return;
     setIsLoading(true);
     setLoginError("");
+    trackEvent("sign_up_click", { method: "email" });
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginId,
@@ -154,6 +156,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
   const handleGoogleLogin = () => {
     setIsLoading(true);
     setLoginError("");
+    trackEvent("sign_up_click", { method: "google" });
     
     // Open the popup login page in a centered window
     const width = 500;
@@ -180,6 +183,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
   const handleKakaoLogin = () => {
     setIsLoading(true);
     setLoginError("");
+    trackEvent("sign_up_click", { method: "kakao" });
 
     const width = 500;
     const height = 650;
@@ -213,6 +217,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
     
     setIsLoading(true);
     setSignupError("");
+    trackEvent("sign_up_click", { method: "email" });
 
     // Check if nickname already exists in database results
     const { data: dupData, error: dupError } = await supabase
@@ -270,6 +275,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
   const confirmGuest = () => {
     sessionStorage.setItem("isGuest", "true");
     sessionStorage.removeItem("userNickname");
+    trackEvent("guest_mode_start");
     handleSuccess();
   };
 

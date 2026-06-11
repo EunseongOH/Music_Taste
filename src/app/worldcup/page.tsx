@@ -13,6 +13,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { saveTournamentProgress, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { trackEvent } from "@/utils/gtag";
 
 interface Track {
   id: string;
@@ -277,6 +278,35 @@ export default function WorldCupPage() {
        let newEliminated = [...eliminatedTracks];
        if (loser) newEliminated.unshift(loser); 
        setEliminatedTracks(newEliminated);
+
+       // Helper to calculate total rounds starting size
+       const getInitialRoundSize = (count: number) => {
+         if (count <= 4) return 4;
+         if (count <= 8) return 8;
+         if (count <= 16) return 16;
+         if (count <= 32) return 32;
+         if (count <= 64) return 64;
+         return Math.pow(2, Math.ceil(Math.log2(count)));
+       };
+
+       // Helper to parse current round number
+       const getCurrentRoundNumber = (roundName: string, matchesCount: number) => {
+         if (!roundName) return matchesCount * 2;
+         if (roundName.includes("결승") || roundName.includes("Final")) return 2;
+         if (roundName.includes("준결승") || roundName.includes("4강") || roundName.includes("Semifinal")) return 4;
+         const match = roundName.match(/(\d+)강/);
+         if (match) return parseInt(match[1]);
+         return matchesCount * 2;
+       };
+
+       // Trigger GA4 match progress event
+       const initialSize = getInitialRoundSize(tracks.length);
+       const roundNum = getCurrentRoundNumber(currentRoundName, matches.length);
+       trackEvent("tournament_progress", {
+         total_rounds: initialSize,
+         current_round: roundNum,
+         current_match: currentMatchIndex + 1
+       });
        
        if (currentMatchIndex + 1 < matches.length) {
          setWinners(newWinners);

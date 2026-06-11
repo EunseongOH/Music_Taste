@@ -223,9 +223,11 @@ export const saveCompletedResult = async (
     user_profile_image: userProfileImage
   };
 
-  const { error: insertError } = await supabase
+  const { data, error: insertError } = await supabase
     .from('tournament_results')
-    .insert(resultData);
+    .insert(resultData)
+    .select('id')
+    .single();
 
   if (insertError) {
     console.error("[Supabase DB] Error saving tournament results:", insertError);
@@ -234,7 +236,7 @@ export const saveCompletedResult = async (
 
   // Once saved successfully, clear the draft
   await deleteActiveDraft();
-  return { success: true };
+  return { success: true, id: data?.id };
 };
 
 // Fetch completed result for a specific artist (single artist mode check)
@@ -312,5 +314,5 @@ export const overwriteCompletedResult = async (
 
   // Once saved successfully, clear the draft
   await deleteActiveDraft();
-  return { success: true };
+  return { success: true, id: resultId };
 };

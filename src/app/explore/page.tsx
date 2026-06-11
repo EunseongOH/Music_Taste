@@ -14,6 +14,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { curatedArtists } from "@/utils/curatedArtists";
+import { trackEvent } from "@/utils/gtag";
 
 interface Artist {
   id: string;
@@ -650,6 +651,7 @@ export default function ExplorePage() {
       }
     } else {
       // Expand / Select for main artists — fetch recommendations
+      trackEvent("select_curated_artist", { artist_name: artist.name });
       setSelectedArtists(prev => {
         if (prev.some(a => a.id === artist.id)) return prev;
         return [...prev, artist];
@@ -1038,6 +1040,7 @@ export default function ExplorePage() {
                         }
                       }
                       
+                      trackEvent("funnel_artist_complete", { selected_artists_count: selectedIds.size });
                       router.push('/tracks');
                     }}
                     className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
