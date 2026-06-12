@@ -47,8 +47,8 @@ const translations = {
     otherRanks: "전체 취향 순위",
     ctaCreate: "나도 나만의 취향표 소트하기 🎵",
     ctaArchive: "공개 아카이브 목록 가기",
-    loading: "공개된 취향 레코드를 불러오는 중...",
-    errorNotFound: "취향 레코드를 찾을 수 없거나 비공개 상태입니다.",
+    loading: "공개된 취향표를 불러오는 중...",
+    errorNotFound: "취향표를 찾을 수 없거나 비공개 상태입니다.",
     nicknameDefault: "음악팬",
     singleDiscography: "최애 곡 줄 세우기",
     backBtn: "뒤로",
@@ -61,8 +61,8 @@ const translations = {
     otherRanks: "Complete Rankings",
     ctaCreate: "Sort My Own Music Taste 🎵",
     ctaArchive: "Back to Public Archive",
-    loading: "Loading shared music taste record...",
-    errorNotFound: "Taste record not found or it is set to private.",
+    loading: "Loading shared music taste card...",
+    errorNotFound: "Taste card not found or it is set to private.",
     nicknameDefault: "Music Fan",
     singleDiscography: "Favorite Songs Lineup",
     backBtn: "Back",
@@ -159,14 +159,14 @@ export default function TasteSharedPage() {
 
   if (!result) {
     return (
-      <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)] px-6">
-        <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 border-b border-navy/10 flex items-center gap-3 shadow-sm mb-12">
+      <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
+        <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center gap-3 shadow-sm mb-12">
           <button onClick={handleBack} className="flex items-center justify-center border-none bg-transparent hover:bg-navy/5 w-8 h-8 rounded-full">
             <ArrowLeft size={20} className="text-navy" />
           </button>
           <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-12">
+        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-12 px-6">
           <div className="w-16 h-16 rounded-full border-2 border-dashed border-navy/30 flex items-center justify-center bg-white/40">
             <Music className="text-navy/30 animate-pulse" size={28} />
           </div>
@@ -196,7 +196,7 @@ export default function TasteSharedPage() {
   return (
     <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
       {/* Top Header */}
-      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm shrink-0">
+      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={handleBack} className="flex items-center justify-center border-none bg-transparent hover:bg-navy/5 w-8 h-8 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-navy" />
@@ -235,7 +235,7 @@ export default function TasteSharedPage() {
             {/* Creator avatar */}
             <div className="relative w-10 h-10 rounded-full overflow-hidden border border-navy/20 shadow-sm shrink-0 bg-white">
               <Image
-                src={result.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                src={result.user_profile_image || "/default-profile.png"}
                 alt={formatNickname(result.user_nickname, t.nicknameDefault)}
                 width={40}
                 height={40}

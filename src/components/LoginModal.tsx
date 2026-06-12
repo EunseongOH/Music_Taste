@@ -6,7 +6,7 @@ import { X, Mail, Lock, User, Phone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
 
 interface LoginModalProps {
@@ -18,9 +18,18 @@ interface LoginModalProps {
 
 type Mode = "login" | "signup" | "guest-warning";
 
-export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLocale }: LoginModalProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
+  const [detectedLocale, setDetectedLocale] = useState<"ko" | "en">("ko");
+
+  useEffect(() => {
+    if (isOpen) {
+      setDetectedLocale(getSafeLocale());
+    }
+  }, [isOpen]);
+
+  const locale = propLocale || detectedLocale;
 
   // Form State
   const [loginId, setLoginId] = useState("");
@@ -285,8 +294,8 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
 
   const t = {
     ko: {
-      tagline: mode === "login" ? "가장 선명한 취향의 기록" : 
-               mode === "signup" ? "새로운 레코드 샵에 오신 것을 환영해요" :
+      tagline: mode === "login" ? "가장 선명한 취향을 찾아서" : 
+               mode === "signup" ? "Sortify에 오신 것을 환영해요" :
                "게스트로 진행 안내",
       email: "이메일 (아이디)",
       emailPlaceholder: "이메일 (아이디)",
@@ -295,7 +304,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
       name: "이름",
       namePlaceholder: "홍길동",
       nickname: "닉네임",
-      nicknamePlaceholder: "레코드 러버",
+      nicknamePlaceholder: "취향 수집가",
       phone: "전화번호 (선택)",
       phonePlaceholder: "010-0000-0000",
       login: "로그인",
@@ -313,8 +322,8 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
       goLogin: "로그인하러 가기",
     },
     en: {
-      tagline: mode === "login" ? "Record your clearest taste" : 
-               mode === "signup" ? "Welcome to the Record Shop!" :
+      tagline: mode === "login" ? "Sort your clearest taste" : 
+               mode === "signup" ? "Welcome to Sortify!" :
                "Guest Mode Guide",
       email: "Email (ID)",
       emailPlaceholder: "Email (ID)",
@@ -323,7 +332,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale = "ko" }
       name: "Name",
       namePlaceholder: "Full Name",
       nickname: "Nickname",
-      nicknamePlaceholder: "Record Lover",
+      nicknamePlaceholder: "Music Lover",
       phone: "Phone Number (Optional)",
       phonePlaceholder: "010-0000-0000",
       login: "Log In",

@@ -203,7 +203,7 @@ export const saveCompletedResult = async (
     if (!userNickname || userNickname.includes("@")) {
       userNickname = "음악팬";
     }
-    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
+    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "/default-profile.png";
   }
 
   const resultData = {
@@ -285,7 +285,7 @@ export const overwriteCompletedResult = async (
     if (!userNickname || userNickname.includes("@")) {
       userNickname = "음악팬";
     }
-    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user/100/100";
+    userProfileImage = sessionStorage.getItem("userProfileImg") || localStorage.getItem("userProfileImg") || "/default-profile.png";
   }
 
   const updateData = {

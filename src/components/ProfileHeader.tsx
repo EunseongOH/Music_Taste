@@ -7,15 +7,18 @@ import Image from "next/image";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 
-export default function ProfileHeader({ className = "" }: { className?: string }) {
+import { useRouter } from "next/navigation";
+
+export default function ProfileHeader({ className = "", locale: propLocale }: { className?: string; locale?: "ko" | "en" }) {
   const { user } = useAuth();
+  const router = useRouter();
   const [customProfileImg, setCustomProfileImg] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [locale, setLocale] = useState<"ko" | "en">("ko");
+  const [localeState, setLocaleState] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
-    setLocale(getSafeLocale());
+    setLocaleState(getSafeLocale());
   }, []);
 
   useEffect(() => {
@@ -30,7 +33,8 @@ export default function ProfileHeader({ className = "" }: { className?: string }
   }, [user]);
 
   const isLoggedIn = !!user;
-  const profileImg = customProfileImg || user?.user_metadata?.avatar_url || "https://picsum.photos/seed/user1/100/100";
+  const profileImg = customProfileImg || user?.user_metadata?.avatar_url || "/default-profile.png";
+  const locale = propLocale || localeState;
 
   if (!isLoggedIn) {
     return (
@@ -46,6 +50,10 @@ export default function ProfileHeader({ className = "" }: { className?: string }
           isOpen={isLoginOpen}
           onClose={() => setIsLoginOpen(false)}
           locale={locale}
+          onSuccess={() => {
+            setIsLoginOpen(false);
+            router.refresh();
+          }}
         />
       </>
     );

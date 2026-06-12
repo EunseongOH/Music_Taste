@@ -361,14 +361,14 @@ export default function WorldCupPage() {
   return (
     <main className="flex flex-col min-h-screen relative z-10 w-full overflow-hidden bg-[#F5F2ED]">
       {/* Header */}
-      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm">
+      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
           <h1 className="font-serif text-2xl text-navy tracking-tight">
             {locale === "en" ? "LP World Cup" : "LP 월드컵"}
           </h1>
         </div>
-        <ProfileHeader />
+        <ProfileHeader locale={locale} />
       </div>
 
       <div className="flex-[1] flex flex-col relative w-full h-full p-3 xs:p-4 overflow-y-auto pb-20 sm:pb-32">

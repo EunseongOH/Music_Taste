@@ -240,6 +240,15 @@ export default function ExplorePage() {
           }
         }
 
+        // If single artist mode and no genres specified (skipped selection), select all genres by default
+        if (genresList.length === 0 && isSingle) {
+          genresList = [
+            "k-pop", "pop", "korean hip hop", "hip hop", "korean r&b", "r&b",
+            "korean rock", "rock", "korean indie", "indie", "electronic", "jazz",
+            "ballad", "trot", "j-pop", "classical"
+          ];
+        }
+
         if (genresList.length > 0) {
           setSelectedGenres(genresList);
         }
@@ -270,7 +279,7 @@ export default function ExplorePage() {
           // We do ONE API call with limit=50 and offset=0 to get fresh artists
           let apiArtists: any[] = [];
           try {
-            const apiResults = await searchArtistsByGenres(genresList, 50, 0);
+            const { items: apiResults } = await searchArtistsByGenres(genresList, 50, 0);
             const curatedIds = new Set(curatedUnique.map((a: any) => a.id));
             // Only add artists not already in curated list
             apiArtists = apiResults
@@ -306,7 +315,7 @@ export default function ExplorePage() {
         const mappedArtists: Artist[] = results.map((artist: any) => ({
           id: artist.id,
           name: artist.name,
-          image: artist.image || artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+          image: artist.image || artist.images?.[0]?.url || "/default-artist.png",
           type: "main",
           popularity: artist.popularity || 0,
         }));
@@ -345,7 +354,7 @@ export default function ExplorePage() {
           const sanitizedRestored: Artist[] = restoredArtists.map((a: any) => ({
             id: a.id,
             name: a.name,
-            image: a.image || a.images?.[0]?.url || `https://picsum.photos/seed/${a.id}/300/300`,
+            image: a.image || a.images?.[0]?.url || "/default-artist.png",
             type: a.type || 'main',
             parentId: a.parentId
           }));
@@ -417,7 +426,7 @@ export default function ExplorePage() {
         const mappedArtists: Artist[] = results.map((artist: any) => ({
           id: artist.id,
           name: artist.name,
-          image: artist.images?.[0]?.url || `https://picsum.photos/seed/${artist.id}/300/300`,
+          image: artist.images?.[0]?.url || "/default-artist.png",
           type: "main",
           popularity: artist.popularity || 0,
         }));
@@ -457,7 +466,7 @@ export default function ExplorePage() {
           const mapped: Artist[] = results.map((a: any) => ({
             id: a.id,
             name: a.name,
-            image: a.images?.[0]?.url || `https://picsum.photos/seed/${a.id}/300/300`,
+            image: a.images?.[0]?.url || "/default-artist.png",
             type: "main",
             popularity: a.popularity || 0,
           }));
@@ -490,11 +499,14 @@ export default function ExplorePage() {
         const nextOffset = currentOffset + 20;
 
         console.log(`[explore] Loading genre artists: offset=${currentOffset} → ${nextOffset}`);
-        const results = await searchArtistsByGenres(selectedGenresRef.current, 20, nextOffset);
+        const { items: results, isFallback } = await searchArtistsByGenres(selectedGenresRef.current, 20, nextOffset);
 
         if (results.length === 0) {
-          setHasMoreGenre(false);
-          hasMoreGenreRef.current = false;
+          // If it's a fallback and returned nothing, do not stop the infinite scroll permanently
+          if (!isFallback) {
+            setHasMoreGenre(false);
+            hasMoreGenreRef.current = false;
+          }
         } else {
           const mapped: Artist[] = results
             .filter((a: any) => a.images?.[0]?.url)
@@ -513,8 +525,10 @@ export default function ExplorePage() {
           });
           setVisibleDefaultCount(prev => prev + 20);
 
-          // Advance offset directly in ref — no setState, no stale value
-          genreOffsetRef.current = nextOffset;
+          // Advance offset only if we fetched successfully from API, preserving the query point on error fallback
+          if (!isFallback) {
+            genreOffsetRef.current = nextOffset;
+          }
         }
       } catch (e) {
         console.error("[explore] Failed to load more genre artists:", e);
@@ -616,7 +630,7 @@ export default function ExplorePage() {
             const similar: Artist[] = topRelated.map((r: any) => ({
               id: r.id,
               name: r.name,
-              image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
+              image: r.images?.[0]?.url || "/default-artist.png",
               type: "similar" as const,
               parentId: artist.id,
               popularity: r.popularity || 0,
@@ -678,7 +692,7 @@ export default function ExplorePage() {
             const similar: Artist[] = topRelated.map((r: any) => ({
               id: r.id,
               name: r.name,
-              image: r.images?.[0]?.url || `https://picsum.photos/seed/${r.id}/300/300`,
+              image: r.images?.[0]?.url || "/default-artist.png",
               type: "similar" as const,
               parentId: artist.id,
               popularity: r.popularity || 0,
@@ -826,7 +840,7 @@ export default function ExplorePage() {
       <div className="sticky top-0 z-40 bg-[#F5F2ED]/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex flex-col gap-3 shadow-sm">
         <div className="flex items-center justify-between">
           <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto md:top-auto md:left-auto right-auto font-bold" />
-          <ProfileHeader className="!relative !top-auto !right-auto !md:top-auto !md:right-auto" />
+          <ProfileHeader locale={locale} className="!relative !top-auto !right-auto !md:top-auto !md:right-auto" />
         </div>
 
         <div className="text-left mt-1 mb-2 px-1">
@@ -838,7 +852,7 @@ export default function ExplorePage() {
           </p>
           
           {/* Pre-selected genres badges */}
-          {selectedGenres.length > 0 && (
+          {selectedGenres.length > 0 && !isSingleArtistMode && (
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               <span className="font-sans text-[10px] text-navy/40 font-bold self-center mr-1">{t.genreLabel}</span>
               {selectedGenres.map(genreId => {
@@ -867,8 +881,17 @@ export default function ExplorePage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t.placeholder} 
-            className="w-full py-2.5 pl-11 pr-4 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
+            className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
           />
+          {searchQuery.length > 0 && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute inset-y-0 right-4 flex items-center justify-center text-navy/40 hover:text-point transition-colors cursor-pointer"
+              aria-label="Clear search query"
+            >
+              <X size={16} strokeWidth={2.5} />
+            </button>
+          )}
         </div>
 
         </div>

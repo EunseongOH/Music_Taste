@@ -19,7 +19,7 @@ interface ProfileModalProps {
 export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [profileImg, setProfileImg] = useState("https://picsum.photos/seed/user1/100/100");
+  const [profileImg, setProfileImg] = useState("/default-profile.png");
   const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
   const [updateError, setUpdateError] = useState("");
@@ -151,7 +151,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
   useEffect(() => {
     if (isOpen) {
-      const currentImg = user?.user_metadata?.avatar_url || sessionStorage.getItem("userProfileImg") || "https://picsum.photos/seed/user1/100/100";
+      const currentImg = user?.user_metadata?.avatar_url || sessionStorage.getItem("userProfileImg") || "/default-profile.png";
       setProfileImg(currentImg);
       
       const savedNickname = sessionStorage.getItem("userNickname");

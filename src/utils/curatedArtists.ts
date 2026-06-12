@@ -55,10 +55,10 @@ export const curatedArtists: Record<string, CuratedArtist[]> = {
     { id: "3TVXtAsR1Inumwj472S9r4", name: "Drake", image: "https://i.scdn.co/image/ab6761610000e5eb4293385d324db8558179afd9" },
     { id: "7dGJo4pcD2V6oG8kP0tJRR", name: "Eminem", image: "https://i.scdn.co/image/ab6761610000e5eba00b11c129b27a88fc72f36b" },
     { id: "246dkjvS1zLTtiykXe5h60", name: "Post Malone", image: "https://i.scdn.co/image/ab6761610000e5ebe17c0aa1714a03d62b5ce4e0" },
-    { id: "0Y5tJX12tflao1v6v6RLGa", name: "Travis Scott", image: "https://i.scdn.co/image/ab6761610000e5eb8da829c6cc587ea0b885b57f" },
-    { id: "5K4W6rqBFW3y6RMf3PjGCR", name: "Kanye West", image: "https://i.scdn.co/image/ab6761610000e5eb1a8a7e23fcba7a7c8e9b3c08" },
-    { id: "6l3HvQ5sa6mNPGH9236vSP", name: "J. Cole", image: "https://i.scdn.co/image/ab6761610000e5eb9c2c5b250e8b9c12ad7fc3d8" },
-    { id: "1U1832wVe7jZsCV4LcZ8OI", name: "Tyler, The Creator", image: "https://i.scdn.co/image/ab6761610000e5eb0c1f7ee8d82eef5b18bb98d8" }
+    { id: "0Y5tJX1MQlPlqiwlOH1tJY", name: "Travis Scott", image: "https://i.scdn.co/image/ab6761610000e5eb19c2790744c792d05570bb71" },
+    { id: "5K4W6rqBFWDnAN6FQUkS6x", name: "Kanye West", image: "https://i.scdn.co/image/ab6761610000e5eb6e835a500e791bf9c27a422a" },
+    { id: "6l3HvQ5sa6mXTsMTB19rO5", name: "J. Cole", image: "https://i.scdn.co/image/ab6761610000e5ebc401ea77e86ee984b1ba9fc2" },
+    { id: "4V8LLVI7PbaPR0K2TGSxFF", name: "Tyler, The Creator", image: "https://i.scdn.co/image/ab6761610000e5ebdf2728294ff77dd11eeb18fb" }
   ],
   "korean r&b": [
     { id: "6aLdhHUqgdKE86xbtNmY8g", name: "Crush", image: "https://i.scdn.co/image/ab6761610000e5ebbf0c39864a4e7361818c2a1a" },
@@ -78,7 +78,7 @@ export const curatedArtists: Record<string, CuratedArtist[]> = {
     { id: "5cj0lLjcoR7YOSnhnX0Po5", name: "Doja Cat", image: "https://i.scdn.co/image/ab6761610000e5eb8a0644455ebfa7d3976f5101" },
     { id: "5pKCCKE2ajJHZ9KAiaK11H", name: "Rihanna", image: "https://i.scdn.co/image/ab6761610000e5ebcb565a8e684e3be458d329ac" },
     { id: "6vWDO969PvNqNYHIOW5v0m", name: "Beyoncé", image: "https://i.scdn.co/image/ab6761610000e5eb7eaa373538359164b843f7c0" },
-    { id: "20wkY7bu05T27tndMM45Ug", name: "Daniel Caesar", image: "https://i.scdn.co/image/ab6761610000e5eb4d5e4a0dff6e5f7b9f8a3c5e" }
+    { id: "20wkVLutqVOYrc0kxFs7rA", name: "Daniel Caesar", image: "https://i.scdn.co/image/ab6761610000e5ebe4d94f7cbebb17504c25d419" }
   ],
   "korean rock": [
     { id: "1rpgxJZxZMLnFNc1Jmyov5", name: "YB", image: "https://i.scdn.co/image/ab6761610000e5eb4a10fa9cabfb1c7e0904d336" },
@@ -132,8 +132,8 @@ export const curatedArtists: Record<string, CuratedArtist[]> = {
   ],
   "electronic": [
     { id: "4tZwfgrHOc3mvqYlEYSvVi", name: "Daft Punk", image: "https://i.scdn.co/image/ab6761610000e5ebd3aa7cc0e419b6c459b08e8e" },
-    { id: "711MCcyhmYJ1FSSu7kgLCI", name: "Calvin Harris", image: "https://i.scdn.co/image/ab6761610000e5eb9c27e753c4fcfdb26fda4d38" },
-    { id: "1vCvlEMmbt30Njo41M3c4s", name: "Avicii", image: "https://i.scdn.co/image/ab6761610000e5eb44ec6f5caefc54eb4b86dcc0" }
+    { id: "7CajNmpbOovFoOoasH2HaY", name: "Calvin Harris", image: "https://i.scdn.co/image/ab6761610000e5eb8ebba5e60113b48de8c11f6b" },
+    { id: "1vCWHaC5f2uS3yhpwWbIA6", name: "Avicii", image: "https://i.scdn.co/image/ab6761610000e5ebae07171f989fb39736674113" }
   ],
   "jazz": [
     { id: "0kbwz7265582317GqN9L2b", name: "Miles Davis", image: "https://i.scdn.co/image/ab6761610000e5eba6c5eb5b7ef5f55fe1c2dd27" },

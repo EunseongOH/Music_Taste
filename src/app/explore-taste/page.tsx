@@ -48,7 +48,7 @@ interface TournamentResult {
 const translations = {
   ko: {
     title: "내 취향 스페이스",
-    bannerTitle: "취향 레코드 저장소",
+    bannerTitle: "취향표 저장소",
     bannerSub: "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요.",
     tabArchive: "내 보관함",
     tabSocial: "친구들의 피드",
@@ -82,14 +82,14 @@ const translations = {
     noMateSync: "아직 나와 취향이 겹치는 메이트가 없어요.",
     syncLabel: "TASTE SYNC",
     mateTasteRecord: "메이트 취향 리스트",
-    mateRecordTitle: "{nickname}님의 LP 레코드",
+    mateRecordTitle: "{nickname}님의 취향표",
     syncScoreLabel: "나와의 취향 싱크로율",
     completedViewing: "아름다운 취향 감상 완료",
     mateInspired: "메이트의 멋진 취향을 구경했어요!",
     nicknameDefault: "음악팬",
     guestMatchGuideTitle: "피드 가이드",
-    guestMatchGuideDesc: "친구들의 피드를 보려면 내가 완성한 음악 취향표가 적어도 1개 이상 있어야 해요. 지금 첫 취향을 기록하러 가볼까요?",
-    firstWorldCupBtn: "첫 취향 기록하기",
+    guestMatchGuideDesc: "친구들의 피드를 보려면 내가 완성한 음악 취향표가 적어도 1개 이상 있어야 해요. 지금 첫 취향을 소트하러 가볼까요?",
+    firstWorldCupBtn: "첫 취향표 소트하기",
     winnerLabel: "최애 곡 1위",
     sameWinnerLabel: "같은 1위:",
     favoriteLabel: "최애:",
@@ -131,14 +131,14 @@ const translations = {
     noMateSync: "No friends with matching track preferences found yet.",
     syncLabel: "TASTE SYNC",
     mateTasteRecord: "Friend's Taste List",
-    mateRecordTitle: "{nickname}'s LP Record",
+    mateRecordTitle: "{nickname}'s Taste Card",
     syncScoreLabel: "Taste Sync Score",
     completedViewing: "Completed viewing",
     mateInspired: "Inspected the friend's awesome taste!",
     nicknameDefault: "Music Fan",
     guestMatchGuideTitle: "Feed Guide",
-    guestMatchGuideDesc: "To view friends' feeds, you must have at least 1 completed taste card. Go complete one now!",
-    firstWorldCupBtn: "Record My Tastes",
+    guestMatchGuideDesc: "To view friends' feeds, you must have at least 1 completed taste card. Go sort one now!",
+    firstWorldCupBtn: "Sort My Tastes",
     winnerLabel: "1ST PLACE WINNER",
     sameWinnerLabel: "Same #1:",
     favoriteLabel: "Favorite:",
@@ -382,13 +382,13 @@ export default function ExploreTastePage() {
       <div className="bg-grain" />
 
       {/* Header Panel */}
-      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm">
+      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
           <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <ProfileHeader />
+          <ProfileHeader locale={locale} />
         </div>
       </div>
 
@@ -716,7 +716,7 @@ export default function ExploreTastePage() {
                           {/* User Avatar */}
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
-                              src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                              src={mate.user_profile_image || "/default-profile.png"}
                               alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                               width={64}
                               height={64}
@@ -774,7 +774,7 @@ export default function ExploreTastePage() {
                           {/* User Avatar */}
                           <div className="relative w-16 h-16 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm mt-1 group-hover:scale-105 transition-transform duration-300">
                             <Image
-                              src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                              src={mate.user_profile_image || "/default-profile.png"}
                               alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                               width={64}
                               height={64}
@@ -829,7 +829,7 @@ export default function ExploreTastePage() {
                             {/* Avatar */}
                             <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300">
                               <Image
-                                src={mate.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                                src={mate.user_profile_image || "/default-profile.png"}
                                 alt={formatNickname(mate.user_nickname, t.nicknameDefault)}
                                 width={48}
                                 height={48}
@@ -1012,7 +1012,7 @@ export default function ExploreTastePage() {
                   <div className="flex items-center gap-3.5 mb-4 pr-6">
                     <div className="relative w-12 h-12 rounded-full border-2 border-navy overflow-hidden bg-white shrink-0 shadow-sm">
                       <Image
-                        src={selectedMateDetail.user_profile_image || "https://picsum.photos/seed/user/80/80"}
+                        src={selectedMateDetail.user_profile_image || "/default-profile.png"}
                         alt={formatNickname(selectedMateDetail.user_nickname, t.nicknameDefault)}
                         width={48}
                         height={48}
