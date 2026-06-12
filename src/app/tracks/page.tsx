@@ -1141,13 +1141,13 @@ export default function TracksPage() {
   return (
     <main className="flex flex-col min-h-screen relative z-10 w-full mb-10 overflow-hidden bg-[var(--app-bg)]">
       {/* Sticky Header with Toggles & Tabs */}
-      <div className="sticky top-0 z-40 bg-cream/95 backdrop-blur-md pt-6 pb-2 px-6 border-b border-navy/10 flex flex-col gap-4 mx-[-1.5rem] w-[calc(100%+3rem)] shadow-sm">
+      <div className="sticky top-0 z-40 bg-cream/95 backdrop-blur-md pt-6 pb-2 border-b border-navy/10 flex flex-col gap-4 mx-[-1.5rem] w-[calc(100%+3rem)] shadow-sm">
         <div className="flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
             <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
           </div>
-          <ProfileHeader className="" />
+          <ProfileHeader locale={locale} className="" />
         </div>
 
         <p className="font-sans text-sm text-charcoal/80 px-6">

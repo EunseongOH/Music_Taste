@@ -121,11 +121,11 @@ export default function GenresPage() {
   };
 
   return (
-    <main className="flex flex-col min-h-screen relative z-10 w-full mb-28 bg-[var(--app-bg)] px-6">
+    <main className="flex flex-col min-h-screen relative z-10 w-full mb-28 bg-[var(--app-bg)]">
       {/* Header */}
-      <div className="pt-6 pb-3 w-full border-b border-navy/5 flex items-center justify-between">
+      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex items-center justify-between shadow-sm">
         <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto font-bold" />
-        <ProfileHeader className="!relative !top-auto !right-auto" />
+        <ProfileHeader locale={locale} className="!relative !top-auto !right-auto" />
       </div>
 
       {/* Main Intro */}

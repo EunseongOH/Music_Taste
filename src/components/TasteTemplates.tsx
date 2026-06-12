@@ -16,15 +16,19 @@ interface TemplateProps {
   isExport?: boolean;
   pageIndex?: number;
   pageSize?: number;
+  testDate?: string;
 }
 
-export function EmotionalListTemplate({ tracks, isExport = false, pageIndex = 0, pageSize = 15 }: TemplateProps) {
+export function EmotionalListTemplate({ tracks, isExport = false, pageIndex = 0, pageSize = 15, testDate }: TemplateProps) {
   // If exporting, slice the tracks based on page index
   const displayTracks = isExport 
     ? tracks.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
     : tracks;
 
   const startRank = isExport ? pageIndex * pageSize + 1 : 1;
+
+  const dateObj = testDate ? new Date(testDate) : new Date();
+  const formattedDate = `${dateObj.getFullYear()}. ${(dateObj.getMonth() + 1).toString().padStart(2, '0')}. ${dateObj.getDate().toString().padStart(2, '0')}`;
 
   return (
     <div 
@@ -39,8 +43,8 @@ export function EmotionalListTemplate({ tracks, isExport = false, pageIndex = 0,
           <Music size={20} />
         </div>
         <h2 className="font-serif text-3xl tracking-tight text-navy leading-none">My Music Taste</h2>
-        <p className="font-sans font-bold text-[8.5px] uppercase tracking-[0.25em] text-[#E67E22] mt-1.5">
-          The Analog Record Shop Chart
+        <p className="font-sans font-bold text-[8.5px] uppercase tracking-[0.25em] text-[#E67E22] mt-1.5 font-mono">
+          {formattedDate}
         </p>
         {isExport && (
           <span className="font-mono text-[9px] text-navy/40 font-bold mt-2 uppercase tracking-widest bg-navy/5 px-2.5 py-0.5 rounded-full">
@@ -96,7 +100,7 @@ export function EmotionalListTemplate({ tracks, isExport = false, pageIndex = 0,
 
       {/* Footer Branding (Mostly for Export Card) */}
       <div className="mt-6 pt-4 border-t border-navy/10 flex items-center justify-between text-navy/40">
-        <span className="font-serif text-[11px] font-bold tracking-tight">The Record Shop</span>
+        <span className="font-serif text-[11px] font-bold tracking-tight">Sortify</span>
         <span className="font-sans text-[8px] uppercase tracking-wider font-semibold">
           {isExport ? `Showing Ranks ${startRank} - ${Math.min(tracks.length, startRank + pageSize - 1)} of ${tracks.length}` : `Total ${tracks.length} tracks`}
         </span>
@@ -180,7 +184,7 @@ export function VintageVinylTemplate({ tracks, isExport = false, pageIndex = 0, 
         <div className="text-center pb-4 border-b border-navy/15 flex flex-col items-center">
           <h2 className="font-serif text-2xl tracking-tight text-navy">My Music Taste</h2>
           <p className="font-sans font-bold text-[8px] uppercase tracking-[0.2em] text-[#E67E22] mt-1">
-            The Record Shop Playlist
+            Sortify Playlist
           </p>
           <span className="font-mono text-[9px] text-navy/40 font-bold mt-2 uppercase tracking-widest bg-navy/5 px-2.5 py-0.5 rounded-full">
             Part {pageIndex + 1} / {Math.ceil(tracks.length / pageSize)}
@@ -233,7 +237,7 @@ export function VintageVinylTemplate({ tracks, isExport = false, pageIndex = 0, 
 
       {/* Footer */}
       <div className="mt-5 pt-3 border-t border-navy/10 flex items-center justify-between text-navy/40">
-        <span className="font-serif text-[10px] font-bold tracking-tight">The Analog Vibe</span>
+        <span className="font-serif text-[10px] font-bold tracking-tight">Sortify</span>
         <span className="font-sans text-[8px] uppercase tracking-wider font-semibold">
           {isExport 
             ? (isFirstPage 

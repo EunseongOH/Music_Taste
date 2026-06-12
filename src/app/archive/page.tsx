@@ -43,7 +43,7 @@ interface TournamentResult {
 const translations = {
   ko: {
     title: "공개 취향 아카이브",
-    subtitle: "리스너들의 음악 취향 레코드",
+    subtitle: "리스너들의 음악 취향표",
     desc: "공개된 아카이브 목록을 구경하고, 나와 취향이 꼭 닮은 리스너들의 취향표를 탐색해 보세요.",
     artistLabel: "아티스트",
     winnerLabel: "1위 곡 정보",
@@ -54,11 +54,11 @@ const translations = {
     allArtists: "모든 아티스트",
     nicknameDefault: "음악팬",
     singleDiscography: "최애 곡 줄 세우기",
-    loading: "취향 레코드 불러오는 중...",
+    loading: "취향표 불러오는 중...",
   },
   en: {
     title: "Public Archive",
-    subtitle: "Music Taste Records",
+    subtitle: "Music Taste Cards",
     desc: "Explore public taste cards and discover what other music fans with similar tastes love listening to.",
     artistLabel: "Artist",
     winnerLabel: "1st Choice Track",
@@ -69,7 +69,7 @@ const translations = {
     allArtists: "All Artists",
     nicknameDefault: "Music Fan",
     singleDiscography: "Favorite Songs Lineup",
-    loading: "Loading taste records...",
+    loading: "Loading taste cards...",
   }
 };
 
@@ -123,7 +123,7 @@ export default function ArchivePage() {
   return (
     <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
       {/* Header Panel */}
-      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm">
+      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton 
             className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" 
@@ -132,7 +132,7 @@ export default function ArchivePage() {
           <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <ProfileHeader />
+          <ProfileHeader locale={locale} />
         </div>
       </div>
 

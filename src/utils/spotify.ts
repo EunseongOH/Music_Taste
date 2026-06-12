@@ -570,10 +570,30 @@ const searchArtistsByGenresLocal = (genres: string[], limit: number, offset: num
   return slice;
 };
 
+export interface GenreSearchResult {
+  items: any[];
+  isFallback: boolean;
+}
+
 // Search artists in bulk for multiple selected genres with a single rate-limit safe query.
 // Offset is automatically wrapped at 950 (Spotify API max) to enable endless pagination.
-export const searchArtistsByGenres = async (genres: string[], limit = 20, offset = 0) => {
-  if (!genres || genres.length === 0) return [];
+export const searchArtistsByGenres = async (genres: string[], limit = 20, offset = 0): Promise<GenreSearchResult> => {
+  if (!genres || genres.length === 0) return { items: [], isFallback: false };
+
+  // If there are too many genres (e.g. user selected all), sample only a subset (max 3) 
+  // per request to prevent API Rate Limit (429) from sequential request bursts.
+  let genresToFetch = genres;
+  if (genres.length > 3) {
+    // Deterministic shuffle based on offset to ensure we cycle through different genres across pagination scrolls,
+    // rather than using pure Math.random() which could repeat the exact same genres.
+    const shuffleSeed = offset * 13;
+    const shuffled = [...genres];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.abs(shuffleSeed + i) % (i + 1);
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    genresToFetch = shuffled.slice(0, 3);
+  }
 
   // Optimization query mapping for each genre ID (standard text queries to maximize results)
   const genreSearchQuery: Record<string, { query: string; market?: string }> = {
@@ -598,12 +618,15 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
     "r-b":           { query: 'r&b', market: 'US' },
   };
 
-  // Determine limit per genre
-  const limitPerGenre = Math.ceil(limit / genres.length);
+  // Determine limit per genre based on the sampled subset size
+  const limitPerGenre = Math.ceil(limit / genresToFetch.length);
   const allResultsMap = new Map<string, any>();
   let anySucceeded = false;
+  let hitRateLimit = false;
 
-  const fetchPromises = genres.map(async (genreId) => {
+  // Sequential execution with 50ms delay to prevent parallel API rate limiting
+  for (let i = 0; i < genresToFetch.length; i++) {
+    const genreId = genresToFetch[i];
     const config = genreSearchQuery[genreId.toLowerCase()] || { query: genreId };
     const maxLimitPerRequest = 10;
     const chunkLimit = Math.min(limitPerGenre, maxLimitPerRequest);
@@ -615,39 +638,41 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
         url += `&market=${config.market}`;
       }
       const response = await spotifyFetch(url);
+      
       if (response.ok) {
         anySucceeded = true;
         const data = await response.json();
         const items = data.artists?.items || [];
-        return items;
+        items.forEach((item: any) => {
+          allResultsMap.set(item.id, item);
+        });
       } else {
         const errText = await response.text();
         console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with status ${response.status}: ${errText}`);
-        return [];
+        
+        // If 429 Too Many Requests was received, break early to prevent compounding the rate limit
+        if (response.status === 429) {
+          hitRateLimit = true;
+          break;
+        }
       }
     } catch (err) {
       console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with exception:`, err);
-      return [];
     }
-  });
 
-  try {
-    const genreResults = await Promise.all(fetchPromises);
-    genreResults.forEach((items) => {
-      items.forEach((item: any) => {
-        allResultsMap.set(item.id, item);
-      });
-    });
-  } catch (e) {
-    console.error("[Spotify API] Promise.all failed in searchArtistsByGenres:", e);
+    // Add a small 50ms spacing between requests unless it's the last item
+    if (i < genres.length - 1) {
+      await delay(50);
+    }
   }
 
-  if (anySucceeded && allResultsMap.size > 0) {
-    return Array.from(allResultsMap.values());
+  // If we had successful responses and did not break due to rate limits, return them
+  if (anySucceeded && allResultsMap.size > 0 && !hitRateLimit) {
+    return { items: Array.from(allResultsMap.values()), isFallback: false };
   }
 
   // Fallback to local genre search cycle
-  return searchArtistsByGenresLocal(genres, limit, offset);
+  return { items: searchArtistsByGenresLocal(genres, limit, offset), isFallback: true };
 };
 
 // Search tracks by query string (returns raw Spotify track objects, up to 10 due to Feb 2026 updates)

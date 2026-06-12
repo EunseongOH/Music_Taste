@@ -39,7 +39,7 @@ export default function Home() {
       title: locale === "ko" ? "최애 곡 줄 세우기" : "Favorite Songs Lineup",
       desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "Select a single artist and line up all of their tracks in the order of your choice.",
       btnText: locale === "ko" ? "시작하기" : "Start",
-      target: "/genres?mode=single"
+      target: "/explore?mode=single"
     },
     {
       id: "archive",
@@ -338,7 +338,7 @@ export default function Home() {
 
       {/* Premium Floating Profile/Login Button */}
       <div className="absolute top-6 right-6 z-50">
-        <ProfileHeader />
+        <ProfileHeader locale={locale} />
       </div>
 
       {/* Premium Floating Language Switcher */}
@@ -574,7 +574,7 @@ export default function Home() {
             <span className="text-navy/15">•</span>
           </li>
           <li>
-            <Link href="/genres?mode=single" className="hover:text-point transition-colors">
+            <Link href="/explore?mode=single" className="hover:text-point transition-colors">
               최애 곡 줄 세우기
             </Link>
           </li>

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Download, Share2, Music, Archive, Check, X } from "lucide-react";
 import Image from "next/image";
 import * as htmlToImage from "html-to-image";
-import SnakePathTimeline from "@/components/SnakePathTimeline";
+import SnakePathTimeline, { getRowSizes } from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
@@ -30,7 +30,7 @@ const translations = {
     saveInstaStoryBtn: "인스타 스토리 저장",
     savingStory: "스토리 저장 중...",
     templatePyramid: "📐 피라미드형",
-    templateList: "📜 감성 리스트형",
+    templateList: "📜 리스트형",
     templateRetro: "📻 레코드형",
     skipBtn: "스킵 Skip ⏭️",
     confirmDownloadAll: "전체 랭킹({count}곡)을 인스타그램 스토리용 이미지 {pages}장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP {pageSize}이 있는 1페이지만 다운로드돼요.)",
@@ -57,8 +57,8 @@ const translations = {
     saveInstaStoryBtn: "Save Insta Story",
     savingStory: "Saving Story...",
     templatePyramid: "📐 Pyramid",
-    templateList: "📜 Aesthetic List",
-    templateRetro: "📻 Vintage Vinyl",
+    templateList: "📜 List",
+    templateRetro: "📻 Vinyl",
     skipBtn: "Skip ⏭️",
     confirmDownloadAll: "Do you want to download the entire ranking of {count} tracks across {pages} images for Instagram Stories?\n\n(If canceled, only the first page with TOP {pageSize} will be downloaded.)",
     saveImageError: "Failed to save image. Please try again.",
@@ -91,15 +91,17 @@ export default function ResultPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineWrapperRef = useRef<HTMLDivElement>(null);
-  const [cameraRig, setCameraRig] = useState<{xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[]} | null>(null);
+  const [cameraRig, setCameraRig] = useState<{ xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[] } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [rawKeyframes, setRawKeyframes] = useState<{x: number, y: number}[]>([]);
+  const [rawKeyframes, setRawKeyframes] = useState<{ x: number, y: number }[]>([]);
   const [timelineViewBoxHeight, setTimelineViewBoxHeight] = useState(600);
   const [template, setTemplate] = useState<"pyramid" | "list" | "retro">("pyramid");
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [showOverwriteModal, setShowOverwriteModal] = useState(false);
   const [existingResult, setExistingResult] = useState<any | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [testDate, setTestDate] = useState<string>("");
   const [archiveTitle, setArchiveTitle] = useState("");
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
@@ -138,6 +140,11 @@ export default function ResultPage() {
             setIsSaved(true);
             setSavedId(sharedId);
             setShowButton(true);
+            if (data.created_at) {
+              setTestDate(data.created_at);
+            } else {
+              setTestDate(new Date().toISOString());
+            }
           } else {
             router.replace("/tracks");
           }
@@ -159,6 +166,7 @@ export default function ResultPage() {
             return;
           }
           setWinners(parsedRanking);
+          setTestDate(new Date().toISOString());
         } catch (e) {
           console.error(e);
           router.replace("/tracks");
@@ -182,21 +190,21 @@ export default function ResultPage() {
           artistName = parsed[0].name;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const isEn = getSafeLocale() === "en";
 
     let defaultTitle = "";
     if (isSingleArtistMode && artistName) {
-      defaultTitle = isEn 
-        ? `${artistName} Song Sort` 
+      defaultTitle = isEn
+        ? `${artistName} Song Sort`
         : `${artistName}의 곡 Sort`;
     } else {
       defaultTitle = isEn
         ? `${winners[0]?.artistName || ""} Taste Card`
         : `${winners[0]?.artistName || ""} 취향표`;
     }
-      
+
     setArchiveTitle(defaultTitle.slice(0, 16));
   }, [winners, isSingleArtistMode]);
 
@@ -217,8 +225,8 @@ export default function ResultPage() {
 
   const handleShareLink = () => {
     if (!savedId) {
-      alert(locale === "en" 
-        ? "Please save to My Taste Space first before sharing! 🎵" 
+      alert(locale === "en"
+        ? "Please save to My Taste Space first before sharing! 🎵"
         : "링크를 공유하려면 먼저 '내 취향 스페이스에 저장' 버튼을 눌러 저장해 주세요! 🎵"
       );
       return;
@@ -240,7 +248,7 @@ export default function ResultPage() {
 
   const handleDownloadCSV = () => {
     if (winners.length === 0) return;
-    
+
     // Add UTF-8 BOM to prevent Korean character encoding issues in MS Excel
     const csvRows = ["\uFEFFRank,Title,Artist"];
 
@@ -273,10 +281,10 @@ export default function ResultPage() {
       if (template === "pyramid") {
         const el = document.getElementById("export-pyramid-card");
         if (!el) throw new Error("Export element not found");
-        
-        const dataUrl = await htmlToImage.toPng(el, { 
-           cacheBust: true, 
-           pixelRatio: 3, // extremely high resolution
+
+        const dataUrl = await htmlToImage.toPng(el, {
+          cacheBust: true,
+          pixelRatio: 5, // ultra-high resolution (2250x4000px)
         });
         const link = document.createElement('a');
         link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`;
@@ -287,17 +295,17 @@ export default function ResultPage() {
         const totalPages = Math.ceil(winners.length / pageSize);
 
         let exportPages = [0]; // default: first page only
-        
+
         if (totalPages > 1) {
-          const msg = locale === "en" 
+          const msg = locale === "en"
             ? translations.en.confirmDownloadAll
-                .replace("{count}", String(winners.length))
-                .replace("{pages}", String(totalPages))
-                .replace("{pageSize}", String(pageSize))
+              .replace("{count}", String(winners.length))
+              .replace("{pages}", String(totalPages))
+              .replace("{pageSize}", String(pageSize))
             : translations.ko.confirmDownloadAll
-                .replace("{count}", String(winners.length))
-                .replace("{pages}", String(totalPages))
-                .replace("{pageSize}", String(pageSize));
+              .replace("{count}", String(winners.length))
+              .replace("{pages}", String(totalPages))
+              .replace("{pageSize}", String(pageSize));
           const confirmAll = window.confirm(msg);
           if (confirmAll) {
             exportPages = Array.from({ length: totalPages }, (_, i) => i);
@@ -313,9 +321,9 @@ export default function ResultPage() {
           // Add a brief timeout to keep downloads ordered and prevent browser blocking
           await new Promise((resolve) => setTimeout(resolve, i * 450));
 
-          const dataUrl = await htmlToImage.toPng(el, { 
-             cacheBust: true, 
-             pixelRatio: 3,
+          const dataUrl = await htmlToImage.toPng(el, {
+            cacheBust: true,
+            pixelRatio: 5, // ultra-high resolution
           });
           const link = document.createElement('a');
           link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`;
@@ -346,10 +354,10 @@ export default function ResultPage() {
             artistName = parsed[0].name;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
-      const title = archiveTitle.trim() || (isSingleArtistMode && artistName 
-        ? (locale === "en" ? `${artistName} Song Sort` : `${artistName}의 곡 Sort`) 
+      const title = archiveTitle.trim() || (isSingleArtistMode && artistName
+        ? (locale === "en" ? `${artistName} Song Sort` : `${artistName}의 곡 Sort`)
         : (locale === "en" ? `${winners[0]?.artistName || ""} Taste Card` : `${winners[0]?.artistName || ""} 취향표`));
 
       let saveRes;
@@ -376,9 +384,9 @@ export default function ResultPage() {
           worldcup_tracks: null
         }
       });
-      
+
       if (error) throw error;
-      
+
       setIsSaved(true);
       if (saveRes && saveRes.id) {
         setSavedId(saveRes.id);
@@ -403,15 +411,8 @@ export default function ResultPage() {
     }
   };
 
-  const handleSaveToArchive = async () => {
-    if (!user) {
-      alert(locale === "en" 
-        ? "Log in to safely store your taste card and view the taste matching feed! 🎵" 
-        : "로그인하면 내 취향 스페이스에 취향표를 보관하고, 친구들의 피드를 확인할 수 있어요. 로그인하러 갈까요? 🎵");
-      return;
-    }
+  const handleConfirmSave = async () => {
     setIsSavingArchive(true);
-
     try {
       let artistId = null;
       let artistName = null;
@@ -424,23 +425,35 @@ export default function ResultPage() {
             artistName = parsed[0].name;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (isSingleArtistMode && artistId) {
         const existing = await fetchCompletedResultByArtist(artistId);
         if (existing) {
           setExistingResult(existing);
           setShowOverwriteModal(true);
+          setShowSaveModal(false);
           setIsSavingArchive(false);
           return;
         }
       }
 
       await executeSaveArchive(false);
+      setShowSaveModal(false);
     } catch (e) {
       console.error(e);
       setIsSavingArchive(false);
     }
+  };
+
+  const handleSaveToArchive = async () => {
+    if (!user) {
+      alert(locale === "en"
+        ? "Log in to safely store your taste card and view the taste matching feed! 🎵"
+        : "로그인하면 내 취향 스페이스에 취향표를 보관하고, 친구들의 피드를 확인할 수 있어요. 로그인하러 갈까요? 🎵");
+      return;
+    }
+    setShowSaveModal(true);
   };
 
   const handleExit = async () => {
@@ -457,10 +470,10 @@ export default function ResultPage() {
     sessionStorage.removeItem("worldcup_progress");
     localStorage.removeItem("worldcup_tracks");
     localStorage.removeItem("worldcup_progress");
-    
+
     sessionStorage.removeItem("selectedArtists");
     localStorage.removeItem("selectedArtists");
-    
+
     // Clear active progress from Supabase user_metadata so they don't get the popup next time
     if (user) {
       try {
@@ -515,7 +528,7 @@ export default function ResultPage() {
     };
   }, []);
 
-  const handleLayoutComplete = useCallback((keyframes: {x: number, y: number}[], viewBoxHeight: number) => {
+  const handleLayoutComplete = useCallback((keyframes: { x: number, y: number }[], viewBoxHeight: number) => {
     setRawKeyframes(keyframes);
     setTimelineViewBoxHeight(viewBoxHeight);
   }, []);
@@ -537,11 +550,11 @@ export default function ResultPage() {
     let totalDist = 0;
     const dists = [0];
     for (let i = 1; i < K; i++) {
-       const dx = rawKeyframes[i].x - rawKeyframes[i-1].x;
-       // Scale dy so it's visually proportional to dx (assuming ~9/16 aspect ratio on mobile)
-       const dy_scaled = (rawKeyframes[i].y - rawKeyframes[i-1].y) * (100 * 16 / 9) / timelineViewBoxHeight;
-       totalDist += Math.sqrt(dx*dx + dy_scaled*dy_scaled);
-       dists.push(totalDist);
+      const dx = rawKeyframes[i].x - rawKeyframes[i - 1].x;
+      // Scale dy so it's visually proportional to dx (assuming ~9/16 aspect ratio on mobile)
+      const dy_scaled = (rawKeyframes[i].y - rawKeyframes[i - 1].y) * (100 * 16 / 9) / timelineViewBoxHeight;
+      totalDist += Math.sqrt(dx * dx + dy_scaled * dy_scaled);
+      dists.push(totalDist);
     }
     if (totalDist === 0) totalDist = 1;
 
@@ -571,11 +584,11 @@ export default function ResultPage() {
     const extendedYKeyframes = [firstY, ...yKeyframes, finalY, "0px"];
     const scaleKeyframes = [S, ...xKeyframes.map(() => S), S, 1];
 
-    setCameraRig({ 
-      xKeyframes: extendedXKeyframes, 
-      yKeyframes: extendedYKeyframes, 
-      scaleKeyframes, 
-      times 
+    setCameraRig({
+      xKeyframes: extendedXKeyframes,
+      yKeyframes: extendedYKeyframes,
+      scaleKeyframes,
+      times
     });
   }, [rawKeyframes, timelineViewBoxHeight, dimensions, winners.length]);
 
@@ -583,20 +596,20 @@ export default function ResultPage() {
 
   return (
     <main className="flex flex-col min-h-screen relative w-full overflow-hidden bg-[var(--app-bg)]">
-      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 border-b border-navy/10 flex items-center justify-between shadow-sm">
+      <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
           <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={handleShareLink}
             className="w-10 h-10 rounded-full border border-navy/20 flex items-center justify-center hover:bg-navy/5 transition-colors"
             title="공유하기"
           >
             <Share2 size={18} className="text-navy" />
           </button>
-          <button 
+          <button
             onClick={handleExit}
             className="w-10 h-10 rounded-full border-2 border-navy flex items-center justify-center bg-white hover:bg-navy/5 transition-colors"
             title="종료하기"
@@ -606,139 +619,207 @@ export default function ResultPage() {
         </div>
       </div>
       {/* Unboxed seamless full-screen results area */}
-      <motion.div 
+      <motion.div
         layout
         transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} // smooth spring-like layout ease
         ref={containerRef}
-        className={showButton 
-          ? "flex-1 w-full max-w-2xl relative bg-[#F5F2ED] flex flex-col min-h-screen py-4 px-2 sm:px-6 mx-auto pb-32 overflow-y-auto scrollbar-none" 
+        className={showButton
+          ? "flex-1 w-full max-w-2xl relative bg-[#F5F2ED] flex flex-col min-h-screen py-4 px-2 sm:px-6 mx-auto pb-32 overflow-y-auto scrollbar-none"
           : "fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 bg-[#F5F2ED] overflow-hidden flex flex-col"
         }
       >
-         {/* Background Elements */}
-         <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />
+        {/* Background Elements */}
+        <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />
 
-         {/* Segmented Design Customization Selector */}
-         {showButton && (
-           <div className="relative z-30 w-full max-w-md mx-auto px-4 mt-2 mb-4 select-none">
-             <div className="flex bg-[#1A2A6C]/5 p-1.5 rounded-2xl border border-[#1A2A6C]/10 backdrop-blur-sm gap-0.5">
-               <button
-                 onClick={() => { setTemplate("pyramid"); trackEvent("change_template", { template_type: "pyramid" }); }}
-                 className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
-                   template === "pyramid" 
-                     ? "bg-white text-navy shadow-sm" 
-                     : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
-                 }`}
-               >
-                 {t.templatePyramid}
-               </button>
-               <button
-                 onClick={() => { setTemplate("list"); trackEvent("change_template", { template_type: "list" }); }}
-                 className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
-                   template === "list" 
-                     ? "bg-white text-navy shadow-sm" 
-                     : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
-                 }`}
-               >
-                 {t.templateList}
-               </button>
-               <button
-                 onClick={() => { setTemplate("retro"); trackEvent("change_template", { template_type: "retro" }); }}
-                 className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${
-                   template === "retro" 
-                     ? "bg-white text-navy shadow-sm" 
-                     : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
-                 }`}
-               >
-                 {t.templateRetro}
-               </button>
-             </div>
-           </div>
-         )}
+        {/* Segmented Design Customization Selector */}
+        {showButton && (
+          <div className="relative z-30 w-full max-w-md mx-auto px-4 mt-2 mb-4 select-none">
+            <div className="flex bg-[#1A2A6C]/5 p-1.5 rounded-2xl border border-[#1A2A6C]/10 backdrop-blur-sm gap-0.5">
+              <button
+                onClick={() => { setTemplate("pyramid"); trackEvent("change_template", { template_type: "pyramid" }); }}
+                className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${template === "pyramid"
+                  ? "bg-white text-navy shadow-sm"
+                  : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
+                  }`}
+              >
+                {t.templatePyramid}
+              </button>
+              <button
+                onClick={() => { setTemplate("list"); trackEvent("change_template", { template_type: "list" }); }}
+                className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${template === "list"
+                  ? "bg-white text-navy shadow-sm"
+                  : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
+                  }`}
+              >
+                {t.templateList}
+              </button>
+              <button
+                onClick={() => { setTemplate("retro"); trackEvent("change_template", { template_type: "retro" }); }}
+                className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${template === "retro"
+                  ? "bg-white text-navy shadow-sm"
+                  : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
+                  }`}
+              >
+                {t.templateRetro}
+              </button>
+            </div>
+          </div>
+        )}
 
-         {/* Floating Skip Button for Cinematic Zoom-in Animation */}
-         {!showButton && (
-           <button
-             onClick={() => setShowButton(true)}
-             className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-           >
-             {t.skipBtn}
-           </button>
-         )}
-
-          <motion.div 
-            layout 
-            ref={timelineWrapperRef}
-            className={`relative z-10 w-full mt-4 ${
-              showButton ? "h-auto overflow-visible pb-20" : "flex-1 overflow-hidden"
-            }`}
+        {/* Floating Skip Button for Cinematic Zoom-in Animation */}
+        {!showButton && (
+          <button
+            onClick={() => setShowButton(true)}
+            className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
           >
-             {winners.length > 0 && (
-               <>
-                 {/* 1. Pyramid Template */}
-                 {template === "pyramid" && (
-                   <motion.div
-                     initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
-                     animate={showButton ? { scale: 1, x: "0px", y: "0px" } : (cameraRig ? { 
-                        scale: cameraRig.scaleKeyframes, 
-                        x: cameraRig.xKeyframes,
-                        y: cameraRig.yKeyframes
-                     } : {})}
-                     transition={showButton ? { duration: 0.1 } : { 
-                        duration: totalDuration, 
-                        times: cameraRig?.times,
-                        ease: "linear"
-                     }}
-                     className={showButton ? "w-full origin-center" : "w-full h-full origin-center"}
-                     style={showButton ? { height: timelineViewBoxHeight } : {}}
-                     onAnimationComplete={() => {
-                       if (!showButton) setShowButton(true);
-                     }}
-                   >
-                      <SnakePathTimeline 
-                         tracks={winners} 
-                         drawDuration={panDuration} 
-                         onLayoutComplete={handleLayoutComplete} 
-                         isCompleted={showButton}
-                      />
-                   </motion.div>
-                 )}
+            {t.skipBtn}
+          </button>
+        )}
 
-                 {/* 2. Emotional List Template */}
-                 {showButton && template === "list" && (
-                   <div className="w-full max-w-md mx-auto">
-                     <EmotionalListTemplate tracks={winners} />
-                   </div>
-                 )}
+        <motion.div
+          layout
+          ref={timelineWrapperRef}
+          className={`relative z-10 w-full mt-4 ${showButton ? "h-auto overflow-visible pb-20" : "flex-1 overflow-hidden"
+            }`}
+        >
+          {winners.length > 0 && (
+            <>
+              {/* 1. Pyramid Template */}
+              {template === "pyramid" && (
+                <motion.div
+                  initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
+                  animate={showButton ? { scale: 1, x: "0px", y: "0px" } : (cameraRig ? {
+                    scale: cameraRig.scaleKeyframes,
+                    x: cameraRig.xKeyframes,
+                    y: cameraRig.yKeyframes
+                  } : {})}
+                  transition={showButton ? { duration: 0.1 } : {
+                    duration: totalDuration,
+                    times: cameraRig?.times,
+                    ease: "linear"
+                  }}
+                  className={showButton ? "w-full origin-center" : "w-full h-full origin-center"}
+                  style={showButton ? { height: timelineViewBoxHeight } : {}}
+                  onAnimationComplete={() => {
+                    if (!showButton) setShowButton(true);
+                  }}
+                >
+                  <SnakePathTimeline
+                    tracks={winners}
+                    drawDuration={panDuration}
+                    onLayoutComplete={handleLayoutComplete}
+                    isCompleted={showButton}
+                  />
+                </motion.div>
+              )}
 
-                 {/* 3. Vintage Vinyl Template */}
-                 {showButton && template === "retro" && (
-                   <div className="w-full max-w-md mx-auto">
-                     <VintageVinylTemplate tracks={winners} />
-                   </div>
-                 )}
-               </>
-             )}
-          </motion.div>
+              {/* 2. Emotional List Template */}
+              {showButton && template === "list" && (
+                <div className="w-full max-w-md mx-auto">
+                  <EmotionalListTemplate tracks={winners} testDate={testDate} />
+                </div>
+              )}
+
+              {/* 3. Vintage Vinyl Template */}
+              {showButton && template === "retro" && (
+                <div className="w-full max-w-md mx-auto">
+                  <VintageVinylTemplate tracks={winners} />
+                </div>
+              )}
+            </>
+          )}
+        </motion.div>
       </motion.div>
 
       {/* Floating Actions */}
       <AnimatePresence>
-         {showButton && (
-           <motion.div 
-             initial={{ opacity: 0, y: 20 }}
-             animate={{ opacity: 1, y: 0 }}
-             className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center gap-3 z-50 pointer-events-none"
-           >
-             {user && !isSaved && (
-                <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl p-4 flex flex-col gap-2.5 shadow-sm z-30 mb-0.5 select-none text-left">
-                  <div className="flex flex-col text-left">
-                    <label htmlFor="archive-title-input" className="font-sans font-bold text-xs text-navy">{t.archiveTitleLabel}</label>
+        {showButton && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center gap-3 z-50 pointer-events-none"
+          >
+            {user && (
+              <button
+                onClick={handleSaveToArchive}
+                disabled={isSavingArchive || isSaved}
+                className={`w-full max-w-[380px] pointer-events-auto py-3.5 rounded-full font-sans font-bold text-base transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2
+                   ${isSaved
+                    ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-500/30 cursor-default'
+                    : 'bg-white border-2 border-navy text-navy hover:bg-navy/5'
+                  }
+                 `}
+              >
+                {isSaved ? (
+                  <>
+                    <Check size={18} />
+                    {t.savedToArchive}
+                  </>
+                ) : (
+                  <>
+                    <Archive size={18} />
+                    {isSavingArchive ? t.savingToArchive : t.saveToArchiveBtn}
+                  </>
+                )}
+              </button>
+            )}
+
+            <div className="w-full max-w-[380px] flex gap-2 pointer-events-auto shadow-lg rounded-full">
+              <button
+                onClick={handleDownloadCSV}
+                className="flex-1 py-4 bg-[#0F766E] hover:bg-[#0D625B] text-white font-sans font-bold text-xs border border-teal-800/20 rounded-l-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer"
+                title="CSV"
+              >
+                {t.saveExcelBtn}
+              </button>
+
+              <button
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`flex-[2] py-4 bg-navy text-cream font-sans font-bold text-xs border border-navy/20 rounded-r-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer ${isExporting ? 'opacity-70' : 'hover:bg-[#111A3E]'}`}
+              >
+                <Download size={14} />
+                {isExporting ? t.savingStory : t.saveInstaStoryBtn}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Save Settings Modal */}
+      <AnimatePresence>
+        {showSaveModal && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[999]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSaveModal(false)}
+            />
+            <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4 pointer-events-none">
+              <motion.div
+                className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              >
+                <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 bg-point/5 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
+                  <Archive className="text-point animate-pulse" size={24} />
+                </div>
+
+                <h2 className="font-serif text-2xl font-bold text-navy mb-4 tracking-tight text-center">{t.saveToArchiveBtn}</h2>
+
+                {/* Archive Title Input */}
+                <div className="w-full flex flex-col gap-1.5 mb-4 text-left">
+                  <div className="flex flex-col">
+                    <label htmlFor="modal-archive-title-input" className="font-sans font-bold text-xs text-navy">{t.archiveTitleLabel}</label>
                     <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-1">{t.archiveTitleSub}</span>
                   </div>
-                  <div className="relative flex items-center">
+                  <div className="relative flex items-center mt-1">
                     <input
-                      id="archive-title-input"
+                      id="modal-archive-title-input"
                       type="text"
                       maxLength={16}
                       value={archiveTitle}
@@ -751,72 +832,46 @@ export default function ResultPage() {
                     </span>
                   </div>
                 </div>
-              )}
 
-             {user && (
-               <div className="w-full max-w-[380px] pointer-events-auto bg-[#FAF7F2]/90 backdrop-blur-sm border-2 border-navy/15 rounded-2xl px-4 py-2 flex items-center justify-between shadow-sm z-30 mb-1 select-none">
-                 <div className="flex flex-col text-left">
-                   <span className="font-sans font-bold text-xs text-navy">{t.publicRankingLabel}</span>
-                   <span className="font-sans text-[9px] text-charcoal/60 leading-none mt-0.5">{t.publicRankingSub}</span>
-                 </div>
-                 <button
-                   type="button"
-                   onClick={() => setIsPublic(p => !p)}
-                   className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isPublic ? "bg-point" : "bg-navy/20"}`}
-                 >
-                   <span
-                     className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isPublic ? "translate-x-5" : "translate-x-0"}`}
-                   />
-                 </button>
-               </div>
-             )}
+                {/* Public Visibility Toggle */}
+                <div className="w-full bg-[#FAF7F2] border border-navy/15 rounded-xl px-4 py-3 flex items-center justify-between select-none mb-6 text-left">
+                  <div className="flex flex-col pr-2">
+                    <span className="font-sans font-bold text-xs text-navy">{t.publicRankingLabel}</span>
+                    <span className="font-sans text-[9px] text-charcoal/60 leading-tight mt-0.5">{t.publicRankingSub}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublic(p => !p)}
+                    className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isPublic ? "bg-point" : "bg-navy/20"}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isPublic ? "translate-x-5" : "translate-x-0"}`}
+                    />
+                  </button>
+                </div>
 
-             {user && (
-               <button 
-                 onClick={handleSaveToArchive}
-                 disabled={isSavingArchive || isSaved}
-                 className={`w-full max-w-[380px] pointer-events-auto py-3.5 rounded-full font-sans font-bold text-base transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2
-                   ${isSaved 
-                     ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-500/30 cursor-default' 
-                     : 'bg-white border-2 border-navy text-navy hover:bg-navy/5'
-                   }
-                 `}
-               >
-                  {isSaved ? (
-                    <>
-                      <Check size={18} />
-                      {t.savedToArchive}
-                    </>
-                  ) : (
-                    <>
-                      <Archive size={18} />
-                      {isSavingArchive ? t.savingToArchive : t.saveToArchiveBtn}
-                    </>
-                  )}
-                </button>
-              )}
-              
-              <div className="w-full max-w-[380px] flex gap-2 pointer-events-auto shadow-lg rounded-full">
-                <button 
-                  onClick={handleDownloadCSV}
-                  className="flex-1 py-4 bg-[#0F766E] hover:bg-[#0D625B] text-white font-sans font-bold text-xs border border-teal-800/20 rounded-l-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer"
-                  title="CSV"
-                >
-                   {t.saveExcelBtn}
-                </button>
-                
-                <button 
-                  onClick={handleExport}
-                  disabled={isExporting}
-                  className={`flex-[2] py-4 bg-navy text-cream font-sans font-bold text-xs border border-navy/20 rounded-r-full flex items-center justify-center gap-1 transition-all active:scale-[0.98] cursor-pointer ${isExporting ? 'opacity-70' : 'hover:bg-[#111A3E]'}`}
-                >
-                   <Download size={14} />
-                   {isExporting ? t.savingStory : t.saveInstaStoryBtn}
-                </button>
-              </div>
-            </motion.div>
-          )}
-       </AnimatePresence>
+                {/* Action Buttons */}
+                <div className="flex flex-col gap-2 w-full">
+                  <button
+                    onClick={handleConfirmSave}
+                    disabled={isSavingArchive}
+                    className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <Archive size={16} />
+                    {isSavingArchive ? t.savingToArchive : t.saveToArchiveBtn}
+                  </button>
+                  <button
+                    onClick={() => setShowSaveModal(false)}
+                    className="w-full py-3 bg-white border border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    {t.cancel}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Overwrite Choice Dialog Modal */}
       <AnimatePresence>
@@ -840,26 +895,26 @@ export default function ResultPage() {
                 <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 bg-point/5 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
                   <Archive className="text-point animate-bounce" size={24} />
                 </div>
-                
+
                 <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.overwriteTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                   {t.overwriteDesc}
                 </p>
-                
+
                 <div className="flex flex-col gap-2 w-full">
-                  <button 
+                  <button
                     onClick={() => executeSaveArchive(true)}
                     className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm"
                   >
                     {t.overwriteBtn}
                   </button>
-                  <button 
+                  <button
                     onClick={() => executeSaveArchive(false)}
                     className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {t.saveNewBtn}
                   </button>
-                  <button 
+                  <button
                     onClick={() => setShowOverwriteModal(false)}
                     className="w-full py-3 bg-white border border-red-200 text-red-500 font-medium text-xs rounded-xl hover:bg-red-50/50 transition-all cursor-pointer mt-1"
                   >
@@ -873,15 +928,23 @@ export default function ResultPage() {
       </AnimatePresence>
       {/* Offscreen High-Fidelity 9:16 Instagram Story Export Cards */}
       {winners.length > 0 && (
-        <div 
+        <div
           className="absolute top-[-9999px] left-[-9999px] pointer-events-none select-none"
           style={{ width: "450px" }}
         >
           {/* 1. Pyramid Export Card (Uses computed scale factor to fit all songs in a single card) */}
           {(() => {
-            const scaleFactor = Math.min(1.0, 600 / timelineViewBoxHeight);
+            const sizes = getRowSizes(winners.length);
+            const maxS = sizes[sizes.length - 1] || 5;
+            const expansionFactor = Math.max(1, maxS / 4);
+            const requiredWidthRatio = 1.3 * expansionFactor;
+            const exportScaleFactor = Math.min(1.0, 1 / requiredWidthRatio, 600 / timelineViewBoxHeight);
+
+            const dateObj = testDate ? new Date(testDate) : new Date();
+            const formattedDate = `${dateObj.getFullYear()}. ${(dateObj.getMonth() + 1).toString().padStart(2, '0')}. ${dateObj.getDate().toString().padStart(2, '0')}`;
+
             return (
-              <div 
+              <div
                 id="export-pyramid-card"
                 className="w-[450px] h-[800px] bg-[#F5F2ED] relative flex flex-col justify-between p-7 overflow-hidden"
               >
@@ -891,25 +954,24 @@ export default function ResultPage() {
                     <Music size={16} />
                   </div>
                   <h3 className="font-serif text-2xl text-navy leading-none tracking-tight">My Taste</h3>
-                  <p className="font-sans font-bold text-[7px] uppercase tracking-[0.2em] text-[#E67E22] mt-1">The Analog Record Shop</p>
+                  {/* ✨ 문구 변경: The Analog Record Shop -> 저장 날짜 */}
+                  <p className="font-sans font-bold text-[8px] uppercase tracking-[0.2em] text-[#E67E22] mt-1.5">
+                    {formattedDate}
+                  </p>
                 </div>
 
                 {/* Vector Scaled Timeline Container */}
-                <div className="relative flex-1 w-full my-3 overflow-hidden" style={{ height: "600px" }}>
-                  <div 
+                <div className="relative flex-1 w-full my-3 overflow-hidden flex justify-center" style={{ height: "600px" }}>
+                  <div
                     style={{
-                      width: `${100 / scaleFactor}%`,
+                      width: "394px",
                       height: `${timelineViewBoxHeight}px`,
-                      transform: `scale(${scaleFactor})`,
+                      transform: `scale(${exportScaleFactor})`,
                       transformOrigin: "top center",
-                      position: "absolute",
-                      top: 0,
-                      left: "50%",
-                      marginLeft: `-${50 / scaleFactor}%`
                     }}
                   >
-                    <SnakePathTimeline 
-                      tracks={winners} 
+                    <SnakePathTimeline
+                      tracks={winners}
                       drawDuration={0.1}
                       isCompleted={true}
                     />
@@ -917,8 +979,9 @@ export default function ResultPage() {
                 </div>
 
                 {/* Footer */}
-                <div className="border-t border-navy/15 pt-2 flex items-center justify-between text-navy/40 text-[9px] font-bold">
-                  <span className="font-serif">The Record Shop</span>
+                <div className="border-t border-navy/15 pt-2 flex items-center justify-between text-navy/40 text-[10px] font-bold">
+                  {/* ✨ 문구 변경: The Record Shop -> Sortify */}
+                  <span className="font-serif text-navy/70">Sortify</span>
                   <span className="font-sans uppercase tracking-wider">Total {winners.length} tracks</span>
                 </div>
               </div>
@@ -930,24 +993,25 @@ export default function ResultPage() {
             const pageSize = template === "list" ? 15 : 10;
             const totalPages = Math.ceil(winners.length / pageSize);
             return Array.from({ length: totalPages }).map((_, pIdx) => (
-              <div 
+              <div
                 key={`export-page-${pIdx}`}
                 id={`export-card-page-${pIdx}`}
                 className="w-[450px] h-[800px] bg-[#FAF7F2] relative flex flex-col justify-between overflow-hidden"
               >
                 {template === "list" ? (
-                  <EmotionalListTemplate 
-                    tracks={winners} 
-                    isExport 
-                    pageIndex={pIdx} 
-                    pageSize={15} 
+                  <EmotionalListTemplate
+                    tracks={winners}
+                    isExport
+                    pageIndex={pIdx}
+                    pageSize={15}
+                    testDate={testDate}
                   />
                 ) : (
-                  <VintageVinylTemplate 
-                    tracks={winners} 
-                    isExport 
-                    pageIndex={pIdx} 
-                    pageSize={10} 
+                  <VintageVinylTemplate
+                    tracks={winners}
+                    isExport
+                    pageIndex={pIdx}
+                    pageSize={10}
                   />
                 )}
               </div>
