@@ -346,12 +346,15 @@ export default function Home() {
       </div>
 
       {/* Premium Floating Language Switcher */}
-      <div className="absolute top-6 left-6 z-50 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300">
+      <div className={`absolute top-6 left-6 z-50 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300 ${
+        isModalOpen || showRestoreModal ? "pointer-events-none opacity-60" : ""
+      }`}>
         <div className="flex items-center justify-center pl-2 pr-1">
           <Globe size={14} className="text-navy/50 animate-pulse" />
         </div>
         <button
           onClick={() => handleLanguageToggle("ko")}
+          disabled={isModalOpen || showRestoreModal}
           className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${locale === "ko"
               ? "bg-navy text-cream shadow-sm scale-105"
               : "text-navy/60 hover:text-navy hover:bg-navy/5"
@@ -361,6 +364,7 @@ export default function Home() {
         </button>
         <button
           onClick={() => handleLanguageToggle("en")}
+          disabled={isModalOpen || showRestoreModal}
           className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${locale === "en"
               ? "bg-navy text-cream shadow-sm scale-105"
               : "text-navy/60 hover:text-navy hover:bg-navy/5"

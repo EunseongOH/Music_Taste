@@ -146,6 +146,9 @@ interface ArtistGroup {
   albumsLoaded?: boolean;
   totalReleases?: number;
   albumsPage?: number; // 0-based page index
+  allAlbums?: (Album | null)[]; // Cache of all albums loaded across all pages
+  backgroundLoading?: boolean; // Is background loading active?
+  backgroundProgress?: { loaded: number; total: number }; // Progress indicator values
 }
 
 const getYouTubeVideoId = (url: string) => {
@@ -581,6 +584,108 @@ export default function TracksPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, artistData]);
 
+  const loadRemainingPagesInBackground = async (artistId: string, totalReleases: number, artistName: string) => {
+    const totalPages = Math.ceil(totalReleases / 10);
+    if (totalPages <= 1) return;
+
+    for (let page = 1; page < totalPages; page++) {
+      // 800ms delay to prevent rate limits
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      try {
+        const offset = page * 10;
+        const albumsData = await getArtistAlbums(artistId, offset, 10);
+        
+        const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
+          id: albumRaw.id,
+          title: albumRaw.name,
+          type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
+          year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
+          image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+          tracks: [],
+          totalTracks: albumRaw.total_tracks || 0
+        }));
+
+        // Fetch tracks for all these albums
+        const finalAlbums = await Promise.all(
+          mappedAlbums.map(async (album: any) => {
+            try {
+              const tracksRaw = await getAlbumTracks(album.id);
+              const tracks = tracksRaw.map((t: any) => {
+                const totalSeconds = Math.floor(t.duration_ms / 1000);
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = String(totalSeconds % 60).padStart(2, '0');
+                return {
+                  id: t.id,
+                  title: t.name,
+                  duration: `${mins}:${secs}`,
+                  previewUrl: t.preview_url
+                };
+              });
+
+              // Auto-select these tracks
+              setSelectedTrackIds(prev => {
+                const next = new Set(prev);
+                tracks.forEach((track: any) => next.add(track.id));
+                return next;
+              });
+
+              setSelectedTracksMetadata(prev => {
+                const next = { ...prev };
+                tracks.forEach((track: any) => {
+                  next[track.id] = {
+                    id: track.id,
+                    title: track.title,
+                    duration: track.duration,
+                    artistName: artistName,
+                    albumTitle: album.title,
+                    albumImage: album.image,
+                    albumId: album.id
+                  };
+                });
+                return next;
+              });
+
+              return { ...album, tracks };
+            } catch (e) {
+              console.error("Failed to load background tracks for album " + album.id, e);
+              return album;
+            }
+          })
+        );
+
+        // Update cached allAlbums state
+        setArtistData(prev => prev.map(a => {
+          if (a.id === artistId) {
+            const currentAllAlbums = a.allAlbums ? [...a.allAlbums] : [];
+            // Merge in the newly fetched albums
+            for (let i = 0; i < finalAlbums.length; i++) {
+              currentAllAlbums[offset + i] = finalAlbums[i];
+            }
+
+            const loadedCount = currentAllAlbums.filter(Boolean).length;
+
+            return {
+              ...a,
+              allAlbums: currentAllAlbums,
+              backgroundProgress: { loaded: loadedCount, total: totalReleases },
+              backgroundLoading: page < totalPages - 1
+            };
+          }
+          return a;
+        }));
+
+      } catch (err) {
+        console.error(`Failed to load page ${page} in background:`, err);
+      }
+    }
+
+    // Set backgroundLoading to false explicitly at the end
+    setArtistData(prev => prev.map(a => 
+      a.id === artistId ? { ...a, backgroundLoading: false } : a
+    ));
+  };
+
   const toggleArtistAccordion = async (artistId: string) => {
     if (expandedArtistId === artistId) {
       setExpandedArtistId(null);
@@ -718,18 +823,33 @@ export default function TracksPage() {
             }
           }
 
-          setArtistData(prev => prev.map(a => 
-            a.id === artistId 
-              ? { 
-                  ...a, 
-                  albums: finalAlbums, 
-                  unreleasedAlbums: unreleasedAlbumsList,
-                  albumsLoaded: true, 
-                  totalReleases: albumsData.total,
-                  albumsPage: 0
-                } 
-              : a
-          ));
+          setArtistData(prev => prev.map(a => {
+            if (a.id === artistId) {
+              const updatedAllAlbums = Array(albumsData.total).fill(null);
+              for (let i = 0; i < finalAlbums.length; i++) {
+                updatedAllAlbums[i] = finalAlbums[i];
+              }
+
+              return { 
+                ...a, 
+                albums: finalAlbums, 
+                unreleasedAlbums: unreleasedAlbumsList,
+                albumsLoaded: true, 
+                totalReleases: albumsData.total,
+                albumsPage: 0,
+                allAlbums: updatedAllAlbums,
+                backgroundLoading: isSingleArtistMode && albumsData.total > 10,
+                backgroundProgress: isSingleArtistMode && albumsData.total > 10 
+                  ? { loaded: 10, total: albumsData.total } 
+                  : undefined
+              };
+            }
+            return a;
+          }));
+
+          if (isSingleArtistMode && albumsData.total > 10) {
+            loadRemainingPagesInBackground(artistId, albumsData.total, artist.name);
+          }
         } catch (e) {
           console.error("Failed to load albums for artist", e);
         } finally {
@@ -749,9 +869,29 @@ export default function TracksPage() {
     const artist = artistData.find(a => a.id === artistId);
     if (!artist) return;
 
+    // Check cache
+    const offset = targetPage * 10;
+    const isCached = artist.allAlbums && 
+                     artist.allAlbums.length > offset && 
+                     artist.allAlbums.slice(offset, offset + 10).every(a => a && a.tracks && a.tracks.length > 0);
+
+    if (isCached && artist.allAlbums) {
+      const cachedAlbums = artist.allAlbums.slice(offset, offset + 10) as Album[];
+      setArtistData(prev => prev.map(a => 
+        a.id === artistId 
+          ? { 
+              ...a, 
+              albums: cachedAlbums, 
+              albumsPage: targetPage
+            } 
+          : a
+      ));
+      setExpandedAlbumId(null);
+      return;
+    }
+
     setLoadingAlbums(prev => new Set(prev).add(`artist_${artistId}`));
     try {
-      const offset = targetPage * 10;
       const albumsData = await getArtistAlbums(artistId, offset, 10);
       
       const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
@@ -813,16 +953,23 @@ export default function TracksPage() {
         );
       }
 
-      setArtistData(prev => prev.map(a => 
-        a.id === artistId 
-          ? { 
-              ...a, 
-              albums: finalAlbums, 
-              albumsPage: targetPage,
-              totalReleases: albumsData.total
-            } 
-          : a
-      ));
+      setArtistData(prev => prev.map(a => {
+        if (a.id === artistId) {
+          const updatedAllAlbums = a.allAlbums ? [...a.allAlbums] : [];
+          for (let i = 0; i < finalAlbums.length; i++) {
+            updatedAllAlbums[offset + i] = finalAlbums[i];
+          }
+
+          return { 
+            ...a, 
+            albums: finalAlbums, 
+            albumsPage: targetPage,
+            totalReleases: albumsData.total,
+            allAlbums: updatedAllAlbums
+          };
+        }
+        return a;
+      }));
       
       setExpandedAlbumId(null);
     } catch (e) {
@@ -1265,7 +1412,11 @@ export default function TracksPage() {
                            {loadingAlbums.has(`artist_${artist.id}`)
                              ? t.albumLoading
                              : artist.albumsLoaded
-                               ? `${artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)} Tracks • ${artist.totalReleases || artist.albums.length} Releases`
+                               ? `${
+                                    artist.allAlbums 
+                                      ? artist.allAlbums.reduce((acc, a) => acc + (a ? (a.totalTracks || a.tracks.length) : 0), 0)
+                                      : artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)
+                                  } Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
                                : t.openAlbums}
                          </p>
                       </div>
@@ -1296,8 +1447,10 @@ export default function TracksPage() {
                                  onClick={() => {
                                    const nextIds = new Set(selectedTrackIds);
                                    const nextMetadata = { ...selectedTracksMetadata };
+                                   const albumsToSelect = artist.allAlbums || artist.albums;
 
-                                   artist.albums.forEach(album => {
+                                   albumsToSelect.forEach(album => {
+                                     if (!album) return;
                                      album.tracks.forEach(track => {
                                        nextIds.add(track.id);
                                        nextMetadata[track.id] = {
@@ -1340,7 +1493,9 @@ export default function TracksPage() {
                                  type="button"
                                  onClick={() => {
                                    const nextIds = new Set(selectedTrackIds);
-                                   artist.albums.forEach(album => {
+                                   const albumsToDeselect = artist.allAlbums || artist.albums;
+                                   albumsToDeselect.forEach(album => {
+                                     if (!album) return;
                                      album.tracks.forEach(track => {
                                        nextIds.delete(track.id);
                                      });
@@ -1768,8 +1923,42 @@ export default function TracksPage() {
       )}
 
       {/* FAB Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex justify-center pointer-events-none">
-        <div className="w-full max-w-[380px] pointer-events-auto">
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
+        <div className="w-full max-w-[380px] pointer-events-auto flex flex-col gap-3">
+          {/* Background Loading Progress Bar */}
+          {artistData.some(a => a.backgroundLoading) && (
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="w-full p-4 rounded-3xl bg-cream/90 backdrop-blur-md border border-navy/10 shadow-lg flex flex-col gap-2 text-center"
+            >
+              <div className="flex justify-between items-center text-xs font-sans font-bold text-navy">
+                <span className="flex items-center gap-1.5">
+                  <Disc className="animate-spin text-point" size={14} />
+                  {locale === "ko" ? "전체 곡 정보를 가져오는 중..." : "Fetching all tracks..."}
+                </span>
+                <span className="text-point">
+                  {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || 0} / {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 0} {locale === "ko" ? "앨범" : "Albums"}
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-navy/10 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-point"
+                  initial={{ width: 0 }}
+                  animate={{
+                    width: `${
+                      ((artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || 0) /
+                        (artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 1)) *
+                      100
+                    }%`
+                  }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            </motion.div>
+          )}
+
           <AnimatePresence>
             {selectedTrackIds.size >= 4 && (
               <motion.button
