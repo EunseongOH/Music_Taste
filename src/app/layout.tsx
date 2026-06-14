@@ -26,6 +26,9 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: "Sortify | 최애곡 순위 매기기, 나만의 음악 취향표 소트(Sort)",
       description: "좋아하는 아티스트와 곡들을 직접 나열하고 소트(Sort)해 보세요! 월드컵 토너먼트를 거쳐 나만의 세밀한 음악 취향표와 전체 트랙 순위 리스트를 완성하고, 나와 비슷한 곡을 좋아하는 사람들이 또 어떤 곡들을 좋아하는지 함께 살펴볼 수 있습니다.",
+      alternates: {
+        canonical: "https://sortify.kr",
+      },
       openGraph: {
         title: "Sortify | 최애곡 순위 매기기, 나만의 음악 취향표 소트(Sort)",
         description: "좋아하는 아티스트와 곡들을 직접 나열하고 소트(Sort)해 보세요! 월드컵 토너먼트를 거쳐 나만의 세밀한 음악 취향표와 전체 트랙 순위 리스트를 완성하고, 나와 비슷한 곡을 좋아하는 사람들이 또 어떤 곡들을 좋아하는지 함께 살펴볼 수 있습니다.",
@@ -37,6 +40,9 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: "Sortify | Rank Your Favorite Songs & Build Your Music Tier List",
       description: "Select your favorite artists and tracks to sort them into your ultimate music tier list. Complete your precise track rankings through song tournaments, and explore what other music fans with similar tastes love listening to.",
+      alternates: {
+        canonical: "https://sortify.kr",
+      },
       openGraph: {
         title: "Sortify | Rank Your Favorite Songs & Build Your Music Tier List",
         description: "Select your favorite artists and tracks to sort them into your ultimate music tier list. Complete your precise track rankings through song tournaments, and explore what other music fans with similar tastes love listening to.",
