@@ -291,10 +291,10 @@ export default function Home() {
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": "Sortify",
-            "url": "https://sortify.co.kr",
+            "url": "https://sortify.kr",
             "potentialAction": {
               "@type": "SearchAction",
-              "target": "https://sortify.co.kr/explore?q={search_term_string}",
+              "target": "https://sortify.kr/explore?q={search_term_string}",
               "query-input": "required name=search_term_string"
             }
           })
@@ -312,28 +312,28 @@ export default function Home() {
                 "position": 1,
                 "name": "믹스 매치 월드컵 (Mix & Match World Cup)",
                 "description": "여러 아티스트를 선택해 명곡들을 토너먼트로 즐기고 나만의 취향표를 만듭니다.",
-                "url": "https://sortify.co.kr/genres"
+                "url": "https://sortify.kr/genres"
               },
               {
                 "@type": "SiteNavigationElement",
                 "position": 2,
                 "name": "최애 곡 줄 세우기 (Favorite Songs Lineup)",
                 "description": "한 명의 아티스트를 선택해 전곡을 내 마음에 드는 순서대로 정렬합니다.",
-                "url": "https://sortify.co.kr/genres?mode=single"
+                "url": "https://sortify.kr/genres?mode=single"
               },
               {
                 "@type": "SiteNavigationElement",
                 "position": 3,
                 "name": "공개 취향 아카이브 (Public Taste Archive)",
                 "description": "다른 유저들이 완성해 공개한 다양하고 개성 넘치는 음악 취향 리스트를 구경합니다.",
-                "url": "https://sortify.co.kr/archive"
+                "url": "https://sortify.kr/archive"
               },
               {
                 "@type": "SiteNavigationElement",
                 "position": 4,
                 "name": "유저 취향 매칭 피드 (Explore Music Tastes)",
                 "description": "나와 음악 취향이 유사한 다른 유저들의 프로필과 취향표를 매칭해 봅니다.",
-                "url": "https://sortify.co.kr/explore-taste"
+                "url": "https://sortify.kr/explore-taste"
               }
             ]
           })
