@@ -341,13 +341,13 @@ export default function Home() {
       />
 
       {/* Premium Floating Profile/Login Button */}
-      <div className="absolute top-6 right-6 z-50">
+      <div className={`absolute top-6 right-6 transition-all duration-300 ${isModalOpen || showRestoreModal ? "z-30 pointer-events-none opacity-0 select-none" : "z-50"}`}>
         <ProfileHeader locale={locale} />
       </div>
 
       {/* Premium Floating Language Switcher */}
-      <div className={`absolute top-6 left-6 z-50 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300 ${
-        isModalOpen || showRestoreModal ? "pointer-events-none opacity-60" : ""
+      <div className={`absolute top-6 left-6 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300 ${
+        isModalOpen || showRestoreModal ? "z-30 pointer-events-none opacity-0 select-none" : "z-50"
       }`}>
         <div className="flex items-center justify-center pl-2 pr-1">
           <Globe size={14} className="text-navy/50 animate-pulse" />
