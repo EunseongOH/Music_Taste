@@ -61,6 +61,20 @@ export default async function RootLayout({
 
       <head>
         <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              "name": "Sortify",
+              "alternateName": "소티파이",
+              "url": "https://sortify.kr",
+              "description": "좋아하는 아티스트와 곡들을 직접 나열하고 소트(Sort)해 보세요! 월드컵 토너먼트를 거쳐 나만의 세밀한 음악 취향표와 전체 트랙 순위 리스트를 완성할 수 있습니다.",
+              "inLanguage": ["ko", "en"]
+            })
+          }}
+        />
+        <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
