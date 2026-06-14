@@ -138,9 +138,12 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       sessionStorage.removeItem("selectedArtists");
       sessionStorage.removeItem("worldcup_tracks");
       sessionStorage.removeItem("worldcup_progress");
+      sessionStorage.removeItem("selected_genres");
       
       localStorage.removeItem("worldcup_tracks");
       localStorage.removeItem("worldcup_progress");
+      localStorage.removeItem("selectedArtists");
+      localStorage.removeItem("selected_genres");
       
       onClose();
       router.push("/");

@@ -42,7 +42,7 @@ interface TournamentResult {
 
 const translations = {
   ko: {
-    title: "공개 취향 아카이브",
+    title: "취향 아카이브",
     subtitle: "리스너들의 음악 취향표",
     desc: "공개된 아카이브 목록을 구경하고, 나와 취향이 꼭 닮은 리스너들의 취향표를 탐색해 보세요.",
     artistLabel: "아티스트",
@@ -125,8 +125,8 @@ export default function ArchivePage() {
       {/* Header Panel */}
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <BackButton 
-            className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" 
+          <BackButton
+            className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0"
             onClick={() => router.push("/")}
           />
           <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>

@@ -92,7 +92,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (authLoading) return;
     
-    const isAdmin = user?.user_metadata?.is_admin === true;
+    const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
     if (!user || !isAdmin) {
       console.warn("Unauthorized access to admin page. Redirecting...");
       router.push("/");
@@ -102,7 +102,7 @@ export default function AdminPage() {
   // 2. Fetch pending tracks if authorized
   useEffect(() => {
     if (authLoading) return;
-    const isAdmin = user?.user_metadata?.is_admin === true;
+    const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
     if (!user || !isAdmin) return;
 
     const loadTracks = async () => {
@@ -187,7 +187,7 @@ export default function AdminPage() {
   }
 
   // Double check so non-admin gets blank screen before redirecting
-  const isAdmin = user?.user_metadata?.is_admin === true;
+  const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
   if (!user || !isAdmin) {
     return null; 
   }

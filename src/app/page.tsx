@@ -50,7 +50,7 @@ export default function Home() {
     },
     {
       id: "public-archive",
-      title: locale === "ko" ? "오픈 취향 아카이브" : "Public Taste Archive",
+      title: locale === "ko" ? "우리의 취향 아카이브" : "Public Taste Archive",
       desc: locale === "ko" ? "다른 음악 팬들이 완성한 다양하고 개성 넘치는 음악 취향 리스트를 구경해 보세요." : "Explore the diverse and unique music taste records shared by other music fans.",
       btnText: locale === "ko" ? "구경하기" : "Explore",
       target: "/archive"
@@ -102,7 +102,7 @@ export default function Home() {
     // Check local progress for current mode
     const localIsSingle = localStorage.getItem("worldcup_is_single_artist") === "true" || sessionStorage.getItem("worldcup_is_single_artist") === "true";
     const hasLocal = !!(
-      localStorage.getItem("worldcup_progress") || 
+      localStorage.getItem("worldcup_progress") ||
       sessionStorage.getItem("worldcup_progress") ||
       localStorage.getItem("worldcup_tracks") ||
       sessionStorage.getItem("worldcup_tracks") ||
@@ -127,7 +127,7 @@ export default function Home() {
           if (!error && data) {
             setActiveDrafts(data);
           }
-        } catch (e) {}
+        } catch (e) { }
       };
       checkDrafts();
     }
@@ -160,10 +160,12 @@ export default function Home() {
         localStorage.removeItem("worldcup_tracks");
         localStorage.removeItem("worldcup_progress");
         localStorage.removeItem("selectedArtists");
+        localStorage.removeItem("selected_genres");
         sessionStorage.removeItem("worldcup_tracks");
         sessionStorage.removeItem("worldcup_progress");
         sessionStorage.removeItem("selectedArtists");
-        
+        sessionStorage.removeItem("selected_genres");
+
         const isSingle = activeMode.id === "single";
         localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
         sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
@@ -218,7 +220,7 @@ export default function Home() {
       const storedTracks = localStorage.getItem("worldcup_tracks") || sessionStorage.getItem("worldcup_tracks");
       const storedProgress = localStorage.getItem("worldcup_progress") || sessionStorage.getItem("worldcup_progress");
       const localIsSingle = localStorage.getItem("worldcup_is_single_artist") === "true" || sessionStorage.getItem("worldcup_is_single_artist") === "true";
-      
+
       if (storedArtists) sessionStorage.setItem("selectedArtists", storedArtists);
       if (storedTracks) sessionStorage.setItem("worldcup_tracks", storedTracks);
       if (storedProgress) sessionStorage.setItem("worldcup_progress", storedProgress);
@@ -242,10 +244,12 @@ export default function Home() {
     localStorage.removeItem("worldcup_progress");
     localStorage.removeItem("selectedArtists");
     localStorage.removeItem("worldcup_is_single_artist");
+    localStorage.removeItem("selected_genres");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
     sessionStorage.removeItem("selectedArtists");
     sessionStorage.removeItem("worldcup_is_single_artist");
+    sessionStorage.removeItem("selected_genres");
 
     const activeMode = modes[activeCardIndex];
     const isSingle = activeMode.id === "single";
@@ -348,21 +352,19 @@ export default function Home() {
         </div>
         <button
           onClick={() => handleLanguageToggle("ko")}
-          className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${
-            locale === "ko" 
-              ? "bg-navy text-cream shadow-sm scale-105" 
+          className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${locale === "ko"
+              ? "bg-navy text-cream shadow-sm scale-105"
               : "text-navy/60 hover:text-navy hover:bg-navy/5"
-          }`}
+            }`}
         >
           KO
         </button>
         <button
           onClick={() => handleLanguageToggle("en")}
-          className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${
-            locale === "en" 
-              ? "bg-navy text-cream shadow-sm scale-105" 
+          className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${locale === "en"
+              ? "bg-navy text-cream shadow-sm scale-105"
               : "text-navy/60 hover:text-navy hover:bg-navy/5"
-          }`}
+            }`}
         >
           EN
         </button>
@@ -403,15 +405,15 @@ export default function Home() {
                 <div className="w-full bg-[#FAF7F2] border-[3px] border-navy rounded-[2.5rem] p-6 shadow-md hover:shadow-lg transition-shadow duration-300 relative flex flex-col items-center justify-between text-center min-h-[170px] select-none">
                   {/* Mode Card Header Badge */}
                   <div className="absolute -top-3 px-4 py-0.5 bg-point text-white text-[9px] font-sans font-bold uppercase tracking-wider rounded-full shadow-sm">
-                    {mode.id === "multi" 
-                      ? "Mode 01" 
-                      : mode.id === "single" 
-                        ? "Mode 02" 
-                        : mode.id === "archive" 
-                          ? "My Space" 
+                    {mode.id === "multi"
+                      ? "Mode 01"
+                      : mode.id === "single"
+                        ? "Mode 02"
+                        : mode.id === "archive"
+                          ? "My Space"
                           : "Public Feed"}
                   </div>
-                  
+
                   <div className="mt-2 w-full flex-1 flex flex-col justify-center">
                     <h3 className="font-serif text-xl sm:text-2xl text-navy font-black tracking-tight">{mode.title}</h3>
                     <p className="font-sans text-xs text-charcoal/70 leading-relaxed mt-2 break-keep px-2">
@@ -425,7 +427,7 @@ export default function Home() {
 
           {/* Left/Right Indicator Arrows (Desktop support) */}
           {activeCardIndex > 0 && (
-            <button 
+            <button
               onClick={() => setActiveCardIndex(p => p - 1)}
               className="absolute left-1 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full border border-navy/15 bg-white/95 hover:bg-white flex items-center justify-center shadow-sm cursor-pointer text-xs"
             >
@@ -433,7 +435,7 @@ export default function Home() {
             </button>
           )}
           {activeCardIndex < modes.length - 1 && (
-            <button 
+            <button
               onClick={() => setActiveCardIndex(p => p + 1)}
               className="absolute right-1 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full border border-navy/15 bg-white/95 hover:bg-white flex items-center justify-center shadow-sm cursor-pointer text-xs"
             >
@@ -448,16 +450,15 @@ export default function Home() {
             <button
               key={idx}
               onClick={() => setActiveCardIndex(idx)}
-              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                activeCardIndex === idx ? "w-6 bg-point" : "w-2 bg-navy/20 hover:bg-navy/40"
-              }`}
+              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${activeCardIndex === idx ? "w-6 bg-point" : "w-2 bg-navy/20 hover:bg-navy/40"
+                }`}
             />
           ))}
         </div>
-        
+
         {/* Actions */}
         <div className="flex flex-col items-center gap-3 mt-2 z-20">
-          <a 
+          <a
             href={modes[activeCardIndex].target}
             onClick={(e) => {
               e.preventDefault();
@@ -467,7 +468,7 @@ export default function Home() {
           >
             {modes[activeCardIndex].btnText}
           </a>
-          
+
           {hasPreviousProgress && (activeCardIndex === 0 || activeCardIndex === 1) && (
             <motion.button
               initial={{ opacity: 0, y: 10 }}
@@ -482,32 +483,42 @@ export default function Home() {
       </div>
 
       <div className="w-full flex flex-col items-center justify-center mt-auto pt-16 pb-8 z-10 gap-4">
-         <LPPlayer />
-         
-         {user?.user_metadata?.is_admin === true && (
-           <motion.a
-             initial={{ opacity: 0, y: 10 }}
-             animate={{ opacity: 1, y: 0 }}
-             href="/admin"
-             onClick={(e) => {
-               e.preventDefault();
-               router.push("/admin");
-             }}
-             className="px-5 py-2 bg-navy/5 text-navy hover:text-point hover:bg-navy/10 rounded-full border border-navy/10 hover:border-point/20 transition-all font-sans font-bold text-xs tracking-wider cursor-pointer flex items-center gap-1.5 shadow-sm inline-flex"
-           >
-             <span className="h-1.5 w-1.5 rounded-full bg-point animate-pulse" />
-             어드민 페이지로 이동
-           </motion.a>
-         )}
+        <LPPlayer />
+
+        {(user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true) && (
+          <motion.a
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            href="/admin"
+            onClick={(e) => {
+              e.preventDefault();
+              router.push("/admin");
+            }}
+            className="px-5 py-2 bg-navy/5 text-navy hover:text-point hover:bg-navy/10 rounded-full border border-navy/10 hover:border-point/20 transition-all font-sans font-bold text-xs tracking-wider cursor-pointer flex items-center gap-1.5 shadow-sm inline-flex"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-point animate-pulse" />
+            어드민 페이지로 이동
+          </motion.a>
+        )}
       </div>
 
-      <LoginModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <LoginModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         locale={locale}
         onSuccess={() => {
           const activeMode = modes[activeCardIndex];
           const isSingle = activeMode.id === "single";
+          // Clear all to ensure clean slate for new mode
+          localStorage.removeItem("worldcup_tracks");
+          localStorage.removeItem("worldcup_progress");
+          localStorage.removeItem("selectedArtists");
+          localStorage.removeItem("selected_genres");
+          sessionStorage.removeItem("worldcup_tracks");
+          sessionStorage.removeItem("worldcup_progress");
+          sessionStorage.removeItem("selectedArtists");
+          sessionStorage.removeItem("selected_genres");
+
           localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
           sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
           router.push(activeMode.target);
@@ -536,20 +547,20 @@ export default function Home() {
                 <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
                   <Trophy className="text-point animate-bounce" size={24} />
                 </div>
-                
+
                 <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.startNewTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                   {t.startNewDesc}
                 </p>
-                
+
                 <div className="flex gap-3 w-full">
-                  <button 
+                  <button
                     onClick={() => setShowRestoreModal(false)}
                     className="flex-1 py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {t.cancel}
                   </button>
-                  <button 
+                  <button
                     onClick={handleStartNew}
                     className="flex-[1.5] py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md cursor-pointer"
                   >

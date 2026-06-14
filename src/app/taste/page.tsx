@@ -468,8 +468,10 @@ export default function ResultPage() {
     sessionStorage.removeItem("worldcup_ranking");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
+    sessionStorage.removeItem("selected_genres");
     localStorage.removeItem("worldcup_tracks");
     localStorage.removeItem("worldcup_progress");
+    localStorage.removeItem("selected_genres");
 
     sessionStorage.removeItem("selectedArtists");
     localStorage.removeItem("selectedArtists");
