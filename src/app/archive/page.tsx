@@ -633,43 +633,41 @@ export default function ArchivePage() {
         </div>
 
         {/* Dynamic Tab Switcher */}
-        <div className="px-6 mb-6">
-          <div className="p-1.5 bg-cream/80 border border-navy/10 rounded-full flex relative z-10 w-full max-w-md mx-auto shadow-inner">
-            <button
-              onClick={() => setActiveTab("taste")}
-              className={`flex-1 py-2 rounded-full font-sans text-xs font-bold transition-all relative z-20 ${
-                activeTab === "taste" ? "text-cream shadow-md" : "text-navy/60 hover:text-navy"
-              }`}
-            >
-              {activeTab === "taste" && (
-                <motion.div
-                  layoutId="activeTabBg"
-                  className="absolute inset-0 bg-navy rounded-full z-[-1]"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              {t.tabTaste}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("unreleased");
-                setIsPlayingVideoId(null);
-                setExpandedLyricsTrackId(null);
-              }}
-              className={`flex-1 py-2 rounded-full font-sans text-xs font-bold transition-all relative z-20 ${
-                activeTab === "unreleased" ? "text-cream shadow-md" : "text-navy/60 hover:text-navy"
-              }`}
-            >
-              {activeTab === "unreleased" && (
-                <motion.div
-                  layoutId="activeTabBg"
-                  className="absolute inset-0 bg-navy rounded-full z-[-1]"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              {t.tabUnreleased}
-            </button>
-          </div>
+        <div className="flex border-b border-navy/10 mb-6 justify-center w-full max-w-md mx-auto px-4 relative z-10">
+          <button
+            onClick={() => setActiveTab("taste")}
+            className={`py-3 px-6 font-sans text-xs sm:text-sm font-bold relative transition-all ${
+              activeTab === "taste" ? "text-navy" : "text-navy/40 hover:text-navy/70"
+            }`}
+          >
+            {t.tabTaste}
+            {activeTab === "taste" && (
+              <motion.div
+                layoutId="archiveActiveLine"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-navy"
+                transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              />
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("unreleased");
+              setIsPlayingVideoId(null);
+              setExpandedLyricsTrackId(null);
+            }}
+            className={`py-3 px-6 font-sans text-xs sm:text-sm font-bold relative transition-all ${
+              activeTab === "unreleased" ? "text-navy" : "text-navy/40 hover:text-navy/70"
+            }`}
+          >
+            {t.tabUnreleased}
+            {activeTab === "unreleased" && (
+              <motion.div
+                layoutId="archiveActiveLine"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-navy"
+                transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              />
+            )}
+          </button>
         </div>
 
         {/* Loading State */}
@@ -816,39 +814,41 @@ export default function ArchivePage() {
         {!isLoading && activeTab === "unreleased" && (
           <div className="px-3 sm:px-4 flex flex-col gap-5">
             {/* Filter pills: Unreleased List vs Released History */}
-            <div className="flex justify-center gap-2 max-w-md mx-auto w-full mb-1">
+            <div className="flex justify-center gap-2 max-w-md mx-auto w-full mb-1.5">
               <button
                 onClick={() => setShowReleasedHistory(false)}
-                className={`flex-1 py-2 rounded-xl font-sans text-[10px] sm:text-xs font-bold transition-all border ${
+                className={`px-4 py-2 rounded-full font-sans text-xs font-bold transition-all border flex items-center gap-1.5 shadow-sm ${
                   !showReleasedHistory
-                    ? "bg-navy text-cream border-navy shadow"
-                    : "bg-white text-navy/60 border-navy/10 hover:bg-navy/5"
+                    ? "bg-navy/5 text-navy border-navy/15 font-bold"
+                    : "bg-white text-navy/40 border-navy/10 hover:text-navy/60 hover:bg-navy/[0.02]"
                 }`}
               >
+                <span className={`w-1.5 h-1.5 rounded-full ${!showReleasedHistory ? "bg-point" : "bg-navy/20"}`} />
                 {locale === "ko" ? "미발매곡 목록" : "Unreleased List"}
               </button>
               <button
                 onClick={() => setShowReleasedHistory(true)}
-                className={`flex-1 py-2 rounded-xl font-sans text-[10px] sm:text-xs font-bold transition-all border ${
+                className={`px-4 py-2 rounded-full font-sans text-xs font-bold transition-all border flex items-center gap-1.5 shadow-sm ${
                   showReleasedHistory
-                    ? "bg-navy text-cream border-navy shadow"
-                    : "bg-white text-navy/60 border-navy/10 hover:bg-navy/5"
+                    ? "bg-navy/5 text-navy border-navy/15 font-bold"
+                    : "bg-white text-navy/40 border-navy/10 hover:text-navy/60 hover:bg-navy/[0.02]"
                 }`}
               >
+                <span className={showReleasedHistory ? "text-point" : "text-navy/30"}>✨</span>
                 {t.tabReleasedHistory}
               </button>
             </div>
 
             {/* Search and Add controls */}
-            <div className="flex gap-2.5 items-center w-full max-w-md mx-auto">
-              <div className="relative flex-1 bg-cream/70 border border-navy/10 rounded-2xl flex items-center px-4 py-3 shadow-inner">
-                <Search size={16} className="text-navy/40 mr-2" />
+            <div className="flex gap-2 items-center w-full max-w-md mx-auto">
+              <div className="relative flex-1 bg-cream/50 border border-navy/8 rounded-2xl flex items-center px-3.5 py-2.5 shadow-inner focus-within:border-navy/20 transition-all">
+                <Search size={14} className="text-navy/40 mr-2" />
                 <input
                   type="text"
                   placeholder={t.searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent border-none outline-none font-sans text-xs w-full text-navy placeholder:text-navy/40"
+                  className="bg-transparent border-none outline-none font-sans text-xs w-full text-navy placeholder:text-navy/30"
                 />
               </div>
               <button
@@ -863,9 +863,9 @@ export default function ArchivePage() {
                     setSelectedArtist(null);
                   }
                 }}
-                className="bg-navy hover:bg-navy/90 text-cream p-3 sm:px-4 sm:py-3.5 rounded-2xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+                className="bg-navy hover:bg-navy/90 text-cream p-2.5 sm:px-4 sm:py-2.5 rounded-2xl shadow transition-all active:scale-[0.98] flex items-center justify-center gap-1 shrink-0"
               >
-                <Plus size={16} />
+                <Plus size={14} />
                 <span className="font-sans text-xs font-bold hidden sm:inline">{t.addUnreleasedBtn}</span>
               </button>
             </div>
