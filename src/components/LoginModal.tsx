@@ -139,7 +139,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
     if (!loginId || !loginPw) return;
     setIsLoading(true);
     setLoginError("");
-    trackEvent("sign_up_click", { method: "email" });
+    trackEvent("login_click", { method: "email" });
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginId,
@@ -165,7 +165,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
   const handleGoogleLogin = () => {
     setIsLoading(true);
     setLoginError("");
-    trackEvent("sign_up_click", { method: "google" });
+    trackEvent("login_click", { method: "google" });
     
     // Open the popup login page in a centered window
     const width = 500;
@@ -192,7 +192,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
   const handleKakaoLogin = () => {
     setIsLoading(true);
     setLoginError("");
-    trackEvent("sign_up_click", { method: "kakao" });
+    trackEvent("login_click", { method: "kakao" });
 
     const width = 500;
     const height = 650;
