@@ -116,6 +116,11 @@ const translations = {
     reportReleaseDone: "제보 완료",
     reportReleaseSuccess: "곡 발매를 제보해 주셔서 고마워요! 공식 발매 여부를 확인한 뒤 며칠 내로 반영할게요.",
     reportReleaseError: "제보 처리에 실패했습니다. 다시 시도해 주세요.",
+    reportConfirmTitle: "공식 발매 제보",
+    reportConfirmHeading: "'{title}' 곡이 공식 발매되었나요?",
+    reportConfirmDesc: "리스너들이 제보해 주시면, 공식 발매 여부를 확인한 뒤 며칠 내로 반영할게요.",
+    reportConfirmBtn: "제보하기",
+    reportConfirmCancel: "돌아가기",
     tabReleasedHistory: "발매 전환된 곡 목록",
     lyricsTabPlain: "일반 가사",
     lyricsTabFanchant: "떼창 / 응원법",
@@ -204,6 +209,11 @@ const translations = {
     reportReleaseDone: "Reported",
     reportReleaseSuccess: "Thank you for reporting the official release! We will verify and update it in a few days.",
     reportReleaseError: "Failed to report release. Please try again.",
+    reportConfirmTitle: "Report Official Release",
+    reportConfirmHeading: "Has '{title}' been officially released?",
+    reportConfirmDesc: "Once reported, we will verify the release and update the archives in a few days.",
+    reportConfirmBtn: "Report Release",
+    reportConfirmCancel: "Go Back",
     tabReleasedHistory: "Officially Released Tracks",
     
     // Add Track Form
@@ -259,6 +269,7 @@ export default function ArchivePage() {
   const [lyricsVersion, setLyricsVersion] = useState<"plain" | "fanchant">("plain");
   const [showReleasedHistory, setShowReleasedHistory] = useState(false);
   const [reportedTracks, setReportedTracks] = useState<string[]>([]);
+  const [reportConfirmTrack, setReportConfirmTrack] = useState<UnreleasedTrack | null>(null);
   
   // Lyrics suggestion states
   const [editModalTrack, setEditModalTrack] = useState<UnreleasedTrack | null>(null);
@@ -1045,7 +1056,7 @@ export default function ArchivePage() {
                               
                               {!showReleasedHistory && (
                                 <button
-                                  onClick={() => handleReportRelease(track.id)}
+                                  onClick={() => setReportConfirmTrack(track)}
                                   disabled={reportedTracks.includes(track.id)}
                                   className={`px-4 py-3 border rounded-2xl transition-all font-sans font-bold text-xs flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-sm ${
                                     reportedTracks.includes(track.id)
@@ -1389,6 +1400,55 @@ export default function ArchivePage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. OFFICIAL RELEASE REPORT CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {reportConfirmTrack && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#F5F2ED] border border-navy/20 rounded-[2.5rem] p-6 max-w-sm w-full shadow-xl text-left"
+            >
+              {/* Header */}
+              <div className="flex flex-col gap-1">
+                <span className="font-sans text-[10px] font-bold text-point uppercase tracking-wider bg-point/10 px-2 py-0.5 rounded-full w-fit">
+                  {t.reportConfirmTitle}
+                </span>
+                <h2 className="font-serif text-xl text-navy font-bold mt-2 leading-snug break-words">
+                  {t.reportConfirmHeading.replace("{title}", reportConfirmTrack.title)}
+                </h2>
+                <p className="font-sans text-xs text-charcoal/60 mt-1 leading-relaxed break-keep">
+                  {t.reportConfirmDesc}
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2.5 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setReportConfirmTrack(null)}
+                  className="flex-1 py-3 bg-white hover:bg-navy/5 border border-navy/15 text-navy rounded-2xl font-sans font-bold text-xs transition-all active:scale-[0.98]"
+                >
+                  {t.reportConfirmCancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const trackId = reportConfirmTrack.id;
+                    setReportConfirmTrack(null);
+                    await handleReportRelease(trackId);
+                  }}
+                  className="flex-[1.5] py-3 bg-navy hover:bg-navy/90 text-cream rounded-2xl font-sans font-bold text-xs transition-all flex items-center justify-center gap-1 active:scale-[0.98] shadow-md shadow-navy/10"
+                >
+                  {t.reportConfirmBtn}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
