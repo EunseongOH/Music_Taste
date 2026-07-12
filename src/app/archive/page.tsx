@@ -803,7 +803,7 @@ export default function ArchivePage() {
 
         {/* UNRELEASED TRACKS TAB CONTENT */}
         {!isLoading && activeTab === "unreleased" && (
-          <div className="px-6 flex flex-col gap-5">
+          <div className="px-3 sm:px-4 flex flex-col gap-5">
             {/* Filter pills: Unreleased List vs Released History */}
             <div className="flex justify-center gap-2 max-w-md mx-auto w-full mb-1">
               <button
@@ -861,7 +861,7 @@ export default function ArchivePage() {
 
             {/* List */}
             {filteredUnreleased.length === 0 ? (
-              <div className="py-16 text-center border-2 border-dashed border-navy/20 rounded-[2.5rem] px-6 bg-white/30 mt-3 max-w-md mx-auto w-full">
+              <div className="py-16 text-center border-2 border-dashed border-navy/20 rounded-[2.5rem] px-6 bg-white/30 mt-3 max-w-lg mx-auto w-full">
                 <Music size={40} className="text-navy/20 mx-auto mb-4" />
                 <h3 className="font-serif text-lg text-navy font-bold mb-1">{t.emptyUnreleasedTitle}</h3>
                 <p className="font-sans text-xs text-navy/50 leading-relaxed px-4 break-keep">
@@ -869,7 +869,7 @@ export default function ArchivePage() {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-4 max-w-xl mx-auto w-full mt-2">
+              <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full mt-2">
                 {filteredUnreleased.map((track) => {
                   const youtubeId = track.video_url ? getYouTubeVideoId(track.video_url) : null;
                   const isPlaying = isPlayingVideoId === track.id;
@@ -881,75 +881,84 @@ export default function ArchivePage() {
                       layout="position"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-white/80 border border-navy/10 rounded-[2.2rem] p-5 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col gap-4"
+                      className="bg-white/80 border border-navy/10 rounded-[2.2rem] p-4 sm:p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-3"
                     >
-                      {/* Track Info Row */}
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                          {youtubeId ? (
-                            <div 
-                              onClick={() => setIsPlayingVideoId(isPlaying ? null : track.id)}
-                              className="w-11 h-11 rounded-2xl border border-navy/10 overflow-hidden shrink-0 shadow bg-black relative cursor-pointer group/thumb hover:border-point transition-all active:scale-95"
-                              title={isPlaying ? t.stopBtn : t.playBtn}
-                            >
-                              <Image
-                                src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
-                                alt={track.title}
-                                fill
-                                sizes="44px"
-                                className="object-cover group-hover/thumb:scale-105 transition-transform duration-300"
-                              />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
-                                <Play size={12} className="text-white fill-white" />
-                              </div>
+                      {/* Top: Thumbnail + Track Info */}
+                      <div className="flex items-start gap-3.5">
+                        {youtubeId ? (
+                          <div
+                            onClick={() => setIsPlayingVideoId(isPlaying ? null : track.id)}
+                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-navy/10 overflow-hidden shrink-0 shadow bg-black relative cursor-pointer group/thumb hover:border-point transition-all active:scale-95"
+                            title={isPlaying ? t.stopBtn : t.playBtn}
+                          >
+                            <Image
+                              src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
+                              alt={track.title}
+                              fill
+                              sizes="64px"
+                              className="object-cover group-hover/thumb:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+                              <Play size={14} className="text-white fill-white" />
                             </div>
-                          ) : null}
-                          <div className="text-left min-w-0 flex-1">
-                            <h3 className="font-serif text-base sm:text-lg text-navy font-bold truncate pr-1">
-                              {track.title}
-                            </h3>
-                            <p className="font-sans text-xs text-charcoal/70 font-semibold truncate">
-                              {track.artist_name}
-                            </p>
-                            {track.release_date && (
-                              <p className="font-sans text-[10px] text-charcoal/40 flex items-center gap-1 mt-0.5">
-                                <Calendar size={10} />
-                                {t.performDate}: {track.release_date}
-                              </p>
-                            )}
                           </div>
-                        </div>
+                        ) : (
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-navy/10 bg-cream flex items-center justify-center shrink-0">
+                            <Music size={20} className="text-navy/30" />
+                          </div>
+                        )}
 
-                        {/* Media controls */}
-                        <div className="flex items-center gap-2">
-                          {track.video_url && (
-                            <button
-                              onClick={() => setIsPlayingVideoId(isPlaying ? null : track.id)}
-                              className={`px-3 py-2 rounded-full border font-sans text-[11px] font-bold flex items-center gap-1 transition-all ${
-                                isPlaying
-                                  ? "bg-navy text-cream border-navy hover:bg-navy/90"
-                                  : "bg-white text-navy border-navy/15 hover:bg-navy/5 shadow-sm"
-                              }`}
-                            >
-                              <Video size={13} className={isPlaying ? "animate-pulse text-point" : ""} />
-                              <span>{isPlaying ? t.stopBtn : t.playBtn}</span>
-                            </button>
+                        {/* Track info — full width, no truncation */}
+                        <div className="flex-1 min-w-0 text-left flex flex-col gap-0.5">
+                          <h3 className="font-serif text-base sm:text-lg text-navy font-bold leading-snug break-words">
+                            {track.title}
+                          </h3>
+                          <p className="font-sans text-xs sm:text-sm text-charcoal/70 font-semibold break-words">
+                            {track.artist_name}
+                          </p>
+                          {track.release_date && (
+                            <p className="font-sans text-[10px] text-charcoal/40 flex items-center gap-1 mt-0.5">
+                              <Calendar size={10} />
+                              {t.performDate}: {track.release_date}
+                            </p>
                           )}
+                        </div>
+                      </div>
 
+                      {/* Bottom: Action buttons row */}
+                      <div className="flex items-center gap-2 pt-0.5">
+                        {track.video_url && (
                           <button
-                            onClick={() => {
-                              setExpandedLyricsTrackId(isLyricsExpanded ? null : track.id);
-                              setLyricsVersion("plain");
-                            }}
-                            className={`p-2 rounded-full border transition-all ${
-                              isLyricsExpanded
-                                ? "bg-cream text-navy border-navy/20"
-                                : "bg-white text-navy/60 border-navy/10 hover:bg-navy/5 shadow-sm"
+                            onClick={() => setIsPlayingVideoId(isPlaying ? null : track.id)}
+                            className={`flex-1 py-2 rounded-full border font-sans text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                              isPlaying
+                                ? "bg-navy text-cream border-navy hover:bg-navy/90"
+                                : "bg-white text-navy border-navy/15 hover:bg-navy/5 shadow-sm"
                             }`}
                           >
-                            {isLyricsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            <Video size={13} className={isPlaying ? "animate-pulse text-point" : ""} />
+                            <span>{isPlaying ? t.stopBtn : t.playBtn}</span>
                           </button>
-                        </div>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setExpandedLyricsTrackId(isLyricsExpanded ? null : track.id);
+                            setLyricsVersion("plain");
+                          }}
+                          className={`flex-1 py-2 rounded-full border font-sans text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                            isLyricsExpanded
+                              ? "bg-cream text-navy border-navy/20"
+                              : "bg-white text-navy/60 border-navy/10 hover:bg-navy/5 shadow-sm"
+                          }`}
+                        >
+                          {isLyricsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          <span className="font-sans text-xs">
+                            {isLyricsExpanded
+                              ? (locale === "ko" ? "가사 닫기" : "Close Lyrics")
+                              : (locale === "ko" ? "가사 보기" : "View Lyrics")}
+                          </span>
+                        </button>
                       </div>
 
                       {/* YouTube Player Section */}
