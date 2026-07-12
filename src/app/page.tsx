@@ -12,6 +12,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale, setSafeLocale } from "@/utils/storage";
+import { trackEvent } from "@/utils/gtag";
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,6 +66,7 @@ export default function Home() {
   const handleLanguageToggle = (lang: "ko" | "en") => {
     setLocale(lang);
     setSafeLocale(lang);
+    trackEvent("change_language", { language: lang });
     router.refresh();
   };
 
@@ -136,6 +138,7 @@ export default function Home() {
   const handleStart = () => {
     const isGuest = sessionStorage.getItem("isGuest") === "true";
     const activeMode = modes[activeCardIndex];
+    trackEvent("home_mode_click", { mode_id: activeMode.id });
 
     if (activeMode.id === "archive") {
       if (user || isGuest) {
@@ -493,10 +496,10 @@ export default function Home() {
           <motion.a
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            href="/admin"
+            href="/manager-taste-control"
             onClick={(e) => {
               e.preventDefault();
-              router.push("/admin");
+              router.push("/manager-taste-control");
             }}
             className="px-5 py-2 bg-navy/5 text-navy hover:text-point hover:bg-navy/10 rounded-full border border-navy/10 hover:border-point/20 transition-all font-sans font-bold text-xs tracking-wider cursor-pointer flex items-center gap-1.5 shadow-sm inline-flex"
           >
