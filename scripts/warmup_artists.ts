@@ -152,6 +152,7 @@ const CHUNK_SIZE = 15;              // 청크 단위 개수 (10 ~ 20개 권장)
 const CHUNK_DELAY_MS = 3500;        // 청크 간 추가 대기 시간
 const DB_CACHE_TTL_DAYS = 21;       // 캐시 보존 기간 (21일)
 const MIN_POPULARITY_LIMIT = 5;     // 1차 검색 인기도 하한선 (0~100)
+const MAX_UPDATES_PER_RUN = 50;     // 1회 실행당 최대 신규/갱신 캐싱 제한 (스포티파이 API 429 회피용)
 
 // Helper to pause execution
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -344,15 +345,25 @@ async function main() {
   let successCount = 0;
   let skipCount = 0;
   let failCount = 0;
+  let isCapReached = false;
 
   // 전체 아티스트 목록을 청크 단위로 나누어 실행
   for (let i = 0; i < ALL_ARTISTS.length; i += CHUNK_SIZE) {
+    if (isCapReached) break;
+    
     const chunk = ALL_ARTISTS.slice(i, i + CHUNK_SIZE);
     console.log(`\n================================================================`);
     console.log(`📦 [청크 진행] ${Math.floor(i / CHUNK_SIZE) + 1}번째 청크 처리 시작 (${i + 1} ~ ${Math.min(i + CHUNK_SIZE, ALL_ARTISTS.length)}명)`);
     console.log(`================================================================`);
 
     for (const rawName of chunk) {
+      // 1회 실행당 API 호출을 동반한 최대 캐싱/갱신 처리 수(성공 + 실패)가 제한 값에 도달하면 조기 종료
+      if ((successCount + failCount) >= MAX_UPDATES_PER_RUN) {
+        console.log(`\n🛑 [제한] 1회 최대 캐싱 제한(${MAX_UPDATES_PER_RUN}명)에 도달했습니다. 남은 항목은 내일 크론 런에서 이어서 적재합니다.`);
+        isCapReached = true;
+        break;
+      }
+
       const globalIndex = ALL_ARTISTS.indexOf(rawName) + 1;
       console.log(`\n[${globalIndex}/${ALL_ARTISTS.length}] "${rawName}" 캐싱 처리 중...`);
 
@@ -403,8 +414,8 @@ async function main() {
       await sleep(REQUEST_DELAY_MS);
     }
 
-    // 청크 완료 후 추가 지연 대기 (마지막 청크인 경우는 대기 생략)
-    if (i + CHUNK_SIZE < ALL_ARTISTS.length) {
+    // 청크 완료 후 추가 지연 대기 (마지막 청크이거나 조기 중단된 경우 대기 생략)
+    if (!isCapReached && i + CHUNK_SIZE < ALL_ARTISTS.length) {
       console.log(`\n💤 청크 완료. API Rate Limit 방어를 위해 ${CHUNK_DELAY_MS / 1000}초간 대기합니다...`);
       await sleep(CHUNK_DELAY_MS);
     }
