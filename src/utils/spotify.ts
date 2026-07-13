@@ -10,6 +10,85 @@ const getCacheExpiresAt = () => {
   return d.toISOString();
 };
 
+const ARTIST_TRANSLATION_MAP: Record<string, string> = {
+  "뉴진스": "NewJeans", "아이브": "IVE", "에스파": "aespa", "르세라핌": "LE SSERAFIM", "아일릿": "ILLIT",
+  "베이비몬스터": "BABYMONSTER", "블랙핑크": "BLACKPINK", "트와이스": "TWICE", "레드벨벳": "Red Velvet", "스테이씨": "STAYC",
+  "엔믹스": "NMIXX", "키스오브라이프": "KISS OF LIFE", "트리플에스": "tripleS", "피프티피프티": "FIFTY FIFTY", "여자아이들": "(G)I-DLE",
+  "방탄소년단": "BTS", "세븐틴": "SEVENTEEN", "스트레이 키즈": "Stray Kids", "스트레이키즈": "Stray Kids", "엔시티 드림": "NCT DREAM",
+  "엔시티드림": "NCT DREAM", "엔시티 127": "NCT 127", "엔시티127": "NCT 127", "라이즈": "RIIZE", "투어스": "TWS",
+  "제로베이스원": "ZEROBASEONE", "엔하이픈": "ENHYPEN", "투모로우바이투게더": "TXT", "보이넥스트도어": "BOYNEXTDOOR", "플레이브": "PLAVE",
+  "데이식스": "DAY6", "루시": "LUCY", "아이유": "IU", "태연": "Taeyeon", "정국": "Jungkook",
+  "지민": "Jimin", "뷔": "V", "제니": "Jennie", "리사": "Lisa", "로제": "Rosé",
+  "나연": "Nayeon", "지효": "Jihyo", "화사": "Hwasa", "선미": "Sunmi", "청하": "Chungha",
+  "권은비": "Kwon Eun Bi", "이영지": "Lee Young Ji", "비비": "BIBI", "샤이니": "SHINee", "엑소": "EXO",
+  "빅뱅": "BIGBANG", "소녀시대": "Girls' Generation", "악뮤": "AKMU", "넥스지": "NEXZ", "이븐": "EVNNE",
+  "싸이커스": "xikers", "나니와단시": "Naniwa Danshi", "캣츠아이": "KATSEYE", "유니스": "UNIS", "리센느": "RESCENE",
+  "배드빌런": "BADVILLAIN", "갓세븐": "GOT7", "몬스타엑스": "MONSTA X", "에이티즈": "ATEEZ", "더보이즈": "THE BOYZ",
+  "트레저": "TREASURE", "위너": "WINNER", "아이콘": "iKON", "비투비": "BTOB", "하이라이트": "Highlight",
+  "슈퍼주니어": "Super Junior", "동방신기": "TVXQ!", "투피엠": "2PM", "에프엑스": "f(x)", "에이핑크": "Apink",
+  "마마무": "MAMAMOO", "여자친구": "GFRIEND", "오마이걸": "OH MY GIRL", "우주소녀": "WJSN", "이달의 소녀": "LOONA",
+  "프로미스나인": "fromis_9", "케플러": "Kep1er", "비비지": "VIVIZ", "에버글로우": "Everglow", "드림캐쳐": "Dreamcatcher",
+  "니쥬": "NiziU", "이무진": "Lee Mujin", "케이윌": "K.Will", "성시경": "Sung Si Kyung", "박효신": "Park Hyo Shin",
+  "윤하": "Younha", "백예린": "Baek Yerin", "이하이": "Lee Hi", "백현": "Baekhyun", "디오": "D.O.",
+  "수호": "Suho", "카이": "Kai", "태민": "Taemin", "키": "Key", "호시": "Hoshi",
+  "아르테미스": "ARTMS", "루셈블": "Loossemble", "빌리": "Billlie", "퍼플키스": "PURPLE KISS", "하이키": "H1-KEY",
+  "우아": "WOOAH", "영파씨": "YOUNG POSSE", "미야오": "MEOVV", "메이딘": "MADEIN", "원어스": "ONEUS",
+  "크래비티": "CRAVITY", "이펙스": "EPEX", "피원하모니": "P1Harmony", "앰퍼샌드원": "AMPERS&ONE", "올아워즈": "ALL(H)OURS",
+  "이세계아이돌": "ISEGYE IDOL", "스텔라이브": "STELLIVE", "인피니트": "INFINITE", "틴탑": "TEEN TOP", "블락비": "Block B",
+  "비원에이포": "B1A4", "비에이피": "B.A.P", "빅스": "VIXX", "뉴이스트": "NU'EST", "엠블랙": "MBLAQ",
+  "투에이엠": "2AM", "티아라": "T-ARA", "시크릿": "Secret", "포미닛": "4minute", "씨스타": "SISTAR",
+  "미쓰에이": "Miss A", "걸스데이": "Girl's Day", "이엑스아이디": "EXID", "에이오에이": "AOA", "나인뮤지스": "Nine Muses",
+  "브라운 아이드 걸스": "Brown Eyed Girls", "카라": "KARA", "원더걸스": "Wonder Girls", "투애니원": "2NE1", "지드래곤": "G-DRAGON",
+  "태양": "TAEYANG", "비": "Rain",
+  // 밴드 / 인디
+  "십cm": "10CM", "잔나비": "Jannabi", "멜로망스": "Melomance", "어반자카파": "Urban Zakapa", "폴김": "Paul Kim",
+  "적재": "Jukjae", "카더가든": "Car, the garden", "최유리": "Choi Yu Ree", "볼빨간사춘기": "Bolbbalgan4", "헤이즈": "Heize",
+  "실리카겔": "Silica Gel", "더 볼런티어스": "The Volunteers", "새소년": "Se So Neon", "쏜애플": "Thornapple", "너드커넥션": "Nerd Connection",
+  "웨이브투에스": "Wave to Earth", "설": "SURL", "스탠딩 에그": "Standing Egg", "치즈": "Cheeze", "스텔라장": "Stella Jang",
+  "선우정아": "Sunwoojunga", "권진아": "Kwon Jin Ah", "샘김": "Sam Kim", "이진아": "Lee Jin Ah", "뎁트": "Dept",
+  "라쿠나": "Lacuna", "까치산": "Kachisan", "김승주": "Kim Seung-ju", "우효": "OOHYO", "갤럭시 익스프레스": "Galaxy Express",
+  "글렌체크": "Glen Check", "이디앗테이프": "Idiotape", "페퍼톤스": "Peppertones", "데이브레이크": "Daybreak", "소란": "Soran",
+  "로맨틱펀치": "Romantic Punch", "크라잉넛": "Crying Nut", "노브레인": "No Brain", "딕펑스": "Dickpunks", "브로콜리너마저": "Broccoli, you too?",
+  "가을방학": "Autumn Vacation", "에피톤 프로젝트": "Epitone Project", "센티멘탈 시너리": "Sentimental Scenery", "심규선": "Lucia", "타루": "Taru",
+  "요조": "Yozoh", "한희정": "Han Hee Jung", "제이래빗": "J Rabbit", "옥상달빛": "OKDAL", "스웨덴세탁소": "Sweden Laundry",
+  "바닐라 어쿠스틱": "Vanilla Acoustic", "어쿠스틱 콜라보": "Acoustic Collabo", "슈가볼": "Sugarbowl", "터치드": "Touched", "유다빈밴드": "Yudabin Band",
+  "나인티오원": "9001", "시네마": "CNEMA", "카디": "KARDI", "답다": "Dabda", "코토바": "cotoba",
+  "브로큰 발렌타인": "Broken Valentine", "해리빅버튼": "HarryBigButton", "롤링쿼츠": "Rolling Quartz", "워킹아프터유": "Walking After U", "도망칠 수 없는 현실에서": "Fleeing from Reality",
+  "디에잇투": "D82", "더 픽스": "The Fix", "로렌": "LØREN", "한로로": "Hanroro", "김뜻돌": "Meaningful Stone",
+  "아워": "OurR", "보수동쿨러": "Bosudong Cooler", "세이수미": "Say Sue Me", "기프트": "GIFT", "FT아일랜드": "FTISLAND",
+  "씨엔블루": "CNBLUE", "프렙": "Prep", "소울맨": "Soulman", "정기고": "Junggigo", "죠지": "George",
+  "따마": "THAMA", "다운": "Dvwn", "수민": "SUMIN",
+  // 힙합
+  "크러쉬": "Crush", "자이언티": "Zion.T", "딘": "DEAN", "디피알 이안": "DPR IAN", "디피알 라이브": "DPR LIVE",
+  "우즈": "Woodz", "콜드": "Colde", "라드뮤지엄": "Rad Museum", "다이나믹 듀오": "Dynamicduo", "에픽하이": "Epik High",
+  "박재범": "Jay Park", "로꼬": "Loco", "우원재": "Woo", "쿠기": "Coogie", "기리보이": "Giriboy",
+  "창모": "Changmo", "애쉬 아일랜드": "ASH ISLAND", "비오": "BE'O", "릴러말즈": "Leellamarz", "빅나티": "BIG Naughty",
+  "스키니브라운": "Skinny Brown", "매드클라운": "Mad Clown", "산이": "San E", "버벌진트": "Verbal Jint", "스윙스": "Swings",
+  "블랙넛": "Black Nut", "바스코": "Vasco", "빌스택스": "Vasco", "저스디스": "Justhis", "키드밀리": "Kid Milli",
+  "노엘": "NO:EL", "양홍원": "Yanghongwon", "나우아임영": "nowiamproud", "빈지노": "Beenzino", "지코": "ZICO",
+  "이센스": "E-Sens", "사이먼 도미닉": "Simon Dominic", "더콰이엇": "The Quiett", "팔로알토": "Paloalto", "딥플로우": "Deepflow",
+  "넉살": "Nucksal", "그레이": "Gray", "코드 쿤스트": "Code Kunst", "피에이치원": "pH-1", "식케이": "Sik-K",
+  "김하온": "Haon", "수퍼비": "Superbee", "언에듀케이티드 키드": "Uneducated Kid", "호미들": "Homies", "씨잼": "C Jamm",
+  "비와이": "BewhY", "태버": "Tabber", "미소": "Miso", "서사무엘": "Samuel Seo", "원슈타인": "Wonstein",
+  "릴보이": "Lil Boi", "테이크원": "TakeOne", "쿵디판다": "Khundi Panda", "던말릭": "Don Malik", "폴블랑코": "Paul Blanco",
+  "해쉬스완": "Hash Swan", "김효은": "Keem Hyo Eun", "이로한": "Rohann", "블라세": "Blase", "칠린홈미": "Chillin Homie",
+  // 제이팝
+  "요아소비": "YOASOBI", "요네즈 켄시": "Kenshi Yonezu", "이마세": "Imase", "후지이 카제": "Fujii Kaze", "킹누": "King Gnu",
+  "오피셜히게단디즘": "Official HIGE DANdism", "미세스 그린 애플": "Mrs. GREEN APPLE", "바운디": "Vaundy", "아이뮨": "Aimyon", "래드벰프스": "RADWIMPS",
+  "원오크록": "One Ok Rock", "아도": "Ado", "유우리": "Yuuri", "이브": "Eve",
+  "시이나 링고": "Sheena Ringo", "우타다 히카루": "Utada Hikaru", "아무로 나미에": "Namie Amuro", "스파이에어": "SPYAIR", "백넘버": "back number",
+  "세카이노 오와리": "SEKAI NO OWARI", "크리피너츠": "Creepy Nuts", "요루시카": "Yorushika", "투유": "Tuyu", "미나미": "Minami",
+  "영기로 잘 부탁해": "ZUTOMAYO", "타니 유우키": "Tani Yuuki", "다이스": "Da-iCE", "아타라시 가코": "ATARASHII GAKKO!", "밀레이": "milet",
+  "엑스지": "XG", "스노우맨": "Snow Man", "스톤즈": "SixTONES", "트래비스 재팬": "Travis Japan", "제이오원": "JO1",
+  "아이앤아이": "INI", "미아이": "ME:I", "퍼퓸": "Perfume", "캬리 파뮤파뮤": "Kyary Pamyu Pamyu", "호시노 겐": "Gen Hoshino",
+  "서치모스": "Suchmos", "널바리치": "Nulbarich", "키린지": "Kirinji", "램프": "Lamp", "수요일의 캄파넬라": "Wednesday Campanilla",
+  "녹황색사회": "Ryokuoushoku Shakai", "노벨브라이트": "Novelbright", "아시안 쿵푸 제너레이션": "ASGARI", "라르크 앙 시엘": "L'Arc-en-Ciel", "엑스재팬": "X JAPAN",
+  "카나리아": "Kanaria", "키쿠오": "Kikuo", "마레투": "MARETU", "데코니나": "DECO*27", "피노키오피": "PinocchioP",
+  "슈도": "Syudou", "레올": "Reol", "마지코": "Majiko", "호시마치 스이세이": "Hoshimachi Suisei", "모리 칼리오페": "Mori Calliope",
+  "결속밴드": "Kessoku Band", "미스앤로이드": "Myth & Roid", "레오나": "ReoNa", "플로우": "FLOW",
+  "전자양": "Electron Sheep", "눔차": "numcha", "혁오": "HYUKOH"
+};
+
 async function saveArtistsToDbCache(artists: any[]) {
   if (!artists || artists.length === 0) return;
   try {
@@ -262,15 +341,27 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
   try {
     const supabase = createAdminClient();
     const now = new Date().toISOString();
-    const { data: dbArtists, error } = await supabase
+    
+    // 한국어 검색어에 대한 영문 이름 매핑 시도
+    const mappedEnglishName = ARTIST_TRANSLATION_MAP[trimmedQuery];
+    
+    let queryBuilder = supabase
       .from('spotify_cache_artists')
       .select('*')
-      .eq('locale', lang)
-      .ilike('name', `%${trimmedQuery}%`)
-      .gt('expires_at', now)
-      .range(offset, offset + limit - 1);
+      .eq('locale', 'ko') // 캐시가 'ko'로만 우선 빌드되므로 'ko' 고정 조회하여 다국어 유실 방지
+      .gt('expires_at', now);
 
-    if (!error && dbArtists && dbArtists.length >= limit) {
+    if (mappedEnglishName) {
+      // 한국어 검색어 혹은 매핑된 영문명 둘 중 하나라도 부분 일치하는 조건
+      queryBuilder = queryBuilder.or(`name.ilike.%${trimmedQuery}%,name.ilike.%${mappedEnglishName}%`);
+    } else {
+      queryBuilder = queryBuilder.ilike('name', `%${trimmedQuery}%`);
+    }
+
+    const { data: dbArtists, error } = await queryBuilder.range(offset, offset + limit - 1);
+
+    // limit 크기와 상관없이 검색 매칭된 결과가 있고 오류가 없으면 즉시 반환하여 캐시를 적극 활용
+    if (!error && dbArtists && dbArtists.length > 0) {
       const formatted = dbArtists.map(a => ({
         id: a.id,
         name: a.name,
@@ -347,10 +438,16 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
       } else {
         const errText = await response.text();
         console.warn(`[Spotify API] Search chunk failed with status ${response.status}: ${errText}.`);
+        if (response.status === 429) {
+          throw new Error("429");
+        }
         break;
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("[Spotify API] Search chunk failed with exception:", e);
+      if (e.message === "429" || e.status === 429) {
+        throw e;
+      }
       break;
     }
     await delay(50);

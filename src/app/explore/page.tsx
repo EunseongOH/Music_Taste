@@ -389,8 +389,11 @@ export default function ExplorePage() {
         } else {
           setArtists(mappedArtists);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch initial artists:", error);
+        if (error.message === "429" || error.status === 429) {
+          setSpotifyError("429");
+        }
       } finally {
         setIsSearching(false);
         await checkSpotifyError();
@@ -449,8 +452,11 @@ export default function ExplorePage() {
         if (results.length < 10) {
           setHasMoreSearch(false);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to search artists:", error);
+        if (error.message === "429" || error.status === 429) {
+          setSpotifyError("429");
+        }
       } finally {
         setIsSearching(false);
         await checkSpotifyError();
@@ -496,8 +502,11 @@ export default function ExplorePage() {
             hasMoreSearchRef.current = false;
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("[explore] Failed to load more search results:", e);
+        if (e.message === "429" || e.status === 429) {
+          setSpotifyError("429");
+        }
       } finally {
         setIsLoadingMore(false);
         isLoadingMoreRef.current = false;
@@ -547,8 +556,11 @@ export default function ExplorePage() {
             genreOffsetRef.current = nextOffset;
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("[explore] Failed to load more genre artists:", e);
+        if (e.message === "429" || e.status === 429) {
+          setSpotifyError("429");
+        }
       } finally {
         setIsLoadingMore(false);
         isLoadingMoreRef.current = false;
