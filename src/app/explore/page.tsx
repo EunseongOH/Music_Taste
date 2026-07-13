@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
-import { searchSpotifyArtists, getInitialArtists, getRelatedArtists, getSpotifyGenreQuery, searchArtistsByGenres } from "@/utils/spotify";
+import { searchSpotifyArtists, getInitialArtists, getRelatedArtists, getSpotifyGenreQuery, searchArtistsByGenres, getLastSpotifyError } from "@/utils/spotify";
 import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
@@ -95,6 +95,20 @@ export default function ExplorePage() {
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
 
   const [locale, setLocale] = useState<"ko" | "en">("ko");
+  const [spotifyError, setSpotifyError] = useState<string | null>(null);
+
+  const checkSpotifyError = useCallback(async () => {
+    try {
+      const err = await getLastSpotifyError();
+      if (err) {
+        setSpotifyError(err);
+      } else {
+        setSpotifyError(null);
+      }
+    } catch {
+      setSpotifyError(null);
+    }
+  }, []);
 
   const t = {
     ko: {
@@ -379,6 +393,7 @@ export default function ExplorePage() {
         console.error("Failed to fetch initial artists:", error);
       } finally {
         setIsSearching(false);
+        await checkSpotifyError();
       }
     };
     fetchInitial();
@@ -438,6 +453,7 @@ export default function ExplorePage() {
         console.error("Failed to search artists:", error);
       } finally {
         setIsSearching(false);
+        await checkSpotifyError();
       }
     }, 500); // 500ms debounce
 
@@ -485,6 +501,7 @@ export default function ExplorePage() {
       } finally {
         setIsLoadingMore(false);
         isLoadingMoreRef.current = false;
+        await checkSpotifyError();
       }
 
     } else if (selectedGenresRef.current.length > 0) {
@@ -535,6 +552,7 @@ export default function ExplorePage() {
       } finally {
         setIsLoadingMore(false);
         isLoadingMoreRef.current = false;
+        await checkSpotifyError();
       }
 
     } else {
@@ -1239,6 +1257,50 @@ export default function ExplorePage() {
                     className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 active:scale-[0.98] transition-all cursor-pointer"
                   >
                     {t.cancel}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+
+        {/* Spotify API Error 안내 모달 (UX 라이팅 가이드 준수) */}
+        {spotifyError && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSpotifyError(null)}
+              className="fixed inset-0 bg-black/45 backdrop-blur-[2px] z-50 cursor-pointer"
+            />
+            <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 flex items-center justify-center pointer-events-none">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="w-full max-w-sm bg-[#F5F2ED] border-2 border-navy p-6 rounded-2xl shadow-xl flex flex-col items-center text-center pointer-events-auto"
+              >
+                <div className="w-12 h-12 rounded-full bg-[#E67E22]/10 flex items-center justify-center mb-4">
+                  <Disc className="w-6 h-6 text-[#E67E22] animate-spin" />
+                </div>
+                
+                <h3 className="text-base font-bold text-navy mb-2">
+                  {spotifyError === "429" ? "음원 정보를 가져올 수 없어요" : "일시적인 연결 오류가 발생했어요"}
+                </h3>
+                
+                <p className="text-xs text-navy/70 leading-relaxed mb-6 whitespace-pre-line">
+                  {spotifyError === "429" 
+                    ? "지금 음악 검색 서비스를 이용하는 분이 너무 많아 스포티파이 서버가 지쳤나 봐요.\n\n하지만 걱정 마세요! 이미 준비해 둔 인기 아티스트 목록이나 저장된 캐시 정보로 계속 서비스를 시작할 수 있어요."
+                    : "스포티파이 서버와 연결하는 도중 잠시 문제가 발생했어요. 인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요."}
+                </p>
+                
+                <div className="flex flex-col gap-2 w-full">
+                  <button 
+                    onClick={() => setSpotifyError(null)}
+                    className="w-full py-3 bg-navy text-cream font-bold text-xs rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                  >
+                    {spotifyError === "429" ? "인기 목록에서 고를래요" : "확인"}
                   </button>
                 </div>
               </motion.div>
