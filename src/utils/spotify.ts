@@ -46,7 +46,7 @@ const ARTIST_TRANSLATION_MAP: Record<string, string> = {
   "실리카겔": "Silica Gel", "더 볼런티어스": "The Volunteers", "새소년": "Se So Neon", "쏜애플": "Thornapple", "너드커넥션": "Nerd Connection",
   "웨이브투에스": "Wave to Earth", "설": "SURL", "스탠딩 에그": "Standing Egg", "치즈": "Cheeze", "스텔라장": "Stella Jang",
   "선우정아": "Sunwoojunga", "권진아": "Kwon Jin Ah", "샘김": "Sam Kim", "이진아": "Lee Jin Ah", "뎁트": "Dept",
-  "라쿠나": "Lacuna", "까치산": "Kachisan", "김승주": "Kim Seung-ju", "우효": "OOHYO", "갤럭시 익스프레스": "Galaxy Express",
+  "라쿠나": "Lacuna", "까치산": "Kachisan", "김승주": "kimseungjoo", "우효": "OOHYO", "갤럭시 익스프레스": "Galaxy Express",
   "글렌체크": "Glen Check", "이디앗테이프": "Idiotape", "페퍼톤스": "Peppertones", "데이브레이크": "Daybreak", "소란": "Soran",
   "로맨틱펀치": "Romantic Punch", "크라잉넛": "Crying Nut", "노브레인": "No Brain", "딕펑스": "Dickpunks", "브로콜리너마저": "Broccoli, you too?",
   "가을방학": "Autumn Vacation", "에피톤 프로젝트": "Epitone Project", "센티멘탈 시너리": "Sentimental Scenery", "심규선": "Lucia", "타루": "Taru",
@@ -332,6 +332,17 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
   const lang = await getLocaleCookie();
   const cacheKey = `${trimmedQuery}_${lang}_limit_${limit}_offset_${offset}_market_${market || "default"}`;
   
+  // 한국어 검색어에 대한 영문 이름 매핑 시도 및 부분 매치 추론
+  let mappedEnglishName = ARTIST_TRANSLATION_MAP[trimmedQuery];
+  if (!mappedEnglishName && trimmedQuery.length >= 2) {
+    const matchedKey = Object.keys(ARTIST_TRANSLATION_MAP).find(key => 
+      key.includes(trimmedQuery) || trimmedQuery.includes(key)
+    );
+    if (matchedKey) {
+      mappedEnglishName = ARTIST_TRANSLATION_MAP[matchedKey];
+    }
+  }
+
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 300 * 1000) { // 5 minutes cache for search
     return cached.data;
@@ -342,14 +353,12 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
     const supabase = createAdminClient();
     const now = new Date().toISOString();
     
-    // 한국어 검색어에 대한 영문 이름 매핑 시도
-    const mappedEnglishName = ARTIST_TRANSLATION_MAP[trimmedQuery];
-    
     let queryBuilder = supabase
       .from('spotify_cache_artists')
       .select('*')
       .eq('locale', 'ko') // 캐시가 'ko'로만 우선 빌드되므로 'ko' 고정 조회하여 다국어 유실 방지
-      .gt('expires_at', now);
+      .gt('expires_at', now)
+      .order('popularity', { ascending: false }); // 인기순 정렬 추가
 
     if (mappedEnglishName) {
       // 한국어 검색어 혹은 매핑된 영문명 둘 중 하나라도 부분 일치하는 조건
@@ -369,8 +378,33 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
         genres: a.genres,
         popularity: a.popularity
       }));
-      searchCache.set(cacheKey, { data: formatted, timestamp: Date.now() });
-      return formatted;
+
+      // 캐시 결과의 신뢰성 검증:
+      // 캐시 결과 중 하나라도 이름에 검색어(한글 또는 영어 번역명)가 포함되어 있는지 확인
+      const hasValidMatch = formatted.some(artist => {
+        const artistNameLower = artist.name.toLowerCase();
+        
+        // 1. 영어 이름과 trimmedQuery 비교
+        if (artistNameLower.includes(trimmedQuery)) return true;
+        
+        // 2. 번역된 영어 이름과 비교
+        if (mappedEnglishName && artistNameLower.includes(mappedEnglishName.toLowerCase())) return true;
+        
+        // 3. 공백/하이픈 제거 비교 (예: "kimseungjoo" vs "kimseung-ju")
+        const normalizedArtistName = artistNameLower.replace(/[\s-]/g, "");
+        const normalizedQuery = trimmedQuery.replace(/[\s-]/g, "");
+        if (normalizedArtistName.includes(normalizedQuery)) return true;
+        if (mappedEnglishName && normalizedArtistName.includes(mappedEnglishName.toLowerCase().replace(/[\s-]/g, ""))) return true;
+
+        return false;
+      });
+
+      if (hasValidMatch) {
+        searchCache.set(cacheKey, { data: formatted, timestamp: Date.now() });
+        return formatted;
+      } else {
+        console.warn(`[Spotify Cache DB] Stale or invalid cache matches found for "${query}". Forcing API search.`);
+      }
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB artist search failed, falling back to API:", e);
@@ -421,7 +455,8 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
     const chunkOffset = offset + fetched;
 
     try {
-      let url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=${chunkLimit}&offset=${chunkOffset}`;
+      const searchTarget = mappedEnglishName ? `${query} OR "${mappedEnglishName}"` : query;
+      let url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTarget)}&type=artist&limit=${chunkLimit}&offset=${chunkOffset}`;
       if (market) {
         url += `&market=${market}`;
       }
@@ -482,13 +517,38 @@ export const getInitialArtists = async () => {
   // Deduplicate by ID
   const uniqueArtists = Array.from(new Map(allCurated.map(a => [a.id, a])).values());
 
-  // Format as Spotify Artist objects
-  const results = uniqueArtists.map(a => ({
-    id: a.id,
-    name: a.name,
-    images: [{ url: a.image }],
-    popularity: 50
-  }));
+  // DB 캐시에서 최신 아티스트 정보(특히 이미지 및 인기도)를 조회해서 결합
+  let cachedMap = new Map<string, any>();
+  try {
+    const supabase = createAdminClient();
+    const artistIds = uniqueArtists.map(a => a.id);
+    const { data: dbArtists } = await supabase
+      .from('spotify_cache_artists')
+      .select('id, name, images, popularity')
+      .in('id', artistIds)
+      .eq('locale', 'ko');
+      
+    if (dbArtists) {
+      dbArtists.forEach(dbA => {
+        if (dbA.images && dbA.images.length > 0) {
+          cachedMap.set(dbA.id, dbA);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("[Spotify Cache DB] Failed to fetch curated cache info:", e);
+  }
+
+  // Format as Spotify Artist objects, combining curated values with fresh DB Cache if available
+  const results = uniqueArtists.map(a => {
+    const dbA = cachedMap.get(a.id);
+    return {
+      id: a.id,
+      name: dbA?.name || a.name,
+      images: dbA?.images || [{ url: a.image }],
+      popularity: dbA?.popularity || 50
+    };
+  });
 
   // Shuffle the results
   for (let i = results.length - 1; i > 0; i--) {
@@ -532,7 +592,8 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
       .gt('expires_at', now)
       .single();
 
-    if (!error && dbAlbums) {
+    // 오염된 빈 캐시 데이터가 아닌 유효한 앨범 데이터가 있을 때만 캐시 복원
+    if (!error && dbAlbums && dbAlbums.total > 0 && dbAlbums.items && dbAlbums.items.length > 0) {
       const result = { items: dbAlbums.items, total: dbAlbums.total };
       albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
@@ -558,23 +619,25 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     total: data.total || 0
   };
 
-  // 3. Save to DB Cache
-  try {
-    const supabase = createAdminClient();
-    const expiresAt = getCacheExpiresAt();
-    await supabase
-      .from('spotify_cache_artist_albums')
-      .upsert({
-        artist_id: artistId,
-        locale: lang,
-        offset,
-        limit,
-        items: result.items,
-        total: result.total,
-        expires_at: expiresAt
-      }, { onConflict: 'artist_id,locale,offset,limit' });
-  } catch (e) {
-    console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
+  // 3. Save to DB Cache (오류로 인한 빈 배열이 영구 캐싱되지 않도록 유효성 검사 후 저장)
+  if (result.total > 0 && result.items.length > 0) {
+    try {
+      const supabase = createAdminClient();
+      const expiresAt = getCacheExpiresAt();
+      await supabase
+        .from('spotify_cache_artist_albums')
+        .upsert({
+          artist_id: artistId,
+          locale: lang,
+          offset,
+          limit,
+          items: result.items,
+          total: result.total,
+          expires_at: expiresAt
+        }, { onConflict: 'artist_id,locale,offset,limit' });
+    } catch (e) {
+      console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
+    }
   }
 
   albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -609,7 +672,8 @@ export const getAlbumTracks = async (albumId: string) => {
       .gt('expires_at', now)
       .single();
 
-    if (!error && dbTracks) {
+    // 오염된 빈 캐시가 아닌 유효한 트랙 데이터가 있을 때만 복원
+    if (!error && dbTracks && dbTracks.items && dbTracks.items.length > 0) {
       tracksCache.set(cacheKey, { data: dbTracks.items, timestamp: Date.now() });
       return dbTracks.items;
     }
@@ -653,20 +717,22 @@ export const getAlbumTracks = async (albumId: string) => {
     }
   }
 
-  // 3. Save to DB Cache
-  try {
-    const supabase = createAdminClient();
-    const expiresAt = getCacheExpiresAt();
-    await supabase
-      .from('spotify_cache_album_tracks')
-      .upsert({
-        album_id: albumId,
-        locale: lang,
-        items: allTracks,
-        expires_at: expiresAt
-      }, { onConflict: 'album_id,locale' });
-  } catch (e) {
-    console.error("[Spotify Cache DB] Failed to save tracks to cache:", e);
+  // 3. Save to DB Cache (오염방지를 위해 유효한 트랙이 존재할 때만 저장)
+  if (allTracks.length > 0) {
+    try {
+      const supabase = createAdminClient();
+      const expiresAt = getCacheExpiresAt();
+      await supabase
+        .from('spotify_cache_album_tracks')
+        .upsert({
+          album_id: albumId,
+          locale: lang,
+          items: allTracks,
+          expires_at: expiresAt
+        }, { onConflict: 'album_id,locale' });
+    } catch (e) {
+      console.error("[Spotify Cache DB] Failed to save tracks to cache:", e);
+    }
   }
 
   tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });

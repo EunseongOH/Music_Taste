@@ -46,7 +46,8 @@ export const fetchUnreleasedTracksForArtist = async (artistId: string) => {
   const { data, error } = await supabase
     .from("unreleased_tracks")
     .select("*")
-    .eq("artist_id", artistId);
+    .eq("artist_id", artistId)
+    .eq("is_released", false);
 
   if (error) {
     console.error("[Supabase DB] Error fetching unreleased tracks for artist:", error.message);

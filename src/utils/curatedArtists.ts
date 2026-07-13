@@ -127,8 +127,8 @@ export const curatedArtists: Record<string, CuratedArtist[]> = {
     { id: "5INjqkS1o8h1imAzPqGZBb", name: "Tame Impala", image: "https://i.scdn.co/image/ab6761610000e5ebe412a782245eb20d9626c601" },
     { id: "3AA28KZvwAUcZuOKwyblJQ", name: "Gorillaz", image: "https://i.scdn.co/image/ab6761610000e5ebdd5b57b40cf2aaeccd07835e" },
     { id: "4LLpKhyESsyAXpc4laK94U", name: "Mac Miller", image: "https://i.scdn.co/image/ab6761610000e5ebed3b89aa602145fde71a163a" },
-    { id: "324ndHOuu9raw36X448W6k", name: "Clairo", image: "https://i.scdn.co/image/ab6761610000e5eb6dd4bbaceba8c74b0ca3b9c0" },
-    { id: "1r1mgR7xyzqp0NJFW8exPX", name: "Phoebe Bridgers", image: "https://i.scdn.co/image/ab6761610000e5eb9c8a3c0f0a76bed4d2ae6f2c" }
+    { id: "3l0CmX0FuQjFxr8SK7Vqag", name: "Clairo", image: "https://i.scdn.co/image/ab6761610000e5eb4804c4a44c85afea1a72d1bd" },
+    { id: "1r1uxoy19fzMxunt3ONAkG", name: "Phoebe Bridgers", image: "https://i.scdn.co/image/ab6761610000e5eb6e2d4ab2b84463aa4c349311" }
   ],
   "electronic": [
     { id: "4tZwfgrHOc3mvqYlEYSvVi", name: "Daft Punk", image: "https://i.scdn.co/image/ab6761610000e5ebd3aa7cc0e419b6c459b08e8e" },
@@ -136,9 +136,9 @@ export const curatedArtists: Record<string, CuratedArtist[]> = {
     { id: "1vCWHaC5f2uS3yhpwWbIA6", name: "Avicii", image: "https://i.scdn.co/image/ab6761610000e5ebae07171f989fb39736674113" }
   ],
   "jazz": [
-    { id: "0kbwz7265582317GqN9L2b", name: "Miles Davis", image: "https://i.scdn.co/image/ab6761610000e5eba6c5eb5b7ef5f55fe1c2dd27" },
-    { id: "1ct7183Njg4a7g882s5S7y", name: "Norah Jones", image: "https://i.scdn.co/image/ab6761610000e5eb267e20b52e14b92e0be4c32c" },
-    { id: "7t7183Njg4a7y882s5S77", name: "Laufey", image: "https://i.scdn.co/image/ab6761610000e5eb35d85ba5a5ca2b9fb33461ae" }
+    { id: "0kbYTNQb4Pb1rPbbaF0pT4", name: "Miles Davis", image: "https://i.scdn.co/image/ab6772690000c46c12f90798134ecfe8dcb99db6" },
+    { id: "2Kx7MNY7cI1ENniW7vT30N", name: "Norah Jones", image: "https://i.scdn.co/image/ab6761610000e5ebed83d3ea063d87ce7e708f00" },
+    { id: "7gW0r5CkdEUMm42w9XpyZO", name: "Laufey", image: "https://i.scdn.co/image/ab6761610000e5ebc751deb23ed62e7cadfb669a" }
   ],
   "ballad": [
     { id: "7jFUYMpMUBDL4JQtMZ5ilc", name: "Sung Si Kyung", image: "https://i.scdn.co/image/ab6761610000e5eb5c85d1892bed878af193285e" },
@@ -165,13 +165,13 @@ export const curatedArtists: Record<string, CuratedArtist[]> = {
     { id: "6w4Xk1ziLyfweN6w3KdhxG", name: "Na Hoon-A", image: "https://i.scdn.co/image/ab67616d0000b2732b7cf00903df9c862bdf9fb6" }
   ],
   "j-pop": [
-    { id: "6t17183Njga78y78S578Y", name: "Yoasobi", image: "https://i.scdn.co/image/ab6761610000e5eb51cd8e9e85b6e47695e39c1a" },
-    { id: "1ct7218Njg4a7y88s5S79", name: "Kenshi Yonezu", image: "https://i.scdn.co/image/ab6761610000e5eb3ce1dbbfac052c1efaedcd84" },
-    { id: "5t7183Njg4a7y882s5S77", name: "Fujii Kaze", image: "https://i.scdn.co/image/ab6761610000e5eb97acc03fef57e29e8ebac5ef" }
+    { id: "64tJ2EAv1R6UaZqc4iOCyj", name: "Yoasobi", image: "https://i.scdn.co/image/ab6761610000e5eb964812dece6096f894a1fe85" },
+    { id: "1snhtMLeb2DYoMOcVbb8iB", name: "Kenshi Yonezu", image: "https://i.scdn.co/image/ab6761610000e5eba39642d6f3ba26f42d54ac98" },
+    { id: "6bDWAcdtVR3WHz2xtiIPUi", name: "Fujii Kaze", image: "https://i.scdn.co/image/ab6761610000e5ebadf53c59da1a6d161a55f6d4" }
   ],
   "classical": [
-    { id: "5wVkS4jQ76oG81gP0tJR2", name: "J.S. Bach", image: "https://i.scdn.co/image/ab6761610000e5eb1e7e5baa16a3de63889e9fb2" },
-    { id: "4wVkS4jQ76oG81gP0tJR3", name: "Mozart", image: "https://i.scdn.co/image/ab6761610000e5eb3b6c2a9e6b09c30e42c2f7d1" },
-    { id: "2wVkS4jQ76oG81gP0tJR4", name: "Beethoven", image: "https://i.scdn.co/image/ab6761610000e5eb9e43c43eba395c5c0b38a5b9" }
+    { id: "5aIqB5nVVvmFsvSdExz408", name: "J.S. Bach", image: "https://i.scdn.co/image/a2ec08fe69ecec2748fbc764aede8f1b03ae8f88" },
+    { id: "4NJhFmfw43RLBLjQvxDuRS", name: "Mozart", image: "https://i.scdn.co/image/ab6761610000e5eb7fa9108c6dadb8c3ec21da88" },
+    { id: "2wOqMjp9TyABvtHdOSOTUS", name: "Beethoven", image: "https://i.scdn.co/image/ab6761610000e5eba636b0b244253f602a629796" }
   ]
 };

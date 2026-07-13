@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
+import { LayoutWrapper } from "@/components/LayoutWrapper";
 import { cookies } from "next/headers";
 import { GoogleAnalytics } from "@next/third-parties/google";
 
@@ -231,11 +232,11 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
         <div className="bg-grain" />
-        <div className="w-full max-w-[430px] mx-auto min-h-screen bg-[var(--app-bg)] shadow-2xl relative flex flex-col px-6 overflow-x-hidden">
-          <AuthProvider>
+        <AuthProvider>
+          <LayoutWrapper>
             {children}
-          </AuthProvider>
-        </div>
+          </LayoutWrapper>
+        </AuthProvider>
         <GoogleAnalytics gaId="G-DBXJYMJRFE" />
       </body>
     </html>

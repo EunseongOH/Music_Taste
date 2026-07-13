@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Loader2, Disc, X, Check, ChevronUp } from "lucide-react";
 import Image from "next/image";
+import { SafeImage } from "@/components/SafeImage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
@@ -783,11 +784,12 @@ export default function ExplorePage() {
       >
         <div className="flex items-center gap-4">
           <div className={`relative w-14 h-14 rounded-full overflow-hidden border-2 ${isSelected ? "border-point" : isSimilar ? "border-point border-dashed" : "border-navy/10"}`}>
-            <Image 
+            <SafeImage 
               src={artist.image} 
               alt={artist.name} 
               fill 
               sizes="56px"
+              fallbackType="artist"
               className="object-cover"
             />
           </div>
@@ -839,12 +841,13 @@ export default function ExplorePage() {
         >
           <div className={`relative w-full h-full rounded-full overflow-hidden ${isSelected ? 'p-1 bg-cream/50' : ''}`}>
             <div className="relative w-full h-full rounded-full overflow-hidden">
-              <Image 
+              <SafeImage 
                 src={artist.image} 
                 alt={artist.name} 
                 fill 
                 sizes="112px"
                 priority={idx !== undefined && idx < 3}
+                fallbackType="artist"
                 className={`object-cover ${isSimilar ? 'opacity-80 mix-blend-multiply filter sepia-[0.4]' : ''} transition-all duration-300 ${isSelected && isSimilar ? 'filter-none mix-blend-normal opacity-100' : ''}`} 
               />
             </div>
@@ -1005,11 +1008,12 @@ export default function ExplorePage() {
                     >
                       {/* Avatar with delete X overlay */}
                       <div className="relative w-11 h-11 rounded-full overflow-hidden border border-navy/20">
-                        <Image 
+                        <SafeImage 
                           src={artist.image} 
                           alt={artist.name} 
                           fill 
                           sizes="44px"
+                          fallbackType="artist"
                           className="object-cover"
                         />
                         
@@ -1221,11 +1225,12 @@ export default function ExplorePage() {
               >
                 {/* Artist Avatar with Spinning LP vibe */}
                 <div className="relative w-24 h-24 rounded-full border-4 border-navy overflow-hidden bg-white shadow-md mb-4 mt-2">
-                  <Image 
+                  <SafeImage 
                     src={pendingSingleArtist.image} 
                     alt={pendingSingleArtist.name}
                     fill
                     sizes="96px"
+                    fallbackType="artist"
                     className="object-cover"
                   />
                 </div>

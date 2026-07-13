@@ -26,6 +26,7 @@ import {
   X
 } from "lucide-react";
 import Image from "next/image";
+import { SafeImage } from "@/components/SafeImage";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { createClient } from "@/utils/supabase/client";
@@ -105,7 +106,7 @@ const translations = {
     tabTaste: "취향표 아카이브",
     tabUnreleased: "승인된 미발매곡 목록",
     searchPlaceholder: "곡명 또는 아티스트 검색...",
-    addUnreleasedBtn: "새 미발매곡 등록",
+    addUnreleasedBtn: "미발매곡 등록 신청",
     unreleasedSubtitle: "미발매곡 아카이브",
     unreleasedDesc: "공식 음원 사이트에는 없지만, 공연이나 유튜브를 통해 사랑받는 리스너들의 미발매곡 아카이브입니다.",
     emptyUnreleasedTitle: "아직 등록된 미발매곡이 없어요",
@@ -139,6 +140,7 @@ const translations = {
     pledgeCheckbox: "네, 안내된 내용을 명확히 확인했으며 동의합니다. (필수)",
     cancelBtn: "취소",
     submitBtn: "수정 제안 제출",
+    submitTrackBtn: "등록 신청하기",
     lyricsSubmittedSuccess: "가사 수정 제안이 전송되었습니다. 어드민의 검수 및 승인 후 서비스에 즉시 반영됩니다! 💌",
     lyricsSubmittedError: "가사 수정 요청에 실패했습니다. 다시 시도해 주세요.",
     
@@ -156,8 +158,9 @@ const translations = {
     trackSubmittedSuccess: "신청이 성공적으로 전송되었습니다! 어드민 검토 후 목록에 반영됩니다. 🥳",
     trackSubmittedError: "미발매곡 등록 신청에 실패했습니다. 다시 시도해 주세요.",
     submitting: "제출 중...",
-    checkAuthText: "가사 수정을 기여하려면 로그인이 필요합니다.",
-    checkAuthAddTrack: "미발매곡을 등록하려면 로그인이 필요합니다.",
+    submittingTrack: "신청 중...",
+    checkAuthText: "가사 등록 및 수정을 하려면 로그인이 필요합니다.",
+    checkAuthAddTrack: "미발매곡을 등록 신청하려면 로그인이 필요합니다.",
     livePreviewTitle: "가사 실시간 뷰어 미리보기",
   },
   en: {
@@ -179,7 +182,7 @@ const translations = {
     tabTaste: "Taste Archives",
     tabUnreleased: "Approved Unreleased",
     searchPlaceholder: "Search song or artist...",
-    addUnreleasedBtn: "Add Unreleased",
+    addUnreleasedBtn: "Request to Register",
     unreleasedSubtitle: "Unreleased Archives",
     unreleasedDesc: "Archived tracks that aren't officially released but are performed live or found on YouTube.",
     emptyUnreleasedTitle: "No unreleased songs yet",
@@ -203,6 +206,7 @@ const translations = {
     pledgeCheckbox: "Yes, I understand and agree to the terms. (Required)",
     cancelBtn: "Cancel",
     submitBtn: "Submit Suggestion",
+    submitTrackBtn: "Submit Request",
     lyricsSubmittedSuccess: "Lyrics update suggestion submitted! It will be updated upon admin approval. 💌",
     lyricsSubmittedError: "Failed to submit lyrics suggestion. Please try again.",
     reportReleaseBtn: "Report Official Release",
@@ -230,8 +234,9 @@ const translations = {
     trackSubmittedSuccess: "Submission requested successfully! Added to the queue for admin approval. 🥳",
     trackSubmittedError: "Failed to suggest track. Please try again.",
     submitting: "Submitting...",
-    checkAuthText: "Please log in to edit/contribute lyrics.",
-    checkAuthAddTrack: "Please log in to suggest an unreleased track.",
+    submittingTrack: "Submitting Request...",
+    checkAuthText: "Login is required to contribute lyrics.",
+    checkAuthAddTrack: "Login is required to request unreleased tracks.",
     livePreviewTitle: "Lyrics Live Preview",
   }
 };
@@ -729,11 +734,12 @@ export default function ArchivePage() {
 
                         {/* User profile image */}
                         <div className="relative w-9 h-9 rounded-full overflow-hidden border border-navy/20 shadow-sm shrink-0 bg-white">
-                          <Image
+                          <SafeImage
                             src={result.user_profile_image || "/default-profile.png"}
                             alt={formatNickname(result.user_nickname, t.nicknameDefault)}
                             width={36}
                             height={36}
+                            fallbackType="artist"
                             className="object-cover w-full h-full"
                           />
                         </div>
@@ -747,30 +753,26 @@ export default function ArchivePage() {
                             <div className="absolute w-[70%] h-[70%] rounded-full border border-white/10 pointer-events-none" />
                             <div className="absolute w-[55%] h-[55%] rounded-full border border-white/10 pointer-events-none" />
                             <div className="w-[45%] h-[45%] rounded-full border border-navy/20 relative overflow-hidden bg-point z-20 flex items-center justify-center shadow-inner">
-                              {result.winner_track_image ? (
-                                <Image
-                                  src={result.winner_track_image}
-                                  alt=""
-                                  fill
-                                  sizes="40px"
-                                  className="object-cover opacity-80"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-navy/5 flex items-center justify-center text-navy/30">
-                                  <Music size={12} />
-                                </div>
-                              )}
+                              <SafeImage
+                                src={result.winner_track_image}
+                                alt=""
+                                fill
+                                sizes="40px"
+                                fallbackType="track"
+                                className="object-cover opacity-80"
+                              />
                               <div className="w-[20%] h-[20%] rounded-full bg-cream border border-navy shadow-sm z-30 absolute" />
                             </div>
                           </div>
 
                           <div className="absolute left-2 w-24 h-24 rounded-xl border border-navy/20 bg-cream shadow-md overflow-hidden z-20">
                             {result.winner_track_image ? (
-                              <Image
+                              <SafeImage
                                 src={result.winner_track_image}
                                 alt={result.winner_track_title}
                                 fill
                                 sizes="96px"
+                                fallbackType="track"
                                 className="object-cover"
                               />
                             ) : (
@@ -902,11 +904,12 @@ export default function ArchivePage() {
                             className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-navy/10 overflow-hidden shrink-0 shadow bg-black relative cursor-pointer group/thumb hover:border-point transition-all active:scale-95"
                             title={isPlaying ? t.stopBtn : t.playBtn}
                           >
-                            <Image
+                            <SafeImage
                               src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
                               alt={track.title}
                               fill
                               sizes="64px"
+                              fallbackType="track"
                               className="object-cover group-hover/thumb:scale-105 transition-transform duration-300"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
@@ -1290,19 +1293,14 @@ export default function ArchivePage() {
                               className="flex items-center gap-2.5 px-4 py-2 hover:bg-navy/5 cursor-pointer font-sans text-xs text-charcoal transition-colors border-b border-navy/5 last:border-none"
                             >
                               <div className="relative w-6 h-6 rounded-full overflow-hidden border border-navy/10 shrink-0 bg-white">
-                                {artist.image ? (
-                                  <Image
-                                    src={artist.image}
-                                    alt={artist.name}
-                                    fill
-                                    sizes="24px"
-                                    className="object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-navy/5 flex items-center justify-center text-navy/30">
-                                    <Music size={10} />
-                                  </div>
-                                )}
+                                <SafeImage
+                                  src={artist.image}
+                                  alt={artist.name}
+                                  fill
+                                  sizes="24px"
+                                  fallbackType="artist"
+                                  className="object-cover"
+                                />
                               </div>
                               <span className="font-bold text-navy">{artist.name}</span>
                             </div>
@@ -1314,19 +1312,14 @@ export default function ArchivePage() {
                     <div className="flex items-center justify-between p-3.5 bg-navy/5 border border-navy/10 rounded-2xl">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative w-8 h-8 rounded-full overflow-hidden border border-navy/10 shrink-0 bg-white">
-                          {selectedArtist.image ? (
-                            <Image
-                              src={selectedArtist.image}
-                              alt={selectedArtist.name}
-                              fill
-                              sizes="32px"
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-navy/5 flex items-center justify-center text-navy/30">
-                              <Music size={12} />
-                            </div>
-                          )}
+                          <SafeImage
+                            src={selectedArtist.image}
+                            alt={selectedArtist.name}
+                            fill
+                            sizes="32px"
+                            fallbackType="artist"
+                            className="object-cover"
+                          />
                         </div>
                         <div className="flex flex-col text-left min-w-0">
                           <span className="font-sans font-bold text-xs text-navy truncate">{selectedArtist.name}</span>
@@ -1396,7 +1389,7 @@ export default function ArchivePage() {
                     disabled={isSubmittingTrack || !addForm.title.trim() || !addForm.artistId}
                     className="flex-[1.5] py-3 bg-navy hover:bg-navy/90 text-cream rounded-2xl font-sans font-bold text-xs transition-all flex items-center justify-center gap-1 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none shadow-md shadow-navy/10"
                   >
-                    {isSubmittingTrack ? t.submitting : t.submitBtn}
+                    {isSubmittingTrack ? t.submittingTrack : t.submitTrackBtn}
                   </button>
                 </div>
               </form>
