@@ -44,4 +44,6 @@ next-env.d.ts
 # temp files
 temp_artists.json
 temp_code.ts
+temp_search_results.json
+/scratch/
 
