@@ -1303,13 +1303,13 @@ export default function ExplorePage() {
                 </div>
                 
                 <h3 className="text-base font-bold text-navy mb-2">
-                  {spotifyError === "429" ? "음원 정보를 가져올 수 없어요" : "일시적인 연결 오류가 발생했어요"}
+                  {spotifyError === "429" ? "음악 정보를 불러오지 못하고 있어요" : "일시적인 연결 오류가 발생했어요"}
                 </h3>
                 
                 <p className="text-xs text-navy/70 leading-relaxed mb-6 whitespace-pre-line">
                   {spotifyError === "429" 
-                    ? "지금 음악 검색 서비스를 이용하는 분이 너무 많아 스포티파이 서버가 지쳤나 봐요.\n\n하지만 걱정 마세요! 이미 준비해 둔 인기 아티스트 목록이나 저장된 캐시 정보로 계속 서비스를 시작할 수 있어요."
-                    : "스포티파이 서버와 연결하는 도중 잠시 문제가 발생했어요. 인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요."}
+                    ? "현재 이용자가 많아 음악 검색과 새로운 곡 정보를 가져오는 기능이 잠시 제한되었어요.\n\n대신 이미 준비되어 있는 인기 아티스트 목록을 이용해 나만의 취향표를 계속 만들어 보실 수 있어요."
+                    : "서버와 연결하는 도중 잠시 문제가 발생했어요. 인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요."}
                 </p>
                 
                 <div className="flex flex-col gap-2 w-full">
@@ -1317,7 +1317,7 @@ export default function ExplorePage() {
                     onClick={() => setSpotifyError(null)}
                     className="w-full py-3 bg-navy text-cream font-bold text-xs rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
                   >
-                    {spotifyError === "429" ? "인기 목록에서 고를래요" : "확인"}
+                    {spotifyError === "429" ? "준비된 목록에서 선택하기" : "확인"}
                   </button>
                 </div>
               </motion.div>
