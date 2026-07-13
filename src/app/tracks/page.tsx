@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Compass, Disc, Search, Plus, X, Info, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { SafeImage } from "@/components/SafeImage";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
@@ -1365,7 +1366,7 @@ export default function TracksPage() {
                   >
                     <div className="flex items-center gap-4">
                       <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-sm shrink-0">
-                        <Image src={result.albumImage} alt={result.albumTitle} fill className="object-cover" />
+                        <SafeImage src={result.albumImage} alt={result.albumTitle} fill fallbackType="track" className="object-cover" />
                       </div>
                       <div className="text-left max-w-[200px] sm:max-w-[400px]">
                         <h4 className={`font-sans text-sm font-bold line-clamp-1 ${isSelected ? "text-point" : "text-navy"}`}>
@@ -1404,7 +1405,7 @@ export default function TracksPage() {
                  >
                     <div className="flex items-center gap-4">
                       <div className="relative w-14 h-14 rounded-full overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
-                         <Image src={artist.image} alt={artist.name} fill sizes="56px" priority={idx === 0} className="object-cover" />
+                         <SafeImage src={artist.image} alt={artist.name} fill sizes="56px" priority={idx === 0} fallbackType="artist" className="object-cover" />
                       </div>
                       <div className="text-left">
                          <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
@@ -1564,7 +1565,7 @@ export default function TracksPage() {
                                                 <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
                                                 {/* LP Label (Inner circle) */}
                                                 <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                  <Image src={album.image} alt={album.title} fill className="object-cover" />
+                                                  <SafeImage src={album.image} alt={album.title} fill fallbackType="track" className="object-cover" />
                                                 </div>
                                                 {/* Center hole */}
                                                 <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
@@ -1777,7 +1778,7 @@ export default function TracksPage() {
                                                      <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
                                                      {/* LP Label */}
                                                      <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                       <Image src={album.image} alt={album.title} fill className="object-cover" />
+                                                       <SafeImage src={album.image} alt={album.title} fill fallbackType="track" className="object-cover" />
                                                      </div>
                                                      {/* Center hole */}
                                                      <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
@@ -1798,7 +1799,7 @@ export default function TracksPage() {
                                                 className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
                                                 style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
                                               >
-                                                <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                <SafeImage src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
                                                 {!isExpanded && (
                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
                                                 )}
@@ -2020,10 +2021,11 @@ export default function TracksPage() {
                   <input required value={unreleasedForm.videoUrl} onChange={e => setUnreleasedForm({...unreleasedForm, videoUrl: e.target.value})} type="url" placeholder={t.videoUrlPlaceholder} className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
                   {unreleasedForm.videoUrl && getYouTubeVideoId(unreleasedForm.videoUrl) && (
                     <div className="mt-2 w-full rounded-xl overflow-hidden border border-navy/10 relative aspect-video bg-navy/5 flex items-center justify-center">
-                      <Image
+                      <SafeImage
                         src={`https://img.youtube.com/vi/${getYouTubeVideoId(unreleasedForm.videoUrl)}/hqdefault.jpg`}
                         alt="YouTube Thumbnail Preview"
                         fill
+                        fallbackType="track"
                         className="object-cover"
                       />
                     </div>

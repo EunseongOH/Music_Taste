@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   Check, X, Disc, ExternalLink, Clock, Music, Video,
-  ChevronLeft, FileText, Sparkles, LayoutDashboard,
+  ChevronLeft, ChevronRight, FileText, Sparkles, LayoutDashboard,
   ListMusic, BookOpen, History, Shield,
   AlertCircle, Loader2
 } from "lucide-react";
@@ -68,11 +68,34 @@ export default function AdminPage() {
   const [notification, setNotification] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
+  const [isMounted, setIsMounted] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   useEffect(() => {
+    setIsMounted(true);
     if (typeof window !== "undefined") {
       setLocale(getSafeLocale());
+
+      const saved = localStorage.getItem("admin_sidebar_collapsed");
+      if (saved !== null) {
+        setIsSidebarCollapsed(saved === "true");
+      }
+
+      const checkMobile = () => {
+        const ua = navigator.userAgent.toLowerCase();
+        const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+        setIsMobileDevice(isMobileUA);
+      };
+      checkMobile();
     }
   }, []);
+
+  const toggleSidebar = () => {
+    const nextVal = !isSidebarCollapsed;
+    setIsSidebarCollapsed(nextVal);
+    localStorage.setItem("admin_sidebar_collapsed", String(nextVal));
+  };
 
   const t = {
     ko: {
@@ -346,7 +369,7 @@ export default function AdminPage() {
     } catch (e) { return dateStr; }
   };
 
-  if (authLoading) {
+  if (authLoading || !isMounted) {
     return (
       <main className="flex flex-col min-h-screen items-center justify-center bg-[var(--app-bg)]">
         <motion.div
@@ -380,7 +403,7 @@ export default function AdminPage() {
   const YoutubePreview = ({ video_url, title }: { video_url: string; title: string }) => {
     const youtubeId = getYouTubeVideoId(video_url);
     return (
-      <div className="w-full flex flex-col gap-2 mt-1">
+      <div className={`w-full flex flex-col gap-2 mt-1 ${!isMobileDevice ? "max-w-[480px]" : ""}`}>
         <div className="flex items-center justify-between font-sans text-xs font-semibold text-navy/70 ml-1">
           <span className="flex items-center gap-1">
             <Video size={13} className="text-red-500" />
@@ -438,7 +461,7 @@ export default function AdminPage() {
     tracks.length === 0
       ? <EmptyState icon={<Music size={26} />} title={t.noPendingTitle} desc={t.noPendingDesc} />
       : (
-        <div className="flex flex-col gap-4">
+        <div className={isMobileDevice ? "flex flex-col gap-4" : "grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-5"}>
           <AnimatePresence mode="popLayout">
             {tracks.map((track) => (
               <motion.div
@@ -501,7 +524,7 @@ export default function AdminPage() {
     lyricsSuggestions.length === 0
       ? <EmptyState icon={<BookOpen size={26} />} title={t.noPendingLyricsTitle} desc={t.noPendingLyricsDesc} />
       : (
-        <div className="flex flex-col gap-4">
+        <div className={isMobileDevice ? "flex flex-col gap-4" : "grid grid-cols-1 xl:grid-cols-2 gap-5"}>
           <AnimatePresence mode="popLayout">
             {lyricsSuggestions.map((suggestion) => {
               const isPlain = !!suggestion.lyrics;
@@ -594,7 +617,7 @@ export default function AdminPage() {
     manageTracks.length === 0
       ? <EmptyState icon={<FileText size={26} />} title={t.noManageTitle} desc={t.noManageDesc} />
       : (
-        <div className="flex flex-col gap-4">
+        <div className={isMobileDevice ? "flex flex-col gap-4" : "grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-5"}>
           <AnimatePresence mode="popLayout">
             {manageTracks.map((track) => {
               const isReported = track.release_reported === true;
@@ -659,7 +682,7 @@ export default function AdminPage() {
     releasedHistory.length === 0
       ? <EmptyState icon={<Clock size={26} />} title={t.noHistoryTitle} desc={t.noHistoryDesc} />
       : (
-        <div className="flex flex-col gap-4">
+        <div className={isMobileDevice ? "flex flex-col gap-4" : "grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-5"}>
           <AnimatePresence mode="popLayout">
             {releasedHistory.map((track) => (
               <motion.div
@@ -744,7 +767,9 @@ export default function AdminPage() {
       </AnimatePresence>
 
       {/* TOP HEADER */}
-      <header className="sticky top-0 z-[100] bg-[var(--app-bg)]/90 backdrop-blur-md border-b border-navy/8 px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+      <header className={`sticky top-0 z-[100] bg-[var(--app-bg)]/90 backdrop-blur-md border-b border-navy/8 py-3 flex items-center justify-between gap-4 ${
+        isMobileDevice ? "px-4 sm:px-6" : "px-8"
+      }`}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/")}
@@ -771,57 +796,105 @@ export default function AdminPage() {
       </header>
 
       {/* BODY */}
-      <div className="flex flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pb-8 gap-6 mt-6">
+      <div className={`flex flex-1 w-full pb-8 mt-6 gap-6 px-4 sm:px-6 ${
+        isMobileDevice 
+          ? "max-w-6xl mx-auto" 
+          : "max-w-full px-8"
+      }`}>
 
-        {/* LEFT SIDEBAR — desktop only */}
-        <aside className="hidden md:flex flex-col w-60 shrink-0 gap-2 self-start sticky top-[72px]">
-          <div className="mb-4 px-1">
-            <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-8 h-8 rounded-xl bg-navy flex items-center justify-center">
-                <LayoutDashboard size={16} className="text-point" />
-              </div>
-              <div>
-                <h1 className="font-serif text-base text-navy font-bold leading-tight">{t.adminTitle}</h1>
-                <p className="font-sans text-[10px] text-charcoal/45">{t.adminSubtitle}</p>
+        {/* LEFT SIDEBAR — PC 전용 */}
+        {!isMobileDevice && (
+          <motion.aside
+            animate={{ width: isSidebarCollapsed ? 76 : 240 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="relative flex flex-col shrink-0 gap-2 self-start sticky top-[72px] bg-white/40 border border-navy/8 rounded-3xl p-3 shadow-sm"
+          >
+            {/* Collapse Toggle Button */}
+            <button
+              onClick={toggleSidebar}
+              className="absolute -right-3 top-6 z-[110] w-6 h-6 bg-white border border-navy/12 rounded-full flex items-center justify-center text-navy shadow-sm hover:bg-cream transition-all cursor-pointer active:scale-95"
+              title={isSidebarCollapsed ? "메뉴 펼치기 (Expand)" : "메뉴 접기 (Collapse)"}
+            >
+              {isSidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            </button>
+
+            {/* Sidebar Header */}
+            <div className="mb-4 px-1 overflow-hidden">
+              <div className="flex items-center gap-2.5 mb-1 min-w-[200px]">
+                <div className="w-8 h-8 rounded-xl bg-navy flex items-center justify-center shrink-0">
+                  <LayoutDashboard size={16} className="text-point" />
+                </div>
+                {!isSidebarCollapsed && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <h1 className="font-serif text-base text-navy font-bold leading-tight">{t.adminTitle}</h1>
+                    <p className="font-sans text-[10px] text-charcoal/45">{t.adminSubtitle}</p>
+                  </motion.div>
+                )}
               </div>
             </div>
-          </div>
 
-          {navItems.map((item) => (
-            <motion.button
-              key={item.id}
-              onClick={() => setActiveSection(item.id)}
-              whileHover={{ x: 2 }}
-              whileTap={{ scale: 0.98 }}
-              className={`relative flex items-center gap-3 px-4 py-3 rounded-2xl font-sans text-sm font-semibold text-left transition-all ${
-                activeSection === item.id
-                  ? "bg-navy text-cream shadow-md shadow-navy/20"
-                  : "text-navy/65 hover:bg-white/70 hover:text-navy"
-              }`}
-            >
-              <span className={activeSection === item.id ? "text-point" : "text-navy/40"}>
-                {item.icon}
-              </span>
-              <span className="flex-1 leading-tight">{item.label}</span>
-              {item.count !== undefined && item.count > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
+            {/* Navigation Items */}
+            {navItems.map((item) => (
+              <motion.button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                whileHover={{ x: isSidebarCollapsed ? 0 : 2 }}
+                whileTap={{ scale: 0.98 }}
+                title={isSidebarCollapsed ? item.label : undefined}
+                className={`relative flex items-center rounded-2xl font-sans text-sm font-semibold text-left transition-all ${
+                  isSidebarCollapsed ? "justify-center p-3.5" : "gap-3 px-4 py-3"
+                } ${
                   activeSection === item.id
-                    ? "bg-point/30 text-cream"
-                    : "bg-navy/10 text-navy/60"
-                }`}>
-                  {item.count}
+                    ? "bg-navy text-cream shadow-md shadow-navy/20"
+                    : "text-navy/65 hover:bg-white/70 hover:text-navy"
+                }`}
+              >
+                <span className={activeSection === item.id ? "text-point" : "text-navy/40"}>
+                  {item.icon}
                 </span>
-              )}
-              {activeSection === item.id && (
-                <motion.div
-                  layoutId="sidebarActiveIndicator"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-point rounded-r-full"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
-              )}
-            </motion.button>
-          ))}
-        </aside>
+
+                {!isSidebarCollapsed && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex-1 leading-tight whitespace-nowrap overflow-hidden text-ellipsis"
+                  >
+                    {item.label}
+                  </motion.span>
+                )}
+
+                {item.count !== undefined && item.count > 0 && (
+                  isSidebarCollapsed ? (
+                    <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-point text-cream text-[9px] font-bold flex items-center justify-center shadow-sm">
+                      {item.count > 9 ? "9+" : item.count}
+                    </span>
+                  ) : (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
+                      activeSection === item.id
+                        ? "bg-point/30 text-cream"
+                        : "bg-navy/10 text-navy/60"
+                    }`}>
+                      {item.count}
+                    </span>
+                  )
+                )}
+
+                {activeSection === item.id && !isSidebarCollapsed && (
+                  <motion.div
+                    layoutId="sidebarActiveIndicator"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-point rounded-r-full"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+              </motion.button>
+            ))}
+          </motion.aside>
+        )}
 
         {/* MAIN CONTENT */}
         <main className="flex-1 min-w-0 flex flex-col gap-5">
@@ -877,39 +950,42 @@ export default function AdminPage() {
         </main>
       </div>
 
-      {/* BOTTOM NAV — mobile only */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-[var(--app-bg)]/95 backdrop-blur-md border-t border-navy/10 px-2 py-2 flex items-center justify-around">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveSection(item.id)}
-            className={`relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all ${
-              activeSection === item.id ? "text-navy" : "text-navy/40"
-            }`}
-          >
-            <span className={`transition-all ${activeSection === item.id ? "text-point scale-110" : ""}`}>
-              {item.icon}
-            </span>
-            <span className="font-sans text-[10px] font-semibold leading-tight text-center max-w-[56px] truncate">
-              {item.label.split(" ")[0]}
-            </span>
-            {activeSection === item.id && (
-              <motion.div
-                layoutId="mobileActiveIndicator"
-                className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-point"
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
-            )}
-            {item.count !== undefined && item.count > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-point text-cream text-[9px] font-bold flex items-center justify-center">
-                {item.count > 9 ? "9+" : item.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
-
-      <div className="md:hidden h-20" />
+      {/* BOTTOM NAV — 모바일 기기 전용 */}
+      {isMobileDevice && (
+        <>
+          <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-[var(--app-bg)]/95 backdrop-blur-md border-t border-navy/10 px-2 py-2 flex items-center justify-around">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={`relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all ${
+                  activeSection === item.id ? "text-navy" : "text-navy/40"
+                }`}
+              >
+                <span className={`transition-all ${activeSection === item.id ? "text-point scale-110" : ""}`}>
+                  {item.icon}
+                </span>
+                <span className="font-sans text-[10px] font-semibold leading-tight text-center max-w-[56px] truncate">
+                  {item.label.split(" ")[0]}
+                </span>
+                {activeSection === item.id && (
+                  <motion.div
+                    layoutId="mobileActiveIndicator"
+                    className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-point"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                {item.count !== undefined && item.count > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-point text-cream text-[9px] font-bold flex items-center justify-center">
+                    {item.count > 9 ? "9+" : item.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className="h-20" />
+        </>
+      )}
     </div>
   );
 }
