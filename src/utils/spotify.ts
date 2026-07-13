@@ -1,5 +1,43 @@
 "use server";
 // src/utils/spotify.ts
+import { createAdminClient } from "./supabase/admin";
+
+const DB_CACHE_TTL_DAYS = 21;
+
+const getCacheExpiresAt = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + DB_CACHE_TTL_DAYS);
+  return d.toISOString();
+};
+
+async function saveArtistsToDbCache(artists: any[]) {
+  if (!artists || artists.length === 0) return;
+  try {
+    const supabase = createAdminClient();
+    const expiresAt = getCacheExpiresAt();
+    const lang = await getLocaleCookie();
+
+    const rows = artists.map(artist => ({
+      id: artist.id,
+      locale: lang,
+      name: artist.name,
+      images: artist.images || [],
+      genres: artist.genres || [],
+      popularity: artist.popularity || 0,
+      expires_at: expiresAt
+    }));
+
+    const { error } = await supabase
+      .from('spotify_cache_artists')
+      .upsert(rows, { onConflict: 'id,locale' });
+
+    if (error) {
+      console.error("[Spotify Cache DB] Error upserting artists:", error.message);
+    }
+  } catch (e) {
+    console.error("[Spotify Cache DB] Failed to save artists to cache:", e);
+  }
+}
 
 const getLocaleCookie = async (): Promise<string> => {
   try {
@@ -213,6 +251,33 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
   if (cached && Date.now() - cached.timestamp < 300 * 1000) { // 5 minutes cache for search
     return cached.data;
   }
+
+  // 1. Try DB Cache first
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+    const { data: dbArtists, error } = await supabase
+      .from('spotify_cache_artists')
+      .select('*')
+      .eq('locale', lang)
+      .ilike('name', `%${trimmedQuery}%`)
+      .gt('expires_at', now)
+      .range(offset, offset + limit - 1);
+
+    if (!error && dbArtists && dbArtists.length >= limit) {
+      const formatted = dbArtists.map(a => ({
+        id: a.id,
+        name: a.name,
+        images: a.images,
+        genres: a.genres,
+        popularity: a.popularity
+      }));
+      searchCache.set(cacheKey, { data: formatted, timestamp: Date.now() });
+      return formatted;
+    }
+  } catch (e) {
+    console.warn("[Spotify Cache DB] DB artist search failed, falling back to API:", e);
+  }
   
   const performLocalSearch = () => {
     const lowercaseQuery = trimmedQuery;
@@ -286,6 +351,7 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
   }
 
   if (succeeded && allItems.length > 0) {
+    saveArtistsToDbCache(allItems);
     searchCache.set(cacheKey, { data: allItems, timestamp: Date.now() });
     return allItems;
   }
@@ -343,9 +409,33 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   const lang = await getLocaleCookie();
   const cacheKey = `${artistId}_${lang}_offset_${offset}_limit_${limit}`;
 
+  // 1. Memory Cache check
   const cached = albumsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
+  }
+
+  // 2. DB Cache check
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+    const { data: dbAlbums, error } = await supabase
+      .from('spotify_cache_artist_albums')
+      .select('*')
+      .eq('artist_id', artistId)
+      .eq('locale', lang)
+      .eq('offset', offset)
+      .eq('limit', limit)
+      .gt('expires_at', now)
+      .single();
+
+    if (!error && dbAlbums) {
+      const result = { items: dbAlbums.items, total: dbAlbums.total };
+      albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    }
+  } catch (e) {
+    console.warn("[Spotify Cache DB] DB getArtistAlbums failed, calling API:", e);
   }
 
   // Fetch only the requested page to minimize requests
@@ -365,6 +455,25 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     total: data.total || 0
   };
 
+  // 3. Save to DB Cache
+  try {
+    const supabase = createAdminClient();
+    const expiresAt = getCacheExpiresAt();
+    await supabase
+      .from('spotify_cache_artist_albums')
+      .upsert({
+        artist_id: artistId,
+        locale: lang,
+        offset,
+        limit,
+        items: result.items,
+        total: result.total,
+        expires_at: expiresAt
+      }, { onConflict: 'artist_id,locale,offset,limit' });
+  } catch (e) {
+    console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
+  }
+
   albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 };
@@ -379,9 +488,30 @@ export const getAlbumTracks = async (albumId: string) => {
   const lang = await getLocaleCookie();
   const cacheKey = `${albumId}_${lang}`;
 
+  // 1. Memory Cache check
   const cached = tracksCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
+  }
+
+  // 2. DB Cache check
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+    const { data: dbTracks, error } = await supabase
+      .from('spotify_cache_album_tracks')
+      .select('*')
+      .eq('album_id', albumId)
+      .eq('locale', lang)
+      .gt('expires_at', now)
+      .single();
+
+    if (!error && dbTracks) {
+      tracksCache.set(cacheKey, { data: dbTracks.items, timestamp: Date.now() });
+      return dbTracks.items;
+    }
+  } catch (e) {
+    console.warn("[Spotify Cache DB] DB getAlbumTracks failed, calling API:", e);
   }
 
   // 1. Fetch the first page (limit = 10) to obtain the total count
@@ -418,6 +548,22 @@ export const getAlbumTracks = async (albumId: string) => {
         console.error(`[Spotify API] Error fetching tracks at offset ${offset}:`, err);
       }
     }
+  }
+
+  // 3. Save to DB Cache
+  try {
+    const supabase = createAdminClient();
+    const expiresAt = getCacheExpiresAt();
+    await supabase
+      .from('spotify_cache_album_tracks')
+      .upsert({
+        album_id: albumId,
+        locale: lang,
+        items: allTracks,
+        expires_at: expiresAt
+      }, { onConflict: 'album_id,locale' });
+  } catch (e) {
+    console.error("[Spotify Cache DB] Failed to save tracks to cache:", e);
   }
 
   tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });
@@ -621,49 +767,91 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
   // Determine limit per genre based on the sampled subset size
   const limitPerGenre = Math.ceil(limit / genresToFetch.length);
   const allResultsMap = new Map<string, any>();
-  let anySucceeded = false;
-  let hitRateLimit = false;
+  const genresNeedingApi: string[] = [];
+  const lang = await getLocaleCookie();
 
-  // Sequential execution with 50ms delay to prevent parallel API rate limiting
-  for (let i = 0; i < genresToFetch.length; i++) {
-    const genreId = genresToFetch[i];
-    const config = genreSearchQuery[genreId.toLowerCase()] || { query: genreId };
-    const maxLimitPerRequest = 10;
-    const chunkLimit = Math.min(limitPerGenre, maxLimitPerRequest);
-    const safeOffset = offset % 950;
+  // 1. Try DB Cache first for each sampled genre
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
 
-    try {
-      let url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(config.query)}&type=artist&limit=${chunkLimit}&offset=${safeOffset}`;
-      if (config.market) {
-        url += `&market=${config.market}`;
-      }
-      const response = await spotifyFetch(url);
-      
-      if (response.ok) {
-        anySucceeded = true;
-        const data = await response.json();
-        const items = data.artists?.items || [];
-        items.forEach((item: any) => {
+    for (const genreId of genresToFetch) {
+      // Look for artists containing the genre in their genres array (JSONB)
+      const { data: dbArtists, error } = await supabase
+        .from('spotify_cache_artists')
+        .select('*')
+        .eq('locale', lang)
+        .contains('genres', [genreId.toLowerCase()])
+        .gt('expires_at', now)
+        .range(offset, offset + limitPerGenre - 1);
+
+      if (!error && dbArtists && dbArtists.length >= limitPerGenre) {
+        dbArtists.forEach((item: any) => {
           allResultsMap.set(item.id, item);
         });
       } else {
-        const errText = await response.text();
-        console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with status ${response.status}: ${errText}`);
-        
-        // If 429 Too Many Requests was received, break early to prevent compounding the rate limit
-        if (response.status === 429) {
-          hitRateLimit = true;
-          break;
+        // If cache has insufficient artists, query Spotify API for this genre
+        genresNeedingApi.push(genreId);
+        if (dbArtists && dbArtists.length > 0) {
+          dbArtists.forEach((item: any) => {
+            allResultsMap.set(item.id, item);
+          });
         }
       }
-    } catch (err) {
-      console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with exception:`, err);
     }
+  } catch (e) {
+    console.warn("[Spotify Cache DB] DB genre search error, using API fallback:", e);
+    genresNeedingApi.push(...genresToFetch);
+  }
 
-    // Add a small 50ms spacing between requests unless it's the last item
-    if (i < genres.length - 1) {
-      await delay(50);
+  // 2. Query Spotify API only for genres with insufficient cache
+  let anySucceeded = false;
+  let hitRateLimit = false;
+
+  if (genresNeedingApi.length > 0) {
+    for (let i = 0; i < genresNeedingApi.length; i++) {
+      const genreId = genresNeedingApi[i];
+      const config = genreSearchQuery[genreId.toLowerCase()] || { query: genreId };
+      const maxLimitPerRequest = 10;
+      const chunkLimit = Math.min(limitPerGenre, maxLimitPerRequest);
+      const safeOffset = offset % 950;
+
+      try {
+        let url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(config.query)}&type=artist&limit=${chunkLimit}&offset=${safeOffset}`;
+        if (config.market) {
+          url += `&market=${config.market}`;
+        }
+        const response = await spotifyFetch(url);
+        
+        if (response.ok) {
+          anySucceeded = true;
+          const data = await response.json();
+          const items = data.artists?.items || [];
+          items.forEach((item: any) => {
+            allResultsMap.set(item.id, item);
+          });
+          // Save fresh API items to DB Cache
+          saveArtistsToDbCache(items);
+        } else {
+          const errText = await response.text();
+          console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with status ${response.status}: ${errText}`);
+          
+          if (response.status === 429) {
+            hitRateLimit = true;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with exception:`, err);
+      }
+
+      if (i < genresNeedingApi.length - 1) {
+        await delay(50);
+      }
     }
+  } else {
+    // All genres resolved from Cache!
+    anySucceeded = true;
   }
 
   // If we had successful responses and did not break due to rate limits, return them

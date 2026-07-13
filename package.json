@@ -6,7 +6,8 @@
     "dev": "node --max-http-header-size=65536 node_modules/next/dist/bin/next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:warmup": "npx tsx --env-file=.env.local scripts/warmup_artists.ts"
   },
   "dependencies": {
     "@next/third-parties": "^16.2.9",
