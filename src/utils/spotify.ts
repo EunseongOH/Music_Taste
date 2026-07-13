@@ -164,6 +164,12 @@ async function spotifyFetch(
     cache: 'no-store' 
   });
 
+  if (response.ok) {
+    lastSpotifyError = "";
+  } else {
+    lastSpotifyError = response.status === 429 ? "429" : String(response.status);
+  }
+
   // Handle 429 Too Many Requests
   if (response.status === 429 && retries > 0) {
     const retryAfterHeader = response.headers.get('Retry-After');
