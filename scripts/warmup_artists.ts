@@ -151,11 +151,20 @@ const REQUEST_DELAY_MS = 900;       // 기본 호출 지연 시간 (800ms ~ 1000
 const CHUNK_SIZE = 15;              // 청크 단위 개수 (10 ~ 20개 권장)
 const CHUNK_DELAY_MS = 3500;        // 청크 간 추가 대기 시간
 const DB_CACHE_TTL_DAYS = 21;       // 캐시 보존 기간 (21일)
+const RENEW_THRESHOLD_DAYS = 7;     // 만료 7일 전부터 갱신 대상으로 분류하여 순차 분산 갱신 도모
 const MIN_POPULARITY_LIMIT = 5;     // 1차 검색 인기도 하한선 (0~100)
 const MAX_UPDATES_PER_RUN = 50;     // 1회 실행당 최대 신규/갱신 캐싱 제한 (스포티파이 API 429 회피용)
 
 // Helper to pause execution
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 만료일 분산(Jitter) 생성기: 21일 기준 +- 3일 편차(18~24일)를 주어 한날한시에 만료 대상이 쏟아지는 걸 영구 방지
+function getJitteredExpiresAt(): Date {
+  const expiresAt = new Date();
+  const randomOffset = Math.floor(Math.random() * 7) - 3; // -3, -2, -1, 0, 1, 2, 3
+  expiresAt.setDate(expiresAt.getDate() + DB_CACHE_TTL_DAYS + randomOffset);
+  return expiresAt;
+}
 
 // -------------------------------------------------------------------------
 // 3. 다국어 이름 분리 및 텍스트 매칭 유틸리티
@@ -308,9 +317,8 @@ function selectBestArtist(items: any[], parsed: ParsedName): any | null {
 async function saveToDb(artist: any) {
   const supabase = createAdminClient();
   
-  // 만료일: 현재 시간 + 21일
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + DB_CACHE_TTL_DAYS);
+  // 만료일: 18~24일 범위의 분산 만료일 부여 (Jitter 적용)
+  const expiresAt = getJitteredExpiresAt();
   const expiresAtStr = expiresAt.toISOString();
 
   // 'ko' 로케일 기준으로 우선 적재
@@ -370,21 +378,21 @@ async function main() {
       try {
         const parsed = parseArtistName(rawName);
 
-        // 1. 이미 캐시된 데이터가 있고 유효 기간이 3일 이상 넉넉히 남아있는지 확인
-        const threeDaysFromNow = new Date();
-        threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-        const threeDaysStr = threeDaysFromNow.toISOString();
+        // 1. 이미 캐시된 데이터가 있고 유효 기간이 RENEW_THRESHOLD_DAYS일 이상 충분히 남아있는지 확인
+        const thresholdDate = new Date();
+        thresholdDate.setDate(thresholdDate.getDate() + RENEW_THRESHOLD_DAYS);
+        const thresholdStr = thresholdDate.toISOString();
 
         const { data: existing } = await supabase
           .from('spotify_cache_artists')
           .select('id, expires_at')
           .eq('locale', 'ko')
           .eq('name', parsed.primary)
-          .gt('expires_at', threeDaysStr)
+          .gt('expires_at', thresholdStr)
           .maybeSingle();
 
         if (existing) {
-          console.log(`  -> [SKIP] 캐시 유효 기간이 3일 이상 충분히 남아있습니다. (만료일: ${existing.expires_at})`);
+          console.log(`  -> [SKIP] 캐시 유효 기간이 ${RENEW_THRESHOLD_DAYS}일 이상 충분히 남아있습니다. (만료일: ${existing.expires_at})`);
           skipCount++;
           continue;
         }
