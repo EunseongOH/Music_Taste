@@ -879,27 +879,24 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
     const now = new Date().toISOString();
 
     for (const genreId of genresToFetch) {
-      // Look for artists containing the genre in their genres array (JSONB)
+      // locale은 'ko' 고정하여 다국어 캐시 누락 방지
       const { data: dbArtists, error } = await supabase
         .from('spotify_cache_artists')
         .select('*')
-        .eq('locale', lang)
+        .eq('locale', 'ko')
         .contains('genres', [genreId.toLowerCase()])
         .gt('expires_at', now)
         .range(offset, offset + limitPerGenre - 1);
 
-      if (!error && dbArtists && dbArtists.length >= limitPerGenre) {
+      if (!error && dbArtists && dbArtists.length > 0) {
         dbArtists.forEach((item: any) => {
           allResultsMap.set(item.id, item);
         });
-      } else {
-        // If cache has insufficient artists, query Spotify API for this genre
-        genresNeedingApi.push(genreId);
-        if (dbArtists && dbArtists.length > 0) {
-          dbArtists.forEach((item: any) => {
-            allResultsMap.set(item.id, item);
-          });
+        if (dbArtists.length < limitPerGenre) {
+          genresNeedingApi.push(genreId);
         }
+      } else {
+        genresNeedingApi.push(genreId);
       }
     }
   } catch (e) {
@@ -933,7 +930,6 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
           items.forEach((item: any) => {
             allResultsMap.set(item.id, item);
           });
-          // Save fresh API items to DB Cache
           saveArtistsToDbCache(items);
         } else {
           const errText = await response.text();
@@ -953,17 +949,31 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
       }
     }
   } else {
-    // All genres resolved from Cache!
     anySucceeded = true;
   }
 
-  // If we had successful responses and did not break due to rate limits, return them
-  if (anySucceeded && allResultsMap.size > 0 && !hitRateLimit) {
+  // API 호출량 제한(429) 도달 시 예외 처리 흐름 고도화
+  if (hitRateLimit) {
+    // 429 차단이 일어났어도 DB 캐시 데이터가 단 1건이라도 존재하면 화면에 덧붙이기 위해 반환
+    if (allResultsMap.size > 0) {
+      return { items: Array.from(allResultsMap.values()), isFallback: false };
+    }
+    // 캐시마저 바닥나 더 이상 돌려줄 데이터가 없으면 비로소 429 throw (클라이언트 모달 유도)
+    throw new Error("429");
+  }
+
+  if (allResultsMap.size > 0) {
     return { items: Array.from(allResultsMap.values()), isFallback: false };
   }
 
-  // Fallback to local genre search cycle
-  return { items: searchArtistsByGenresLocal(genres, limit, offset), isFallback: true };
+  // DB 캐시 및 API 모두 무효한 경우 로컬 curatedArtists 장르 순회 폴백
+  const localItems = searchArtistsByGenresLocal(genres, limit, offset);
+  if (localItems.length > 0) {
+    return { items: localItems, isFallback: true };
+  }
+
+  // 로컬 매칭마저 완전히 바닥났다면 (더 이상 로드할 게 없으면) 429 에러 throw
+  throw new Error("429");
 };
 
 // Search tracks by query string (returns raw Spotify track objects, up to 10 due to Feb 2026 updates)
