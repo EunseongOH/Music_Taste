@@ -365,7 +365,7 @@ export default function WorldCupPage() {
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
           <h1 className="font-serif text-2xl text-navy tracking-tight">
-            {locale === "en" ? "LP World Cup" : "LP 월드컵"}
+            {locale === "en" ? "Taste World Cup" : "취향 월드컵"}
           </h1>
         </div>
         <ProfileHeader locale={locale} />
