@@ -822,6 +822,7 @@ const searchArtistsByGenresLocal = (genres: string[], limit: number, offset: num
 export interface GenreSearchResult {
   items: any[];
   isFallback: boolean;
+  error?: string;
 }
 
 // Search artists in bulk for multiple selected genres with a single rate-limit safe query.
@@ -958,8 +959,8 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
     if (allResultsMap.size > 0) {
       return { items: Array.from(allResultsMap.values()), isFallback: false };
     }
-    // 캐시마저 바닥나 더 이상 돌려줄 데이터가 없으면 비로소 429 throw (클라이언트 모달 유도)
-    throw new Error("429");
+    // 캐시마저 바닥나 더 이상 돌려줄 데이터가 없으면 비로소 429 error 상태 리턴 (서버 예외 throw 방지)
+    return { items: [], isFallback: false, error: "429" };
   }
 
   if (allResultsMap.size > 0) {
@@ -972,8 +973,8 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
     return { items: localItems, isFallback: true };
   }
 
-  // 로컬 매칭마저 완전히 바닥났다면 (더 이상 로드할 게 없으면) 429 에러 throw
-  throw new Error("429");
+  // 로컬 매칭마저 완전히 바닥났다면 (더 이상 로드할 게 없으면) 429 error 상태 리턴
+  return { items: [], isFallback: false, error: "429" };
 };
 
 // Search tracks by query string (returns raw Spotify track objects, up to 10 due to Feb 2026 updates)

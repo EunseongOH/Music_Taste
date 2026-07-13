@@ -525,7 +525,12 @@ export default function ExplorePage() {
         const nextOffset = currentOffset + 20;
 
         console.log(`[explore] Loading genre artists: offset=${currentOffset} → ${nextOffset}`);
-        const { items: results, isFallback } = await searchArtistsByGenres(selectedGenresRef.current, 20, nextOffset);
+        const { items: results, isFallback, error: apiError } = await searchArtistsByGenres(selectedGenresRef.current, 20, nextOffset);
+
+        if (apiError === "429") {
+          setSpotifyError("429");
+          return;
+        }
 
         if (results.length === 0) {
           // If it's a fallback and returned nothing, do not stop the infinite scroll permanently
