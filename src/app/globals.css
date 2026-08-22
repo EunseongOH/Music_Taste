@@ -9,6 +9,48 @@
   --font-serif: var(--font-playfair);
 }
 
+@utility typo-display {
+  font-family: var(--font-pretendard);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+@utility typo-h1 {
+  font-family: var(--font-pretendard);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+@utility typo-h2 {
+  font-family: var(--font-pretendard);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+@utility typo-body-bold {
+  font-family: var(--font-pretendard);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+
+@utility typo-body {
+  font-family: var(--font-pretendard);
+  font-weight: 400;
+  letter-spacing: 0em;
+  line-height: 1.6;
+}
+
+@utility typo-caption {
+  font-family: var(--font-pretendard);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
 :root {
   --background: #EAE2D6;
   --app-bg: var(--color-cream);

@@ -29,21 +29,24 @@ export default function Home() {
 
   const modes = [
     {
-      id: "multi",
-      title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
-      desc: locale === "ko" ? "좋아하는 아티스트들의 명곡을 한데 모아 토너먼트로 즐기고, 내가 가장 사랑하는 단 한 곡을 찾아보세요." : "Select multiple favorite artists, mix their top songs, and find your absolute #1 track.",
-      btnText: locale === "ko" ? "시작하기" : "Start",
-      target: "/genres"
-    },
-    {
       id: "single",
+      badge: locale === "ko" ? "한 아티스트 전곡" : "Single Artist",
       title: locale === "ko" ? "최애 곡 줄 세우기" : "Favorite Songs Lineup",
       desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "Select a single artist and line up all of their tracks in the order of your choice.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/explore?mode=single"
     },
     {
+      id: "multi",
+      badge: locale === "ko" ? "여러 아티스트" : "Multiple Artists",
+      title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
+      desc: locale === "ko" ? "좋아하는 아티스트들의 명곡을 한데 모아 토너먼트로 즐기고, 내가 가장 사랑하는 단 한 곡을 찾아보세요." : "Select multiple favorite artists, mix their top songs, and find your absolute #1 track.",
+      btnText: locale === "ko" ? "시작하기" : "Start",
+      target: "/genres"
+    },
+    {
       id: "archive",
+      badge: locale === "ko" ? "내 보관함" : "My Space",
       title: locale === "ko" ? "내 취향 스페이스" : "My Taste Space",
       desc: locale === "ko" ? "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요." : "Explore your saved music tastes and browse the feeds of friends who share similar tastes.",
       btnText: locale === "ko" ? "확인하기" : "Check",
@@ -51,6 +54,7 @@ export default function Home() {
     },
     {
       id: "public-archive",
+      badge: locale === "ko" ? "취향 피드" : "Public Feed",
       title: locale === "ko" ? "우리의 취향 아카이브" : "Public Taste Archive",
       desc: locale === "ko" ? "다른 음악 팬들이 완성한 다양하고 개성 넘치는 음악 취향 리스트를 구경해 보세요." : "Explore the diverse and unique music taste records shared by other music fans.",
       btnText: locale === "ko" ? "구경하기" : "Explore",
@@ -95,7 +99,7 @@ export default function Home() {
 
   // 1. Sync activeDraft & hasPreviousProgress with activeCardIndex and activeDrafts
   useEffect(() => {
-    const isSingleForCard = activeCardIndex === 1;
+    const isSingleForCard = activeCardIndex === 0;
 
     // Filter active drafts for current mode
     const matchingDraft = activeDrafts.find(draft => draft.is_single_artist === isSingleForCard);
@@ -353,7 +357,7 @@ export default function Home() {
         isModalOpen || showRestoreModal ? "z-30 pointer-events-none opacity-0 select-none" : "z-50"
       }`}>
         <div className="flex items-center justify-center pl-2 pr-1">
-          <Globe size={14} className="text-navy/50 animate-pulse" />
+          <Globe size={14} className="text-navy/50" />
         </div>
         <button
           onClick={() => handleLanguageToggle("ko")}
@@ -411,14 +415,8 @@ export default function Home() {
               <div key={mode.id} className="w-full px-4 shrink-0 flex justify-center">
                 <div className="w-full bg-[#FAF7F2] border-[3px] border-navy rounded-[2.5rem] p-6 shadow-md hover:shadow-lg transition-shadow duration-300 relative flex flex-col items-center justify-between text-center min-h-[170px] select-none">
                   {/* Mode Card Header Badge */}
-                  <div className="absolute -top-3 px-4 py-0.5 bg-point text-white text-[9px] font-sans font-bold uppercase tracking-wider rounded-full shadow-sm">
-                    {mode.id === "multi"
-                      ? "Mode 01"
-                      : mode.id === "single"
-                        ? "Mode 02"
-                        : mode.id === "archive"
-                          ? "My Space"
-                          : "Public Feed"}
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center justify-center h-6 px-3.5 bg-point text-white text-[11px] font-sans font-bold rounded-full shadow-sm leading-none whitespace-nowrap">
+                    {mode.badge}
                   </div>
 
                   <div className="mt-2 w-full flex-1 flex flex-col justify-center">
