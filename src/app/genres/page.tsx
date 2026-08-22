@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Disc, Music, Check, ArrowRight } from "lucide-react";
+import { Disc, ArrowRight } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
@@ -17,21 +17,21 @@ interface GenreItem {
 }
 
 const GENRES: GenreItem[] = [
-  { id: "k-pop", name: "K-Pop", engName: "Korean Pop", color: "#E67E22" },
-  { id: "pop", name: "해외 팝", engName: "Global Pop", color: "#1ABC9C" },
+  { id: "k-pop", name: "K-Pop", engName: "K-Pop", color: "#E67E22" },
+  { id: "pop", name: "해외 팝", engName: "Pop", color: "#1ABC9C" },
   { id: "korean hip hop", name: "국내 힙합", engName: "K-Hip Hop", color: "#9B59B6" },
-  { id: "hip hop", name: "해외 힙합", engName: "Global Hip Hop", color: "#8E44AD" },
+  { id: "hip hop", name: "해외 힙합", engName: "Hip Hop", color: "#8E44AD" },
   { id: "korean r&b", name: "국내 R&B", engName: "K-R&B", color: "#F1C40F" },
-  { id: "r&b", name: "해외 R&B", engName: "Global R&B", color: "#F39C12" },
+  { id: "r&b", name: "해외 R&B", engName: "R&B", color: "#F39C12" },
   { id: "korean rock", name: "국내 록", engName: "K-Rock", color: "#E74C3C" },
-  { id: "rock", name: "해외 록", engName: "Global Rock", color: "#C0392B" },
+  { id: "rock", name: "해외 록", engName: "Rock", color: "#C0392B" },
   { id: "korean indie", name: "국내 인디", engName: "K-Indie", color: "#34495E" },
-  { id: "indie", name: "해외 인디", engName: "Global Indie", color: "#2C3E50" },
+  { id: "indie", name: "해외 인디", engName: "Indie", color: "#2C3E50" },
   { id: "electronic", name: "일렉트로닉", engName: "Electronic", color: "#2ECC71" },
   { id: "jazz", name: "재즈", engName: "Jazz", color: "#D35400" },
   { id: "ballad", name: "발라드", engName: "K-Ballad", color: "#2980B9" },
   { id: "trot", name: "트로트", engName: "K-Trot", color: "#9B59B6" },
-  { id: "j-pop", name: "J-Pop", engName: "Japanese Pop", color: "#C0392B" },
+  { id: "j-pop", name: "J-Pop", engName: "J-Pop", color: "#C0392B" },
   { id: "classical", name: "클래식", engName: "Classical", color: "#7F8C8D" },
 ];
 
@@ -46,7 +46,6 @@ export default function GenresPage() {
       const params = new URLSearchParams(window.location.search);
       setIsSingleArtistMode(params.get("mode") === "single");
 
-      // Load previously selected genres if any
       const stored = sessionStorage.getItem("selected_genres") || localStorage.getItem("selected_genres");
       if (stored) {
         try {
@@ -69,7 +68,6 @@ export default function GenresPage() {
       } else {
         updated = [...prev, id];
       }
-      // Sync to storages immediately
       sessionStorage.setItem("selected_genres", JSON.stringify(updated));
       localStorage.setItem("selected_genres", JSON.stringify(updated));
       return updated;
@@ -79,22 +77,18 @@ export default function GenresPage() {
   const handleNext = () => {
     if (selectedGenres.length < 3) return;
     
-    // Trigger GA4 funnel event with comma-separated genres string
     trackEvent("funnel_genre_complete", { 
       selected_genres_count: selectedGenres.length,
       selected_genres: selectedGenres.join(",")
     });
 
-    // Track each selected genre individually for aggregate bar charts in GA4
     selectedGenres.forEach(genreId => {
       trackEvent("select_genre", { genre_id: genreId });
     });
 
-    // Sync to storage (best-effort; may be in-memory if sandboxed)
     sessionStorage.setItem("selected_genres", JSON.stringify(selectedGenres));
     localStorage.setItem("selected_genres", JSON.stringify(selectedGenres));
     
-    // ALSO encode genres in URL query params so they survive storage sandbox restrictions
     const genresParam = encodeURIComponent(JSON.stringify(selectedGenres));
     const modeQs = isSingleArtistMode ? "&mode=single" : "";
     router.push(`/explore?genres=${genresParam}${modeQs}`);
@@ -110,14 +104,14 @@ export default function GenresPage() {
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.05,
+        staggerChildren: 0.04,
       },
     },
   };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 15 },
-    show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 260, damping: 20 } },
+    show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 280, damping: 22 } },
   };
 
   return (
@@ -129,88 +123,90 @@ export default function GenresPage() {
       </div>
 
       {/* Main Intro */}
-      <div className="text-left mt-6 mb-8">
-        <h1 className="font-serif text-[1.6rem] sm:text-3xl text-navy tracking-tight leading-snug font-bold">
-          {locale === "ko" ? (
-            <>
-              선호하는 음악 장르를
-              <br />
-              골라주세요
-            </>
-          ) : (
-            "Select your favorite genres"
-          )}
+      <div className="text-left mt-6 mb-6">
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-navy/5 rounded-full mb-3 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]">
+          <Disc size={13} className="text-point" />
+          <span className="font-sans text-xs font-bold text-navy/80">
+            {locale === "ko" ? `선택: ${selectedGenres.length} / 최소 3개` : `Selected: ${selectedGenres.length} / Min 3`}
+          </span>
+        </div>
+
+        <h1 className="font-serif text-2xl sm:text-3xl text-navy tracking-tight leading-snug font-bold">
+          {locale === "ko" ? "선호하는 음악 장르를 골라주세요" : "Select your favorite music genres"}
         </h1>
-        <p className="font-sans text-charcoal/90 font-medium text-sm sm:text-base mt-2">
-          {locale === "ko" ? "최소 3개의 장르를 선택해 주세요." : "Please select at least 3 genres."}
+        <p className="font-sans text-xs sm:text-sm text-charcoal/70 mt-1.5 leading-relaxed">
+          {locale === "ko" ? "LP 레코드를 터치하여 좋아하는 음악 취향을 담아보세요." : "Tap LP sleeves to select your favorite music tastes."}
         </p>
       </div>
 
-      {/* Genres Grid */}
+      {/* Option A: Analog LP Record Sleeve Grid */}
       <motion.div 
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-3 gap-3"
+        className="grid grid-cols-2 sm:grid-cols-3 gap-4"
       >
         {GENRES.map((genre) => {
           const isSelected = selectedGenres.includes(genre.id);
-          const primaryName = locale === "ko" ? genre.name : genre.engName;
-          const secondaryName = locale === "ko" ? genre.engName : genre.name;
+          const genreName = locale === "ko" ? genre.name : genre.engName;
           
           return (
             <motion.div
               key={genre.id}
               variants={itemVariants}
               onClick={() => handleGenreClick(genre.id)}
-              className={`relative bg-[#FAF7F2] border-3 rounded-[1.5rem] p-3 py-4 flex flex-col items-center justify-between text-center cursor-pointer select-none transition-all duration-300 min-h-[140px] shadow-sm hover:shadow-md ${
-                isSelected 
-                  ? "border-point bg-[#FAF7F2] scale-102 ring-2 ring-point/20" 
-                  : "border-navy hover:border-navy/70"
-              }`}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              className="relative cursor-pointer select-none pt-3"
             >
-              {/* Spinning Vinyl Vinyl disc Graphic */}
-              <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
-                <motion.div
-                  animate={isSelected ? { rotate: 360 } : { rotate: 0 }}
-                  transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center border border-navy/10 relative shadow-sm ${
-                    isSelected ? "bg-navy" : "bg-charcoal/10"
-                  }`}
-                >
-                  <Disc className={isSelected ? "text-cream" : "text-charcoal/50"} size={28} />
-                  {/* Vinyl Label */}
-                  <div 
-                    className="absolute w-4 h-4 rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border"
-                    style={{ 
-                      backgroundColor: isSelected ? genre.color : "#FAF7F2",
-                      borderColor: isSelected ? "#FAF7F2" : "#2D3436"
-                    }}
-                  />
-                </motion.div>
+              {/* The LP Record Disc (Slides out top-right when selected) */}
+              <motion.div
+                animate={{
+                  x: isSelected ? 18 : 6,
+                  y: isSelected ? -14 : -2,
+                  rotate: isSelected ? 18 : 0,
+                }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="absolute top-0 right-3 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#1c1c1c] border-2 border-navy/30 shadow-md flex items-center justify-center z-0 pointer-events-none"
+              >
+                {/* Vinyl Grooves */}
+                <div className="absolute inset-1.5 rounded-full border border-white/10" />
+                <div className="absolute inset-3 rounded-full border border-white/10" />
                 
-                {/* Micro selection check mark */}
-                {isSelected && (
-                  <motion.div 
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute -top-1 -right-1 w-5 h-5 bg-point rounded-full border-2 border-cream flex items-center justify-center shadow-sm"
-                  >
-                    <Check size={10} className="text-white" strokeWidth={3} />
-                  </motion.div>
-                )}
-              </div>
+                {/* Vinyl Center Colored Label */}
+                <div 
+                  className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-white/30 flex items-center justify-center shadow-inner"
+                  style={{ backgroundColor: genre.color }}
+                >
+                  <div className="w-2 h-2 rounded-full bg-[#FAF7F2] border border-black/20" />
+                </div>
+              </motion.div>
 
-              {/* Genre Texts */}
-              <div className="mt-3 flex flex-col items-center w-full px-1">
-                <span className={`font-serif text-[13px] leading-tight font-bold text-center break-keep w-full ${isSelected ? "text-navy" : "text-charcoal"}`}>
-                  {primaryName}
-                </span>
-                <span className="font-sans text-[9px] text-charcoal/40 font-medium uppercase mt-1 tracking-wider text-center break-words w-full leading-tight">
-                  {secondaryName}
-                </span>
+              {/* The Record Sleeve Box */}
+              <div 
+                className={`relative z-10 bg-[#FAF7F2] rounded-2xl p-3.5 sm:p-4 border-[3px] transition-all duration-300 h-[110px] flex flex-col justify-between ${
+                  isSelected 
+                    ? "border-point shadow-sm" 
+                    : "border-navy hover:border-navy/70 shadow-sm"
+                }`}
+              >
+                {/* Top Row: Genre Name */}
+                <div className="flex items-center w-full">
+                  <span className="font-serif text-sm sm:text-base font-bold text-navy tracking-tight leading-none whitespace-nowrap">
+                    {genreName}
+                  </span>
+                </div>
+
+                {/* Bottom Row: Vinyl Groove Line Indicator & Tag */}
+                <div className="flex items-center justify-between border-t border-navy/10 pt-2 w-full">
+                  <span className="font-sans text-[9px] sm:text-[10px] font-bold text-navy/40 uppercase tracking-wider whitespace-nowrap">
+                    {genre.engName}
+                  </span>
+                  <div 
+                    className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border border-navy/20 shrink-0"
+                    style={{ backgroundColor: genre.color }}
+                  />
+                </div>
               </div>
             </motion.div>
           );
@@ -225,14 +221,16 @@ export default function GenresPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-[#F5F2ED]/98 border-t-[2.5px] border-navy/15 pt-4 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md"
+            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-cream/95 border-t border-navy/15 pt-3.5 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md"
           >
-            <div className="w-full max-w-[380px] mx-auto flex flex-col gap-3">
+            <div className="w-full max-w-[380px] mx-auto flex flex-col gap-2.5">
               <div className="flex items-center justify-between px-1">
-                <span className="font-sans text-[11px] font-bold text-navy/70 tracking-tight">
-                  {locale === "ko" ? "선택한 음악 장르" : "Selected Genres"}
+                <span className="font-sans text-xs font-bold text-navy/70">
+                  {locale === "ko" ? "선택한 장르" : "Selected Genres"}
                 </span>
-                <span className="bg-point text-white text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                  selectedGenres.length >= 3 ? "bg-point text-white" : "bg-navy/10 text-navy"
+                }`}>
                   {locale === "ko" ? `${selectedGenres.length}개 선택됨` : `${selectedGenres.length} selected`}
                 </span>
               </div>
@@ -247,7 +245,7 @@ export default function GenresPage() {
                   >
                     <button
                       onClick={handleNext}
-                      className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-base shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
+                      className="w-full py-3.5 rounded-full bg-navy text-cream font-sans font-bold text-base shadow-lg border border-navy/20 hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer inline-flex items-center justify-center gap-2 leading-none"
                     >
                       {locale === "ko" ? "아티스트 탐색하기" : "Explore Artists"}
                       <ArrowRight size={16} strokeWidth={2.5} />

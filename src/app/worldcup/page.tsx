@@ -376,9 +376,9 @@ export default function WorldCupPage() {
           <div className="flex flex-col items-center flex-1 w-full justify-between max-w-md mx-auto">
             
             {/* Match Info */}
-            <div className="text-center mt-2 mb-2 xs:mb-3 sm:mb-4 w-full relative">
-               <div className="inline-block bg-navy/5 px-3 py-1 rounded-full mb-3 shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)]">
-                 <p className="font-sans text-xs font-bold text-navy/70 tracking-wide">
+            <div className="text-center mt-2 mb-2 xs:mb-3 sm:mb-4 w-full relative flex flex-col items-center">
+               <div className="inline-block bg-navy/5 px-3 py-1 rounded-full mb-2 shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)]">
+                 <p className="font-sans text-xs font-bold text-navy/80 tracking-wide">
                    {locale === "en" ? (
                      <>Match <span className="text-point">{currentMatchIndex + 1}</span> of {matches.length}</>
                    ) : (
@@ -386,7 +386,16 @@ export default function WorldCupPage() {
                    )}
                  </p>
                </div>
-               <h2 className="font-serif text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none">
+
+               {/* Visual Progress Bar */}
+               <div className="w-48 h-1.5 bg-navy/10 rounded-full mb-3 overflow-hidden">
+                 <div 
+                   className="h-full bg-point transition-all duration-300 rounded-full" 
+                   style={{ width: `${((currentMatchIndex + 1) / matches.length) * 100}%` }}
+                 />
+               </div>
+
+               <h2 className="font-serif text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none font-bold">
                  {getLocalizedRoundName(currentRoundName, locale)}
                </h2>
             </div>
@@ -411,13 +420,13 @@ export default function WorldCupPage() {
                       <WorldCupCandidate track={matches[currentMatchIndex][0]} onDrop={handleDrop} onActive={setIsAnyLpActive} />
                     </motion.div>
 
-                    {/* Central VS Separator (Positioned beautifully in-between, never overlapping!) */}
+                    {/* Central VS Separator */}
                     <motion.div
                       key="vs-separator"
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.5 }}
-                      className="shrink-0 font-serif italic text-[#1A2A6C]/20 text-xl sm:text-3xl md:text-4xl font-black select-none px-1 py-6 sm:py-10"
+                      className="shrink-0 font-serif italic text-navy/40 text-xl sm:text-3xl md:text-4xl font-black select-none px-1 py-6 sm:py-10"
                     >
                       VS
                     </motion.div>
