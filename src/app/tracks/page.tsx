@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Compass, Disc, Search, Plus, X, Info, AlertCircle } from "lucide-react";
+import { Check, Compass, Disc, Search, Plus, X, Info, AlertCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { SafeImage } from "@/components/SafeImage";
@@ -38,7 +38,9 @@ const translations = {
     unreleased: "미발매곡",
     addUnreleasedBtn: "미발매곡 추가",
     createWorldCup: "월드컵 대진 만드는 중",
-    selectMore: "최소 {count}곡을 더 골라주세요 🔥",
+    startWorldCup: "월드컵 시작하기",
+    fetchingAllTracks: "발매곡 수집 중...",
+    selectMore: "최소 {count}곡을 더 선택해 주세요",
     addUnreleasedModalTitle: "미발매곡 추가",
     trackTitleLabel: "곡 제목",
     trackTitlePlaceholder: "예: 미공개 자작곡 1번",
@@ -88,8 +90,10 @@ const translations = {
     next: "Next",
     unreleased: "Unreleased Tracks",
     addUnreleasedBtn: "Add Unreleased Track",
-    createWorldCup: "Preparing your lineup...",
-    selectMore: "Please select {count} more tracks 🔥",
+    createWorldCup: "Preparing lineup...",
+    startWorldCup: "Start World Cup",
+    fetchingAllTracks: "Fetching releases...",
+    selectMore: "Select {count} more track(s)",
     addUnreleasedModalTitle: "Add Unreleased Track",
     trackTitleLabel: "Track Title",
     trackTitlePlaceholder: "e.g., Unreleased Song #1",
@@ -1923,72 +1927,131 @@ export default function TracksPage() {
         </div>
       )}
 
-      {/* FAB Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
-        <div className="w-full max-w-[380px] pointer-events-auto flex flex-col gap-3">
-          {/* Background Loading Progress Bar */}
-          {artistData.some(a => a.backgroundLoading) && (
+      {/* FAB Bottom - Morphing Unified Dock / Button */}
+      {(() => {
+        const isCurrentlyLoadingTracks = artistData.some(a => a.backgroundLoading) || loadingAlbums.size > 0;
+        const isReadyToStart = !isCurrentlyLoadingTracks && selectedTrackIds.size >= 4;
+
+        return (
+          <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
             <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
-              className="w-full p-4 rounded-3xl bg-cream/90 backdrop-blur-md border border-navy/10 shadow-lg flex flex-col gap-2 text-center"
+              layout
+              transition={{ type: "spring", stiffness: 350, damping: 28 }}
+              onClick={isReadyToStart ? handleStartWorldCup : undefined}
+              className={`w-full max-w-[380px] pointer-events-auto transition-colors duration-300 overflow-hidden ${
+                isCurrentlyLoadingTracks
+                  ? "bg-cream/95 backdrop-blur-xl border border-navy/15 shadow-[0_12px_40px_rgba(26,42,108,0.2)] rounded-[2.2rem] p-3.5 flex flex-col gap-3 select-none cursor-not-allowed"
+                  : isReadyToStart
+                    ? "bg-navy text-cream border border-navy/20 shadow-[0_10px_30px_rgba(26,42,108,0.35)] rounded-full py-4 px-6 hover:bg-navy/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                    : "bg-cream/90 backdrop-blur-md border border-navy/20 shadow-[0_4px_15px_rgba(0,0,0,0.1)] rounded-full py-3 px-6 text-center text-navy font-bold text-sm"
+              }`}
             >
-              <div className="flex justify-between items-center text-xs font-sans font-bold text-navy">
-                <span className="flex items-center gap-1.5">
-                  <Disc className="animate-spin text-point" size={14} />
-                  {locale === "ko" ? "전체 곡 정보를 가져오는 중..." : "Fetching all tracks..."}
-                </span>
-                <span className="text-point">
-                  {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || 0} / {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 0} {locale === "ko" ? "앨범" : "Albums"}
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-navy/10 rounded-full overflow-hidden">
+              {/* 1. Loading State Layout */}
+              <AnimatePresence initial={false}>
+                {isCurrentlyLoadingTracks && (
+                  <motion.div
+                    key="loading-content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.35, ease: "easeInOut" }}
+                    className="flex flex-col gap-2.5 overflow-hidden"
+                  >
+                    {/* Header */}
+                    <div className="flex justify-between items-center text-xs font-sans font-bold text-navy px-1">
+                      <span className="flex items-center gap-2">
+                        {/* Soundwave Equalizer Animation (4 Bars) */}
+                        <div className="flex items-end gap-[3px] h-3.5 w-4 pb-[1px]">
+                          <motion.span
+                            animate={{ height: ["20%", "100%", "30%", "85%", "20%"] }}
+                            transition={{ repeat: Infinity, duration: 0.7, ease: "easeInOut", delay: 0 }}
+                            className="w-[3px] bg-point rounded-full"
+                          />
+                          <motion.span
+                            animate={{ height: ["60%", "20%", "100%", "40%", "60%"] }}
+                            transition={{ repeat: Infinity, duration: 0.7, ease: "easeInOut", delay: 0.15 }}
+                            className="w-[3px] bg-point rounded-full"
+                          />
+                          <motion.span
+                            animate={{ height: ["30%", "90%", "40%", "100%", "30%"] }}
+                            transition={{ repeat: Infinity, duration: 0.7, ease: "easeInOut", delay: 0.3 }}
+                            className="w-[3px] bg-point rounded-full"
+                          />
+                          <motion.span
+                            animate={{ height: ["80%", "30%", "75%", "20%", "80%"] }}
+                            transition={{ repeat: Infinity, duration: 0.7, ease: "easeInOut", delay: 0.45 }}
+                            className="w-[3px] bg-point rounded-full"
+                          />
+                        </div>
+                        <span className="tracking-tight">{t.fetchingAllTracks}</span>
+                      </span>
+                      <span className="text-point font-mono text-[11px] bg-point/10 px-2.5 py-0.5 rounded-full font-bold">
+                        {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || (loadingAlbums.size > 0 ? "..." : 0)} / {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 0} {locale === "ko" ? "앨범" : "Albums"}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-1.5 bg-navy/10 rounded-full overflow-hidden relative">
+                      <motion.div
+                        className="h-full bg-gradient-to-r from-point to-amber-500 rounded-full"
+                        initial={{ width: "10%" }}
+                        animate={{
+                          width: `${
+                            Math.max(
+                              10,
+                              ((artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || 1) /
+                                (artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 1)) *
+                              100
+                            )
+                          }%`
+                        }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+
+                    {/* Disabled Status Button inside Loading Card */}
+                    <div className="w-full py-3 rounded-[1.4rem] bg-navy/10 text-navy/50 text-center font-semibold text-sm border border-navy/5 flex items-center justify-center gap-2">
+                      <span>{t.createWorldCup}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy/60 font-bold">
+                        {selectedTrackIds.size}
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* 2. Loaded & Ready State (Standalone Navy Button) */}
+              {!isCurrentlyLoadingTracks && selectedTrackIds.size >= 4 && (
                 <motion.div
-                  className="h-full bg-point"
-                  initial={{ width: 0 }}
-                  animate={{
-                    width: `${
-                      ((artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || 0) /
-                        (artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 1)) *
-                      100
-                    }%`
-                  }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
+                  key="ready-content"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="flex items-center justify-center gap-2 font-sans font-bold text-lg text-cream w-full"
+                >
+                  <span>{t.startWorldCup}</span>
+                  <span className="text-xs bg-point text-white px-2.5 py-1 rounded-full font-bold">
+                    {selectedTrackIds.size}
+                  </span>
+                </motion.div>
+              )}
+
+              {/* 3. Minimal Counter when < 4 tracks */}
+              {!isCurrentlyLoadingTracks && selectedTrackIds.size > 0 && selectedTrackIds.size < 4 && (
+                <motion.div
+                  key="minimal-counter"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center font-sans font-bold text-xs text-navy w-full"
+                >
+                  {t.selectMore.replace("{count}", String(4 - selectedTrackIds.size))}
+                </motion.div>
+              )}
             </motion.div>
-          )}
-
-          <AnimatePresence>
-            {selectedTrackIds.size >= 4 && (
-              <motion.button
-                initial={{ y: 80, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 80, opacity: 0 }}
-                onClick={handleStartWorldCup}
-                className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-[0_10px_30px_rgba(26,42,108,0.3)] border border-navy/20 flex items-center justify-center gap-2 hover:bg-navy/90 transition-all active:scale-[0.98]"
-              >
-                <Compass size={20} className="mr-1" />
-                {t.createWorldCup}
-                <span className="ml-2 bg-point text-white text-xs px-2.5 py-1 rounded-full font-bold">{selectedTrackIds.size}</span>
-              </motion.button>
-            )}
-
-            {/* Minimal counter when < 4 tracks */}
-            {selectedTrackIds.size > 0 && selectedTrackIds.size < 4 && (
-               <motion.div
-                 initial={{ y: 50, opacity: 0 }}
-                 animate={{ y: 0, opacity: 1 }}
-                 exit={{ y: 50, opacity: 0 }}
-                 className="mx-auto w-max px-6 py-3 rounded-full bg-cream/90 backdrop-blur-md text-navy font-sans font-bold text-sm shadow-[0_4px_15px_rgba(0,0,0,0.1)] border border-navy/20 flex items-center justify-center"
-               >
-                 {t.selectMore.replace("{count}", String(4 - selectedTrackIds.size))}
-               </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
       {/* Unreleased Track Modal */}
       <AnimatePresence>

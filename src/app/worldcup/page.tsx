@@ -66,8 +66,8 @@ export default function WorldCupPage() {
   function getLocalizedRoundName(name: string, targetLocale: "ko" | "en"): string {
     if (!name) return "";
     if (targetLocale === "ko") {
-      if (name.includes("Final") && !name.includes("결승")) return "결승전";
-      if (name.includes("Semifinal") || name.includes("준결승") || name.includes("4강")) return "준결승 (4강)";
+      if (name.includes("Final") || name.includes("결승")) return "결승전";
+      if (name.includes("Semifinal") || name.includes("준결승") || name.includes("4강")) return "준결승전";
       if (name.endsWith("강")) return name;
       const matchRoundN = name.match(/Round of (\d+)/i);
       if (matchRoundN) return `${matchRoundN[1]}강`;
@@ -75,8 +75,8 @@ export default function WorldCupPage() {
       if (matchPlayin) return `${matchPlayin[1]}강 진출 예선전`;
       return name;
     } else {
-      if (name.includes("결승") || name === "Final") return "Final";
-      if (name.includes("준결승") || name.includes("4강") || name.includes("Semifinal")) return "Semifinal (Top 4)";
+      if (name.includes("결승") || name.includes("Final")) return "Final";
+      if (name.includes("준결승") || name.includes("4강") || name.includes("Semifinal")) return "Semifinal";
       const matchRoundKo = name.match(/(\d+)강$/);
       if (matchRoundKo) return `Round of ${matchRoundKo[1]}`;
       const matchPlayinKo = name.match(/(\d+)강 진출 예선전/);
@@ -230,8 +230,8 @@ export default function WorldCupPage() {
       }
 
       let roundName = "";
-      if (N === 2) roundName = "결승 (Final)";
-      else if (N === 4) roundName = "준결승 (4강)";
+      if (N === 2) roundName = "결승전";
+      else if (N === 4) roundName = "준결승전";
       else roundName = `${N}강`;
 
       setMatches(newMatches);
@@ -395,7 +395,7 @@ export default function WorldCupPage() {
                  />
                </div>
 
-               <h2 className="font-serif text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none font-bold">
+               <h2 className="font-sans text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none font-extrabold">
                  {getLocalizedRoundName(currentRoundName, locale)}
                </h2>
             </div>
