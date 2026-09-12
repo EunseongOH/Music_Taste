@@ -46,7 +46,6 @@ const translations = {
     shareMainBtn: "공유하기",
     shareMenuTitle: "결과 공유하기",
     shareXOption: "X (트위터)로 공유",
-    shareThreadsOption: "스레드로 공유",
     shareKakaoOption: "카카오톡으로 공유",
     shareInstagramOption: "인스타그램 스토리에 공유",
     instagramGuideTitle: "인스타그램 스토리 공유 가이드",
@@ -84,7 +83,6 @@ const translations = {
     shareMainBtn: "Share Results",
     shareMenuTitle: "Share Results",
     shareXOption: "Share on X (Twitter)",
-    shareThreadsOption: "Share on Threads",
     shareKakaoOption: "Share on KakaoTalk",
     shareInstagramOption: "Share on Instagram Story",
     instagramGuideTitle: "Instagram Story Share Guide",
@@ -290,15 +288,6 @@ export default function ResultPage() {
     const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, "_blank");
     trackEvent("funnel_share_x", {});
-  };
-
-  const handleShareThreads = () => {
-    const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
-    const artistName = winners[0]?.artistName || "";
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    const text = `${artistName} 취향표 TOP 10\n\n${topTracks}\n\n${url}`;
-    window.open(`https://threads.net/intent/post?text=${encodeURIComponent(text)}`, "_blank");
-    trackEvent("funnel_share_threads", {});
   };
 
   const handleShareKakao = () => {
@@ -1004,18 +993,7 @@ export default function ResultPage() {
                   <span>{t.shareXOption}</span>
                 </button>
 
-                {/* 2. Threads */}
-                <button
-                  onClick={handleShareThreads}
-                  className="w-full h-[52px] px-5 bg-[#000000] hover:bg-[#1F1F1F] active:bg-[#2C2C2C] text-white font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                    <path d="M16.5 11.4c-.1 0-.2-.1-.3-.1-.2-2.9-1.8-4.6-4.5-4.6-1.7 0-3 .7-3.9 2l1.5 1c.6-1 1.4-1.4 2.4-1.4 1.5 0 2.5.9 2.8 2.6-.7-.2-1.4-.3-2.2-.3-2.7 0-4.5 1.5-4.4 3.6.1 1.8 1.7 3 3.6 3 1.9 0 3.4-1 4-2.8.4.3.7.7.9 1.1.4.9.4 2.4-.8 3.6-1 1-2.3 1.5-4.2 1.5-2.3 0-4-.7-5.1-2.2C1.2 17 .7 15 .7 12s.5-5 1.6-6.4C3.4 4.1 5.1 3.4 7.4 3.4c2.3 0 4.1.7 5.2 2.2.6.7 1 1.6 1.3 2.7l1.8-.5c-.4-1.4-.9-2.5-1.7-3.4C12.6 2.5 10.3 1.6 7.4 1.6 4.5 1.6 2.2 2.5.7 4.4-.6 6.1-1.3 8.6-1.3 12s.7 5.9 2 7.6c1.5 1.9 3.8 2.8 6.7 2.8 2.4 0 4.2-.6 5.6-2 1.7-1.7 1.8-4 1.4-5.4-.3-1-1-1.9-1.9-2.6zm-4.9 3.9c-1 0-1.9-.5-2-1.4 0-.8.6-1.7 2.6-1.7.7 0 1.4.1 2.1.3-.3 1.8-1.3 2.8-2.7 2.8z" />
-                  </svg>
-                  <span>{t.shareThreadsOption}</span>
-                </button>
-
-                {/* 3. KakaoTalk */}
+                {/* 2. KakaoTalk */}
                 <button
                   onClick={handleShareKakao}
                   className="w-full h-[52px] px-5 bg-[#FEE500] hover:bg-[#F5DC00] active:bg-[#EDD100] text-black font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -1026,7 +1004,7 @@ export default function ResultPage() {
                   <span className="opacity-90">{t.shareKakaoOption}</span>
                 </button>
 
-                {/* 4. Instagram Story */}
+                {/* 3. Instagram Story */}
                 <button
                   onClick={handleShareInstagram}
                   className="w-full h-[52px] px-5 bg-gradient-to-r from-[#f09433] via-[#dc2743] to-[#bc1888] hover:opacity-95 text-white font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -1037,7 +1015,7 @@ export default function ResultPage() {
                   <span>{t.shareInstagramOption}</span>
                 </button>
 
-                {/* 5. Copy Link */}
+                {/* 4. Copy Link */}
                 <button
                   onClick={handleCopyLink}
                   className="w-full h-[52px] px-5 bg-white border border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
