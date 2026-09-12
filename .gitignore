@@ -62,3 +62,4 @@ temp_search_results.json
 # 진단용 스크린샷
 /toss/baseline/probe.png
 /toss/baseline/refs-auth-verify/
+/toss/baseline/*.png
