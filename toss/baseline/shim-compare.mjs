@@ -29,8 +29,8 @@ mkdirSync(OUT, { recursive: true });
 
 const ROUTE = process.argv[2] ?? '/shim-probe';
 const NEXT_URL = `http://localhost:3000${ROUTE}`;
-// Vite dev 는 딥 경로 폴백이 없으므로 진입 html 을 직접 지정한다.
-const VITE_URL = `http://localhost:5173/${process.env.VITE_PAGE ?? 'probe.html'}`;
+// Vite dev 는 딥 경로 폴백이 없다. 기본은 루트(index.html)를 그대로 연다.
+const VITE_URL = `http://localhost:5173/${process.env.VITE_PAGE ?? ''}`;
 
 /**
  * 비교 대상 루트 후보. 앞에서부터 존재하는 첫 번째를 쓴다.

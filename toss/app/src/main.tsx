@@ -1,51 +1,30 @@
-import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './toss.css';
+import { AuthProvider } from '@/components/AuthProvider';
+import { LayoutWrapper } from '@/components/LayoutWrapper';
+import { RouterProvider } from './router';
+import App from './App';
 
 /**
- * Phase 3.1 검증용 최소 화면.
+ * 토스 미니앱 진입점.
  *
- * 확인하려는 것은 두 가지다.
- *  1. Tailwind v4 가 @source 로 실제 src/ 까지 스캔해 디자인 토큰이 살아있는지
- *     (bg-cream / text-navy / text-point / text-charcoal)
- *  2. 폰트 두 종이 로드되는지 (font-sans=Pretendard, font-serif=Playfair)
+ * 트리 구조는 src/app/layout.tsx 와 같게 맞춘다:
+ *   <div class="bg-grain"> 는 index.html 에 두고 (layout.tsx 의 body 첫 자식)
+ *   AuthProvider > LayoutWrapper > 페이지
+ * RouterProvider 는 Next 에서 런타임이 암묵적으로 제공하던 자리라 제일 바깥에 둔다.
+ * (LayoutWrapper 가 usePathname 을 쓰므로 그보다 위에 있어야 한다)
  *
- * Phase 3.3 에서 실제 src/app/page.tsx 로 대체된다.
+ * StrictMode 는 쓰지 않는다. effect 가 두 번 돌면 AuthProvider 의 세션 조회와
+ * 페이지들의 초기 요청이 중복된다 — 얻을 게 없고 WebView 에서는 손해다.
+ *
+ * Phase 5 에서 이 위에 익명 식별키 → Supabase 세션 수립이 들어간다.
  */
-function Probe() {
-  const [vh, setVh] = useState('');
-  useEffect(() => {
-    setVh(`${window.innerHeight}px (viewport)`);
-  }, []);
-
-  return (
-    <div className="w-full max-w-[430px] mx-auto min-h-screen bg-cream px-6 py-10 flex flex-col gap-6">
-      <h1 className="font-serif text-5xl text-navy tracking-tight">Sortify</h1>
-      <p className="font-sans text-base text-charcoal">
-        Pretendard 본문 — 가나다라마바사 0123
-      </p>
-      <p className="typo-h2 text-navy">typo-h2 유틸리티</p>
-
-      <div className="flex gap-3">
-        {[
-          ['bg-cream', 'border border-navy/20'],
-          ['bg-navy', ''],
-          ['bg-charcoal', ''],
-          ['bg-point', ''],
-        ].map(([cls, extra]) => (
-          <div key={cls} className="flex flex-col items-center gap-1">
-            <div className={`w-14 h-14 rounded-xl ${cls} ${extra}`} />
-            <span className="font-sans text-[10px] text-charcoal/70">{cls}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-auto font-sans text-xs text-charcoal/60">
-        <p>min-h-screen → 100dvh 로 덮어쓰기 적용됨</p>
-        <p>뷰포트 높이: {vh}</p>
-      </div>
-    </div>
-  );
-}
-
-createRoot(document.getElementById('root')!).render(<Probe />);
+createRoot(document.getElementById('root')!).render(
+  <RouterProvider>
+    <AuthProvider>
+      <LayoutWrapper>
+        <App />
+      </LayoutWrapper>
+    </AuthProvider>
+  </RouterProvider>
+);

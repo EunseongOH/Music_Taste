@@ -19,6 +19,9 @@
       "next/image": ["./src/shims/next-image.tsx"],
       "next/link": ["./src/shims/next-link.tsx"],
       "next/navigation": ["./src/shims/next-navigation.ts"],
+      "@/components/BackButton": ["./src/shims/BackButton.tsx"],
+      "@/components/LoginModal": ["./src/shims/LoginModal.tsx"],
+      "@/utils/gtag": ["./src/shims/gtag.ts"],
       "@/*": ["../../src/*"]
     }
   },

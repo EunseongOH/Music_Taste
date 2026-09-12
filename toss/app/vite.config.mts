@@ -31,6 +31,14 @@ export default defineConfig(({ mode }) => {
         { find: 'next/link', replacement: path.resolve(SHIMS, 'next-link.tsx') },
         { find: 'next/navigation', replacement: path.resolve(SHIMS, 'next-navigation.ts') },
 
+        // 토스에서 그대로 쓸 수 없는 src/ 모듈을 치환한다. 원본은 건드리지 않는다.
+        // 자체 뒤로가기 금지(앱인토스 네비게이션 바와 중복) → 같은 크기의 빈 칸
+        { find: '@/components/BackButton', replacement: path.resolve(SHIMS, 'BackButton.tsx') },
+        // 익명 식별키로만 로그인하므로 자체 로그인 UI 를 띄우지 않는다
+        { find: '@/components/LoginModal', replacement: path.resolve(SHIMS, 'LoginModal.tsx') },
+        // GA 스크립트가 없다. 앱인토스 Analytics 연결은 Phase 9.5
+        { find: '@/utils/gtag', replacement: path.resolve(SHIMS, 'gtag.ts') },
+
         // 그 밖의 `@/...` 는 실제 src/ 를 무수정으로 가리킨다.
         { find: /^@\//, replacement: SRC + '/' },
       ],
