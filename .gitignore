@@ -64,3 +64,6 @@ temp_search_results.json
 /toss/baseline/refs-auth-verify/
 /toss/baseline/*.png
 /*.ait
+
+# 앱인토스 이식 — Next/Vite 화면 비교 산출물
+/toss/baseline/shim-out/

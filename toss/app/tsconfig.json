@@ -15,6 +15,10 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
+      // vite.config.mts 의 alias 와 같은 매핑이어야 타입 검사가 실제 빌드를 반영한다.
+      "next/image": ["./src/shims/next-image.tsx"],
+      "next/link": ["./src/shims/next-link.tsx"],
+      "next/navigation": ["./src/shims/next-navigation.ts"],
       "@/*": ["../../src/*"]
     }
   },

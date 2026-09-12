@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');
 const SRC = path.resolve(REPO, 'src');
+const SHIMS = path.resolve(HERE, 'src/shims');
 
 /**
  * 앱인토스 미니앱(토스 전용) Vite 빌드.
@@ -26,7 +27,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: [
         // Next 런타임이 없으므로 shim 으로 대체한다. `@/` 보다 먼저 와야 한다.
-        // (Phase 3.2 에서 추가)
+        { find: 'next/image', replacement: path.resolve(SHIMS, 'next-image.tsx') },
+        { find: 'next/link', replacement: path.resolve(SHIMS, 'next-link.tsx') },
+        { find: 'next/navigation', replacement: path.resolve(SHIMS, 'next-navigation.ts') },
 
         // 그 밖의 `@/...` 는 실제 src/ 를 무수정으로 가리킨다.
         { find: /^@\//, replacement: SRC + '/' },
