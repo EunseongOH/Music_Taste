@@ -41,6 +41,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# apps in toss (Vite 빌드 산출물)
+/toss/app/dist/
+/toss/*.ait
+
+# 내보내기 회귀 검증의 임시 결과물. 기준선(toss/baseline/refs)은 커밋한다 —
+# taste/page.tsx 리팩터 이후에는 다시 뜰 수 없기 때문.
+/toss/baseline/refs-verify/
+
 # temp files
 temp_artists.json
 temp_code.ts

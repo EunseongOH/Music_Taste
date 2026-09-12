@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 토스 미니앱(Vite) 빌드 타깃 — Next 툴링 대상에서 제외
+    "toss/**",
   ]),
 ]);
 

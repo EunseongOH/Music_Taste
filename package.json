@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:warmup": "npx tsx --env-file=.env.local scripts/warmup_artists.ts"
+    "db:warmup": "npx tsx --env-file=.env.local scripts/warmup_artists.ts",
+    "baseline:capture": "node toss/baseline/capture.mjs",
+    "baseline:verify": "node toss/baseline/verify.mjs"
   },
   "dependencies": {
+    "@apps-in-toss/web-framework": "^3.4.0",
     "@next/third-parties": "^16.2.9",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",

@@ -1,0 +1,52 @@
+{
+  "fixedTime": "2026-01-15T00:00:00.000Z",
+  "trackCount": 20,
+  "files": [
+    {
+      "name": "카더가든_Music_Taste_Pyramid.png",
+      "bytes": 556352,
+      "sha256": "a629ddf92ce978511a839bc3afa4284e72624d6cce22777e28e8b31abde0b8b4",
+      "from": "pyramid"
+    },
+    {
+      "name": "카더가든_Music_Taste_list_Part1.png",
+      "bytes": 440910,
+      "sha256": "2ff6a9c91904a2a2cf1ac871b1f8d19b093ec179846263c8398c10d9b38dbdbf",
+      "from": "list"
+    },
+    {
+      "name": "카더가든_Music_Taste_list_Part2.png",
+      "bytes": 397417,
+      "sha256": "2d8840d0ed44ab1c13e8304c941cee28ef57cc0b397970929b2ffec5cde0cfef",
+      "from": "list"
+    },
+    {
+      "name": "카더가든_Music_Taste_retro_Part1.png",
+      "bytes": 658829,
+      "sha256": "74d4f7972f339e2cd48e717afd913b059367fafca944b1b367b749097542ed0d",
+      "from": "retro"
+    },
+    {
+      "name": "카더가든_Music_Taste_retro_Part2.png",
+      "bytes": 528135,
+      "sha256": "24fa2a7c1d96b4f12aaa53f79db35e01ec6fcd1b3fc7e90375e887feffcc8033",
+      "from": "retro"
+    },
+    {
+      "name": "카더가든_Music_Ranking.csv",
+      "bytes": 2097,
+      "sha256": "e0072383e456948dadd0116bb573751b79d97ee689ea567fb7a1c4c8b48fd06b",
+      "from": "csv"
+    }
+  ],
+  "dialogs": [
+    {
+      "type": "confirm",
+      "message": "전체 랭킹(20곡)을 인스타그램 스토리용 이미지 2장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP 15이 있는 1페이지만 다운로드돼요.)"
+    },
+    {
+      "type": "confirm",
+      "message": "전체 랭킹(20곡)을 인스타그램 스토리용 이미지 2장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP 10이 있는 1페이지만 다운로드돼요.)"
+    }
+  ]
+}
