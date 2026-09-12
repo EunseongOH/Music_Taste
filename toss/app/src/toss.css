@@ -1,0 +1,32 @@
+/*
+ * 토스 빌드의 스타일 진입점.
+ *
+ * 웹의 globals.css 를 그대로 가져와 디자인 토큰(@theme inline)과 타이포 유틸리티를
+ * 공유한다. Tailwind v4 는 CSS 파일 위치를 기준으로 소스를 자동 탐색하므로,
+ * 이 파일이 toss/app/src 에 있으면 실제 src/ 의 클래스를 찾지 못한다.
+ * 그래서 @source 로 명시해야 한다 — 빼면 화면이 부분적으로 스타일 없이 렌더된다.
+ */
+@import "../../../src/app/globals.css";
+
+@source "../../../src";
+@source "./";
+
+/*
+ * WebView 에서 100vh 는 주소창/시스템 UI 때문에 실제 보이는 높이와 어긋난다.
+ * src/ 전역이 min-h-screen(= min-height:100vh)을 쓰므로, src 를 고치지 않고
+ * 여기서 동일 특이도로 덮어쓴다(나중에 선언된 쪽이 이긴다).
+ */
+.min-h-screen {
+  min-height: 100dvh;
+}
+.h-screen {
+  height: 100dvh;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+}

@@ -9,14 +9,20 @@
  * 주의: CORS는 보안 경계가 아니다(브라우저 밖에서는 무시된다). 인증이 필요한
  * 엔드포인트는 별도의 검증을 반드시 갖춰야 한다.
  */
-const APP_NAME = 'sortify';
+// apps-in-toss.config.ts 의 appName 과 같아야 한다. 토스가 Origin 을 만들 때
+// 대소문자를 어떻게 처리하는지 문서에 없어서 양쪽 표기를 모두 허용한다.
+const APP_NAMES = ['Sortify', 'sortify'];
 
-const ALLOWED_ORIGINS = new Set([
-  `https://${APP_NAME}.apps.tossmini.com`, // 실서비스
-  `https://${APP_NAME}.private-apps.tossmini.com`, // 콘솔 QR 테스트
-  `https://${APP_NAME}.web.tossmini.com`, // 예비(문서 표기 상충)
-  `https://${APP_NAME}.private-web.tossmini.com`, // 예비
-]);
+const HOSTS = [
+  'apps.tossmini.com', // 실서비스 (FAQ: 2026-08-25 이후 업로드 번들)
+  'private-apps.tossmini.com', // 콘솔 QR 테스트
+  'web.tossmini.com', // 예비 (3.x 문서 표기)
+  'private-web.tossmini.com', // 예비
+];
+
+const ALLOWED_ORIGINS = new Set(
+  APP_NAMES.flatMap((name) => HOSTS.map((host) => `https://${name}.${host}`))
+);
 
 /** 허용된 origin일 때만 CORS 헤더를 만든다. 그 외에는 빈 객체. */
 export function corsHeaders(origin: string | null): Record<string, string> {

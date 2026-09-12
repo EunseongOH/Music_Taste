@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      앱인토스 비게임 출시 가이드: 지도처럼 꼭 필요한 경우를 제외하고
+      제스처 기반 확대·축소는 비활성화해야 한다. viewport-fit=cover 는
+      Safe Area(env(safe-area-inset-*)) 를 쓰기 위한 전제다.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#F5F2ED" />
+    <title>Sortify</title>
+
+    <!--
+      Next 빌드는 next/font 로 폰트를 주입하지만 Vite 빌드에는 그 런타임이 없다.
+      Pretendard 는 번들에 포함하고, Playfair 는 Google Fonts 에서 받는다.
+      (자체 호스팅 전환은 후속 과제 — 네트워크 의존을 없애는 편이 낫다.)
+    -->
+    <style>
+      @font-face {
+        font-family: 'Pretendard';
+        src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
+        font-weight: 45 920;
+        font-display: swap;
+      }
+      :root {
+        --font-pretendard: 'Pretendard', system-ui, -apple-system, sans-serif;
+        --font-playfair: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
