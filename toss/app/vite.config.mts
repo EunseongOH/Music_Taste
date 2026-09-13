@@ -40,6 +40,8 @@ export default defineConfig(({ mode }) => {
         { find: '@/utils/gtag', replacement: path.resolve(SHIMS, 'gtag.ts') },
         // "use server" 모듈은 다른 origin 에서 호출할 수 없다 → REST 디스패치 경유
         { find: '@/utils/spotify', replacement: path.resolve(SHIMS, 'spotify.ts') },
+        // 저장·공유는 WebView 에서 웹 방식이 통하지 않는다 → 앱인토스 SDK
+        { find: '@/utils/platform', replacement: path.resolve(HERE, 'src/platform.toss.ts') },
 
         // 그 밖의 `@/...` 는 실제 src/ 를 무수정으로 가리킨다.
         { find: /^@\//, replacement: SRC + '/' },

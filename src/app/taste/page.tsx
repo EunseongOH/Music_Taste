@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, Share2, Music, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
 import Image from "next/image";
-import * as htmlToImage from "html-to-image";
+import * as platform from "@/utils/platform";
 import SnakePathTimeline, { getRowSizes } from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
@@ -53,6 +53,7 @@ const translations = {
     openInstagramBtn: "인스타그램 열기",
     copyLinkOption: "취향표 링크 복사하기",
     linkCopiedToast: "링크가 복사되었어요",
+    linkCopyError: "링크를 복사하지 못했어요. 다시 시도해 주세요.",
   },
   en: {
     title: "My Taste Card",
@@ -90,6 +91,7 @@ const translations = {
     openInstagramBtn: "Open Instagram",
     copyLinkOption: "Copy Link",
     linkCopiedToast: "Link copied to clipboard",
+    linkCopyError: "Couldn't copy the link. Please try again.",
   }
 };
 
@@ -238,7 +240,7 @@ export default function ResultPage() {
     }
   }, [user, winners.length, isSaved, isSingleArtistMode]);
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
       let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
       csvContent += "Rank,Title,Artist,Album\n";
@@ -252,13 +254,7 @@ export default function ResultPage() {
         csvContent += row + "\n";
       });
 
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `${winners[0]?.artistName || "Artist"}_Music_Ranking.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await platform.saveCsv(csvContent, `${winners[0]?.artistName || "Artist"}_Music_Ranking.csv`);
       setShowSaveSheet(false);
       trackEvent("funnel_excel_download", {});
     } catch (err) {
@@ -267,11 +263,18 @@ export default function ResultPage() {
     }
   };
 
-  const handleCopyLink = () => {
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    navigator.clipboard.writeText(url);
-    showToastMessage(t.linkCopiedToast);
-    trackEvent("funnel_copy_link", {});
+  const handleCopyLink = async () => {
+    // 웹에서는 실패하지 않는 경로지만, WebView 어댑터는 권한 거부나 구버전
+    // 앱에서 실제로 실패할 수 있다. 잡지 않으면 버튼이 먹통처럼 보인다.
+    try {
+      const url = await platform.shareUrl(savedId);
+      await platform.copyText(url);
+      showToastMessage(t.linkCopiedToast);
+      trackEvent("funnel_copy_link", {});
+    } catch (err) {
+      console.error("Failed to copy link", err);
+      showToastMessage(t.linkCopyError, "error");
+    }
   };
 
   const handleShareInstagram = async () => {
@@ -281,24 +284,23 @@ export default function ResultPage() {
     trackEvent("funnel_share_instagram", {});
   };
 
-  const handleShareX = () => {
+  const handleShareX = async () => {
     const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
     const artistName = winners[0]?.artistName || "";
     const text = `${artistName} 취향표 TOP 10\n\n${topTracks}`;
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, "_blank");
+    const url = await platform.shareUrl(savedId);
+    await platform.openExternal(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
     trackEvent("funnel_share_x", {});
   };
 
-  const handleShareKakao = () => {
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    if (navigator.share) {
-      navigator.share({
-        title: t.title,
-        text: `${winners[0]?.artistName || ""} 취향표`,
-        url: url,
-      }).catch(() => {});
-    } else {
+  const handleShareKakao = async () => {
+    const url = await platform.shareUrl(savedId);
+    const shared = await platform.share({
+      title: t.title,
+      text: `${winners[0]?.artistName || ""} 취향표`,
+      url: url,
+    });
+    if (!shared) {
       handleCopyLink();
     }
     trackEvent("funnel_share_kakao", {});
@@ -310,14 +312,7 @@ export default function ResultPage() {
       if (template === "pyramid") {
         const el = document.getElementById("export-card-pyramid");
         if (!el) return;
-        const dataUrl = await htmlToImage.toPng(el, {
-          cacheBust: true,
-          pixelRatio: 5,
-        });
-        const link = document.createElement('a');
-        link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`;
-        link.href = dataUrl;
-        link.click();
+        await platform.saveImage(el, `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`);
       } else {
         const pageSize = template === "list" ? 15 : 10;
         const totalPages = Math.ceil(winners.length / pageSize);
@@ -342,14 +337,10 @@ export default function ResultPage() {
 
           await new Promise((resolve) => setTimeout(resolve, i * 450));
 
-          const dataUrl = await htmlToImage.toPng(el, {
-            cacheBust: true,
-            pixelRatio: 5,
-          });
-          const link = document.createElement('a');
-          link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`;
-          link.href = dataUrl;
-          link.click();
+          await platform.saveImage(
+            el,
+            `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`
+          );
         }
       }
       setShowSaveSheet(false);
@@ -983,6 +974,7 @@ export default function ResultPage() {
 
               <div className="flex flex-col gap-3 w-full mb-4">
                 {/* 1. X (Twitter) */}
+                {platform.shareTargets.includes("x") && (
                 <button
                   onClick={handleShareX}
                   className="w-full h-[52px] px-5 bg-[#0F1419] hover:bg-[#20262E] active:bg-[#2C353D] text-white font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -992,8 +984,10 @@ export default function ResultPage() {
                   </svg>
                   <span>{t.shareXOption}</span>
                 </button>
+                )}
 
                 {/* 2. KakaoTalk */}
+                {platform.shareTargets.includes("kakao") && (
                 <button
                   onClick={handleShareKakao}
                   className="w-full h-[52px] px-5 bg-[#FEE500] hover:bg-[#F5DC00] active:bg-[#EDD100] text-black font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -1003,8 +997,10 @@ export default function ResultPage() {
                   </svg>
                   <span className="opacity-90">{t.shareKakaoOption}</span>
                 </button>
+                )}
 
                 {/* 3. Instagram Story */}
+                {platform.shareTargets.includes("instagram") && (
                 <button
                   onClick={handleShareInstagram}
                   className="w-full h-[52px] px-5 bg-gradient-to-r from-[#f09433] via-[#dc2743] to-[#bc1888] hover:opacity-95 text-white font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -1014,6 +1010,7 @@ export default function ResultPage() {
                   </svg>
                   <span>{t.shareInstagramOption}</span>
                 </button>
+                )}
 
                 {/* 4. Copy Link */}
                 <button

@@ -23,6 +23,7 @@
       "@/components/LoginModal": ["./src/shims/LoginModal.tsx"],
       "@/utils/gtag": ["./src/shims/gtag.ts"],
       "@/utils/spotify": ["./src/shims/spotify.ts"],
+      "@/utils/platform": ["./src/platform.toss.ts"],
       "@/*": ["../../src/*"]
     }
   },

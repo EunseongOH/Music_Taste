@@ -20,10 +20,15 @@ export default defineConfig({
     primaryColor: '#E67E22',
   },
 
-  // 실제로 SDK 를 호출하기 전까지는 비워 둔다. 쓰지 않는 권한을 선언하면
-  // 사용자에게 불필요한 권한 안내가 노출되고 검수에서도 지적될 수 있다.
-  // 이미지 저장(photos) · 링크 복사(clipboard) 는 어댑터 구현 시점에 추가한다.
-  permissions: [],
+  // 실제로 쓰는 것만 선언한다. 안 쓰는 권한을 선언하면 사용자에게 불필요한
+  // 권한 안내가 노출되고 검수에서도 지적될 수 있다.
+  //  - photos/write    : 취향표 PNG·CSV 저장 (File.saveBase64)
+  //  - clipboard/write : 취향표 링크 복사 (Clipboard.setText)
+  // 읽기 권한은 필요 없다 — 쓰기만 한다.
+  permissions: [
+    { name: 'photos', access: 'write' },
+    { name: 'clipboard', access: 'write' },
+  ],
 
   navigationBar: {
     // 앱인토스 네비게이션 바를 사용한다. 자체 뒤로가기(BackButton)와 동시에
