@@ -22,6 +22,9 @@ const NEXT = 'http://localhost:3000';
 /** 아이유 — 기준선(fixture.json)에서 쓰는 것과 같은 아티스트다. */
 const ARTIST = { id: '7c1HgFDe8ogy5NOZ1ANCJQ', name: 'IU', image: '' };
 
+/** 실제 공개 취향표 하나. 읽기만 하며 DB 를 바꾸지 않는다. */
+const SHARED_ID = '631ac9fe-0305-4b26-bad8-05908a5ccae4';
+
 /**
  * `/tracks` 는 아티스트를 펼쳐야 앨범을 부르고, 앨범을 눌러야 트랙을 부른다.
  * 검색창은 디바운스 후 `/api/spotify-search` 로 나간다(상대 경로 → apiBase 패치).
@@ -74,6 +77,17 @@ const CASES = [
   },
   { route: '/worldcup', seed: {} },
   { route: '/taste', seed: {} },
+  { route: '/explore-taste', seed: {} },
+  // 공개 아카이브는 실제 DB 를 읽는다. 목록이 바뀔 수 있어 고정 문구로 본다.
+  { route: '/archive', seed: {}, text: 'skip', contains: ['취향 아카이브'] },
+  // 공유된 취향표. 토스는 `/shared?id=`, 웹은 `/taste/<id>` 로 같은 화면을 연다.
+  {
+    route: `/taste/${SHARED_ID}`,
+    tossRoute: `/shared?id=${SHARED_ID}`,
+    seed: {},
+  },
+  // 앱 안에서의 이동은 웹과 같은 `/taste/<uuid>` 형태다 (archive/page.tsx:801).
+  { route: `/taste/${SHARED_ID}`, seed: {} },
 ];
 
 /** 두 문자열이 처음 갈라지는 지점을 사람이 읽을 수 있게 보여준다. */
@@ -153,16 +167,21 @@ const browser = await chromium.launch();
 const freshCtx = () => browser.newContext({ viewport: { width: 430, height: 900 } });
 
 try {
-  for (const { route, seed, act, expect = [], expectUrl = [], text = 'exact', contains = [] } of CASES) {
+  for (const { route, tossRoute, seed, act, expect = [], expectUrl = [], text = 'exact', contains = [] } of CASES) {
     console.log(`\n${route}`);
     const [vc, nc] = [await freshCtx(), await freshCtx()];
-    const v = await visit(vc, VITE, route, seed, act);
+    const v = await visit(vc, VITE, tossRoute ?? route, seed, act);
     const n = await visit(nc, NEXT, route, seed, act);
 
     console.log(`      토스: ${v.url} / 이미지 ${v.view.imgs} / "${v.view.text.slice(0, 60)}"`);
     console.log(`      웹  : ${n.url} / 이미지 ${n.view.imgs}`);
 
-    check(v.url === n.url, '최종 경로가 웹과 같음', `${v.url} vs ${n.url}`);
+    if (tossRoute) {
+      // 토스는 딥링크를 쿼리 형태로 받는다. 경로는 다르고 화면이 같아야 한다.
+      console.log(`      (토스는 ${tossRoute} 로 같은 화면을 연다)`);
+    } else {
+      check(v.url === n.url, '최종 경로가 웹과 같음', `${v.url} vs ${n.url}`);
+    }
     if (text === 'exact') {
       check(
         v.view.text === n.view.text,

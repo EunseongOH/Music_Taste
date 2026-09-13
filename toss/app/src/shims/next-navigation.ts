@@ -10,11 +10,20 @@ export const useRouter = () => nav;
 export const usePathname = () => useLocation().pathname;
 
 /**
- * 토스 빌드는 `/taste/[id]` 를 `/shared?id=<uuid>` 로 마운트한다.
- * (`/taste` 정적 경로와 겹쳐서 동적 세그먼트를 쓸 수 없다)
- * 쿼리스트링을 그대로 params 로 돌려주면 `taste/[id]/page.tsx` 의
- * `params.id` 가 무수정으로 동작한다.
+ * `taste/[id]/page.tsx` 가 쓰는 `params.id` 를 만들어 준다. 두 경로를 모두 받는다.
+ *
+ *  - `/taste/<uuid>` : 앱 안에서의 이동. archive 화면이 이 형태로 보낸다
+ *    (archive/page.tsx:801). 클라이언트 라우팅이라 정적 파일이 필요 없다.
+ *  - `/shared?id=<uuid>` : 딥링크·공유 링크용. 정적 호스팅에서는 임의의
+ *    `/taste/<uuid>/index.html` 을 미리 만들어 둘 수 없어서, 밖에서 들어오는
+ *    링크는 쿼리 형태를 쓴다.
+ *
+ * 동적 세그먼트를 쓰는 라우트가 이 하나뿐이라 경로 패턴 엔진을 두지 않는다.
  */
 export function useParams(): Record<string, string> {
-  return Object.fromEntries(new URLSearchParams(useLocation().search));
+  const { pathname, search } = useLocation();
+  const params: Record<string, string> = Object.fromEntries(new URLSearchParams(search));
+  const fromPath = pathname.match(/^\/taste\/(.+)$/);
+  if (fromPath) params.id = decodeURIComponent(fromPath[1]);
+  return params;
 }
