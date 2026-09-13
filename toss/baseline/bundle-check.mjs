@@ -59,7 +59,55 @@ check(!/\beval\s*\(/.test(all), 'eval 호출 없음');
 // 라이트 모드 필수 — 다크 모드 분기가 없어야 한다.
 check(!all.includes('prefers-color-scheme'), 'prefers-color-scheme 분기 없음');
 
-console.log('\n[4] 번들 크기');
+console.log('\n[4] Safe Area — 화면 아래 고정 요소');
+/*
+ * `fixed bottom-0` 인 요소는 홈 인디케이터에 가리지 않게 toss.css 에서
+ * 패딩을 더해 준다. 그 규칙은 요소가 쓰는 Tailwind 패딩 클래스별로 있어서,
+ * 새 조합이 생기면 조용히 누락된다 — 기기에서만 드러나는 종류의 문제다.
+ * 관리자 화면은 토스에 실리지 않으므로 제외한다.
+ */
+const css = readFileSync(join(REPO, 'toss/app/src/toss.css'), 'utf8');
+const covered = [
+  ...new Set([...css.matchAll(/\.fixed\.bottom-0\.([a-z]+-\d+)\s*\{/g)].map((m) => m[1])),
+];
+/*
+ * 반응형 변형(`sm:p-6`)은 세지 않는다. 모바일 폭에서는 적용되지 않으므로
+ * 그걸 근거로 통과시키면 실제로는 처리되지 않은 요소를 놓친다.
+ * `pt-`·`px-` 는 아래 패딩과 무관하므로 p-/pb- 만 본다.
+ */
+const PAD = /(?<![\w:-])(?:p|pb)-\d+\b/g;
+
+const pages = [];
+const walk = (dir) => {
+  for (const e of readdirSync(join(REPO, dir), { withFileTypes: true })) {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) {
+      if (e.name !== 'manager-taste-control') walk(rel);
+    } else if (e.name.endsWith('.tsx')) pages.push(rel);
+  }
+};
+walk('src/app');
+
+const missing = [];
+for (const f of pages) {
+  for (const line of readFileSync(join(REPO, f), 'utf8').split('\n')) {
+    if (!/fixed bottom-0/.test(line)) continue;
+    const pads = line.match(PAD) ?? [];
+    // 하나라도 규칙에 없으면 잡는다. `some` 으로 두면 다른 패딩이 걸렸다는
+    // 이유로 처리되지 않은 클래스를 통과시킨다.
+    const uncovered = pads.filter((p) => !covered.includes(p));
+    if (pads.length === 0 || uncovered.length > 0) {
+      missing.push(`${f}: ${uncovered.join(' ') || '(패딩 클래스 없음)'}`);
+    }
+  }
+}
+check(
+  missing.length === 0,
+  `고정 요소가 모두 Safe Area 규칙에 걸림 (규칙: ${covered.join(', ')})`,
+  missing.join(' | ')
+);
+
+console.log('\n[5] 번들 크기');
 const total = files.reduce((n, f) => n + statSync(join(DIST, 'assets', f)).size, 0);
 const jsBytes = js.reduce((n, j) => n + Buffer.byteLength(j.src), 0);
 console.log(`      assets 합계 ${(total / 1024).toFixed(0)}kB (JS ${(jsBytes / 1024).toFixed(0)}kB)`);

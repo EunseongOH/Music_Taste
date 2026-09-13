@@ -12,7 +12,7 @@
     "baseline:verify": "node toss/baseline/verify.mjs",
     "dev:toss": "vite --config toss/app/vite.config.mts",
     "build:toss": "vite build --config toss/app/vite.config.mts && ait build",
-    "check:toss": "node toss/baseline/flow-check.mjs && node toss/baseline/router-check.mjs && node toss/baseline/bundle-check.mjs"
+    "check:toss": "node toss/baseline/flow-check.mjs && node toss/baseline/router-check.mjs && node toss/baseline/deeplink-check.mjs && node toss/baseline/bundle-check.mjs"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^3.4.0",

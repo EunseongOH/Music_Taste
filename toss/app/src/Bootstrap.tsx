@@ -3,6 +3,8 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 import { RouterProvider } from './router';
 import { establishSession, TossSessionError } from './tossSession';
+import { startSafeArea } from './safeArea';
+import { applyInitialRoute } from './initialRoute';
 import App from './App';
 
 /**
@@ -23,7 +25,11 @@ export default function Bootstrap() {
     setState('loading');
     setError(null);
     establishSession().then(
-      () => setState('ready'),
+      () => {
+        // 공유 링크로 들어왔다면 그리기 전에 경로를 맞춘다.
+        applyInitialRoute();
+        setState('ready');
+      },
       (err) => {
         /*
          * 개발 중에는 일반 브라우저에서 열기 때문에 토스 네이티브 브리지가
@@ -34,6 +40,7 @@ export default function Bootstrap() {
          */
         if (import.meta.env.DEV && err instanceof TossSessionError && err.reason === 'not_toss') {
           console.warn('[toss] 토스 앱 밖 — 세션 없이 진행합니다 (개발 전용)');
+          applyInitialRoute();
           setState('ready');
           return;
         }
@@ -45,6 +52,9 @@ export default function Bootstrap() {
   }, []);
 
   useEffect(run, [run]);
+
+  // Safe Area 를 CSS 변수로 내보낸다. 회전·키보드로 값이 바뀌면 따라간다.
+  useEffect(startSafeArea, []);
 
   if (state === 'ready') {
     return (
