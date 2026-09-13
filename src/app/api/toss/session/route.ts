@@ -43,8 +43,10 @@ const EMAIL_DOMAIN = 'toss.sortify.kr';
  * **아직 구현되지 않았다.** 여기가 Phase 9.2 의 유일한 작업 지점이다.
  * 구현 전까지는 `TOSS_USER_PEPPER` 미설정으로 엔드포인트 자체를 막아 둔다.
  */
-async function verifyAnonKey(_hash: string): Promise<boolean> {
-  // TODO(Phase 9.2): mTLS 로 토스 검증 API 호출
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 구현될 자리를 남겨 둔다
+async function verifyAnonKey(hash: string): Promise<boolean> {
+  // TODO(Phase 9.2): mTLS 클라이언트 인증서로
+  // POST /api-partner/v1/apps-in-toss/users/anon-key/verify 에 hash 를 확인한다.
   return false;
 }
 
