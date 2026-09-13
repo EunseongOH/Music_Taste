@@ -1,4 +1,7 @@
 import { createRoot } from 'react-dom/client';
+// 전역 fetch 를 감싸 `/api/*` 를 기존 Next 서버로 돌린다.
+// 어떤 페이지가 요청을 보내기 전에 적용돼야 하므로 맨 위에 둔다.
+import './apiBase';
 import './toss.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { LayoutWrapper } from '@/components/LayoutWrapper';

@@ -7,7 +7,6 @@
 import { chromium } from 'playwright';
 
 const ROUTE = process.argv[2] ?? '/';
-const VITE_PAGE = process.env.VITE_PAGE ?? '';
 
 async function read(url) {
   const page = await ctx.newPage();
@@ -43,7 +42,8 @@ const ctx = await browser.newContext({
 
 try {
   const a = await read(`http://localhost:3000${ROUTE}`);
-  const b = await read(`http://localhost:5173/${VITE_PAGE}`);
+  // Vite dev 는 SPA 폴백이 있어 같은 경로를 그대로 쓸 수 있다.
+  const b = await read(`http://localhost:5173${ROUTE}`);
 
   const setB = new Set(b.nodes.map((s) => s.split('\t')[1]));
   const setA = new Set(a.nodes.map((s) => s.split('\t')[1]));

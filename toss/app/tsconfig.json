@@ -22,8 +22,12 @@
       "@/components/BackButton": ["./src/shims/BackButton.tsx"],
       "@/components/LoginModal": ["./src/shims/LoginModal.tsx"],
       "@/utils/gtag": ["./src/shims/gtag.ts"],
+      "@/utils/spotify": ["./src/shims/spotify.ts"],
       "@/*": ["../../src/*"]
     }
   },
-  "include": ["src", "vite.config.mts", "../../src"]
+  "include": ["src", "vite.config.mts", "../../src"],
+  // Next 서버 전용 코드. 토스 번들에 들어가지 않고, shim 이 걸린 상태로
+  // 검사하면 서버에서만 쓰는 export(searchTracksByQuery 등)가 없다고 나온다.
+  "exclude": ["../../src/app/api", "../../src/utils/supabase/server.ts"]
 }

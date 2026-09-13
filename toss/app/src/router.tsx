@@ -63,6 +63,15 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     subs.add(sync);
     // 네이티브 뒤로가기는 WebView 의 history 를 움직이므로 popstate 로 들어온다.
     window.addEventListener('popstate', sync);
+
+    // 구독하기 전에 일어난 이동을 놓치지 않는다.
+    // React 는 자식의 effect 를 부모보다 먼저 실행한다. 그래서 페이지가
+    // 마운트 직후 router.replace 를 부르면(예: /worldcup 은 저장된 트랙이
+    // 없을 때 바로 /tracks 로 보낸다) 그 시점엔 구독자가 없어서 알림이
+    // 사라지고, 주소만 바뀐 채 이전 화면이 남는다.
+    const now = read();
+    if (now.pathname !== loc.pathname || now.search !== loc.search) setLoc(now);
+
     return () => {
       subs.delete(sync);
       window.removeEventListener('popstate', sync);

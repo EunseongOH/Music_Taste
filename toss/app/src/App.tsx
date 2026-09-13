@@ -1,5 +1,10 @@
 import type { ComponentType } from 'react';
 import Home from '@/app/page';
+import Genres from '@/app/genres/page';
+import Explore from '@/app/explore/page';
+import Tracks from '@/app/tracks/page';
+import WorldCup from '@/app/worldcup/page';
+import Taste from '@/app/taste/page';
 import { useLocation } from './router';
 
 /**
@@ -9,11 +14,16 @@ import { useLocation } from './router';
  * 관리자 화면(`/manager-taste-control`)은 **여기에 올리지 않는다** —
  * 표에 없으면 번들에도 들어가지 않는다.
  *
- * Phase 4 에서 /genres · /explore · /tracks · /worldcup · /taste ·
- * /explore-taste · /archive · /shared 를 추가한다.
+ * Phase 4.2 에서 /explore-taste · /archive · /shared 를 추가한다.
  */
 const routes: Record<string, ComponentType> = {
   '/': Home,
+  // 월드컵 본선까지의 기본 동선
+  '/genres': Genres,
+  '/explore': Explore,
+  '/tracks': Tracks,
+  '/worldcup': WorldCup,
+  '/taste': Taste,
 };
 
 export default function App() {

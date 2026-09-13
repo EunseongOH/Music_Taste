@@ -38,6 +38,8 @@ export default defineConfig(({ mode }) => {
         { find: '@/components/LoginModal', replacement: path.resolve(SHIMS, 'LoginModal.tsx') },
         // GA 스크립트가 없다. 앱인토스 Analytics 연결은 Phase 9.5
         { find: '@/utils/gtag', replacement: path.resolve(SHIMS, 'gtag.ts') },
+        // "use server" 모듈은 다른 origin 에서 호출할 수 없다 → REST 디스패치 경유
+        { find: '@/utils/spotify', replacement: path.resolve(SHIMS, 'spotify.ts') },
 
         // 그 밖의 `@/...` 는 실제 src/ 를 무수정으로 가리킨다.
         { find: /^@\//, replacement: SRC + '/' },
