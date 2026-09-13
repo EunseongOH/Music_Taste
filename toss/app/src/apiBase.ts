@@ -1,7 +1,7 @@
 /**
  * 토스 빌드에서 `/api/*` 호출이 어디로 갈지 정한다.
  *
- * 미니앱 번들은 토스가 호스팅하는 origin(`https://Sortify.apps.tossmini.com`)에서
+ * 미니앱 번들은 토스가 호스팅하는 origin(`https://sortify-musictaste.apps.tossmini.com`)에서
  * 돌아간다. 거기에는 API 서버가 없으므로 상대 경로 `/api/...` 는 존재하지 않는
  * 주소가 된다. 기존 Next 서버로 돌려야 한다.
  *

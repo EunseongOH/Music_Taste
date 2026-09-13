@@ -35,7 +35,10 @@ export const shareTargets: ShareTarget[] = ['link', 'image'];
  * 쿼리 형태(`/shared?id=`)를 쓴다 — App.tsx 라우트 표와 짝이다.
  */
 export async function shareUrl(savedId: string | null): Promise<string> {
-  const path = savedId ? `intoss://Sortify/shared?id=${savedId}` : 'intoss://Sortify';
+  // intoss://<appName> — apps-in-toss.config.ts 의 appName 과 같아야 한다.
+  const path = savedId
+    ? `intoss://sortify-musictaste/shared?id=${savedId}`
+    : 'intoss://sortify-musictaste';
   try {
     return await Share.createLink({ path });
   } catch {

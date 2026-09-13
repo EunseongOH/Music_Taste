@@ -13,7 +13,8 @@ import { defineConfig } from '@apps-in-toss/web-framework/config';
  * CORS Origin(https://<appName>.apps.tossmini.com)에도 쓰인다.
  */
 export default defineConfig({
-  appName: 'Sortify',
+  // 콘솔에 등록된 값. 표시 이름('Sortify')과 다르다.
+  appName: 'sortify-musictaste',
 
   brand: {
     // 서비스 포인트 컬러(globals.css 의 --color-point)

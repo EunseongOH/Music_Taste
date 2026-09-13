@@ -9,9 +9,9 @@
  * 주의: CORS는 보안 경계가 아니다(브라우저 밖에서는 무시된다). 인증이 필요한
  * 엔드포인트는 별도의 검증을 반드시 갖춰야 한다.
  */
-// apps-in-toss.config.ts 의 appName 과 같아야 한다. 토스가 Origin 을 만들 때
-// 대소문자를 어떻게 처리하는지 문서에 없어서 양쪽 표기를 모두 허용한다.
-const APP_NAMES = ['Sortify', 'sortify'];
+// apps-in-toss.config.ts 의 appName 과 같아야 한다.
+// 콘솔에 등록된 값이며, 화면에 보이는 이름('Sortify')과는 다르다.
+const APP_NAME = 'sortify-musictaste';
 
 const HOSTS = [
   'apps.tossmini.com', // 실서비스 (FAQ: 2026-08-25 이후 업로드 번들)
@@ -20,9 +20,7 @@ const HOSTS = [
   'private-web.tossmini.com', // 예비
 ];
 
-const ALLOWED_ORIGINS = new Set(
-  APP_NAMES.flatMap((name) => HOSTS.map((host) => `https://${name}.${host}`))
-);
+const ALLOWED_ORIGINS = new Set(HOSTS.map((host) => `https://${APP_NAME}.${host}`));
 
 // 개발 중에는 Vite dev 서버(:5173)에서 이 API 를 부른다. Vite 프록시로
 // 같은 출처인 척 우회하면 절대 URL·CORS 경로가 dev 에서 한 번도 실행되지
