@@ -51,9 +51,11 @@ const translations = {
     instagramGuideTitle: "인스타그램 스토리 공유 가이드",
     instagramGuideDesc: "취향표 이미지가 다운로드되었어요!\n인스타그램 스토리에서 내려받은 이미지를 선택해 공유해 보세요.",
     openInstagramBtn: "인스타그램 열기",
+    shareNativeOption: "다른 앱으로 공유하기",
     copyLinkOption: "취향표 링크 복사하기",
-    linkCopiedToast: "링크가 복사되었어요",
+    linkCopiedToast: "취향표가 복사되었어요",
     linkCopyError: "링크를 복사하지 못했어요. 다시 시도해 주세요.",
+    shareFailed: "공유하지 못했어요. 다시 시도해 주세요.",
   },
   en: {
     title: "My Taste Card",
@@ -89,9 +91,11 @@ const translations = {
     instagramGuideTitle: "Instagram Story Share Guide",
     instagramGuideDesc: "The card image has been downloaded! Select it from your gallery on Instagram Story to share.",
     openInstagramBtn: "Open Instagram",
+    shareNativeOption: "Share to another app",
     copyLinkOption: "Copy Link",
-    linkCopiedToast: "Link copied to clipboard",
+    linkCopiedToast: "Taste card copied to clipboard",
     linkCopyError: "Couldn't copy the link. Please try again.",
+    shareFailed: "Couldn't share. Please try again.",
   }
 };
 
@@ -100,6 +104,22 @@ interface Track {
   title: string;
   artistName: string;
   albumImage: string;
+}
+
+/**
+ * 공유에 쓰는 TOP 10 텍스트.
+ *
+ * X 공유·링크 복사·공유 시트가 모두 이 함수를 쓴다. 같은 문구를 여러 곳에서
+ * 따로 만들면 한쪽만 고쳐져 서서히 갈라진다.
+ *
+ * ⚠️ 여기에 sortify.kr 주소를 넣지 말 것. 앱인토스는 "공유하기 링크가 자사
+ * 웹사이트로 랜딩되는 경우"를 제한한다 — 링크는 어댑터(`platform.shareUrl`)가
+ * 플랫폼에 맞게 따로 만든다.
+ */
+function buildShareText(winners: Track[]): string {
+  const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
+  const artistName = winners[0]?.artistName || "";
+  return `${artistName} 취향표 TOP 10\n\n${topTracks}`;
 }
 
 export default function ResultPage() {
@@ -115,6 +135,15 @@ export default function ResultPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineWrapperRef = useRef<HTMLDivElement>(null);
+  /**
+   * 진행 중인 자동 저장. 공유 직전에 이걸 기다린다.
+   *
+   * 공유 버튼은 애니메이션이 끝나면 바로 활성화되는데(showButton), 그 시점에
+   * 자동 저장은 아직 끝나지 않았을 수 있다. 그러면 savedId 가 null 이라
+   * 남에게 의미 없는 링크가 나간다 — 웹은 `/taste`, 토스는 미니앱 홈.
+   * 상태가 아니라 ref 라서 리렌더를 유발하지 않는다.
+   */
+  const autoSaveRef = useRef<Promise<void> | null>(null);
   const [cameraRig, setCameraRig] = useState<{ xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[] } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [rawKeyframes, setRawKeyframes] = useState<{ x: number, y: number }[]>([]);
@@ -205,7 +234,7 @@ export default function ResultPage() {
   useEffect(() => {
     if (user && winners.length >= 16 && !isSaved && !isAutoSaving) {
       setIsAutoSaving(true);
-      (async () => {
+      autoSaveRef.current = (async () => {
         try {
           let artistId: string | null = null;
           let artistName: string | null = null;
@@ -263,12 +292,33 @@ export default function ResultPage() {
     }
   };
 
+  /**
+   * 공유에 쓸 링크를 만든다. 모든 공유 경로가 이 하나를 지난다.
+   *
+   * 자동 저장이 진행 중이면 끝날 때까지 기다린다 — 그래야 savedId 가 생겨
+   * "그 사람의 취향표"로 가는 링크가 나간다. 덮어쓰기 모달로 빠진 경우에는
+   * 저장 없이 resolve 되므로 무한 대기는 생기지 않는다.
+   */
+  const resolveShareUrl = async () => {
+    try {
+      await autoSaveRef.current;
+    } catch {
+      // 저장 실패는 자동 저장 쪽에서 이미 로그를 남긴다. 공유는 계속 진행한다.
+    }
+    // 공유 링크의 미리보기 이미지로 1위 곡 앨범아트를 쓴다(토스 전용).
+    // 웹은 taste/[id]/layout.tsx 의 generateMetadata 가 같은 일을 한다.
+    const cover = winners[0]?.albumImage;
+    const ogImageUrl = cover?.startsWith("https://") ? cover : undefined;
+    return platform.shareUrl(savedId, ogImageUrl);
+  };
+
   const handleCopyLink = async () => {
     // 웹에서는 실패하지 않는 경로지만, WebView 어댑터는 권한 거부나 구버전
     // 앱에서 실제로 실패할 수 있다. 잡지 않으면 버튼이 먹통처럼 보인다.
     try {
-      const url = await platform.shareUrl(savedId);
-      await platform.copyText(url);
+      const url = await resolveShareUrl();
+      // 링크만이 아니라 TOP 10 까지 함께 복사한다.
+      await platform.copyText(`${buildShareText(winners)}\n\n${url}`);
       showToastMessage(t.linkCopiedToast);
       trackEvent("funnel_copy_link", {});
     } catch (err) {
@@ -288,16 +338,39 @@ export default function ResultPage() {
   };
 
   const handleShareX = async () => {
-    const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
-    const artistName = winners[0]?.artistName || "";
-    const text = `${artistName} 취향표 TOP 10\n\n${topTracks}`;
-    const url = await platform.shareUrl(savedId);
+    const text = buildShareText(winners);
+    const url = await resolveShareUrl();
     await platform.openExternal(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
     trackEvent("funnel_share_x", {});
   };
 
+  /**
+   * OS 공유 시트를 열어 TOP 10 과 링크를 함께 내보낸다. (토스 빌드 전용)
+   *
+   * 사용자가 카카오톡·인스타 등 설치된 앱을 직접 고르므로, 개별 SNS 버튼을
+   * 두지 않아도 외부 공유가 열린다. 나가는 링크는 어댑터가 만든 토스 공유
+   * 링크 하나뿐이라 "자사 웹사이트 랜딩" 제한에도 걸리지 않는다.
+   */
+  const handleShareNative = async () => {
+    try {
+      const text = buildShareText(winners);
+      const url = await resolveShareUrl();
+      const shared = await platform.share({ title: t.title, text, url });
+      // ponytail: 어댑터의 share() 가 boolean 이라 "사용자 취소"와 "실패"를
+      // 구분하지 못한다. 그래서 폴백(자동 복사)을 돌리지 않는다 — 취소할 때마다
+      // 클립보드 권한 팝업이 뜨는 편이 더 나쁘다. 실기기에서 취소 동작을 확인한
+      // 뒤, 구분이 필요하면 share() 가 사유를 돌려주도록 넓힌다.
+      if (!shared) showToastMessage(t.shareFailed, "error");
+      trackEvent("funnel_share_native", {});
+    } catch (err) {
+      console.error("Failed to share", err);
+      const msg = err instanceof platform.PlatformError ? err.message : t.shareFailed;
+      showToastMessage(msg, "error");
+    }
+  };
+
   const handleShareKakao = async () => {
-    const url = await platform.shareUrl(savedId);
+    const url = await resolveShareUrl();
     const shared = await platform.share({
       title: t.title,
       text: `${winners[0]?.artistName || ""} 취향표`,
@@ -1015,7 +1088,19 @@ export default function ResultPage() {
                 </button>
                 )}
 
-                {/* 4. Copy Link */}
+                {/* 4. 다른 앱으로 공유 (OS 공유 시트) — 토스 빌드에서만 렌더된다.
+                     웹은 위의 X·카카오·인스타 버튼이 같은 일을 나눠 맡는다. */}
+                {platform.shareTargets.includes("native") && (
+                <button
+                  onClick={handleShareNative}
+                  className="w-full h-[52px] px-5 bg-navy hover:bg-navy/90 active:bg-navy/80 text-cream font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
+                >
+                  <Share2 size={18} />
+                  <span>{t.shareNativeOption}</span>
+                </button>
+                )}
+
+                {/* 5. Copy Link */}
                 <button
                   onClick={handleCopyLink}
                   className="w-full h-[52px] px-5 bg-white border border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"

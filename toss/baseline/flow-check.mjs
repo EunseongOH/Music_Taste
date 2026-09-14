@@ -226,6 +226,58 @@ try {
     await nc.close();
   }
 
+  /*
+   * 공유받은 사람의 참여 동선.
+   *
+   * 남의 취향표를 보고 "나도 만들기"를 누르면, 그 취향표를 만든 모드로 홈이
+   * 열려야 한다. '최애 곡 줄 세우기' 결과를 보고 들어왔는데 '믹스 매치
+   * 월드컵'이 먼저 뜨면 흐름이 끊긴다.
+   *
+   * 홈의 시작 버튼 href 로 확인한다 — 카드마다 목적지가 다르므로 어떤 카드가
+   * 열려 있는지가 그대로 드러난다(카드 0 = /explore?mode=single,
+   * 카드 1 = /genres). 캐러셀의 transform 을 읽는 것보다 덜 깨진다.
+   */
+  console.log('\n참여 동선 (?mode 이어받기)');
+  const startHref = (page) =>
+    page.evaluate(() => document.querySelector('main a[href^="/explore"], main a[href="/genres"]')?.getAttribute('href') ?? null);
+
+  for (const [base, label, sharedRoute] of [
+    [NEXT, '웹  ', `/taste/${SHARED_ID}`],
+    [VITE, '토스', `/shared?id=${SHARED_ID}`],
+  ]) {
+    const ctx = await freshCtx();
+
+    // 1) 파라미터 없는 홈은 지금과 같아야 한다(기존 진입 경로 무영향).
+    const plain = await ctx.newPage();
+    await plain.goto(`${base}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await plain.waitForTimeout(2500);
+    check((await startHref(plain)) === '/explore?mode=single', `${label} — 파라미터 없으면 기존과 같이 카드 0`, (await startHref(plain)) ?? '없음');
+
+    // 2) ?mode=multi 로 들어오면 '믹스 매치 월드컵' 카드가 먼저 보인다.
+    const multi = await ctx.newPage();
+    await multi.goto(`${base}/?mode=multi`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await multi.waitForTimeout(2500);
+    check((await startHref(multi)) === '/genres', `${label} — ?mode=multi → 믹스 매치 월드컵`, (await startHref(multi)) ?? '없음');
+
+    // 3) 공유 화면의 CTA 가 원본 모드를 붙여 홈으로 보낸다.
+    //    SHARED_ID 는 '최애 곡 줄 세우기'(is_single_artist) 결과다.
+    const shared = await ctx.newPage();
+    await shared.goto(`${base}${sharedRoute}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await shared.waitForTimeout(4000);
+    const cta = shared.getByRole('button', { name: '나도 나만의 취향표 소트하기' }).last();
+    if ((await cta.count()) === 0) {
+      check(false, `${label} — 공유 화면에 CTA 있음`, '버튼 없음');
+    } else {
+      await cta.click();
+      await shared.waitForTimeout(2500);
+      const q = new URL(shared.url()).search;
+      check(q.includes('mode=single'), `${label} — CTA 가 원본 모드를 이어받음`, shared.url());
+      check((await startHref(shared)) === '/explore?mode=single', `${label} — 이동한 홈이 최애 곡 줄 세우기`, (await startHref(shared)) ?? '없음');
+    }
+
+    await ctx.close();
+  }
+
   console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);
   process.exitCode = failed === 0 ? 0 : 1;
 } finally {

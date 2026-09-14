@@ -18,7 +18,12 @@ import * as htmlToImage from "html-to-image";
  * 페이지에 그대로 남긴다** — 그래야 두 빌드의 동작이 갈라지지 않는다.
  */
 
-export type ShareTarget = "link" | "image" | "x" | "instagram" | "kakao";
+/**
+ * `native` = 플랫폼이 제공하는 공유 시트(설치된 앱 목록)를 여는 수단.
+ * 유니온은 토스 구현(`toss/app/src/platform.toss.ts`)과 같아야 한다 —
+ * 한쪽만 고치면 토스 빌드의 타입 검사가 바로 잡는다.
+ */
+export type ShareTarget = "native" | "link" | "image" | "x" | "instagram" | "kakao";
 
 /**
  * 사용자에게 그대로 보여도 되는 오류.
@@ -30,16 +35,22 @@ export type ShareTarget = "link" | "image" | "x" | "instagram" | "kakao";
 export class PlatformError extends Error {}
 
 /**
- * 이 플랫폼에서 노출할 공유 수단.
+ * 이 플랫폼에서 노출할 공유 수단. 페이지가 이 목록으로 버튼을 가른다.
  *
- * 웹은 전부 지원한다. 토스 빌드에서는 `['link','image']` 만 남는데,
- * 앱인토스는 자사 사이트로 내보내는 동선과 외부 앱 설치 유도를 제한하기
- * 때문이다. 버튼 자체가 렌더되지 않으므로 정책 위반 경로가 UI 에 없다.
+ * 웹은 각 SNS 버튼을 직접 두므로 `native`(공유 시트)를 넣지 않는다.
+ * 카카오 버튼이 이미 `navigator.share` 를 부르고 있어 중복이다.
  */
 export const shareTargets: ShareTarget[] = ["link", "image", "x", "instagram", "kakao"];
 
-/** 공유·복사에 쓸 링크. 저장된 취향표가 있으면 그 주소, 없으면 현재 주소. */
-export async function shareUrl(savedId: string | null): Promise<string> {
+/**
+ * 공유·복사에 쓸 링크. 저장된 취향표가 있으면 그 주소, 없으면 현재 주소.
+ *
+ * `ogImageUrl` 은 토스 구현에서만 쓴다(공유 링크의 미리보기 이미지).
+ * 웹은 `taste/[id]/layout.tsx` 의 generateMetadata 가 같은 일을 이미 하므로
+ * 받기만 하고 쓰지 않는다 — 시그니처를 맞춰 호출부를 하나로 유지한다.
+ */
+export async function shareUrl(savedId: string | null, ogImageUrl?: string): Promise<string> {
+  void ogImageUrl;
   return savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
 }
 

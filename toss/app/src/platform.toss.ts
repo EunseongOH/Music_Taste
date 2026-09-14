@@ -13,7 +13,11 @@ import * as htmlToImage from 'html-to-image';
  * `Share.sendMessage` · `Device.openURL` · `Clipboard.setText`)을 쓴다.
  */
 
-export type ShareTarget = 'link' | 'image' | 'x' | 'instagram' | 'kakao';
+/**
+ * `native` = OS 공유 시트(설치된 앱 목록). 유니온은 웹 구현
+ * (`src/utils/platform.ts`)과 같아야 한다.
+ */
+export type ShareTarget = 'native' | 'link' | 'image' | 'x' | 'instagram' | 'kakao';
 
 /** 사용자에게 그대로 보여도 되는 오류. (src/utils/platform.ts 와 같은 역할) */
 export class PlatformError extends Error {}
@@ -21,13 +25,13 @@ export class PlatformError extends Error {}
 /**
  * 토스 빌드에서 노출할 공유 수단.
  *
- * X·카카오·인스타그램을 빼는 이유:
- *  - 비게임 출시 가이드가 자사 사이트로 내보내는 동선과 외부 앱 설치 유도를
- *    제한한다. 외부 SNS 로 나가는 버튼은 심사에서 걸릴 소지가 크다.
- *  - 대신 링크 복사가 `intoss://` 딥링크를 주므로 토스 안에서 공유가 된다.
- * 버튼 자체가 렌더되지 않으므로 문제될 경로가 UI 에 아예 없다.
+ * X·카카오·인스타그램 **개별 버튼**을 두지 않는 이유는 "외부 SNS 공유가
+ * 금지되어서"가 아니다 — 그런 조항은 문서에 없다. 앱인토스가 제한하는 것은
+ * "공유하기 링크가 자사 웹사이트로 랜딩되는 경우"다(intro/guide.md 2-2).
+ * `native`(OS 공유 시트) 하나면 사용자가 카카오톡·인스타 등을 직접 고르므로
+ * 개별 버튼이 필요 없고, 나가는 링크도 토스 공유 링크 하나로 고정된다.
  */
-export const shareTargets: ShareTarget[] = ['link', 'image'];
+export const shareTargets: ShareTarget[] = ['native', 'link', 'image'];
 
 /**
  * 공유·복사에 쓸 링크.
@@ -37,13 +41,16 @@ export const shareTargets: ShareTarget[] = ['link', 'image'];
  * 정적 호스팅이라 `/taste/<uuid>` 같은 임의 경로에 파일을 둘 수 없어서
  * 쿼리 형태(`/shared?id=`)를 쓴다 — App.tsx 라우트 표와 짝이다.
  */
-export async function shareUrl(savedId: string | null): Promise<string> {
+export async function shareUrl(savedId: string | null, ogImageUrl?: string): Promise<string> {
   // intoss://<appName> — apps-in-toss.config.ts 의 appName 과 같아야 한다.
+  // 테스트 스킴(intoss-private://)을 여기에 쓰면 출시 체크리스트 위반이다.
   const path = savedId
     ? `intoss://sortify-musictaste/shared?id=${savedId}`
     : 'intoss://sortify-musictaste';
   try {
-    return await Share.createLink({ path });
+    // ogImageUrl 은 외부 플랫폼에 붙여넣었을 때의 미리보기 이미지다.
+    // 구버전 토스앱에서는 SDK 가 알아서 무시하므로 버전 분기를 두지 않는다.
+    return await Share.createLink({ path, ogImageUrl });
   } catch (err) {
     // 구버전 토스앱 등으로 링크 생성이 안 되면 딥링크 원문이라도 돌려준다.
     // 복사 자체는 되게 하는 편이 낫다.
@@ -62,7 +69,7 @@ export async function shareUrl(savedId: string | null): Promise<string> {
  */
 export async function saveImage(el: HTMLElement, fileName: string): Promise<void> {
   if (!File.saveBase64.isSupported()) {
-    throw new Error('이 버전의 토스 앱에서는 이미지 저장을 지원하지 않아요.');
+    throw new PlatformError('이 버전의 토스 앱에서는 이미지 저장을 지원하지 않아요.');
   }
 
   let dataUrl: string | null = null;
@@ -75,7 +82,7 @@ export async function saveImage(el: HTMLElement, fileName: string): Promise<void
       console.warn(`[toss] pixelRatio ${pixelRatio} 실패, 낮춰서 재시도`, err);
     }
   }
-  if (!dataUrl) throw new Error('이미지를 만들지 못했어요.');
+  if (!dataUrl) throw new PlatformError('이미지를 만들지 못했어요.');
 
   await File.saveBase64({
     data: dataUrl.replace(/^data:image\/png;base64,/, ''),
@@ -93,7 +100,7 @@ export async function saveImage(el: HTMLElement, fileName: string): Promise<void
  */
 export async function saveCsv(csvContent: string, fileName: string): Promise<void> {
   if (!File.saveBase64.isSupported()) {
-    throw new Error('이 버전의 토스 앱에서는 파일 저장을 지원하지 않아요.');
+    throw new PlatformError('이 버전의 토스 앱에서는 파일 저장을 지원하지 않아요.');
   }
   const body = csvContent.replace(/^data:text\/csv;charset=utf-8,/, '');
   // 한글·BOM 이 들어 있으므로 UTF-8 바이트로 만든 뒤 base64 로 바꾼다.
