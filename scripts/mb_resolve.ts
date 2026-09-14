@@ -50,16 +50,6 @@ async function mb(path: string, tries = 4): Promise<any> {
   return { __throttled: true };
 }
 
-/** 제목 정규화: 소문자, 괄호/특수문자 제거, 리패키지 접미 제거 */
-function normTitle(s: string): string {
-  return (s || "")
-    .toLowerCase()
-    .replace(/\((?:[^)]*)\)|\[[^\]]*\]/g, " ")
-    .replace(/\b(deluxe|repackage|special\s*edition|remaster(ed)?|expanded|anniversary)\b/g, " ")
-    .replace(/[^a-z0-9가-힣ぁ-んァ-ヶ一-龯]+/g, "")
-    .trim();
-}
-
 const hasHangul = (s: string) => /[가-힣]/.test(s || "");
 
 /** 한글 -> 영문 맵을 뒤집어 영문 -> 한글도 찾을 수 있게 한다 */
@@ -109,7 +99,7 @@ async function byName(name: string): Promise<{ mbid: string; matched: string } |
 async function fillArtist(mbid: string) {
   // inc 에 tags 를 넣지 않는다 (CC-BY-NC-SA).
   const a = await mb(`artist/${mbid}?inc=aliases&fmt=json`);
-  if (a?.__throttled || a?.__status) return { ok: false, releaseGroups: 0 };
+  if (a?.__throttled || a?.__status) return { ok: false, releaseGroups: 0, albums: 0 };
 
   const aliases = (a.aliases || []).map((x: any) => ({ name: x.name, locale: x.locale, type: x.type }));
   const koAlias =
@@ -130,21 +120,44 @@ async function fillArtist(mbid: string) {
   }, { onConflict: "mbid" });
   if (artErr) {
     console.error(`  ! mb_artist upsert 실패: ${artErr.message}`);
-    return { ok: false, releaseGroups: 0 };
+    return { ok: false, releaseGroups: 0, albums: 0 };
   }
 
-  // 릴리스그룹 일괄 수집. 실측 평균 32 개라 대부분 1 회로 끝난다.
-  const rgs: any[] = [];
-  for (let offset = 0; offset < 300; offset += 100) {
-    const page = await mb(`release-group?artist=${mbid}&limit=100&offset=${offset}&fmt=json`);
+  // release(발매판) 단위로 browse 한다. release-group 단위가 아닌 이유:
+  //   MB 의 Spotify "앨범" URL 관계는 release-group 이 아니라 release 에 붙어 있다
+  //   (실측: release-group browse + url-rels 는 NewJeans 0/25, release browse 는 18/26).
+  //   release 에 embed 된 release-group 객체에 title/primary-type/first-release-date 가
+  //   전부 들어 있어서, 이 호출 하나로 RG 행과 앨범 매핑을 동시에 얻는다.
+  //   추가 Spotify 호출 0 회, 추가 MB 호출도 사실상 0 회다.
+  const rgById = new Map<string, any>();
+  const albumMap = new Map<string, string>();  // spotify album id -> rg mbid
+
+  // 다작 아티스트는 release 가 수백 개다. 5 페이지(500 개)에서 자른다.
+  // ponytail: 500 넘는 아티스트는 최근 발매분 일부가 빠질 수 있다. 실제로 문제되면 상한을 올린다.
+  for (let offset = 0; offset < 500; offset += 100) {
+    const page = await mb(`release?artist=${mbid}&inc=url-rels+release-groups&limit=100&offset=${offset}&fmt=json`);
     if (page?.__throttled || page?.__status) break;
-    const items = page["release-groups"] || [];
-    rgs.push(...items);
-    if (rgs.length >= (page["release-group-count"] ?? 0) || items.length === 0) break;
+    const releases = page.releases || [];
+
+    for (const rel of releases) {
+      const rg = rel["release-group"];
+      if (!rg?.id) continue;
+      if (!rgById.has(rg.id)) rgById.set(rg.id, rg);
+
+      const sp = (rel.relations || []).find((r: any) =>
+        String(r.url?.resource ?? "").includes("open.spotify.com/album/"));
+      if (sp) {
+        const albumId = String(sp.url.resource).split("/album/")[1]?.split(/[?#/]/)[0];
+        // 한 RG 에 여러 판(리패키지 등)이 있어도 Spotify 앨범 ID 는 서로 다르다 — 전부 매핑한다
+        if (albumId) albumMap.set(albumId, rg.id);
+      }
+    }
+
+    if (releases.length === 0 || offset + releases.length >= (page["release-count"] ?? 0)) break;
   }
 
-  if (rgs.length > 0) {
-    const rows = rgs.map((rg: any) => ({
+  if (rgById.size > 0) {
+    const rows = [...rgById.values()].map((rg: any) => ({
       mbid: rg.id,
       artist_mbid: mbid,
       title: rg.title,
@@ -156,7 +169,16 @@ async function fillArtist(mbid: string) {
     if (error) console.error(`  ! mb_release_group upsert 실패: ${error.message}`);
   }
 
-  return { ok: true, releaseGroups: rgs.length };
+  if (albumMap.size > 0) {
+    // url_rel: MB 편집자가 직접 단 링크라 정확도 100%. 제목 매칭이 필요 없다.
+    const rows = [...albumMap.entries()].map(([spotify_id, rgMbid]) => ({
+      spotify_id, entity: "album", mbid: rgMbid, confidence: "url_rel",
+    }));
+    const { error } = await supabase.from("mb_spotify_map").upsert(rows, { onConflict: "spotify_id" });
+    if (error) console.error(`  ! album map upsert 실패: ${error.message}`);
+  }
+
+  return { ok: true, releaseGroups: rgById.size, albums: albumMap.size };
 }
 
 /** MB 는 "2024" / "2024-05" 같은 부분 날짜를 준다. Postgres DATE 로 넣으려면 채워야 한다. */
@@ -204,7 +226,40 @@ async function resolveOne(row: { spotify_id: string; entity: string; hint: strin
   }, { onConflict: "spotify_id" });
 
   await supabase.from("mb_resolve_queue").delete().eq("spotify_id", spotify_id);
-  return { status: "ok" as const, confidence, releaseGroups: filled.releaseGroups };
+  return { status: "ok" as const, confidence, releaseGroups: filled.releaseGroups, albums: filled.albums };
+}
+
+/**
+ * 백필: 이미 리졸브된 url_rel 아티스트를 다시 채운다 (앨범 매핑이 추가되기 전에 처리된 분).
+ * updated_at 이 오래된 순서로 돌기 때문에 여러 번 나눠 돌려도 이어서 진행되고,
+ * 한 바퀴 돈 뒤에는 그대로 주기적 갱신이 된다. 별도 진행 상태를 저장하지 않는다.
+ */
+async function backfillAlbums() {
+  const supabase = createAdminClient();
+
+  const { data: maps } = await supabase
+    .from("mb_spotify_map")
+    .select("mbid")
+    .eq("entity", "artist")
+    .in("confidence", ["url_rel", "manual"]);
+  const trusted = new Set((maps ?? []).map(m => m.mbid));
+
+  const { data: artists } = await supabase
+    .from("mb_artist")
+    .select("mbid, name, updated_at")
+    .order("updated_at", { ascending: true })
+    .limit(BATCH * 2);  // name 매칭분이 섞여 있으니 여유 있게 가져와서 거른다
+
+  const targets = (artists ?? []).filter(a => trusted.has(a.mbid)).slice(0, BATCH);
+  console.log(`앨범 백필 ${targets.length} 명 (신뢰 아티스트 ${trusted.size} 명 중)`);
+
+  let rgs = 0, albums = 0, ok = 0;
+  for (const a of targets) {
+    const r = await fillArtist(a.mbid);
+    if (r.ok) { ok++; rgs += r.releaseGroups; albums += r.albums; }
+    console.log(`  ${r.ok ? "O" : "-"} ${a.name} rg=${r.releaseGroups} album=${r.albums}`);
+  }
+  console.log(`\n백필 완료 ${ok}/${targets.length} · 릴리스그룹 ${rgs} · Spotify 앨범 매핑 ${albums} · MB 호출 ${mbCalls}회`);
 }
 
 /** 초기 시드: 자체 자산을 전부 큐에 넣는다. */
@@ -248,6 +303,10 @@ async function main() {
     await seed();
     return;
   }
+  if (process.argv.includes("--albums")) {
+    await backfillAlbums();
+    return;
+  }
 
   const supabase = createAdminClient();
   const { data: queue, error } = await supabase
@@ -262,14 +321,14 @@ async function main() {
   if (!queue || queue.length === 0) { console.log("큐가 비어 있다."); return; }
 
   console.log(`큐 ${queue.length} 건 처리 시작 (MB ${MB_DELAY_MS}ms 간격)`);
-  const tally = { ok: 0, url_rel: 0, name: 0, retry: 0, gave_up: 0, rgs: 0 };
+  const tally = { ok: 0, url_rel: 0, name: 0, retry: 0, gave_up: 0, rgs: 0, albums: 0 };
 
   for (const row of queue) {
     try {
       const r = await resolveOne(row as any);
       if (r.status === "ok") {
-        tally.ok++; tally[r.confidence]++; tally.rgs += r.releaseGroups;
-        console.log(`  O ${row.hint ?? row.spotify_id} [${r.confidence}] rg=${r.releaseGroups}`);
+        tally.ok++; tally[r.confidence]++; tally.rgs += r.releaseGroups; tally.albums += r.albums;
+        console.log(`  O ${row.hint ?? row.spotify_id} [${r.confidence}] rg=${r.releaseGroups} album=${r.albums}`);
       } else {
         tally[r.status]++;
         console.log(`  ${r.status === "gave_up" ? "X" : "-"} ${row.hint ?? row.spotify_id}`);
@@ -283,7 +342,7 @@ async function main() {
   const mins = ((Date.now() - t0) / 60000).toFixed(1);
   console.log(`\n완료 ${mins}분 / MB 호출 ${mbCalls}회`);
   console.log(`성공 ${tally.ok} (url_rel ${tally.url_rel} / name ${tally.name}) · 재시도 ${tally.retry} · 포기 ${tally.gave_up}`);
-  console.log(`릴리스그룹 ${tally.rgs} 건 확보`);
+  console.log(`릴리스그룹 ${tally.rgs} 건 · Spotify 앨범 매핑 ${tally.albums} 건 확보`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

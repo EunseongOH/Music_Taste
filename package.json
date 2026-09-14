@@ -15,7 +15,8 @@
     "check:toss": "node toss/baseline/flow-check.mjs && node toss/baseline/router-check.mjs && node toss/baseline/deeplink-check.mjs && node toss/baseline/bundle-check.mjs",
     "check:web": "node toss/baseline/web-regression.mjs && node toss/baseline/share-check.mjs && npm run baseline:verify",
     "mb:seed": "npx tsx --env-file=.env.local scripts/mb_resolve.ts --seed",
-    "mb:resolve": "npx tsx --env-file=.env.local scripts/mb_resolve.ts"
+    "mb:resolve": "npx tsx --env-file=.env.local scripts/mb_resolve.ts",
+    "mb:albums": "npx tsx --env-file=.env.local scripts/mb_resolve.ts --albums"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^3.4.0",

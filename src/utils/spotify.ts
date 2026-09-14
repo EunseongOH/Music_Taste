@@ -723,6 +723,63 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   return cut(items, total);
 };
 
+// Phase E-2: 싱글 아티스트 모드의 "전곡 자동 선택"을 Spotify 호출 0 회로 되살린다.
+//
+// 이미 캐시에 앨범 목록 전체와 모든 앨범의 트랙이 들어 있는 아티스트(warm)에만 동작하고,
+// 하나라도 비면 빈 결과를 돌려준다. 그러면 호출부는 페이지 단위 로드로 폴백한다.
+//
+// canonical(MusicBrainz)만으로 하지 않는 이유: 월드컵·취향표는 트랙을 Spotify 트랙 ID 로
+// 저장하는데, MB 에는 트랙 단위 Spotify 링크가 거의 없다(레코딩의 2.4%, 실측 Ditto 0/1).
+// 앨범 단위 링크는 MB 에서 받을 수 있지만 트랙 ID 는 Spotify 에서 한 번은 받아야 한다.
+// 읽는 곳은 TTL 21일 임시 캐시라 약관 IV.3.2 "temporary caching" 범위 안이다.
+export const getArtistDiscography = async (artistId: string) => {
+  const empty = { albums: [] as any[], total: 0 };
+  if (!artistId) return empty;
+
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+
+    const { data: row } = await supabase
+      .from('spotify_album_cache_v2')
+      .select('items, total')
+      .eq('artist_id', artistId)
+      .gt('expires_at', now)
+      .maybeSingle();
+
+    const items: any[] = Array.isArray(row?.items) ? row!.items : [];
+    const total = row?.total ?? 0;
+    // 앨범 목록이 빈틈 없이 전부 있어야 한다
+    if (total === 0 || items.length < total || items.slice(0, total).some(a => !a)) return empty;
+
+    const albums = items.slice(0, total);
+    const ids = albums.map(a => a.id);
+
+    const { data: trackRows } = await supabase
+      .from('spotify_cache_album_tracks')
+      .select('album_id, items')
+      .in('album_id', ids)
+      .gt('expires_at', now);
+
+    const tracksByAlbum = new Map<string, any[]>();
+    for (const t of trackRows ?? []) {
+      if (Array.isArray(t.items) && t.items.length > 0 && !tracksByAlbum.has(t.album_id)) {
+        tracksByAlbum.set(t.album_id, t.items);
+      }
+    }
+    // 앨범 하나라도 트랙이 비어 있으면 warm 이 아니다
+    if (ids.some(id => !tracksByAlbum.has(id))) return empty;
+
+    return {
+      albums: albums.map(a => ({ ...a, tracks: tracksByAlbum.get(a.id) })),
+      total,
+    };
+  } catch (e) {
+    console.warn("[discography] cache read failed:", e);
+    return empty;
+  }
+};
+
 // Fetch album's tracks (Sequentially fetched in chunks of 10 to avoid 429 Rate Limits)
 export const getAlbumTracks = async (albumId: string) => {
   if (!albumId) {

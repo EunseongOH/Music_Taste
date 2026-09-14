@@ -8,7 +8,7 @@ import Image from "next/image";
 import { SafeImage } from "@/components/SafeImage";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
-import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
+import { getArtistAlbums, getAlbumTracks, getArtistDiscography } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
 import { trackEvent } from "@/utils/gtag";
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
@@ -161,6 +161,17 @@ const getYouTubeVideoId = (url: string) => {
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
 };
+
+// Spotify 앨범 원본 -> 화면용 Album. 같은 람다가 여러 곳에 복붙돼 있던 것을 모았다.
+const mapAlbum = (albumRaw: any): Album => ({
+  id: albumRaw.id,
+  title: albumRaw.name,
+  type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
+  year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
+  image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+  tracks: [],
+  totalTracks: albumRaw.total_tracks || 0
+});
 
 export default function TracksPage() {
   const { user } = useAuth();
@@ -589,54 +600,55 @@ export default function TracksPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, artistData]);
 
-  // 현재 페이지에 보이는 앨범의 트랙만 채우고 자동 선택한다.
+  // 앨범 목록의 트랙들을 매핑하고 전부 자동 선택한다. 트랙을 어디서 받았는지와 무관하다.
+  const selectAlbumsTracks = (entries: { album: any; tracksRaw: any[] }[], artistName: string): any[] => {
+    const out = entries.map(({ album, tracksRaw }) => ({
+      ...album,
+      tracks: tracksRaw.map((t: any) => {
+        const totalSeconds = Math.floor(t.duration_ms / 1000);
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = String(totalSeconds % 60).padStart(2, '0');
+        return { id: t.id, title: t.name, duration: `${mins}:${secs}`, previewUrl: t.preview_url };
+      }),
+    }));
+
+    // 앨범마다 setState 를 두 번씩 부르던 것을 한 번으로 모은다 (전곡 로드 시 수백 번이 된다)
+    setSelectedTrackIds(prev => {
+      const next = new Set(prev);
+      out.forEach(a => a.tracks.forEach((track: any) => next.add(track.id)));
+      return next;
+    });
+    setSelectedTracksMetadata(prev => {
+      const next = { ...prev };
+      out.forEach(album => album.tracks.forEach((track: any) => {
+        next[track.id] = {
+          id: track.id,
+          title: track.title,
+          duration: track.duration,
+          artistName,
+          albumTitle: album.title,
+          albumImage: album.image,
+          albumId: album.id
+        };
+      }));
+      return next;
+    });
+    return out;
+  };
+
+  // 현재 페이지에 보이는 앨범의 트랙만 받아 채운다.
   // 순차 실행: Promise.all 로 앨범 10개를 동시에 때리던 것이 429 의 주범이었다.
   const hydrateAlbumTracks = async (albums: any[], artistName: string): Promise<any[]> => {
-    const out: any[] = [];
+    const entries: { album: any; tracksRaw: any[] }[] = [];
     for (const album of albums) {
       try {
-        const tracksRaw = await getAlbumTracks(album.id);
-        const tracks = tracksRaw.map((t: any) => {
-          const totalSeconds = Math.floor(t.duration_ms / 1000);
-          const mins = Math.floor(totalSeconds / 60);
-          const secs = String(totalSeconds % 60).padStart(2, '0');
-          return {
-            id: t.id,
-            title: t.name,
-            duration: `${mins}:${secs}`,
-            previewUrl: t.preview_url
-          };
-        });
-
-        setSelectedTrackIds(prev => {
-          const next = new Set(prev);
-          tracks.forEach((track: any) => next.add(track.id));
-          return next;
-        });
-
-        setSelectedTracksMetadata(prev => {
-          const next = { ...prev };
-          tracks.forEach((track: any) => {
-            next[track.id] = {
-              id: track.id,
-              title: track.title,
-              duration: track.duration,
-              artistName,
-              albumTitle: album.title,
-              albumImage: album.image,
-              albumId: album.id
-            };
-          });
-          return next;
-        });
-
-        out.push({ ...album, tracks });
+        entries.push({ album, tracksRaw: await getAlbumTracks(album.id) });
       } catch (e) {
         console.error("Failed to load tracks for album " + album.id, e);
-        out.push(album);
+        entries.push({ album, tracksRaw: [] });
       }
     }
-    return out;
+    return selectAlbumsTracks(entries, artistName);
   };
 
   const toggleArtistAccordion = async (artistId: string) => {
@@ -650,16 +662,23 @@ export default function TracksPage() {
       if (artist && !artist.albumsLoaded) {
         setLoadingAlbums(prev => new Set(prev).add(`artist_${artistId}`));
         try {
-          const albumsData = await getArtistAlbums(artistId, 0, 10);
-          const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
-            id: albumRaw.id,
-            title: albumRaw.name,
-            type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
-            year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-            image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
-            tracks: [], 
-            totalTracks: albumRaw.total_tracks || 0
-          }));
+          // Phase E-2: 싱글 모드에서 캐시가 이 아티스트의 앨범·트랙을 전부 갖고 있으면
+          // Spotify 호출 없이 전곡을 한 번에 불러와 자동 선택한다. 하나라도 비면 빈 결과가
+          // 오고, 아래 페이지 단위 경로가 그대로 흐른다.
+          const disco = isSingleArtistMode
+            ? await getArtistDiscography(artistId)
+            : { albums: [] as any[], total: 0 };
+          const warmAll = disco.albums.length > 0
+            ? selectAlbumsTracks(
+                disco.albums.map((raw: any) => ({ album: mapAlbum(raw), tracksRaw: raw.tracks })),
+                artist.name
+              )
+            : null;
+
+          const albumsData = warmAll
+            ? { items: disco.albums.slice(0, 10), total: disco.total }
+            : await getArtistAlbums(artistId, 0, 10);
+          const mappedAlbums = albumsData.items.map(mapAlbum);
 
           // Fetch unreleased tracks from Supabase and map them to custom virtual Single albums
           let unreleasedAlbumsList: Album[] = [];
@@ -701,7 +720,8 @@ export default function TracksPage() {
 
           let finalAlbums: any[] = mappedAlbums;
           if (isSingleArtistMode) {
-            finalAlbums = await hydrateAlbumTracks(mappedAlbums, artist.name);
+            // warm 이면 트랙까지 이미 다 채워져 있다. 아니면 첫 페이지만 Spotify 에서 받는다.
+            finalAlbums = warmAll ? warmAll.slice(0, 10) : await hydrateAlbumTracks(mappedAlbums, artist.name);
 
             if (unreleasedAlbumsList.length > 0) {
               setSelectedTrackIds(prev => {
@@ -734,21 +754,25 @@ export default function TracksPage() {
 
           setArtistData(prev => prev.map(a => {
             if (a.id === artistId) {
-              const updatedAllAlbums = Array(albumsData.total).fill(null);
-              for (let i = 0; i < finalAlbums.length; i++) {
-                updatedAllAlbums[i] = finalAlbums[i];
+              // warm 이면 전 페이지를 채워 둔다 — 페이지 이동이 handleArtistAlbumsPageChange 의
+              // isCached 분기로 빠져서 Spotify 를 다시 타지 않는다.
+              const updatedAllAlbums = warmAll ?? Array(albumsData.total).fill(null);
+              if (!warmAll) {
+                for (let i = 0; i < finalAlbums.length; i++) {
+                  updatedAllAlbums[i] = finalAlbums[i];
+                }
               }
 
-              return { 
-                ...a, 
-                albums: finalAlbums, 
+              return {
+                ...a,
+                albums: finalAlbums,
                 unreleasedAlbums: unreleasedAlbumsList,
-                albumsLoaded: true, 
+                albumsLoaded: true,
                 totalReleases: albumsData.total,
                 albumsPage: 0,
                 allAlbums: updatedAllAlbums,
-                // 배경 전수 수집 제거(Phase A-1). 사용자가 페이지를 넘길 때만 로드한다.
-                // canonical DB 가 서면 Phase E-2 에서 Spotify 호출 0회로 전곡 로드를 되살린다.
+                // Phase A-1 에서 배경 전수 수집을 제거했다. 전곡 로드는 캐시가 전부 찬
+                // 아티스트에 한해 Phase E-2(getArtistDiscography)가 호출 0 회로 대신한다.
                 backgroundLoading: false,
                 backgroundProgress: undefined
               };
@@ -799,15 +823,7 @@ export default function TracksPage() {
     try {
       const albumsData = await getArtistAlbums(artistId, offset, 10);
       
-      const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
-        id: albumRaw.id,
-        title: albumRaw.name,
-        type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
-        year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-        image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
-        tracks: [],
-        totalTracks: albumRaw.total_tracks || 0
-      }));
+      const mappedAlbums = albumsData.items.map(mapAlbum);
 
       let finalAlbums: any[] = mappedAlbums;
       if (isSingleArtistMode) {
