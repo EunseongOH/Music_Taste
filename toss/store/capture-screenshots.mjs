@@ -23,13 +23,22 @@ const OUT = join(HERE, 'out');
 mkdirSync(OUT, { recursive: true });
 
 const BASE = 'http://localhost:5173';
-const RANKING = JSON.parse(readFileSync(join(HERE, '../baseline/fixture.json'), 'utf8'));
+// 여러 아티스트가 섞인 픽스처를 쓴다. 기준선용(카더가든 전용)은 회귀 비교의
+// 고정 입력이라 건드리지 않는다.
+const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture-mix.json'), 'utf8'));
 
-// 세로형: 실제 모바일 폭으로 찍고 규격에 맞게 축소한다.
-const SHOT_W = 430;
-const SHOT_H = 708; // 430 / (636/1048) ≈ 708
+/*
+ * 실제 기기 화면비로 찍는다 — 아이폰 16 (393×852pt, 비율 0.461).
+ * 콘솔 규격(636×1048)은 비율이 0.607 이라 더 뭉툭하다. 그 비율로 바로 찍으면
+ * 화면 위아래가 잘리므로, 기기 화면을 통째로 넣고 양옆을 크림 배경으로 채운다.
+ */
+const PHONE = { w: 393, h: 852 };
 const PORTRAIT = { w: 636, h: 1048 };
 const LANDSCAPE = { w: 1504, h: 741 };
+
+// 프레임 안에서 기기 화면이 차지할 크기 (위아래 여백 24px)
+const FRAME_H = PORTRAIT.h - 48;
+const FRAME_W = Math.round(FRAME_H * (PHONE.w / PHONE.h));
 
 const SCREENS = [
   { name: '1-home', route: '/', seed: {}, wait: 3000 },
@@ -61,6 +70,22 @@ const SCREENS = [
   },
 ];
 
+/** 기기 화면을 크림 배경 위에 둥근 모서리로 얹어 콘솔 규격에 맞춘다. */
+async function frame(page, buf) {
+  await page.setContent(`
+    <style>
+      html,body{margin:0;width:${PORTRAIT.w}px;height:${PORTRAIT.h}px;overflow:hidden}
+      body{background:#EAE2D6;display:grid;place-items:center}
+      img{width:${FRAME_W}px;height:${FRAME_H}px;display:block;
+          border-radius:30px;border:1px solid rgba(26,42,108,.14);
+          box-shadow:0 18px 44px rgba(26,42,108,.18)}
+    </style>
+    <img src="data:image/png;base64,${buf.toString('base64')}"/>
+  `);
+  await page.waitForTimeout(400);
+  return page.screenshot();
+}
+
 /** PNG 를 canvas 로 정확한 규격에 맞춰 축소한다. */
 async function resize(page, buf, w, h) {
   return Buffer.from(
@@ -87,16 +112,23 @@ async function resize(page, buf, w, h) {
 }
 
 const browser = await chromium.launch();
-const helper = await (await browser.newContext()).newPage();
+// 합성용 페이지. 뷰포트를 콘솔 규격에 맞춰야 스크린샷이 그 크기로 나온다.
+const helper = await (
+  await browser.newContext({
+    viewport: { width: PORTRAIT.w, height: PORTRAIT.h },
+    deviceScaleFactor: 1,
+  })
+).newPage();
 await helper.goto('about:blank');
 
 const portraits = [];
+const phoneShots = [];
 
 try {
   for (const s of SCREENS) {
     const ctx = await browser.newContext({
-      viewport: { width: SHOT_W, height: SHOT_H },
-      deviceScaleFactor: 3, // 1290×2124 로 찍어 축소 → 선명하게
+      viewport: { width: PHONE.w, height: PHONE.h },
+      deviceScaleFactor: 3, // 1179×2556 (아이폰 16 실제 픽셀) 로 찍어 축소
       locale: 'ko-KR',
       timezoneId: 'Asia/Seoul',
     });
@@ -135,16 +167,18 @@ try {
     await page.waitForTimeout(500);
 
     const raw = await page.screenshot();
-    const out = await resize(helper, raw, PORTRAIT.w, PORTRAIT.h);
+    const out = await frame(helper, raw);
     const file = join(OUT, `portrait-${s.name}.png`);
     writeFileSync(file, out);
     portraits.push({ name: s.name, data: out.toString('base64') });
+    // 가로형 목업에는 프레임 없는 기기 화면 원본을 쓴다(비율 그대로).
+    phoneShots.push({ name: s.name, data: raw.toString('base64') });
     console.log(`  세로형 ${PORTRAIT.w}×${PORTRAIT.h}  ${s.name}`);
     await ctx.close();
   }
 
   // 가로형: 브랜드 배경 위에 세로 화면 3장을 올린다.
-  const pick = portraits.filter((p) => ['1-home', '4-worldcup', '5-taste'].includes(p.name));
+  const pick = phoneShots.filter((p) => ['1-home', '4-worldcup', '5-taste'].includes(p.name));
   const land = await browser.newContext({
     viewport: { width: LANDSCAPE.w, height: LANDSCAPE.h },
     deviceScaleFactor: 1,
@@ -167,9 +201,11 @@ try {
       .dot{display:inline-block;width:12px;height:12px;border-radius:50%;
       background:#E67E22;margin-right:12px;vertical-align:middle}
       .shots{display:flex;gap:28px;align-items:center}
-      .shots img{width:262px;border-radius:20px;border:1px solid rgba(26,42,108,.16);
+      .shots img{width:246px;height:533px;object-fit:cover;border-radius:26px;
+        border:1px solid rgba(26,42,108,.16);
         box-shadow:0 26px 60px rgba(26,42,108,.20)}
-      .shots img:nth-child(2){width:300px;box-shadow:0 32px 72px rgba(26,42,108,.26)}
+      .shots img:nth-child(2){width:278px;height:603px;
+        box-shadow:0 32px 72px rgba(26,42,108,.26)}
     </style>
     <div class="copy">
       <h1>Sortify</h1>
