@@ -196,9 +196,10 @@ export const saveCompletedResult = async (
   let userNickname = "";
   let userProfileImage = "";
   if (typeof window !== "undefined") {
-    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    // 서버 값이 기준, 캐시는 폴백. (DB 트리거가 profiles 의 닉네임으로 다시 덮어쓴다)
+    userNickname = user.user_metadata?.nickname || "";
     if (!userNickname || userNickname.includes("@")) {
-      userNickname = user.user_metadata?.nickname || "";
+      userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
     }
     if (!userNickname || userNickname.includes("@")) {
       userNickname = "음악팬";
@@ -278,9 +279,10 @@ export const overwriteCompletedResult = async (
   let userNickname = "";
   let userProfileImage = "";
   if (typeof window !== "undefined") {
-    userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
+    // 서버 값이 기준, 캐시는 폴백. (DB 트리거가 profiles 의 닉네임으로 다시 덮어쓴다)
+    userNickname = user.user_metadata?.nickname || "";
     if (!userNickname || userNickname.includes("@")) {
-      userNickname = user.user_metadata?.nickname || "";
+      userNickname = sessionStorage.getItem("userNickname") || localStorage.getItem("userNickname") || "";
     }
     if (!userNickname || userNickname.includes("@")) {
       userNickname = "음악팬";

@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
+import { NICKNAME_ERROR_TEXT, isNicknameAvailable, validateNickname } from "@/utils/nickname";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -228,18 +229,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
     setSignupError("");
     trackEvent("sign_up_click", { method: "email" });
 
-    // Check if nickname already exists in database results
-    const { data: dupData, error: dupError } = await supabase
-      .from("tournament_results")
-      .select("id")
-      .eq("user_nickname", signupNickname.trim());
-
-    if (!dupError && dupData && dupData.length > 0) {
-      setSignupError(
-        locale === "ko"
-          ? "이미 사용 중인 닉네임이에요."
-          : "This nickname is already taken."
-      );
+    // 닉네임 규정·중복. 가입 트리거가 profiles 에 이 이름을 넣는데, 중복이면
+    // 유니크 인덱스에 걸려 가입 자체가 실패하므로 먼저 확인한다.
+    const nicknameError = validateNickname(signupNickname);
+    const nicknameOk = !nicknameError && (await isNicknameAvailable(signupNickname));
+    if (!nicknameOk) {
+      setSignupError(NICKNAME_ERROR_TEXT[locale === "ko" ? "ko" : "en"][nicknameError ?? "taken"]);
       setIsLoading(false);
       return;
     }
@@ -251,6 +246,8 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
         data: {
           name: signupName,
           nickname: signupNickname.trim(),
+          // 직접 입력한 이름이라 첫 공유 때 다시 묻지 않는다.
+          nickname_confirmed: true,
           phone: signupPhone || null,
         }
       }

@@ -15,6 +15,7 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
 import { trackEvent } from "@/utils/gtag";
+import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 
 const translations = {
   ko: {
@@ -57,6 +58,8 @@ const translations = {
     linkCopyError: "링크를 복사하지 못했어요. 다시 시도해 주세요.",
     shareFailed: "공유하지 못했어요. 다시 시도해 주세요.",
     copyFallbackToast: "공유 창에서 '복사'를 눌러 주세요",
+    shareNameLabel: "공유할 때 보일 이름",
+    shareNameHint: "처음 한 번만 확인해요. 프로필 닉네임도 이 이름으로 바뀌어요.",
   },
   en: {
     title: "My Taste Card",
@@ -98,6 +101,8 @@ const translations = {
     linkCopyError: "Couldn't copy the link. Please try again.",
     shareFailed: "Couldn't share. Please try again.",
     copyFallbackToast: "Tap 'Copy' in the share sheet",
+    shareNameLabel: "Name shown when sharing",
+    shareNameHint: "Asked only once. Your profile nickname will change too.",
   }
 };
 
@@ -177,6 +182,10 @@ export default function ResultPage() {
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showExitSaveModal, setShowExitSaveModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  // 첫 공유 때 확인하는 이름. 모달이 열릴 때 현재 닉네임으로 채운다.
+  const [shareName, setShareName] = useState("");
+  const [shareNameError, setShareNameError] = useState("");
+  const needsNameConfirm = !!user && user.user_metadata?.nickname_confirmed !== true;
   const [showInstagramGuideModal, setShowInstagramGuideModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -327,20 +336,42 @@ export default function ResultPage() {
     return platform.shareUrl(savedId, ogImageUrl);
   };
 
-  /** 공유 본문(유도 문구까지). 링크는 호출부가 붙이거나 어댑터가 붙인다. */
-  const shareBody = () => {
-    const nickname = user?.user_metadata?.nickname;
-    const safeNickname = typeof nickname === "string" && !nickname.includes("@") ? nickname : null;
-    return `${buildShareText(winners, safeNickname)}\n\n${SHARE_CTA}`;
+  /**
+   * 공유 헤더에 쓸 이름을 정한다. 공유 버튼마다 먼저 부른다.
+   *
+   * 로그인했지만 아직 이름을 확인하지 않은 사용자(자동 생성 닉네임)는 모달 위쪽
+   * 입력칸의 값을 저장·확정한 뒤 쓴다. 입력칸은 자동 닉네임으로 미리 채워져
+   * 있어서 그대로 누르면 추가 조작이 없다. 한 번 확정하면 다시 묻지 않는다.
+   *
+   * 반환: 이름 / null(게스트 — 이름 없이 공유) / false(저장 실패 — 공유 중단)
+   */
+  const ensureShareName = async (): Promise<string | null | false> => {
+    if (!user) return null;
+    const current = user.user_metadata?.nickname;
+    if (!needsNameConfirm) {
+      return typeof current === "string" && !current.includes("@") ? current : null;
+    }
+    const result = await saveNickname(shareName);
+    if (result !== "ok") {
+      setShareNameError(NICKNAME_ERROR_TEXT[locale][result]);
+      return false;
+    }
+    trackEvent("nickname_confirmed_on_share", { changed: shareName.trim() !== current });
+    return shareName.trim();
   };
 
+  /** 공유 본문(유도 문구까지). 링크는 호출부가 붙이거나 어댑터가 붙인다. */
+  const shareBody = (nickname: string | null) => `${buildShareText(winners, nickname)}\n\n${SHARE_CTA}`;
+
   const handleCopyLink = async () => {
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
     // 웹에서는 실패하지 않는 경로지만, WebView 어댑터는 권한 거부나 구버전
     // 앱에서 실제로 실패할 수 있다. 잡지 않으면 버튼이 먹통처럼 보인다.
     try {
       const url = await resolveShareUrl();
       // 링크만이 아니라 TOP 10 까지 함께 복사한다.
-      const result = await platform.copyText(`${shareBody()}\n${url}`);
+      const result = await platform.copyText(`${shareBody(nickname)}\n${url}`);
       // 토스에서 클립보드 쓰기가 막히면 어댑터가 공유 시트(복사 가능)를 대신 연다.
       showToastMessage(result === "sheet" ? t.copyFallbackToast : t.linkCopiedToast);
       trackEvent("funnel_copy_link", { result });
@@ -361,7 +392,9 @@ export default function ResultPage() {
   };
 
   const handleShareX = async () => {
-    const text = shareBody();
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
+    const text = shareBody(nickname);
     const url = await resolveShareUrl();
     await platform.openExternal(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
     trackEvent("funnel_share_x", {});
@@ -375,8 +408,10 @@ export default function ResultPage() {
    * 링크 하나뿐이라 "자사 웹사이트 랜딩" 제한에도 걸리지 않는다.
    */
   const handleShareNative = async () => {
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
     try {
-      const text = shareBody();
+      const text = shareBody(nickname);
       const url = await resolveShareUrl();
       const shared = await platform.share({ title: t.title, text, url });
       // ponytail: 어댑터의 share() 가 boolean 이라 "사용자 취소"와 "실패"를
@@ -838,7 +873,11 @@ export default function ResultPage() {
               </button>
 
               <button
-                onClick={() => setShowShareModal(true)}
+                onClick={() => {
+                  setShareName(user?.user_metadata?.nickname ?? "");
+                  setShareNameError("");
+                  setShowShareModal(true);
+                }}
                 className="flex-1 h-[48px] bg-navy text-cream font-sans font-bold text-sm rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md hover:bg-[#111A3E]"
               >
                 <Share2 size={18} />
@@ -1070,6 +1109,28 @@ export default function ResultPage() {
               <h2 className="font-serif text-xl font-bold text-navy mb-5 tracking-tight text-center">
                 {t.shareMenuTitle}
               </h2>
+
+              {needsNameConfirm && (
+                <div className="w-full mb-4">
+                  <label htmlFor="share-name" className="block font-sans text-xs font-bold text-navy/70 mb-1.5">
+                    {t.shareNameLabel}
+                  </label>
+                  <input
+                    id="share-name"
+                    value={shareName}
+                    onChange={(e) => {
+                      setShareName(e.target.value);
+                      setShareNameError("");
+                    }}
+                    maxLength={12}
+                    autoComplete="off"
+                    className="w-full h-[48px] px-4 bg-white border border-navy/20 rounded-xl text-navy font-sans font-bold text-sm focus:outline-none focus:border-navy"
+                  />
+                  <p className={`mt-1.5 font-sans text-xs ${shareNameError ? "text-red-500" : "text-navy/50"}`}>
+                    {shareNameError || t.shareNameHint}
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-3 w-full mb-4">
                 {/* 1. X (Twitter) */}

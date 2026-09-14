@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -157,7 +158,8 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       const currentImg = user?.user_metadata?.avatar_url || sessionStorage.getItem("userProfileImg") || "/default-profile.png";
       setProfileImg(currentImg);
       
-      const savedNickname = sessionStorage.getItem("userNickname");
+      // 서버 값(user_metadata)이 기준. 캐시는 로그인 직후 메타데이터가 비었을 때만.
+      const savedNickname = user?.user_metadata?.nickname || sessionStorage.getItem("userNickname");
       if (savedNickname) setNickname(savedNickname);
 
       const savedPhone = sessionStorage.getItem("userPhone");
@@ -176,8 +178,9 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedNickname = nickname.trim();
-    if (!trimmedNickname) {
-      setUpdateError(locale === "ko" ? "닉네임을 입력해 주세요." : "Please enter a nickname.");
+    const localError = validateNickname(trimmedNickname);
+    if (localError) {
+      setUpdateError(NICKNAME_ERROR_TEXT[locale][localError]);
       return;
     }
 
@@ -188,27 +191,20 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
     try {
       if (user) {
-        // 1. Check if the nickname is already used by ANOTHER user in historical results
-        const { data: dupData, error: dupError } = await supabase
-          .from("tournament_results")
-          .select("id")
-          .eq("user_nickname", trimmedNickname)
-          .neq("user_id", user.id);
-
-        if (dupError) {
-          console.error("Error checking nickname uniqueness:", dupError.message);
+        // 1. 닉네임은 서버 함수로만 바꾼다(규정·중복·결과 사본을 서버가 함께 처리).
+        //    프로필에서 직접 저장한 이름이므로 확인된 이름으로 기록된다.
+        if (trimmedNickname !== user.user_metadata?.nickname || !user.user_metadata?.nickname_confirmed) {
+          const saved = await saveNickname(trimmedNickname);
+          if (saved !== "ok") {
+            setUpdateError(NICKNAME_ERROR_TEXT[locale][saved]);
+            setIsUpdating(false);
+            return;
+          }
         }
 
-        if (dupData && dupData.length > 0) {
-          setUpdateError(locale === "ko" ? "이미 사용 중인 닉네임이에요." : "This nickname is already taken.");
-          setIsUpdating(false);
-          return;
-        }
-
-        // 2. Update Supabase Auth metadata
+        // 2. 나머지 프로필 정보. user_metadata 는 키 단위로 합쳐지므로 nickname 은 보내지 않는다.
         const { error: authError } = await supabase.auth.updateUser({
           data: {
-            nickname: trimmedNickname,
             phone: phone.trim() || null,
             avatar_url: profileImg
           }
@@ -224,13 +220,10 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
           return;
         }
 
-        // 3. Update all past results in tournament_results
+        // 3. 지난 결과의 프로필 이미지. 닉네임 사본은 1 에서 서버가 이미 맞췄다.
         await supabase
           .from("tournament_results")
-          .update({ 
-            user_nickname: trimmedNickname,
-            user_profile_image: profileImg
-          })
+          .update({ user_profile_image: profileImg })
           .eq("user_id", user.id);
       }
 
