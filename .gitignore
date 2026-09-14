@@ -67,3 +67,6 @@ temp_search_results.json
 
 # 앱인토스 이식 — Next/Vite 화면 비교 산출물
 /toss/baseline/shim-out/
+
+# 콘솔 업로드용 이미지 — 스크립트로 다시 만들 수 있다
+/toss/store/out/
