@@ -15,6 +15,9 @@ import * as htmlToImage from 'html-to-image';
 
 export type ShareTarget = 'link' | 'image' | 'x' | 'instagram' | 'kakao';
 
+/** 사용자에게 그대로 보여도 되는 오류. (src/utils/platform.ts 와 같은 역할) */
+export class PlatformError extends Error {}
+
 /**
  * 토스 빌드에서 노출할 공유 수단.
  *
@@ -41,8 +44,10 @@ export async function shareUrl(savedId: string | null): Promise<string> {
     : 'intoss://sortify-musictaste';
   try {
     return await Share.createLink({ path });
-  } catch {
+  } catch (err) {
     // 구버전 토스앱 등으로 링크 생성이 안 되면 딥링크 원문이라도 돌려준다.
+    // 복사 자체는 되게 하는 편이 낫다.
+    console.warn('[toss] Share.createLink 실패, 딥링크 원문 사용', err);
     return path;
   }
 }
@@ -103,9 +108,33 @@ export async function saveCsv(csvContent: string, fileName: string): Promise<voi
   });
 }
 
-/** 클립보드에 텍스트를 넣는다. */
+/**
+ * 클립보드에 텍스트를 넣는다.
+ *
+ * `Clipboard.setText` 는 권한 함수라, 아직 묻지 않은 상태(`notDetermined`)에서
+ * 바로 부르면 던진다. 먼저 상태를 보고 필요하면 권한 안내를 띄운다.
+ * apps-in-toss.config.ts 에 clipboard/write 를 선언해 두는 것만으로는 부족하다.
+ */
 export async function copyText(text: string): Promise<void> {
-  await Clipboard.setText(text);
+  let status;
+  try {
+    status = await Clipboard.setText.getPermission();
+    if (status === 'notDetermined') {
+      status = await Clipboard.setText.openPermissionDialog();
+    }
+  } catch (err) {
+    throw new PlatformError(`클립보드를 쓸 수 없어요. (${(err as Error)?.message ?? '권한 확인 실패'})`);
+  }
+
+  if (status === 'denied') {
+    throw new PlatformError('클립보드 권한이 꺼져 있어요. 토스 설정에서 허용해 주세요.');
+  }
+
+  try {
+    await Clipboard.setText(text);
+  } catch (err) {
+    throw new PlatformError(`복사에 실패했어요. (${(err as Error)?.message ?? '알 수 없음'})`);
+  }
 }
 
 /**

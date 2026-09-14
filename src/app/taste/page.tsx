@@ -273,7 +273,10 @@ export default function ResultPage() {
       trackEvent("funnel_copy_link", {});
     } catch (err) {
       console.error("Failed to copy link", err);
-      showToastMessage(t.linkCopyError, "error");
+      // 어댑터가 사용자용 문구를 준 경우에는 그대로 보여준다.
+      // 그래야 "권한을 켜 주세요" 처럼 할 수 있는 일이 전달된다.
+      const msg = err instanceof platform.PlatformError ? err.message : t.linkCopyError;
+      showToastMessage(msg, "error");
     }
   };
 

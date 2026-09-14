@@ -21,6 +21,15 @@ import * as htmlToImage from "html-to-image";
 export type ShareTarget = "link" | "image" | "x" | "instagram" | "kakao";
 
 /**
+ * 사용자에게 그대로 보여도 되는 오류.
+ *
+ * 어댑터가 실패하는 이유는 플랫폼마다 다르고(권한 거부, 구버전 앱 등),
+ * "다시 시도해 주세요" 한 줄로는 사용자가 할 수 있는 일이 없다. 이 타입으로
+ * 던진 메시지만 화면에 그대로 띄운다 — 내부 오류 문구가 새지 않는다.
+ */
+export class PlatformError extends Error {}
+
+/**
  * 이 플랫폼에서 노출할 공유 수단.
  *
  * 웹은 전부 지원한다. 토스 빌드에서는 `['link','image']` 만 남는데,
