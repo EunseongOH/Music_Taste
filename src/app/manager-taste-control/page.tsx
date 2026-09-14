@@ -210,7 +210,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
+    const isAdmin = user?.app_metadata?.is_admin === true;
     if (!user || !isAdmin) {
       router.push("/");
     }
@@ -218,7 +218,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
+    const isAdmin = user?.app_metadata?.is_admin === true;
     if (!user || !isAdmin) return;
 
     const loadData = async () => {
@@ -384,7 +384,7 @@ export default function AdminPage() {
     );
   }
 
-  const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
+  const isAdmin = user?.app_metadata?.is_admin === true;
   if (!user || !isAdmin) return null;
 
   const navItems: { id: NavSection; icon: React.ReactNode; label: string; count?: number }[] = [

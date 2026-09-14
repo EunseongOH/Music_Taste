@@ -506,7 +506,7 @@ export default function Home() {
       <div className="w-full flex flex-col items-center justify-center mt-auto pt-16 pb-8 z-10 gap-4">
         <LPPlayer />
 
-        {(user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true) && (
+        {(user?.app_metadata?.is_admin === true) && (
           <motion.a
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
