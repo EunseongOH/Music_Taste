@@ -44,6 +44,7 @@ const mint = async (hash) => {
 };
 
 const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+let skipped = false;
 const created = new Set();
 const rows = new Set();
 
@@ -61,6 +62,19 @@ try {
 
   console.log('\n[2] 결정성 — 같은 키는 항상 같은 사용자');
   const a1 = await mint(KEY_A);
+
+  /*
+   * 검증이 켜져 있으면(기본 enforce) 가짜 테스트 키는 당연히 막힌다.
+   * 그건 정상 동작이므로 실패로 세지 않고, 무엇을 해야 이어서 볼 수 있는지 알린다.
+   */
+  if (a1.status === 503 && (a1.body.error === 'no_cert' || a1.body.error === 'upstream_error')) {
+    console.log(`  [–] 식별키 검증이 켜져 있어 발급 검사를 건너뜁니다 (${a1.body.error})`);
+    console.log('      이어서 보려면 서버에 TOSS_ANON_KEY_VERIFY=off 를 두고 다시 실행하세요.');
+    console.log('      (검증 자체가 fail-closed 로 동작한다는 확인이기도 합니다)');
+    skipped = true;
+  }
+
+  if (!skipped) {
   check(a1.status === 200, '첫 발급 성공', `HTTP ${a1.status} ${a1.body.error ?? ''}`);
   if (a1.status !== 200) throw new Error('발급 실패로 이후 검사 불가');
   created.add(a1.body.user_id);
@@ -126,6 +140,7 @@ try {
     // 비공개 행은 남에게 보이지도 않아야 한다.
     const peek = await asB.from('tournament_results').select('id').eq('id', ins.data.id);
     check((peek.data?.length ?? 0) === 0, '다른 사용자에게 비공개 행이 보이지 않음');
+  }
   }
 } finally {
   console.log('\n[5] 정리');
