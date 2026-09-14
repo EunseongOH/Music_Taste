@@ -56,6 +56,7 @@ const translations = {
     linkCopiedToast: "취향표가 복사되었어요",
     linkCopyError: "링크를 복사하지 못했어요. 다시 시도해 주세요.",
     shareFailed: "공유하지 못했어요. 다시 시도해 주세요.",
+    copyFallbackToast: "공유 창에서 '복사'를 눌러 주세요",
   },
   en: {
     title: "My Taste Card",
@@ -96,6 +97,7 @@ const translations = {
     linkCopiedToast: "Taste card copied to clipboard",
     linkCopyError: "Couldn't copy the link. Please try again.",
     shareFailed: "Couldn't share. Please try again.",
+    copyFallbackToast: "Tap 'Copy' in the share sheet",
   }
 };
 
@@ -116,11 +118,24 @@ interface Track {
  * 웹사이트로 랜딩되는 경우"를 제한한다 — 링크는 어댑터(`platform.shareUrl`)가
  * 플랫폼에 맞게 따로 만든다.
  */
-function buildShareText(winners: Track[]): string {
-  const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
-  const artistName = winners[0]?.artistName || "";
-  return `${artistName} 취향표 TOP 10\n\n${topTracks}`;
+function buildShareText(winners: Track[], nickname?: string | null): string {
+  // 결과 화면의 isSingleArtistMode 는 선택 아티스트 유무로만 정해져 믹스 모드도
+  // true 가 되므로 쓰지 않는다. 실제 곡의 아티스트 수로 판단한다.
+  const mixed = new Set(winners.map((tr) => tr.artistName)).size > 1;
+  const topTracks = winners
+    .slice(0, 10)
+    .map((tr, i) => `${i + 1}. ${tr.title}${mixed ? ` - ${tr.artistName}` : ""}`)
+    .join("\n");
+  const subject = mixed ? "믹스 매치" : winners[0]?.artistName || "";
+  const owner = nickname ? `${nickname}님의 ` : "";
+  return `${owner}${subject} 취향표 TOP 10\n\n${topTracks}`;
 }
+
+/**
+ * 링크 바로 위에 붙는 참여 유도 문구. 주소는 넣지 않는다(위 경고와 같은 이유).
+ * 공유 본문은 항상 `본문 \n\n 유도 문구 \n 링크` 순서다.
+ */
+const SHARE_CTA = "내 진짜 최애곡을 알고 싶다면? Sortify에서 직접 뽑아보기 👇";
 
 export default function ResultPage() {
   const router = useRouter();
@@ -312,15 +327,23 @@ export default function ResultPage() {
     return platform.shareUrl(savedId, ogImageUrl);
   };
 
+  /** 공유 본문(유도 문구까지). 링크는 호출부가 붙이거나 어댑터가 붙인다. */
+  const shareBody = () => {
+    const nickname = user?.user_metadata?.nickname;
+    const safeNickname = typeof nickname === "string" && !nickname.includes("@") ? nickname : null;
+    return `${buildShareText(winners, safeNickname)}\n\n${SHARE_CTA}`;
+  };
+
   const handleCopyLink = async () => {
     // 웹에서는 실패하지 않는 경로지만, WebView 어댑터는 권한 거부나 구버전
     // 앱에서 실제로 실패할 수 있다. 잡지 않으면 버튼이 먹통처럼 보인다.
     try {
       const url = await resolveShareUrl();
       // 링크만이 아니라 TOP 10 까지 함께 복사한다.
-      await platform.copyText(`${buildShareText(winners)}\n\n${url}`);
-      showToastMessage(t.linkCopiedToast);
-      trackEvent("funnel_copy_link", {});
+      const result = await platform.copyText(`${shareBody()}\n${url}`);
+      // 토스에서 클립보드 쓰기가 막히면 어댑터가 공유 시트(복사 가능)를 대신 연다.
+      showToastMessage(result === "sheet" ? t.copyFallbackToast : t.linkCopiedToast);
+      trackEvent("funnel_copy_link", { result });
     } catch (err) {
       console.error("Failed to copy link", err);
       // 어댑터가 사용자용 문구를 준 경우에는 그대로 보여준다.
@@ -338,7 +361,7 @@ export default function ResultPage() {
   };
 
   const handleShareX = async () => {
-    const text = buildShareText(winners);
+    const text = shareBody();
     const url = await resolveShareUrl();
     await platform.openExternal(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
     trackEvent("funnel_share_x", {});
@@ -353,7 +376,7 @@ export default function ResultPage() {
    */
   const handleShareNative = async () => {
     try {
-      const text = buildShareText(winners);
+      const text = shareBody();
       const url = await resolveShareUrl();
       const shared = await platform.share({ title: t.title, text, url });
       // ponytail: 어댑터의 share() 가 boolean 이라 "사용자 취소"와 "실패"를

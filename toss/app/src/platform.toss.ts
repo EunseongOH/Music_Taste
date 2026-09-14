@@ -122,25 +122,34 @@ export async function saveCsv(csvContent: string, fileName: string): Promise<voi
  * 바로 부르면 던진다. 먼저 상태를 보고 필요하면 권한 안내를 띄운다.
  * apps-in-toss.config.ts 에 clipboard/write 를 선언해 두는 것만으로는 부족하다.
  */
-export async function copyText(text: string): Promise<void> {
-  let status;
+export async function copyText(text: string): Promise<'copied' | 'sheet'> {
+  // 진단용 기록. 실기기에서 권한 팝업을 허용한 뒤에도 setText 가
+  // "Permission '클립보드' is not granted" 로 실패하는 사례가 있었다
+  // (2026-09-15, Android). 원인이 확인되면 이 기록은 지운다.
+  const trace: Record<string, unknown> = {};
   try {
-    status = await Clipboard.setText.getPermission();
+    let status = await Clipboard.setText.getPermission();
+    trace.permission = status;
     if (status === 'notDetermined') {
       status = await Clipboard.setText.openPermissionDialog();
+      trace.dialog = status;
+    }
+    if (status !== 'denied') {
+      await Clipboard.setText(text);
+      return 'copied';
     }
   } catch (err) {
-    throw new PlatformError(`클립보드를 쓸 수 없어요. (${(err as Error)?.message ?? '권한 확인 실패'})`);
+    trace.error = (err as Error)?.message ?? String(err);
   }
+  console.warn('[toss] 클립보드 쓰기 실패 — 공유 시트로 대신 연다', trace);
 
-  if (status === 'denied') {
-    throw new PlatformError('클립보드 권한이 꺼져 있어요. 토스 설정에서 허용해 주세요.');
-  }
-
+  // 공유 시트에는 "복사" 항목이 있고, 이 경로는 권한이 필요 없다.
+  // 사용자는 한 번 더 누르게 되지만, 아무것도 못 하는 것보다 낫다.
   try {
-    await Clipboard.setText(text);
+    await Share.sendMessage({ message: text });
+    return 'sheet';
   } catch (err) {
-    throw new PlatformError(`복사에 실패했어요. (${(err as Error)?.message ?? '알 수 없음'})`);
+    throw new PlatformError(`복사하지 못했어요. (${(err as Error)?.message ?? '알 수 없음'})`);
   }
 }
 

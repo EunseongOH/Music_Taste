@@ -77,9 +77,15 @@ export async function saveCsv(csvContent: string, fileName: string): Promise<voi
   document.body.removeChild(link);
 }
 
-/** 클립보드에 텍스트를 넣는다. */
-export async function copyText(text: string): Promise<void> {
+/**
+ * 클립보드에 텍스트를 넣는다.
+ *
+ * 돌려주는 값은 실제로 한 일이다. 웹은 항상 `'copied'` 지만, 토스 구현은
+ * 클립보드가 막히면 공유 시트를 대신 열고 `'sheet'` 를 돌려준다.
+ */
+export async function copyText(text: string): Promise<"copied" | "sheet"> {
   navigator.clipboard.writeText(text);
+  return "copied";
 }
 
 /**
