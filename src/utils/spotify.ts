@@ -140,16 +140,28 @@ const CACHE_TTL = 3600 * 1000; // 1 hour in ms
 const albumsCache = new Map<string, { data: any; timestamp: number }>();
 const tracksCache = new Map<string, { data: any; timestamp: number }>();
 const relatedArtistsCache = new Map<string, { data: any; timestamp: number }>();
-const RELATED_ARTISTS_TTL = 10 * 60 * 1000; // 10 minutes — shorter so new fallback logic is used sooner
+const RELATED_ARTISTS_TTL = CACHE_TTL; // 로컬 계산이라 짧게 잡을 이유가 없다 (A-4 이전에는 10분)
 const searchCache = new Map<string, { data: any; timestamp: number }>();
 
 let cachedInitialArtists: any[] | null = null;
 let initialArtistsExpirationTime = 0;
 
+// A-7: 원래 모듈 전역 변수였다. 서버리스 인스턴스를 공유하는 사용자끼리 상태가 섞여서
+// A 사용자가 유발한 429 가 B 사용자 화면에 떴다. 전역 상태이므로 전역 저장소에 둔다.
 let lastSpotifyError = "";
 
 export const getLastSpotifyError = async () => {
-  return lastSpotifyError;
+  try {
+    const { data } = await createAdminClient()
+      .from('spotify_quota')
+      .select('blocked_until')
+      .eq('id', 1)
+      .maybeSingle();
+    if (data?.blocked_until && new Date(data.blocked_until) > new Date()) return "429";
+    return "";
+  } catch {
+    return lastSpotifyError; // DB 조회 실패 시 프로세스 로컬 값으로 폴백
+  }
 };
 
 // Get the access token using the Client Credentials Flow
@@ -205,11 +217,42 @@ export const getSpotifyAccessToken = async (): Promise<string> => {
 // 3. 401 Unauthorized (Token invalidation/refresh)
 // 4. Retries up to a maximum limit
 // 5. Bypasses Next.js file fetch cache to avoid caching HTTP error responses permanently
+// 전역 토큰버킷. 프로세스 메모리로는 서버리스 다중 인스턴스에서 아무것도 못 잡으므로
+// Supabase 단일 행에 버킷을 두고 여기서만 통과시킨다.
+// 거부 시 합성 429 를 돌려주면 기존 호출부의 429 처리 경로가 그대로 재사용된다.
+// RPC 자체가 실패하면 fail-open — 가드가 서비스를 죽여서는 안 된다.
+async function takeQuotaToken(): Promise<boolean> {
+  try {
+    const { data, error } = await createAdminClient().rpc('spotify_take_token');
+    if (error) return true;
+    return data !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function tripQuotaBreaker(secs: number) {
+  try {
+    await createAdminClient().rpc('spotify_trip_breaker', { secs });
+  } catch { /* 계측 실패가 요청을 죽이지 않는다 */ }
+}
+
+const RATE_LIMITED_RESPONSE = () =>
+  new Response('{"error":{"status":429,"message":"local rate limit"}}', {
+    status: 429,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
 async function spotifyFetch(
   url: string,
   options: RequestInit = {},
   retries = 3
 ): Promise<Response> {
+  if (!(await takeQuotaToken())) {
+    lastSpotifyError = "429";
+    return RATE_LIMITED_RESPONSE();
+  }
+
   const token = await getSpotifyAccessToken();
 
   const lang = await getLocaleCookie();
@@ -257,7 +300,9 @@ async function spotifyFetch(
     // Add safety cap: if Spotify asks us to wait for more than 5 seconds, 
     // do not block the server thread. Return the 429 response so the caller handles it gracefully.
     if (retryAfterSeconds > 5) {
-      console.warn(`[Spotify API] 429 Rate limited. Spotify requested ${retryAfterSeconds}s delay which exceeds safety cap. Returning error response.`);
+      console.warn(`[Spotify API] 429 Rate limited. Spotify requested ${retryAfterSeconds}s delay which exceeds safety cap. Tripping breaker.`);
+      // 한 인스턴스가 맞은 429 를 전 인스턴스가 함께 존중한다.
+      await tripQuotaBreaker(retryAfterSeconds);
       return response;
     }
     
@@ -562,86 +607,113 @@ export const getInitialArtists = async () => {
   return results;
 };
 
-// Fetch artist's albums (Paged to prevent excessive rate limiting)
+// Spotify 는 /artists/{id}/albums 와 /albums/{id}/tracks 에 limit=50 을 허용한다.
+// 2026-02 개편의 limit 10 상한은 /v1/search 에만 적용된다.
+// 만약 50 이 거부되면 10 으로 낮춘다 — 플래그 하나로 끝내고 env 설정을 만들지 않는다.
+let albumPageSize = 50;
+
+// Fetch artist's albums.
+// Spotify 에는 항상 50 개 블록 단위로 요청하고 앱에서 잘라 돌려준다.
+// UI 페이지(10개) 5 개가 Spotify 호출 1 회를 공유한다.
 export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) => {
   if (!artistId) {
     console.warn('[Spotify API] getArtistAlbums called with empty or undefined artistId');
     return { items: [], total: 0 };
   }
 
-  const lang = await getLocaleCookie();
-  const cacheKey = `${artistId}_${lang}_offset_${offset}_limit_${limit}`;
+  const cacheKey = `albums_${artistId}`;
+  // items 는 절대 offset 으로 색인된 희소 배열이다.
+  const cut = (items: any[], total: number) => ({
+    items: items.slice(offset, offset + limit).filter(Boolean),
+    total,
+  });
+  const isCovered = (items: any[], total: number) => {
+    const end = Math.min(offset + limit, total);
+    if (offset >= end) return offset < total ? false : true;
+    for (let i = offset; i < end; i++) if (!items[i]) return false;
+    return true;
+  };
 
-  // 1. Memory Cache check
+  // 1. Memory Cache
   const cached = albumsCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL
+      && isCovered(cached.data.items, cached.data.total)) {
+    return cut(cached.data.items, cached.data.total);
   }
 
-  // 2. DB Cache check
+  // 2. DB Cache (v2 — artist_id 단독 PK)
+  let items: any[] = cached?.data?.items ?? [];
+  let total: number = cached?.data?.total ?? 0;
   try {
     const supabase = createAdminClient();
-    const now = new Date().toISOString();
-    const { data: dbAlbums, error } = await supabase
-      .from('spotify_cache_artist_albums')
-      .select('*')
+    const { data: row } = await supabase
+      .from('spotify_album_cache_v2')
+      .select('items, total')
       .eq('artist_id', artistId)
-      .eq('locale', lang)
-      .eq('offset', offset)
-      .eq('limit', limit)
-      .gt('expires_at', now)
-      .single();
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
 
-    // 오염된 빈 캐시 데이터가 아닌 유효한 앨범 데이터가 있을 때만 캐시 복원
-    if (!error && dbAlbums && dbAlbums.total > 0 && dbAlbums.items && dbAlbums.items.length > 0) {
-      const result = { items: dbAlbums.items, total: dbAlbums.total };
-      albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      return result;
+    if (row && row.total > 0 && Array.isArray(row.items)) {
+      items = row.items;
+      total = row.total;
+      albumsCache.set(cacheKey, { data: { items, total }, timestamp: Date.now() });
+      if (isCovered(items, total)) return cut(items, total);
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB getArtistAlbums failed, calling API:", e);
   }
 
-  // Fetch only the requested page to minimize requests
-  const response = await spotifyFetch(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${offset}`
+  // 3. Spotify — 요청된 offset 을 포함하는 블록 하나만 받는다
+  const blockStart = Math.floor(offset / albumPageSize) * albumPageSize;
+  let response = await spotifyFetch(
+    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${albumPageSize}&offset=${blockStart}`
   );
+
+  // limit=50 이 거부되면 한 번만 10 으로 낮춰 재시도하고, 이후로는 계속 10 을 쓴다
+  if ((response.status === 400 || response.status === 403) && albumPageSize !== 10) {
+    console.warn(`[Spotify API] limit=${albumPageSize} rejected (${response.status}). Falling back to 10.`);
+    albumPageSize = 10;
+    const retryStart = Math.floor(offset / 10) * 10;
+    response = await spotifyFetch(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=${retryStart}`
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-    return { items: [], total: 0 };
+    // 부분 캐시라도 있으면 그거라도 돌려준다
+    return total > 0 ? cut(items, total) : { items: [], total: 0 };
   }
 
   const data = await response.json();
-  const result = {
-    items: data.items || [],
-    total: data.total || 0
-  };
+  const fetched: any[] = data.items || [];
+  total = data.total || 0;
 
-  // 3. Save to DB Cache (오류로 인한 빈 배열이 영구 캐싱되지 않도록 유효성 검사 후 저장)
-  if (result.total > 0 && result.items.length > 0) {
+  const merged = [...items];
+  const start = Math.floor(offset / albumPageSize) * albumPageSize;
+  for (let i = 0; i < fetched.length; i++) merged[start + i] = fetched[i];
+  items = merged;
+
+  // 4. Save to DB Cache (빈 배열이 영구 캐싱되지 않도록 유효성 검사 후)
+  if (total > 0 && fetched.length > 0) {
     try {
-      const supabase = createAdminClient();
-      const expiresAt = getCacheExpiresAt();
-      await supabase
-        .from('spotify_cache_artist_albums')
+      await createAdminClient()
+        .from('spotify_album_cache_v2')
         .upsert({
           artist_id: artistId,
-          locale: lang,
-          offset,
-          limit,
-          items: result.items,
-          total: result.total,
-          expires_at: expiresAt
-        }, { onConflict: 'artist_id,locale,offset,limit' });
+          items,
+          total,
+          cached_at: new Date().toISOString(),
+          expires_at: getCacheExpiresAt(),
+        }, { onConflict: 'artist_id' });
     } catch (e) {
       console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
     }
   }
 
-  albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-  return result;
+  albumsCache.set(cacheKey, { data: { items, total }, timestamp: Date.now() });
+  return cut(items, total);
 };
 
 // Fetch album's tracks (Sequentially fetched in chunks of 10 to avoid 429 Rate Limits)
@@ -681,10 +753,19 @@ export const getAlbumTracks = async (albumId: string) => {
     console.warn("[Spotify Cache DB] DB getAlbumTracks failed, calling API:", e);
   }
 
-  // 1. Fetch the first page (limit = 10) to obtain the total count
-  const firstResponse = await spotifyFetch(
-    `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=0`
+  // limit=50 한 번이면 안전캡(50트랙)까지 전부 받는다.
+  // 기존에는 10 개씩 최대 5 회를 돌았다 — 순수하게 5 배 손해였다.
+  let firstResponse = await spotifyFetch(
+    `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${albumPageSize}&offset=0`
   );
+
+  if ((firstResponse.status === 400 || firstResponse.status === 403) && albumPageSize !== 10) {
+    console.warn(`[Spotify API] track limit=${albumPageSize} rejected (${firstResponse.status}). Falling back to 10.`);
+    albumPageSize = 10;
+    firstResponse = await spotifyFetch(
+      `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=0`
+    );
+  }
 
   if (!firstResponse.ok) {
     const errorText = await firstResponse.text();
@@ -696,23 +777,22 @@ export const getAlbumTracks = async (albumId: string) => {
   let allTracks = firstData.items || [];
   const total = firstData.total || 0;
 
-  // 2. If there are more than 10 tracks, request the remaining chunks of 10 sequentially
-  if (total > 10) {
-    const maxTracksLimit = 50; // Safety cap: load up to 50 tracks (5 pages)
-    
-    for (let offset = 10; offset < total && offset < maxTracksLimit; offset += 10) {
+  // 폴백으로 10 이 된 경우에만 남은 페이지를 순차로 마저 받는다 (안전캡 50 트랙)
+  if (allTracks.length < Math.min(total, 50)) {
+    for (let offset = allTracks.length; offset < total && offset < 50; offset += albumPageSize) {
       try {
         const res = await spotifyFetch(
-          `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=10&offset=${offset}`
+          `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${albumPageSize}&offset=${offset}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          allTracks = allTracks.concat(data.items || []);
-        }
-        // Small 50ms delay to avoid tripping 429
+        if (!res.ok) break;
+        const data = await res.json();
+        const page = data.items || [];
+        if (page.length === 0) break;
+        allTracks = allTracks.concat(page);
         await delay(50);
       } catch (err) {
         console.error(`[Spotify API] Error fetching tracks at offset ${offset}:`, err);
+        break;
       }
     }
   }
@@ -751,66 +831,13 @@ export const getRelatedArtists = async (artistId: string) => {
     return cached.data;
   }
 
-  // 1. Try Spotify /related-artists endpoint (requires OAuth for some accounts, may 403)
-  try {
-    const response = await spotifyFetch(`https://api.spotify.com/v1/artists/${artistId}/related-artists`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      const items = data.artists || [];
-      
-      if (items.length > 0) {
-        const filtered = items.filter((a: any) => a.id !== artistId);
-        for (let i = filtered.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
-        }
-        const result = filtered.slice(0, 3);
-        relatedArtistsCache.set(artistId, { data: result, timestamp: Date.now() });
-        return result;
-      }
-    } else {
-      console.warn(`[Spotify API] getRelatedArtists failed with status ${response.status}. Falling back to genre search.`);
-    }
-  } catch (e) {
-    console.error("Failed to fetch related artists from Spotify API, using genre search fallback", e);
-  }
-
-  // 2. Find artist's genre from curated list
-  let artistGenre: string | null = null;
-  for (const [genre, artists] of Object.entries(curatedArtists)) {
-    if (artists.some((a: any) => a.id === artistId)) {
-      artistGenre = genre;
-      break;
-    }
-  }
-
-  // 3. Try Spotify genre search with a random offset to surface non-curated artists
-  if (artistGenre) {
-    try {
-      const genreQuery = await getSpotifyGenreQuery(artistGenre);
-      // Use a random offset between 20-100 to go beyond the first page of popular artists
-      const randomOffset = Math.floor(Math.random() * 80) + 20;
-      const results = await searchSpotifyArtists(genreQuery.q, 10, randomOffset, genreQuery.market);
-      if (results.length > 0) {
-        const filtered = results.filter((r: any) => r.id !== artistId);
-        const shuffled = [...filtered].sort(() => Math.random() - 0.5);
-        const count = Math.floor(Math.random() * 3) + 1;
-        const result = shuffled.slice(0, count).map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          images: r.images || [],
-          popularity: r.popularity || 0,
-        }));
-        relatedArtistsCache.set(artistId, { data: result, timestamp: Date.now() });
-        return result;
-      }
-    } catch (e) {
-      console.warn("[Spotify API] Genre search fallback failed for related artists:", e);
-    }
-  }
-
-  // 4. Last resort: use curated list (may overlap with visible artists, but better than nothing)
+  // Spotify 호출을 하지 않는다.
+  //  - /v1/artists/{id}/related-artists 는 2024-11 에 폐기되어 이 앱에서 403 확정이다.
+  //    아티스트를 고를 때마다 실패가 보장된 왕복을 1 회씩 태우고 있었다.
+  //  - 그 뒤에 있던 장르 검색 폴백은 randomOffset 때문에 캐시 키가 매번 달라져
+  //    DB·메모리 캐시가 구조적으로 안 먹었다. 요구되는 정확도("비슷한 아티스트 3명")에
+  //    비해 비용이 터무니없어서 둘 다 제거한다.
+  // 로컬 curated 목록만으로 충분하고, Phase E 에서 canonical 장르 매칭으로 품질을 올린다.
   const allCurated = Object.entries(curatedArtists);
   let matchingArtists: any[] = [];
   for (const [_, artists] of allCurated) {

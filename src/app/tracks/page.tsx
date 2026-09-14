@@ -589,106 +589,54 @@ export default function TracksPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, artistData]);
 
-  const loadRemainingPagesInBackground = async (artistId: string, totalReleases: number, artistName: string) => {
-    const totalPages = Math.ceil(totalReleases / 10);
-    if (totalPages <= 1) return;
-
-    for (let page = 1; page < totalPages; page++) {
-      // 800ms delay to prevent rate limits
-      await new Promise(resolve => setTimeout(resolve, 800));
-
+  // 현재 페이지에 보이는 앨범의 트랙만 채우고 자동 선택한다.
+  // 순차 실행: Promise.all 로 앨범 10개를 동시에 때리던 것이 429 의 주범이었다.
+  const hydrateAlbumTracks = async (albums: any[], artistName: string): Promise<any[]> => {
+    const out: any[] = [];
+    for (const album of albums) {
       try {
-        const offset = page * 10;
-        const albumsData = await getArtistAlbums(artistId, offset, 10);
-        
-        const mappedAlbums = albumsData.items.map((albumRaw: any) => ({
-          id: albumRaw.id,
-          title: albumRaw.name,
-          type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
-          year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-          image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
-          tracks: [],
-          totalTracks: albumRaw.total_tracks || 0
-        }));
+        const tracksRaw = await getAlbumTracks(album.id);
+        const tracks = tracksRaw.map((t: any) => {
+          const totalSeconds = Math.floor(t.duration_ms / 1000);
+          const mins = Math.floor(totalSeconds / 60);
+          const secs = String(totalSeconds % 60).padStart(2, '0');
+          return {
+            id: t.id,
+            title: t.name,
+            duration: `${mins}:${secs}`,
+            previewUrl: t.preview_url
+          };
+        });
 
-        // Fetch tracks for all these albums
-        const finalAlbums = await Promise.all(
-          mappedAlbums.map(async (album: any) => {
-            try {
-              const tracksRaw = await getAlbumTracks(album.id);
-              const tracks = tracksRaw.map((t: any) => {
-                const totalSeconds = Math.floor(t.duration_ms / 1000);
-                const mins = Math.floor(totalSeconds / 60);
-                const secs = String(totalSeconds % 60).padStart(2, '0');
-                return {
-                  id: t.id,
-                  title: t.name,
-                  duration: `${mins}:${secs}`,
-                  previewUrl: t.preview_url
-                };
-              });
+        setSelectedTrackIds(prev => {
+          const next = new Set(prev);
+          tracks.forEach((track: any) => next.add(track.id));
+          return next;
+        });
 
-              // Auto-select these tracks
-              setSelectedTrackIds(prev => {
-                const next = new Set(prev);
-                tracks.forEach((track: any) => next.add(track.id));
-                return next;
-              });
-
-              setSelectedTracksMetadata(prev => {
-                const next = { ...prev };
-                tracks.forEach((track: any) => {
-                  next[track.id] = {
-                    id: track.id,
-                    title: track.title,
-                    duration: track.duration,
-                    artistName: artistName,
-                    albumTitle: album.title,
-                    albumImage: album.image,
-                    albumId: album.id
-                  };
-                });
-                return next;
-              });
-
-              return { ...album, tracks };
-            } catch (e) {
-              console.error("Failed to load background tracks for album " + album.id, e);
-              return album;
-            }
-          })
-        );
-
-        // Update cached allAlbums state
-        setArtistData(prev => prev.map(a => {
-          if (a.id === artistId) {
-            const currentAllAlbums = a.allAlbums ? [...a.allAlbums] : [];
-            // Merge in the newly fetched albums
-            for (let i = 0; i < finalAlbums.length; i++) {
-              currentAllAlbums[offset + i] = finalAlbums[i];
-            }
-
-            const loadedCount = currentAllAlbums.filter(Boolean).length;
-
-            return {
-              ...a,
-              allAlbums: currentAllAlbums,
-              backgroundProgress: { loaded: loadedCount, total: totalReleases },
-              backgroundLoading: page < totalPages - 1
+        setSelectedTracksMetadata(prev => {
+          const next = { ...prev };
+          tracks.forEach((track: any) => {
+            next[track.id] = {
+              id: track.id,
+              title: track.title,
+              duration: track.duration,
+              artistName,
+              albumTitle: album.title,
+              albumImage: album.image,
+              albumId: album.id
             };
-          }
-          return a;
-        }));
+          });
+          return next;
+        });
 
-      } catch (err) {
-        console.error(`Failed to load page ${page} in background:`, err);
+        out.push({ ...album, tracks });
+      } catch (e) {
+        console.error("Failed to load tracks for album " + album.id, e);
+        out.push(album);
       }
     }
-
-    // Set backgroundLoading to false explicitly at the end
-    setArtistData(prev => prev.map(a => 
-      a.id === artistId ? { ...a, backgroundLoading: false } : a
-    ));
+    return out;
   };
 
   const toggleArtistAccordion = async (artistId: string) => {
@@ -751,53 +699,9 @@ export default function TracksPage() {
             console.error("Failed to fetch unreleased tracks from Supabase:", err);
           }
 
-          let finalAlbums = mappedAlbums;
+          let finalAlbums: any[] = mappedAlbums;
           if (isSingleArtistMode) {
-            finalAlbums = await Promise.all(
-              mappedAlbums.map(async (album: any) => {
-                try {
-                  const tracksRaw = await getAlbumTracks(album.id);
-                  const tracks = tracksRaw.map((t: any) => {
-                    const totalSeconds = Math.floor(t.duration_ms / 1000);
-                    const mins = Math.floor(totalSeconds / 60);
-                    const secs = String(totalSeconds % 60).padStart(2, '0');
-                    return {
-                      id: t.id,
-                      title: t.name,
-                      duration: `${mins}:${secs}`,
-                      previewUrl: t.preview_url
-                    };
-                  });
-                  
-                  setSelectedTrackIds(prev => {
-                    const next = new Set(prev);
-                    tracks.forEach((track: any) => next.add(track.id));
-                    return next;
-                  });
-
-                  setSelectedTracksMetadata(prev => {
-                    const next = { ...prev };
-                    tracks.forEach((track: any) => {
-                      next[track.id] = {
-                        id: track.id,
-                        title: track.title,
-                        duration: track.duration,
-                        artistName: artist.name,
-                        albumTitle: album.title,
-                        albumImage: album.image,
-                        albumId: album.id
-                      };
-                    });
-                    return next;
-                  });
-
-                  return { ...album, tracks };
-                } catch (e) {
-                  console.error("Failed to load tracks for album " + album.id, e);
-                  return album;
-                }
-              })
-            );
+            finalAlbums = await hydrateAlbumTracks(mappedAlbums, artist.name);
 
             if (unreleasedAlbumsList.length > 0) {
               setSelectedTrackIds(prev => {
@@ -843,18 +747,14 @@ export default function TracksPage() {
                 totalReleases: albumsData.total,
                 albumsPage: 0,
                 allAlbums: updatedAllAlbums,
-                backgroundLoading: isSingleArtistMode && albumsData.total > 10,
-                backgroundProgress: isSingleArtistMode && albumsData.total > 10 
-                  ? { loaded: 10, total: albumsData.total } 
-                  : undefined
+                // 배경 전수 수집 제거(Phase A-1). 사용자가 페이지를 넘길 때만 로드한다.
+                // canonical DB 가 서면 Phase E-2 에서 Spotify 호출 0회로 전곡 로드를 되살린다.
+                backgroundLoading: false,
+                backgroundProgress: undefined
               };
             }
             return a;
           }));
-
-          if (isSingleArtistMode && albumsData.total > 10) {
-            loadRemainingPagesInBackground(artistId, albumsData.total, artist.name);
-          }
         } catch (e) {
           console.error("Failed to load albums for artist", e);
         } finally {
@@ -909,53 +809,9 @@ export default function TracksPage() {
         totalTracks: albumRaw.total_tracks || 0
       }));
 
-      let finalAlbums = mappedAlbums;
+      let finalAlbums: any[] = mappedAlbums;
       if (isSingleArtistMode) {
-        finalAlbums = await Promise.all(
-          mappedAlbums.map(async (album: any) => {
-            try {
-              const tracksRaw = await getAlbumTracks(album.id);
-              const tracks = tracksRaw.map((t: any) => {
-                const totalSeconds = Math.floor(t.duration_ms / 1000);
-                const mins = Math.floor(totalSeconds / 60);
-                const secs = String(totalSeconds % 60).padStart(2, '0');
-                return {
-                  id: t.id,
-                  title: t.name,
-                  duration: `${mins}:${secs}`,
-                  previewUrl: t.preview_url
-                };
-              });
-              
-              setSelectedTrackIds(prev => {
-                const next = new Set(prev);
-                tracks.forEach((track: any) => next.add(track.id));
-                return next;
-              });
-
-              setSelectedTracksMetadata(prev => {
-                const next = { ...prev };
-                tracks.forEach((track: any) => {
-                  next[track.id] = {
-                    id: track.id,
-                    title: track.title,
-                    duration: track.duration,
-                    artistName: artist.name,
-                    albumTitle: album.title,
-                    albumImage: album.image,
-                    albumId: album.id
-                  };
-                });
-                return next;
-              });
-
-              return { ...album, tracks };
-            } catch (e) {
-              console.error("Failed to load tracks for album " + album.id, e);
-              return album;
-            }
-          })
-        );
+        finalAlbums = await hydrateAlbumTracks(mappedAlbums, artist.name);
       }
 
       setArtistData(prev => prev.map(a => {
