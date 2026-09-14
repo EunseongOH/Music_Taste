@@ -70,3 +70,11 @@ temp_search_results.json
 
 # 콘솔 업로드용 이미지 — 스크립트로 다시 만들 수 있다
 /toss/store/out/
+
+# mTLS 인증서 base64 — 비밀값. 절대 커밋 금지
+/toss/mtls-out/
+*.key
+*.crt
+*.p12
+*.pfx
+*.pem
