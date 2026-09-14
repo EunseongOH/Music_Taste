@@ -7,7 +7,12 @@ import { request as httpsRequest } from 'node:https';
  *   POST https://apps-in-toss-api.toss.im/api-partner/v1/apps-in-toss/users/anon-key/verify
  *   헤더 x-anon-key: <hash> / 본문 없음
  *   성공 { "resultType": "SUCCESS", "success": "true" }
- *   401  식별키가 없거나 매핑된 사용자를 찾을 수 없음
+ *
+ * ⚠️ 문서는 무효한 키에 401 을 준다고 하지만, 실제로는 **HTTP 200 에
+ *    `resultType: "FAIL"`** 로 온다(직접 호출해 확인).
+ *      {"resultType":"FAIL","success":null,
+ *       "error":{"errorCode":"4010","reason":"인증 정보를 찾을 수 없어요."}}
+ *    그래서 상태 코드가 아니라 본문의 resultType 으로 판정한다. 401 도 함께 받는다.
  *
  * 서버 간 통신이라 mTLS 클라이언트 인증서가 필요하다. Edge 런타임은 mTLS 를
  * 하지 못하므로 이 모듈을 쓰는 라우트는 Node 런타임이어야 한다.
@@ -56,6 +61,12 @@ export async function verifyAnonKey(hash: string): Promise<VerifyResult> {
   if (!creds) return { ok: false, reason: 'no_cert' };
 
   return new Promise<VerifyResult>((resolve) => {
+    /*
+     * 인증서 값이 깨져 있으면 httpsRequest 가 **동기적으로** 던진다.
+     * 그러면 아래 req.on('error') 가 붙기도 전이라 잡히지 않고, 호출부까지
+     * 올라가 500 이 된다. 원인 없는 500 은 운영에서 진단이 불가능하다.
+     */
+    try {
     const req = httpsRequest(
       {
         host: HOST,
@@ -70,7 +81,7 @@ export async function verifyAnonKey(hash: string): Promise<VerifyResult> {
         res.on('data', (c) => (body += c));
         res.on('end', () => {
           if (res.statusCode === 401) {
-            resolve({ ok: false, reason: 'invalid_key' });
+            resolve({ ok: false, reason: 'invalid_key', detail: 'HTTP 401' });
             return;
           }
           if (res.statusCode !== 200) {
@@ -81,17 +92,26 @@ export async function verifyAnonKey(hash: string): Promise<VerifyResult> {
             });
             return;
           }
+          let parsed: { resultType?: string; success?: string; error?: { errorCode?: string; reason?: string } };
           try {
-            // success 는 문자열 "true" 다(불리언이 아니다).
-            const parsed = JSON.parse(body) as { success?: string };
-            resolve(
-              parsed.success === 'true'
-                ? { ok: true }
-                : { ok: false, reason: 'invalid_key', detail: body.slice(0, 200) }
-            );
+            parsed = JSON.parse(body);
           } catch {
             resolve({ ok: false, reason: 'upstream_error', detail: `파싱 실패: ${body.slice(0, 200)}` });
+            return;
           }
+          // success 는 문자열 "true" 다(불리언이 아니다).
+          if (parsed.resultType === 'SUCCESS' && parsed.success === 'true') {
+            resolve({ ok: true });
+            return;
+          }
+          // 키가 무효하면 200 + resultType FAIL 로 온다.
+          resolve({
+            ok: false,
+            reason: 'invalid_key',
+            detail: parsed.error?.errorCode
+              ? `${parsed.error.errorCode} ${parsed.error.reason ?? ''}`.trim()
+              : body.slice(0, 200),
+          });
         });
       }
     );
@@ -104,5 +124,13 @@ export async function verifyAnonKey(hash: string): Promise<VerifyResult> {
       resolve({ ok: false, reason: 'upstream_error', detail: err.message })
     );
     req.end();
+    } catch (err) {
+      // 대부분 인증서/키 값이 잘못된 경우다(base64 가 깨졌거나 PEM 이 아님).
+      resolve({
+        ok: false,
+        reason: 'upstream_error',
+        detail: `요청 생성 실패(인증서 확인 필요): ${(err as Error).message}`,
+      });
+    }
   });
 }
