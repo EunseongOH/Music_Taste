@@ -3,6 +3,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { corsHeaders, preflight } from '../cors';
+import { verifyAnonKey } from '../verifyAnonKey';
 
 /**
  * 토스 익명 식별키 → Supabase 세션 발급.
@@ -19,36 +20,25 @@ import { corsHeaders, preflight } from '../cors';
  * 자가 치유하므로(components/AuthProvider.tsx), 웹 사용자와 같은 경로를 탄다.
  *
  * ──────────────────────────────────────────────────────────────────────────
- * ⚠️ 보안: 이 엔드포인트는 **아직 익명키를 검증하지 않는다.**
+ * 보안: hash 는 bearer credential 이다. 남의 hash 를 아는 사람은 그 계정으로
+ * 로그인할 수 있고, CORS 는 보안 경계가 아니다(브라우저 밖에서는 무시된다).
+ * 그래서 두 겹으로 막는다.
  *
- * hash 는 bearer credential 이다. 남의 hash 를 아는 사람은 그 계정으로
- * 로그인할 수 있다. CORS 는 보안 경계가 아니다 — 브라우저 밖에서는 무시된다.
+ *  1. `TOSS_USER_PEPPER` 가 없으면 503. 운영에 이 값을 넣기 전까지는 배포돼
+ *     있어도 아무도 쓸 수 없다.
+ *  2. `TOSS_ANON_KEY_VERIFY` 로 토스 서버 검증을 건다. **기본값이 enforce** 라
+ *     인증서를 설정하지 않으면 발급이 막힌다(fail-closed). 조용히 열린 채로
+ *     남는 것보다 눈에 띄게 막히는 편이 낫다.
  *
- * 그래서 기본값은 **꺼짐**이다. `TOSS_USER_PEPPER` 가 없으면 503 을 돌려준다.
- * 운영 환경에 이 변수를 넣기 전까지는 배포돼 있어도 아무도 쓸 수 없다.
+ * ⚠️ 샌드박스는 mock 식별키를 주므로 검증에 실패한다(문서 명시).
+ *    샌드박스에서 볼 때는 `TOSS_ANON_KEY_VERIFY=off`, 실제 확인은 QR 로 한다.
  *
- * 출시 전에 반드시 `verifyAnonKey()` 를 구현해야 한다(Phase 9.2 출시 게이트):
- * mTLS 클라이언트 인증서로 토스 검증 API
- * (`/api-partner/v1/apps-in-toss/users/anon-key/verify`) 에 hash 를 확인한 뒤에만
- * 발급한다. Edge 런타임은 mTLS 를 못 하므로 Node 런타임을 유지해야 한다.
+ * Edge 런타임은 mTLS 를 못 하므로 Node 런타임을 유지해야 한다.
  * ──────────────────────────────────────────────────────────────────────────
  */
 export const runtime = 'nodejs';
 
 const EMAIL_DOMAIN = 'toss.sortify.kr';
-
-/**
- * 익명 식별키가 진짜 토스가 발급한 것인지 확인한다.
- *
- * **아직 구현되지 않았다.** 여기가 Phase 9.2 의 유일한 작업 지점이다.
- * 구현 전까지는 `TOSS_USER_PEPPER` 미설정으로 엔드포인트 자체를 막아 둔다.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 구현될 자리를 남겨 둔다
-async function verifyAnonKey(hash: string): Promise<boolean> {
-  // TODO(Phase 9.2): mTLS 클라이언트 인증서로
-  // POST /api-partner/v1/apps-in-toss/users/anon-key/verify 에 hash 를 확인한다.
-  return false;
-}
 
 /** 익명키에서 결정적으로 유도한 계정 정보. 서버 밖으로 나가지 않는다. */
 function deriveCredentials(hash: string, pepper: string) {
@@ -114,9 +104,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_hash' }, { status: 400, headers });
   }
 
-  // 검증이 구현되면 통과하지 못한 요청은 여기서 끝난다.
-  if (process.env.TOSS_REQUIRE_ANON_KEY_VERIFY === 'true' && !(await verifyAnonKey(hash))) {
-    return NextResponse.json({ error: 'unverified_key' }, { status: 403, headers });
+  /*
+   * 토스 서버에 식별키를 확인한다.
+   *  enforce(기본) — 통과하지 못하면 발급하지 않는다
+   *  log           — 결과를 남기되 발급은 허용한다. 인증서 설정 직후 전환용
+   *  off           — 호출하지 않는다. 샌드박스처럼 mock 키를 쓰는 환경 전용
+   *
+   * 토스 서버 장애로 확인이 안 될 때도 발급하지 않는다. 로그인이 잠시 막히는
+   * 쪽이, 확인되지 않은 키로 남의 계정에 들어가는 것보다 낫다.
+   */
+  const mode = process.env.TOSS_ANON_KEY_VERIFY ?? 'enforce';
+  if (mode !== 'off') {
+    const verified = await verifyAnonKey(hash);
+    if (!verified.ok) {
+      console.error(
+        `[api/toss/session] 식별키 검증 실패 (${mode}): ${verified.reason}`,
+        verified.detail ?? ''
+      );
+      if (mode !== 'log') {
+        const status = verified.reason === 'invalid_key' ? 403 : 503;
+        return NextResponse.json({ error: verified.reason }, { status, headers });
+      }
+    }
   }
 
   const { email, password } = deriveCredentials(hash, pepper);
