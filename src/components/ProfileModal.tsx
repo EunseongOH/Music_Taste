@@ -575,9 +575,10 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   <button
                     type="button"
                     onClick={() => {
-                      sessionStorage.setItem("worldcup_ranking", JSON.stringify(tracks));
+                      // 저장된 취향표 전용 화면(자동 저장 없음). 예전 세션의 선택 아티스트가
+                      // 남아 있어도 영향받지 않는다.
                       onClose();
-                      router.push("/taste");
+                      router.push(`/my-taste?id=${selectedArchive.id}`);
                     }}
                     className={`${primaryButton} w-full mt-4`}
                   >

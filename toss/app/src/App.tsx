@@ -5,6 +5,7 @@ import Explore from '@/app/explore/page';
 import Tracks from '@/app/tracks/page';
 import WorldCup from '@/app/worldcup/page';
 import Taste from '@/app/taste/page';
+import MyTaste from '@/app/my-taste/page';
 import ExploreTaste from '@/app/explore-taste/page';
 import ArchivePage from '@/app/archive/page';
 import SharedTaste from '@/app/taste/[id]/page';
@@ -25,6 +26,8 @@ const routes: Record<string, ComponentType> = {
   '/tracks': Tracks,
   '/worldcup': WorldCup,
   '/taste': Taste,
+  // 저장해 둔 취향표 다시 보기. id 는 쿼리(?id=)로 받는다(정적 호스팅).
+  '/my-taste': MyTaste,
   // 보관·탐색
   '/explore-taste': ExploreTaste,
   '/archive': ArchivePage,

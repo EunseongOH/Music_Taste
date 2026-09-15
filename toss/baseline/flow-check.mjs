@@ -89,6 +89,8 @@ const CASES = [
   },
   // 앱 안에서의 이동은 웹과 같은 `/taste/<uuid>` 형태다 (archive/page.tsx:801).
   { route: `/taste/${SHARED_ID}`, seed: {} },
+  // 저장된 취향표 다시 보기(자동 저장 없음). 공개 취향표라 게스트도 열린다.
+  { route: `/my-taste?id=${SHARED_ID}`, seed: {} },
 ];
 
 /** 두 문자열이 처음 갈라지는 지점을 사람이 읽을 수 있게 보여준다. */

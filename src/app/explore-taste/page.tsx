@@ -6,7 +6,7 @@ import { Trash2, Disc, ChevronDown } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
-import { safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { getSafeLocale } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
 import { displayNickname } from "@/utils/nickname";
@@ -681,13 +681,10 @@ export default function ExploreTastePage() {
               <button
                 type="button"
                 onClick={() => {
-                  sessionStorage.setItem("worldcup_ranking", JSON.stringify(archiveTracks));
-                  sessionStorage.setItem("selectedArtists", JSON.stringify([{
-                    id: archiveDetail.artist_id || "",
-                    name: archiveDetail.artist_name || trackArtistExtract(archiveTracks)
-                  }]));
+                  // 저장된 취향표 전용 화면으로 연다. 월드컵 결과 화면(/taste)을 재사용하면
+                  // 불러올 때마다 자동 저장이 돌아 같은 취향표가 중복 저장됐다.
                   setSelectedArchiveDetail(null);
-                  router.push(`/taste?mode=${archiveDetail.is_single_artist ? "single" : "multi"}`);
+                  router.push(`/my-taste?id=${archiveDetail.id}`);
                 }}
                 className={`${primaryButton} w-full`}
               >
@@ -776,9 +773,3 @@ export default function ExploreTastePage() {
   );
 }
 
-// Extra helper extraction of artist names from tracks array
-function trackArtistExtract(tracks: Track[]): string {
-  if (tracks.length === 0) return "";
-  const first = tracks[0];
-  return first.artistName || first.a || "";
-}

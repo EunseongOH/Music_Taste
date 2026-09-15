@@ -103,7 +103,7 @@ try {
    * 문서에 없다. 잘못 구독하면 앱에서 빠져나갈 수 없게 된다. 네이티브 뒤로가기가
    * history 를 움직이게 두면 depth 0 에서 자연스럽게 종료된다. (Phase 8 에서 확인)
    */
-  for (const route of ['/', '/explore', '/tracks', '/taste', '/archive']) {
+  for (const route of ['/', '/explore', '/tracks', '/taste', '/my-taste', '/archive']) {
     await page.goto(`http://localhost:5173${route}`, {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
