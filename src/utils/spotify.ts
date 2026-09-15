@@ -4,10 +4,14 @@ import { createAdminClient } from "./supabase/admin";
 import { ARTIST_TRANSLATION_MAP } from "./artistNames";
 
 const DB_CACHE_TTL_DAYS = 21;
+// 아티스트의 앨범 목록은 신규 발매를 알아채는 유일한 창구라 짧게 둔다. 21일이면 어제 캐시된 아티스트의
+// 신곡이 최대 3주 동안 목록에 안 뜬다. 앨범 50개당 Spotify 1회라 하루 한 번 새로 받아도 부담이 작다.
+// (이미 나온 앨범의 트랙리스트는 바뀌지 않으므로 그쪽은 21일 그대로)
+const ALBUM_LIST_TTL_DAYS = 1;
 
-const getCacheExpiresAt = () => {
+const getCacheExpiresAt = (days = DB_CACHE_TTL_DAYS) => {
   const d = new Date();
-  d.setDate(d.getDate() + DB_CACHE_TTL_DAYS);
+  d.setDate(d.getDate() + days);
   return d.toISOString();
 };
 
@@ -829,7 +833,7 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
           items,
           total,
           cached_at: new Date().toISOString(),
-          expires_at: getCacheExpiresAt(),
+          expires_at: getCacheExpiresAt(ALBUM_LIST_TTL_DAYS),
         }, { onConflict: 'artist_id' });
     } catch (e) {
       console.error("[Spotify Cache DB] Failed to save albums to cache:", e);

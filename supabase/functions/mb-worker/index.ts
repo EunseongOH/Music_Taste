@@ -25,6 +25,10 @@ const MB_MIN_INTERVAL_MS = 1050;
 const BUDGET_MS = 50_000;   // 매분 호출되므로 다음 실행과 겹치지 않게 한다 (무료 플랜 벽시계 150초 안)
 const LEASE_SECS = 90;      // 워커가 죽으면 이 시간 뒤 다음 실행이 잠금을 가져간다
 const REFRESH_DAYS = 14;    // 찾은 아티스트의 MB 데이터가 이보다 오래되면 신규 발매를 다시 받는다
+// 신곡 감지: Spotify 앨범 목록(요청 경로가 받아 둔 캐시)에 최근 발매인데 DB 에 없는 앨범이 있으면
+// 14일을 기다리지 않고 MB 를 다시 본다. MB 에 아직 없으면 이 간격으로만 재확인한다.
+const NEW_RELEASE_WINDOW_DAYS = 60;
+const RECHECK_DAYS = 3;
 const MAX_ATTEMPTS = 3;
 
 const sb = createClient(
@@ -36,7 +40,7 @@ const sb = createClient(
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let deadline = 0;
 const timeLeft = () => deadline - Date.now();
-const stats = { mbCalls: 0, resolved: 0, refreshed: 0, gaveUp: 0, releases: 0, tracks: 0, backlog: 0 };
+const stats = { mbCalls: 0, resolved: 0, refreshed: 0, newRelease: 0, redirected: 0, gaveUp: 0, releases: 0, tracks: 0, backlog: 0 };
 
 let lastStart = 0;
 async function mb(path: string): Promise<any> {
@@ -176,6 +180,38 @@ async function fillRelease(releaseMbid: string): Promise<"ok" | "budget" | "fail
   return "ok";
 }
 
+/** "2024-05-01" / "2024-05" / "2024" -> ms. 못 읽으면 NaN */
+const releaseTime = (d?: string) =>
+  !d ? NaN : Date.parse(/^\d{4}$/.test(d) ? `${d}-01-01` : /^\d{4}-\d{2}$/.test(d) ? `${d}-01` : d);
+
+/**
+ * 이 아티스트의 Spotify 앨범 목록 캐시에 최근 발매인데 DB(발매판 매핑)에 없는 앨범이 있나.
+ * Spotify 를 부르지 않고, 요청 경로가 사용자에게 보여주려고 받아 둔 캐시만 읽는다.
+ */
+async function hasUnmappedRecentRelease(spotifyArtistId: string): Promise<boolean> {
+  const { data: row } = await sb.from("spotify_album_cache_v2").select("items").eq("artist_id", spotifyArtistId).maybeSingle();
+  const cutoff = Date.now() - NEW_RELEASE_WINDOW_DAYS * 86_400_000;
+  const recent = ((row?.items ?? []) as any[])
+    .filter((a) => a?.id && releaseTime(a.release_date) >= cutoff)
+    .map((a) => a.id as string);
+  if (!recent.length) return false;
+  const { data: mapped } = await sb.from("mb_album_release").select("spotify_album_id").in("spotify_album_id", recent);
+  const have = new Set((mapped ?? []).map((m) => m.spotify_album_id));
+  return recent.some((id) => !have.has(id));
+}
+
+/** MB 아티스트에 달린 Spotify 아티스트 링크들 (MB 1회) */
+async function spotifyLinksOf(mbid: string): Promise<string[] | "budget" | "transient"> {
+  const d = await mb(`artist/${mbid}?inc=url-rels&fmt=json`);
+  if (d?.__budget) return "budget";
+  if (failed(d)) return "transient";
+  return (d.relations || [])
+    .map((r: any) => String(r.url?.resource ?? ""))
+    .filter((u: string) => u.includes("open.spotify.com/artist/"))
+    .map((u: string) => u.split("/artist/")[1]?.split(/[?#/]/)[0])
+    .filter(Boolean);
+}
+
 type QueueRow = { spotify_id: string; hint: string | null; attempts: number };
 
 /** 수요 큐 1건. 끝까지 채우면 큐에서 지우고, 예산이 끝나면 남겨 둔다. */
@@ -197,10 +233,11 @@ async function processDemand(row: QueueRow): Promise<"done" | "budget"> {
     mbid = map.mbid;
     const { data: art } = await sb.from("mb_artist").select("updated_at").eq("mbid", mbid).maybeSingle();
     const ageDays = art ? (Date.now() - new Date(art.updated_at).getTime()) / 86_400_000 : Infinity;
-    if (ageDays > REFRESH_DAYS) {
+    const newRelease = ageDays > RECHECK_DAYS && ageDays <= REFRESH_DAYS && await hasUnmappedRecentRelease(row.spotify_id);
+    if (ageDays > REFRESH_DAYS || newRelease) {
       if (timeLeft() < 15_000) return "budget";
       if (!(await fillArtist(mbid, true))) return timeLeft() < 3000 ? "budget" : retry();
-      stats.refreshed++;
+      if (newRelease) stats.newRelease++; else stats.refreshed++;
     }
   } else {
     if (timeLeft() < 20_000) return "budget";
@@ -223,6 +260,24 @@ async function processDemand(row: QueueRow): Promise<"done" | "budget"> {
       await drop(); stats.gaveUp++; return "done";
     }
     const found = look.mbid;
+
+    // 이름으로 찾은 MB 아티스트가 자기 Spotify 링크를 따로 갖고 있으면, 큐에 들어온 Spotify 프로필은
+    // 같은 이름의 다른 사람이다. (실제 사례: Spotify 동명이인 "이찬혁"이 AKMU 이찬혁 MB 아티스트에
+    // 이름으로 붙었는데, 그 MB 아티스트에는 올바른 Spotify 링크가 이미 있었다.)
+    // 이 프로필은 연결하지 않고, MB 가 가리키는 진짜 프로필을 대신 큐에 넣는다.
+    if (confidence === "name") {
+      const links = await spotifyLinksOf(found);
+      if (links === "budget") return "budget";
+      if (links === "transient") return retry();
+      if (links.length && !links.includes(row.spotify_id)) {
+        await sb.from("mb_resolve_queue").upsert(
+          links.map((id) => ({ spotify_id: id, entity: "artist", hint: row.hint, created_at: new Date().toISOString() })),
+          { onConflict: "spotify_id" },
+        );
+        await drop(); stats.redirected++; return "done";
+      }
+    }
+
     if (!(await fillArtist(found, confidence === "url_rel"))) return timeLeft() < 3000 ? "budget" : retry();
     await sb.from("mb_spotify_map").upsert({ spotify_id: row.spotify_id, entity: "artist", mbid: found, confidence },
       { onConflict: "spotify_id" });
