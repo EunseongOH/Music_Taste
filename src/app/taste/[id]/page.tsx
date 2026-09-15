@@ -164,7 +164,7 @@ export default function TasteSharedPage() {
           <button onClick={handleBack} className="flex items-center justify-center border-none bg-transparent hover:bg-navy/5 w-8 h-8 rounded-full">
             <ArrowLeft size={20} className="text-navy" />
           </button>
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-12 px-6">
           <div className="w-16 h-16 rounded-full border-2 border-dashed border-navy/30 flex items-center justify-center bg-white/40">
@@ -201,7 +201,7 @@ export default function TasteSharedPage() {
           <button onClick={handleBack} className="flex items-center justify-center border-none bg-transparent hover:bg-navy/5 w-8 h-8 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-navy" />
           </button>
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
       </div>
 

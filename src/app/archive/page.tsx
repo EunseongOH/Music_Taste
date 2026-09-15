@@ -616,7 +616,7 @@ export default function ArchivePage() {
             className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0"
             onClick={() => router.push("/")}
           />
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
           <ProfileHeader locale={locale} />

@@ -426,7 +426,7 @@ export default function ExploreTastePage() {
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
         <div className="flex items-center gap-2">
           <ProfileHeader locale={locale} />
