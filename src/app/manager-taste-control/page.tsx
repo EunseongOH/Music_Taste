@@ -451,7 +451,7 @@ export default function AdminPage() {
         {icon}
       </div>
       <div>
-        <h3 className="font-serif text-lg text-navy mb-1 font-bold">{title}</h3>
+        <h3 className="text-lg text-navy mb-1 font-bold">{title}</h3>
         <p className="font-sans text-xs text-charcoal/55 leading-relaxed whitespace-pre-wrap">{desc}</p>
       </div>
     </motion.div>
@@ -479,7 +479,7 @@ export default function AdminPage() {
                     <span className="font-sans text-[10px] font-bold text-point uppercase tracking-wider bg-point/10 px-2 py-0.5 rounded-full w-fit mb-1">
                       {t.unreleased}
                     </span>
-                    <h2 className="font-serif text-xl text-navy font-bold leading-tight">{track.title}</h2>
+                    <h2 className="text-xl text-navy font-bold leading-tight">{track.title}</h2>
                     <p className="font-sans text-sm text-charcoal/75 font-semibold">{track.artist_name}</p>
                     <div className="flex items-center gap-1.5 mt-1 font-sans text-xs text-charcoal/45">
                       <Clock size={11} />
@@ -553,7 +553,7 @@ export default function AdminPage() {
                           {isPlain ? t.lyricsTypePlain : t.lyricsTypeFanchant}
                         </span>
                       </div>
-                      <h2 className="font-serif text-xl text-navy font-bold leading-tight">
+                      <h2 className="text-xl text-navy font-bold leading-tight">
                         {suggestion.unreleased_tracks?.title}
                       </h2>
                       <p className="font-sans text-sm text-charcoal/75 font-semibold">
@@ -644,7 +644,7 @@ export default function AdminPage() {
                           </span>
                         )}
                       </div>
-                      <h2 className="font-serif text-xl text-navy font-bold leading-tight">{track.title}</h2>
+                      <h2 className="text-xl text-navy font-bold leading-tight">{track.title}</h2>
                       <p className="font-sans text-sm text-charcoal/75 font-semibold">{track.artist_name}</p>
                       <div className="flex items-center gap-1.5 mt-1 font-sans text-xs text-charcoal/45">
                         <Clock size={11} />
@@ -705,7 +705,7 @@ export default function AdminPage() {
                         ✨ {t.releasedBadge}
                       </span>
                     </div>
-                    <h2 className="font-serif text-xl text-navy font-bold leading-tight">{track.title}</h2>
+                    <h2 className="text-xl text-navy font-bold leading-tight">{track.title}</h2>
                     <p className="font-sans text-sm text-charcoal/75 font-semibold">{track.artist_name}</p>
                     <div className="flex items-center gap-1.5 mt-1 font-sans text-xs text-charcoal/45">
                       <Clock size={11} />
@@ -782,7 +782,7 @@ export default function AdminPage() {
             <div className="w-6 h-6 rounded-lg bg-navy flex items-center justify-center">
               <Shield size={13} className="text-point" />
             </div>
-            <span className="font-sans text-xs font-bold text-navy/50 tracking-widest font-mono uppercase">
+            <span className="font-sans text-xs font-bold text-navy/50 tracking-widest uppercase">
               {t.adminPortal}
             </span>
           </div>
@@ -830,7 +830,7 @@ export default function AdminPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <h1 className="font-serif text-base text-navy font-bold leading-tight">{t.adminTitle}</h1>
+                    <h1 className="text-base text-navy font-bold leading-tight">{t.adminTitle}</h1>
                     <p className="font-sans text-[10px] text-charcoal/45">{t.adminSubtitle}</p>
                   </motion.div>
                 )}
@@ -908,7 +908,7 @@ export default function AdminPage() {
               {currentNavItem.icon}
             </div>
             <div>
-              <h2 className="font-serif text-xl sm:text-2xl text-navy font-bold leading-tight">
+              <h2 className="text-xl sm:text-2xl text-navy font-bold leading-tight">
                 {currentNavItem.label}
               </h2>
               {!isLoading && (

@@ -53,7 +53,7 @@ export default function PopupLogin() {
           style={{ background: isKakao ? "#000000" : "#e63946" }}
         />
       </div>
-      <h3 className="font-serif text-2xl font-bold mb-2">
+      <h3 className="text-2xl font-bold mb-2">
         {isKakao 
           ? (locale === "en" ? "Kakao Login" : "카카오 로그인")
           : (locale === "en" ? "Google Login" : "구글 로그인")}

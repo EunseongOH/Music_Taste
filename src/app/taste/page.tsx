@@ -912,7 +912,7 @@ export default function ResultPage() {
             >
               <div className="w-12 h-1.5 bg-navy/20 rounded-full mb-6" />
 
-              <h2 className="font-serif text-xl font-bold text-navy mb-5 tracking-tight text-center">
+              <h2 className="text-xl font-bold text-navy mb-5 tracking-tight text-center">
                 {t.saveSheetTitle}
               </h2>
 
@@ -988,7 +988,7 @@ export default function ResultPage() {
                   <Archive className="text-point" size={24} />
                 </div>
 
-                <h2 className="font-serif text-xl font-bold text-navy mb-2 tracking-tight">
+                <h2 className="text-xl font-bold text-navy mb-2 tracking-tight">
                   {t.exitSaveTitle}
                 </h2>
                 <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-6 whitespace-pre-wrap px-1">
@@ -1041,7 +1041,7 @@ export default function ResultPage() {
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 transition={{ type: "spring", stiffness: 350, damping: 25 }}
               >
-                <h2 className="font-serif text-xl font-bold text-navy mb-2 tracking-tight">
+                <h2 className="text-xl font-bold text-navy mb-2 tracking-tight">
                   {t.overwriteTitle}
                 </h2>
                 <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-4 whitespace-pre-wrap px-1">
@@ -1110,7 +1110,7 @@ export default function ResultPage() {
             >
               <div className="w-12 h-1.5 bg-navy/20 rounded-full mb-6" />
 
-              <h2 className="font-serif text-xl font-bold text-navy mb-5 tracking-tight text-center">
+              <h2 className="text-xl font-bold text-navy mb-5 tracking-tight text-center">
                 {t.shareMenuTitle}
               </h2>
 
@@ -1235,7 +1235,7 @@ export default function ResultPage() {
                   <X size={18} strokeWidth={2.5} />
                 </button>
 
-                <h2 className="font-serif text-xl font-bold text-navy mb-2 tracking-tight">{t.instagramGuideTitle}</h2>
+                <h2 className="text-xl font-bold text-navy mb-2 tracking-tight">{t.instagramGuideTitle}</h2>
                 <p className="font-sans text-xs text-charcoal/80 leading-relaxed mb-6 whitespace-pre-wrap px-1">
                   {t.instagramGuideDesc}
                 </p>

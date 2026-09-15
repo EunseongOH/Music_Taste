@@ -223,7 +223,7 @@ export default function TasteSharedPage() {
                   </span>
                 )}
               </div>
-              <h2 className="font-serif text-xl text-navy font-black mt-1 leading-tight tracking-tight break-keep">
+              <h2 className="text-xl text-navy font-black mt-1 leading-tight tracking-tight break-keep">
                 {result.title}
               </h2>
               <span className="font-sans text-[11px] text-charcoal/60 font-semibold flex items-center gap-1 mt-0.5">
@@ -295,10 +295,10 @@ export default function TasteSharedPage() {
 
             {/* 1st Place badge and Info */}
             <div className="text-center mt-5 w-full px-2">
-              <div className="inline-flex items-center gap-1 px-3 py-0.5 bg-[#E67E22] text-[#FAF7F2] font-serif text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm mb-2.5">
+              <div className="inline-flex items-center gap-1 px-3 py-0.5 bg-[#E67E22] text-[#FAF7F2] text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm mb-2.5">
                 <Award size={11} /> 1st Choice
               </div>
-              <h3 className="text-base font-black text-navy font-serif tracking-tight leading-tight line-clamp-1">
+              <h3 className="text-base font-black text-navy tracking-tight leading-tight line-clamp-1">
                 {result.winner_track_title}
               </h3>
               <p className="text-xs text-navy/60 font-semibold mt-1">
@@ -310,7 +310,7 @@ export default function TasteSharedPage() {
           {/* Ranks 2-30 list */}
           {normalizedRanking.length > 1 && (
             <div className="flex flex-col gap-3">
-              <h3 className="font-serif text-sm font-bold text-navy border-b border-navy/10 pb-2 mb-1 flex items-center gap-1.5">
+              <h3 className="text-sm font-bold text-navy border-b border-navy/10 pb-2 mb-1 flex items-center gap-1.5">
                 <Music size={14} className="text-point" />
                 {t.otherRanks}
               </h3>
@@ -325,7 +325,7 @@ export default function TasteSharedPage() {
                     >
                       <div className="flex items-center gap-3.5 flex-1 min-w-0">
                         {/* Rank Badge */}
-                        <span className={`font-serif text-xs font-black w-5 text-center select-none ${
+                        <span className={`font-num text-xs font-black w-5 text-center select-none ${
                           isTop3 ? "text-[#E67E22] text-sm" : "text-navy/40"
                         }`}>
                           {rank}

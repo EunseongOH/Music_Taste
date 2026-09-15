@@ -14,9 +14,19 @@ const pretendard = localFont({
   variable: "--font-pretendard",
 });
 
+// 홈 화면의 큰 "Sortify" 워드마크 전용(font-wordmark). 한글이 없어 본문에는 쓰지 않는다.
 const playfair = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-playfair",
+});
+
+// 숫자만 혼자 강조되는 자리(순위·%·큰 숫자) 전용(font-num).
+// 숫자·기호만 쓰므로 라틴 전용 Std 가변 폰트(82KB)를 쓴다. OFL: ./fonts/WantedSans-OFL.txt
+const wantedSans = localFont({
+  src: "./fonts/WantedSansStdVariable.woff2",
+  display: "swap",
+  weight: "400 1000",
+  variable: "--font-wanted",
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -64,7 +74,7 @@ export default async function RootLayout({
   const lang = cookieStore.get("locale")?.value || "ko";
 
   return (
-    <html lang={lang} suppressHydrationWarning className={`${pretendard.variable} ${playfair.variable} h-full antialiased`}>
+    <html lang={lang} suppressHydrationWarning className={`${pretendard.variable} ${playfair.variable} ${wantedSans.variable} h-full antialiased`}>
 
       <head>
         <script

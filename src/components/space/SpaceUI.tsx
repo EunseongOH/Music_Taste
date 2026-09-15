@@ -208,7 +208,7 @@ export function RankList({ tracks }: { tracks: RankTrack[] }) {
       {tracks.map((track, idx) => (
         <li key={`${track.id ?? ""}-${idx}`} className="flex items-center gap-3 py-2.5">
           <span
-            className={`w-7 shrink-0 text-center type-title-2 font-serif ${
+            className={`w-7 shrink-0 text-center type-title-2 font-num tabular-nums ${
               idx < 3 ? "text-point-ink" : "text-navy/70"
             }`}
           >

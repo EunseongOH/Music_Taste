@@ -426,7 +426,7 @@ export default function WorldCupPage() {
       <main className="flex flex-col min-h-screen items-center justify-center bg-[var(--app-bg)] p-6">
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
           <Trophy size={64} className="text-point mb-6" />
-          <h1 className="font-serif text-3xl text-navy mb-2">{locale === "en" ? "My Favorite is..." : "내가 꼽은 최고의 명곡은..."}</h1>
+          <h1 className="text-3xl text-navy mb-2">{locale === "en" ? "My Favorite is..." : "내가 꼽은 최고의 명곡은..."}</h1>
           <div className="w-64 h-64 relative rounded-xl border-4 border-point shadow-lg overflow-hidden mt-6">
              <Image src={winners[0].albumImage} alt={winners[0].title} fill className="object-cover" />
           </div>
@@ -554,7 +554,7 @@ export default function WorldCupPage() {
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.5 }}
-                      className="shrink-0 font-serif italic text-navy/40 text-xl sm:text-3xl md:text-4xl font-black select-none px-1 py-6 sm:py-10"
+                      className="shrink-0 italic text-navy/40 text-xl sm:text-3xl md:text-4xl font-black select-none px-1 py-6 sm:py-10"
                     >
                       VS
                     </motion.div>

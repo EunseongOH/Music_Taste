@@ -30,7 +30,7 @@
 
     <!--
       Next 빌드는 next/font 로 폰트를 주입하지만 Vite 빌드에는 그 런타임이 없다.
-      Pretendard 는 번들에 포함하고, Playfair 는 Google Fonts 에서 받는다.
+      Pretendard·원티드산스(숫자 전용)는 번들에 포함하고, Playfair(홈 워드마크 전용)는 Google Fonts 에서 받는다.
       (자체 호스팅 전환은 후속 과제 — 네트워크 의존을 없애는 편이 낫다.)
     -->
     <style>
@@ -38,6 +38,12 @@
         font-family: pretendard;
         src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
         font-weight: 45 920;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: wantedSans;
+        src: url('/fonts/WantedSansStdVariable.woff2') format('woff2');
+        font-weight: 400 1000;
         font-display: swap;
       }
 
@@ -61,6 +67,14 @@
         size-adjust: 101.55%;
       }
       @font-face {
+        font-family: 'wantedSans Fallback';
+        src: local('Arial');
+        ascent-override: 91.66%;
+        descent-override: 23.22%;
+        line-gap-override: 0%;
+        size-adjust: 103.88%;
+      }
+      @font-face {
         font-family: 'Playfair Display Fallback';
         src: local('Times New Roman');
         ascent-override: 97.25%;
@@ -73,6 +87,7 @@
       :root {
         --font-pretendard: 'pretendard', 'pretendard Fallback';
         --font-playfair: 'Playfair Display', 'Playfair Display Fallback';
+        --font-wanted: 'wantedSans', 'wantedSans Fallback';
       }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

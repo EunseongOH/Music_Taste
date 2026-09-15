@@ -379,7 +379,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                 <div className="w-4 h-4 bg-point rounded-full border-2 border-navy" />
               </div>
               
-              <h2 className="font-serif text-3xl font-bold text-navy mb-1 tracking-tight">Sortify</h2>
+              <h2 className="text-3xl font-bold text-navy mb-1 tracking-tight">Sortify</h2>
               <p className="font-sans text-charcoal/60 mb-6 text-sm font-medium">
                 {t.tagline}
               </p>

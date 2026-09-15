@@ -70,7 +70,7 @@ export default function Bootstrap() {
 
   return (
     <div className="w-full max-w-[430px] mx-auto min-h-screen bg-[var(--app-bg)] flex flex-col items-center justify-center gap-5 px-8 text-center">
-      <h1 className="font-serif text-3xl text-navy tracking-tight">Sortify</h1>
+      <h1 className="text-3xl text-navy tracking-tight">Sortify</h1>
 
       {state === 'loading' ? (
         <p className="font-sans text-sm text-charcoal/60">불러오는 중...</p>

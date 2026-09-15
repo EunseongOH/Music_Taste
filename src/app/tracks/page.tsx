@@ -1284,7 +1284,7 @@ export default function TracksPage() {
         >
           <Disc size={80} strokeWidth={1} />
         </motion.div>
-        <h1 className="font-serif text-2xl text-navy font-bold tracking-tight">{t.loadingTitle}</h1>
+        <h1 className="text-2xl text-navy font-bold tracking-tight">{t.loadingTitle}</h1>
         <p className="font-sans text-sm text-charcoal/70 mt-2 font-medium">{t.loadingDesc}</p>
       </main>
     );
@@ -1333,7 +1333,7 @@ export default function TracksPage() {
       {searchQuery.trim() !== "" ? (
         <div className="py-6 pb-32 px-3 flex flex-col gap-4">
           <div className="flex items-center justify-between px-2 mb-2">
-            <h2 className="font-serif text-xl text-navy">{t.searchResults} ({searchResults.length})</h2>
+            <h2 className="text-xl text-navy">{t.searchResults} ({searchResults.length})</h2>
           </div>
           {isSearching ? (
             <div className="py-20 flex flex-col items-center justify-center text-navy/50 gap-3">
@@ -1412,7 +1412,7 @@ export default function TracksPage() {
                          <SafeImage src={artist.image} alt={artist.name} fill sizes="56px" priority={idx === 0} fallbackType="artist" className="object-cover" />
                       </div>
                       <div className="text-left">
-                         <h2 className="font-serif text-xl text-navy">{artist.name}</h2>
+                         <h2 className="text-xl text-navy">{artist.name}</h2>
                          <p className="font-sans text-xs text-charcoal/60 mt-0.5">
                            {loadingAlbums.has(`artist_${artist.id}`)
                              ? t.albumLoading
@@ -1674,7 +1674,7 @@ export default function TracksPage() {
                                                     className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                                   >
                                                      <div className="flex items-center gap-3">
-                                                        <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                        <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
                                                         <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
                                                      </div>
                                                      {isSelected ? (
@@ -1733,7 +1733,7 @@ export default function TracksPage() {
                            {/* Decoupled Unreleased Section - Renders individual virtual Single albums */}
                            {artist.unreleasedAlbums && artist.unreleasedAlbums.length > 0 && (
                              <div className="mt-8 pt-6 border-t border-dashed border-navy/10 text-left">
-                               <h3 className="font-serif text-lg text-navy mb-4 flex items-center gap-2">
+                               <h3 className="text-lg text-navy mb-4 flex items-center gap-2">
                                  <Compass size={18} className="text-point shrink-0" />
                                  {t.unreleased}
                                </h3>
@@ -1881,7 +1881,7 @@ export default function TracksPage() {
                                                        className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                                      >
                                                         <div className="flex items-center gap-3">
-                                                           <span className="text-xs font-serif text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                           <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
                                                            <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
                                                         </div>
                                                         {isSelected ? (
@@ -1985,7 +1985,7 @@ export default function TracksPage() {
                         </div>
                         <span className="tracking-tight">{t.fetchingAllTracks}</span>
                       </span>
-                      <span className="text-point font-mono text-[11px] bg-point/10 px-2.5 py-0.5 rounded-full font-bold">
+                      <span className="text-point text-[11px] bg-point/10 px-2.5 py-0.5 rounded-full font-bold">
                         {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.loaded || (loadingAlbums.size > 0 ? "..." : 0)} / {artistData.find(a => a.backgroundLoading)?.backgroundProgress?.total || 0} {locale === "ko" ? "앨범" : "Albums"}
                       </span>
                     </div>
@@ -2069,7 +2069,7 @@ export default function TracksPage() {
               className="bg-[#F5F2ED] w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden border border-navy/10 flex flex-col"
             >
               <div className="p-6 pb-4 border-b border-navy/5 flex items-center justify-between">
-                <h3 className="font-serif text-xl text-navy">{t.addUnreleasedModalTitle}</h3>
+                <h3 className="text-xl text-navy">{t.addUnreleasedModalTitle}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 -mr-2 text-navy/50 hover:text-navy hover:bg-navy/5 rounded-full transition-colors">
                   <X size={20} />
                 </button>
@@ -2163,7 +2163,7 @@ export default function TracksPage() {
 
                 {exitWizardStep === 'main' ? (
                   <>
-                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.exitTitle}</h2>
+                    <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.exitTitle}</h2>
                     <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                       {t.exitDesc}
                     </p>
@@ -2196,7 +2196,7 @@ export default function TracksPage() {
                   </>
                 ) : (
                   <>
-                    <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.saveTitle}</h2>
+                    <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.saveTitle}</h2>
                     <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                       {t.saveDesc}<br/>
                       <span className="text-point font-medium">{t.saveDescSub}</span>
@@ -2259,7 +2259,7 @@ export default function TracksPage() {
                   <AlertCircle className="text-point animate-pulse" size={32} />
                 </div>
 
-                <h3 className="font-serif text-xl font-bold text-navy mb-2 tracking-tight">{t.alertTitle}</h3>
+                <h3 className="text-xl font-bold text-navy mb-2 tracking-tight">{t.alertTitle}</h3>
                 <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                   {customAlert}
                 </p>

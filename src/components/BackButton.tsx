@@ -118,7 +118,7 @@ export default function BackButton({ className = "", onClick }: BackButtonProps)
                           <X size={20} strokeWidth={2} />
                         </button>
                         
-                        <h2 className="font-serif text-2xl text-point mb-2 mt-2">{t.title}</h2>
+                        <h2 className="text-2xl text-point mb-2 mt-2">{t.title}</h2>
                         <p className="font-sans text-charcoal/80 mb-8 mt-2 leading-relaxed text-sm whitespace-pre-line">
                           {t.warning}
                         </p>

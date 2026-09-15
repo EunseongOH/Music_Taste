@@ -647,7 +647,7 @@ export default function ExploreTastePage() {
                                 {t.winnerPrefix} {mate.winner_track_title} · {mate.winner_track_artist}
                               </p>
                             </div>
-                            <span className="type-title-2 font-serif text-point-ink shrink-0">{score.toFixed(1)}%</span>
+                            <span className="type-title-2 font-num text-point-ink shrink-0">{score.toFixed(1)}%</span>
                           </button>
                         </li>
                       );
@@ -738,7 +738,7 @@ export default function ExploreTastePage() {
                   {mateDetailJaccard !== null && (
                     <>
                       {" · "}
-                      {t.syncLabel} <span className="font-serif text-point-ink font-semibold">{mateDetailJaccard.toFixed(1)}%</span>
+                      {t.syncLabel} <span className="font-num text-point-ink font-semibold">{mateDetailJaccard.toFixed(1)}%</span>
                     </>
                   )}
                 </p>

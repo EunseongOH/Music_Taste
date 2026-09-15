@@ -400,7 +400,7 @@ export default function Home() {
 
       <div className="flex flex-col items-center justify-center flex-1 w-full text-center z-10 space-y-6 mt-12 md:mt-0">
         <div className="space-y-2">
-          <h1 className="font-serif text-5xl md:text-7xl text-navy tracking-tight drop-shadow-sm font-bold">
+          <h1 className="font-wordmark text-5xl md:text-7xl text-navy tracking-tight drop-shadow-sm font-bold">
             Sortify
           </h1>
           <p className="font-sans text-xs md:text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed break-keep mt-1">
@@ -437,7 +437,7 @@ export default function Home() {
                   </div>
 
                   <div className="mt-2 w-full flex-1 flex flex-col justify-center">
-                    <h3 className="font-serif text-xl sm:text-2xl text-navy font-black tracking-tight">{mode.title}</h3>
+                    <h3 className="text-xl sm:text-2xl text-navy font-black tracking-tight">{mode.title}</h3>
                     <p className="font-sans text-xs text-charcoal/70 leading-relaxed mt-2 break-keep px-2">
                       {mode.desc}
                     </p>
@@ -570,7 +570,7 @@ export default function Home() {
                   <Trophy className="text-point animate-bounce" size={24} />
                 </div>
 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.startNewTitle}</h2>
+                <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.startNewTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                   {t.startNewDesc}
                 </p>

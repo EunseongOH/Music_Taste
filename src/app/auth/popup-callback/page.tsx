@@ -85,7 +85,7 @@ export default function PopupCallback() {
       <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-6 animate-pulse">
         <div className="w-4 h-4 bg-point rounded-full" />
       </div>
-      <h3 className="font-serif text-2xl font-bold mb-2">
+      <h3 className="text-2xl font-bold mb-2">
         {locale === "en" ? "Authenticating..." : "로그인을 완료하고 있어요"}
       </h3>
       <p className="font-sans text-sm text-charcoal/60">

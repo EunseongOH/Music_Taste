@@ -1,6 +1,6 @@
 # Sortify 타이포그래피 시스템
 
-> 2026-09-15 제정 · 토큰 정의: `src/app/globals.css` (`type-*` 유틸, `--color-point-ink`)
+> 2026-09-15 제정 · 같은 날 개정(서체 역할 변경) · 토큰 정의: `src/app/globals.css`
 > 새 화면·수정 화면은 이 문서의 토큰만 쓴다. `text-[10px]` 같은 임의 크기를 직접 쓰지 않는다.
 
 ## 1. 원칙
@@ -9,16 +9,23 @@
 2. **최소 12px.** 모바일 WebView(토스 미니앱 포함)에서 10px 이하는 읽기 어렵다.
 3. **굵기는 4단계.** 400 · 600 · 700, 그리고 `type-display` 전용 800. 단계가 많으면 위계가 흐려진다(KRDS).
 4. **행간은 약 1.5배.** KRDS 는 최소 150%, 토스 TDS 본문은 15/22.5 · 17/25.5 다.
-5. **한글은 Pretendard, 영문·숫자 강조만 Playfair.**
-   - Playfair 는 `latin` 서브셋만 로드한다(`src/app/layout.tsx`).
-   - `font-serif` 를 한글에 쓰면 실제로는 기기마다 다른 대체 글꼴로 보인다.
-   - Playfair 는 순위 숫자, 싱크 %, 영문 워드마크 "Sortify" 처럼 Sortify 톤을 내는 자리에만 쓴다.
-   - 탭·섹션 제목 옆 **개수는 Pretendard** 로 둔다. Playfair 숫자는 올드스타일(0·1 이 소문자 높이)이라 한글 바로 옆에서는 크기가 들쭉날쭉해 보인다. 숫자가 혼자 강조되는 자리(순위·%)에서만 Playfair 가 어울린다.
+5. **서체는 세 가지, 역할이 겹치지 않는다.**
+
+| 서체 | 클래스 | 쓰는 곳 | 쓰지 않는 곳 |
+|---|---|---|---|
+| Pretendard | 기본(`font-sans`) | 모든 한글·영문 글자, 문장 속 숫자("1위 Harmony", "총 8매치 중 3번째") | — |
+| 원티드산스 Std | `font-num` | **숫자만 혼자 강조되는 자리**: 순위 숫자(1, 2, 3…), 퍼센트(32.4%), 곡 수·날짜처럼 크게 떼어 쓰는 숫자 | 글자와 한 덩어리로 읽히는 숫자 |
+| Playfair Display | `font-wordmark` | **홈 화면의 큰 "Sortify" 워드마크 한 곳** | 그 밖의 모든 곳 |
+
+- Playfair 는 `latin` 서브셋만 로드한다. 한글에 쓰면 기기마다 다른 대체 글꼴로 보여서, 워드마크 외에는 쓰지 않는다.
+- 원티드산스는 숫자·기호만 쓰므로 라틴 전용 **Std 가변 폰트**(약 82KB)를 번들에 넣었다. 라이선스는 SIL OFL 1.1이고, 원문은 `src/app/fonts/WantedSans-OFL.txt` 에 있다.
+- 순위처럼 세로로 줄 세우는 숫자에는 `tabular-nums` 를 함께 붙여 자릿수 폭을 맞춘다.
+
 6. **영문 대문자 라벨(eyebrow)은 쓰지 않는다.** 한글 화면에서는 장식에 가깝고 판독성이 떨어진다.
 
-## 2. 토큰
+## 2. 크기 토큰
 
-토큰은 크기·행간·굵기·자간만 정한다. 글꼴은 기본(Pretendard)이며, Playfair 가 필요하면 `font-serif` 를 덧붙인다.
+토큰은 크기·행간·굵기·자간만 정한다. 서체는 위 표의 클래스를 덧붙여 정한다.
 
 | 토큰 | 크기 / 행간 | 굵기 | 자간 | 쓰는 곳 |
 |---|---|---|---|---|
@@ -40,7 +47,7 @@
 | 보조 | sub 13 | Typography 7 · 13/19.5 | Body XSmall 13 | Footnote 13 | Body Small 12/16 |
 | 메타 | caption 12 | subTypography | Label XSmall 13 | Caption 1 · 12 | Label Small 11/16 |
 
-본문을 KRDS 기본값(17)이 아니라 15로 둔 이유: 목록 위주 화면이라 한 화면에 보이는 정보량이 중요하다. 이는 토스 TDS·iOS 목록 화면의 관행과 같다(2026-09-15 결정).
+본문을 KRDS 기본값(17)이 아니라 15로 둔 이유가 있다. 목록 위주 화면이라 한 화면에 보이는 정보량이 중요하고, 토스 TDS·iOS 목록 화면의 관행과도 같다(2026-09-15 결정).
 
 ## 3. 글자 색
 
@@ -57,7 +64,7 @@
 ## 4. 조합 예
 
 ```tsx
-{/* 섹션 제목 + 개수 */}
+{/* 섹션 제목 + 개수 — 개수는 글자 옆이라 Pretendard */}
 <h2 className="type-title-2 text-navy">같은 1위 곡 <span className="text-navy/70">3</span></h2>
 
 {/* 목록 행 */}
@@ -65,24 +72,28 @@
 <p className="type-sub text-navy/70">1위 Feel My Rhythm · Red Velvet</p>
 <p className="type-caption text-navy/70">2026.09.11 · 최애 곡 줄 세우기</p>
 
-{/* 순위 숫자 — 숫자라서 Playfair */}
-<span className="type-title-2 font-serif text-point-ink">1</span>
+{/* 순위 숫자 — 숫자만 있어서 원티드산스, 세로 정렬이라 tabular-nums */}
+<span className="type-title-2 font-num tabular-nums text-point-ink">1</span>
 
-{/* 싱크 % */}
-<span className="type-title-2 font-serif text-point-ink">72.4%</span>
+{/* 싱크 % — 숫자만 있어서 원티드산스 */}
+<span className="type-title-2 font-num text-point-ink">72.4%</span>
+
+{/* 홈 워드마크 — 이 한 곳만 */}
+<h1 className="font-wordmark text-5xl">Sortify</h1>
 ```
 
 ## 5. 적용 현황
 
 | 대상 | 상태 |
 |---|---|
-| 상단 헤더 h1 (월드컵·트랙·결과·공유·스페이스·아카이브) | 적용 |
+| 상단 헤더 h1 (월드컵·곡 선택·결과·공유·스페이스·아카이브) | 적용 |
 | 내 취향 스페이스 · 우리의 취향 아카이브 · 프로필 창 | 적용 |
-| 홈, 아티스트/장르 선택, 월드컵 본문, 결과 화면 본문 | 후속 과제 |
-| 결과 템플릿(`TasteTemplates`) | **적용하지 않음** — 내보내기 PNG 바이트 비교(`npm run baseline:verify`)가 걸려 있어, 바꾸려면 기준선을 새로 찍는 결정이 먼저 필요 |
+| 모든 화면의 `font-serif` 제거(워드마크 → `font-wordmark`, 숫자 → `font-num`) | 적용 |
+| 결과 템플릿(`TasteTemplates`, `SnakePathTimeline`) | **재디자인 때 적용.** 내보내기 PNG 바이트 비교(`npm run baseline:verify`)가 걸려 있어, 템플릿을 새로 만들고 기준선을 다시 찍을 때 함께 바꾼다. 그때까지만 `--font-serif` 토큰을 남겨 둔다 |
 
 ## 출처
 - 토스 TDS Mobile Typography — https://tossmini-docs.toss.im/tds-mobile/foundation/typography/
 - KRDS 타이포그래피 — https://www.krds.go.kr/html/site/style/style_03.html
 - Apple Human Interface Guidelines, Typography (iOS 기본 크기)
 - Material Design 3, Type scale
+- 원티드산스 — https://github.com/wanteddev/wanted-sans (SIL OFL 1.1)

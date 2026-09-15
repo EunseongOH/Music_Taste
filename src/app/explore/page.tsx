@@ -756,7 +756,7 @@ export default function ExplorePage() {
     return (
       <main className="flex flex-col min-h-screen relative z-10 w-full items-center justify-center bg-[var(--app-bg)]">
         <Loader2 className="animate-spin text-point mb-6" size={48} strokeWidth={2.5} />
-        <h1 className="font-serif text-2xl text-navy font-bold">{t.loadingTitle}</h1>
+        <h1 className="text-2xl text-navy font-bold">{t.loadingTitle}</h1>
         <p className="font-sans text-sm text-charcoal/70 mt-2">{t.loadingDesc}</p>
       </main>
     );
@@ -878,11 +878,11 @@ export default function ExplorePage() {
       <div className="sticky top-0 z-40 bg-[#F5F2ED]/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex flex-col gap-3 shadow-sm">
         <div className="flex items-center justify-between">
           <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto md:top-auto md:left-auto right-auto font-bold" />
-          <ProfileHeader locale={locale} className="!relative !top-auto !right-auto !md:top-auto !md:right-auto" />
+          <ProfileHeader locale={locale} className="ml-auto !relative !top-auto !right-auto !md:top-auto !md:right-auto" />
         </div>
 
         <div className="text-left mt-1 mb-2 px-1">
-          <h1 className="font-serif text-[1.4rem] text-navy tracking-tight leading-snug font-bold">
+          <h1 className="text-[1.4rem] text-navy tracking-tight leading-snug font-bold">
             {t.title}
           </h1>
           <p className="font-sans text-charcoal/90 font-medium text-sm mt-1">
@@ -939,7 +939,7 @@ export default function ExplorePage() {
         {searchQuery.trim().length > 0 ? (
           /* 1. Search Results Section */
           <div className="flex flex-col">
-            <h2 className="font-serif text-lg text-navy font-bold mb-4 flex items-center gap-2">
+            <h2 className="text-lg text-navy font-bold mb-4 flex items-center gap-2">
               {t.searchResult}
               <span className="text-xs font-sans text-point font-medium">{t.searchResultSub}</span>
             </h2>
@@ -1167,7 +1167,7 @@ export default function ExplorePage() {
                   <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
                 </motion.div>
 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-3 tracking-tight">{t.saveExitTitle}</h2>
+                <h2 className="text-2xl font-bold text-navy mb-3 tracking-tight">{t.saveExitTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
                   {t.saveExitDesc}
                 </p>
@@ -1235,7 +1235,7 @@ export default function ExplorePage() {
                   />
                 </div>
                 
-                <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.singleConfirmTitle}</h2>
+                <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.singleConfirmTitle}</h2>
                 <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-2">
                   {t.singleConfirmDesc}
                 </p>

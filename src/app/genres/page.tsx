@@ -119,7 +119,7 @@ export default function GenresPage() {
       {/* Header */}
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex items-center justify-between shadow-sm">
         <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto font-bold" />
-        <ProfileHeader locale={locale} className="!relative !top-auto !right-auto" />
+        <ProfileHeader locale={locale} className="ml-auto !relative !top-auto !right-auto" />
       </div>
 
       {/* Main Intro */}
@@ -131,7 +131,7 @@ export default function GenresPage() {
           </span>
         </div>
 
-        <h1 className="font-serif text-2xl sm:text-3xl text-navy tracking-tight leading-snug font-bold">
+        <h1 className="text-2xl sm:text-3xl text-navy tracking-tight leading-snug font-bold">
           {locale === "ko" ? "선호하는 음악 장르를 골라주세요" : "Select your favorite music genres"}
         </h1>
         <p className="font-sans text-xs sm:text-sm text-charcoal/70 mt-1.5 leading-relaxed">
@@ -192,7 +192,7 @@ export default function GenresPage() {
               >
                 {/* Top Row: Genre Name */}
                 <div className="flex items-center w-full">
-                  <span className="font-serif text-sm sm:text-base font-bold text-navy tracking-tight leading-none whitespace-nowrap">
+                  <span className="text-sm sm:text-base font-bold text-navy tracking-tight leading-none whitespace-nowrap">
                     {genreName}
                   </span>
                 </div>
