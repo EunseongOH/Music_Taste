@@ -1,5 +1,11 @@
 /**
- * MusicBrainz lazy-fill 리졸버 워커 (Phase D)
+ * MusicBrainz 수동 대량 작업 스크립트
+ *
+ * 상시 처리는 supabase/functions/mb-worker (pg_cron 이 매분 호출)가 맡는다. 사용자가 검색·열람한
+ * 아티스트는 요청 경로가 mb_resolve_queue 에 기록하고 그 워커가 채운다. 이 스크립트는 초기 시드와
+ * 대량 백필처럼 한 번에 몰아서 돌릴 때만 쓴다.
+ * ponytail: 아티스트 확인·앨범·트랙리스트 로직이 워커와 중복돼 있다. 워커가 운영에서 안정적인 게
+ *           확인되면 이 스크립트는 --seed 만 남기고 나머지는 워커 호출로 대체한다.
  *
  * mb_resolve_queue 를 소비해 canonical 층(mb_artist / mb_release_group / mb_recording)을
  * 채우고 mb_spotify_map 에 Spotify ID <-> MBID 매핑을 남긴다.
@@ -91,12 +97,14 @@ async function byUrlRelationship(spotifyId: string): Promise<string | null> {
  * 실측 정확도 57% (빌스택스->Vasco Rossi, 그레이->David Gray 같은 오매칭)라
  * confidence='name' 으로 격리하고 자동 채택하지 않는다.
  */
-async function byName(name: string): Promise<{ mbid: string; matched: string } | null> {
-  const candidates = [name];
+async function byName(hint: string): Promise<{ mbid: string; matched: string } | null> {
+  // hint 는 "영문|한글" 형식일 수 있다(요청 경로·시드가 이렇게 넣는다)
+  const candidates = hint.split("|").map(s => s.trim()).filter(Boolean);
+  const name = candidates[0] ?? "";
   const alt = hasHangul(name)
     ? ARTIST_TRANSLATION_MAP[name]
     : EN_TO_KO[name.toLowerCase()];
-  if (alt) candidates.push(alt);
+  if (alt && !candidates.includes(alt)) candidates.push(alt);
 
   for (const q of candidates) {
     const data = await mb(`artist/?query=${encodeURIComponent(`artist:"${q}"`)}&fmt=json&limit=5`);
@@ -408,7 +416,11 @@ async function seed() {
     .range(f, t));
   for (const m of mapped) rows.delete(m.spotify_id);
 
-  const list = [...rows.values()];
+  // 워커는 한글 맵을 모르므로 "영문|한글" 로 넘긴다 (요청 경로의 enqueueDemand 와 같은 형식)
+  const list = [...rows.values()].map(r => {
+    const alt = ARTIST_TRANSLATION_MAP[r.hint] ?? EN_TO_KO[r.hint?.toLowerCase()];
+    return alt && alt !== r.hint ? { ...r, hint: `${r.hint}|${alt}` } : r;
+  });
   for (let i = 0; i < list.length; i += 500) {
     const { error } = await supabase
       .from("mb_resolve_queue")

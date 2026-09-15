@@ -249,17 +249,56 @@ async function canonicalTracksByAlbum(albumIds: string[]): Promise<Map<string, a
 /** Spotify 에서 온 트랙에는 원래 ID 를 spotify_id 로 남긴다. 키 체계가 둘이라 판별용이다. */
 const withSpotifyId = (tracks: any[]) => tracks.map(t => ({ ...t, spotify_id: t.spotify_id ?? t.id }));
 
-/** canonical miss 를 리졸버 큐에 던진다. await 하지 않는다 — 요청 지연 0. */
-function enqueueResolve(items: { id: string; name?: string }[]) {
-  if (!items.length) return;
-  const rows = items
-    .filter(i => i?.id)
-    .map(i => ({ spotify_id: i.id, entity: 'artist', hint: i.name ?? null }));
-  if (!rows.length) return;
-  createAdminClient()
-    .from('mb_resolve_queue')
-    .upsert(rows, { onConflict: 'spotify_id', ignoreDuplicates: true })
-    .then(undefined, () => { /* 큐 적재 실패는 조용히 넘긴다 */ });
+// 영문 -> 한글. 워커는 이 맵을 모르므로 큐에 넣을 때 "영문|한글" 로 같이 넘긴다.
+// (실측: 한국 아티스트는 MB 에 한글 이름이 정식명인 경우가 많아 한글 재검색이 발견율을 크게 올린다)
+const EN_TO_KO = new Map(Object.entries(ARTIST_TRANSLATION_MAP).map(([ko, en]) => [en.toLowerCase(), ko]));
+
+// 같은 인스턴스에서 같은 아티스트를 이 시간 안에 다시 기록하지 않는다. 인기 아티스트를 수천 명이
+// 동시에 봐도 DB 쓰기는 인스턴스당 한 번이다. 워커가 처리하는 쪽이 느리므로 이 이상 자주 쓸 이유가 없다.
+const DEMAND_THROTTLE_MS = 6 * 3600 * 1000;
+const demandSeen = new Map<string, number>();
+
+/**
+ * 사용자가 검색하거나 열어본 아티스트를 수요 큐에 기록한다. await 하지 않는다 — 요청 지연 0.
+ * created_at 을 지금으로 갱신해서 워커가 "최근에 찾은 아티스트"부터 처리하게 한다.
+ * 이미 DB 에 다 있는 아티스트면 워커가 MB 호출 없이 DB 조회 몇 번으로 확인하고 지운다.
+ */
+function enqueueDemand(items: { id: string; name?: string }[]) {
+  const now = Date.now();
+  const fresh = items.filter(i => i?.id && now - (demandSeen.get(i.id) ?? 0) > DEMAND_THROTTLE_MS);
+  if (!fresh.length) return;
+  for (const i of fresh) demandSeen.set(i.id, now);
+  if (demandSeen.size > 20000) demandSeen.clear();  // 메모리 상한
+
+  const at = new Date(now).toISOString();
+  const hint = (name?: string) => {
+    if (!name) return undefined;
+    const alt = ARTIST_TRANSLATION_MAP[name] ?? EN_TO_KO.get(name.toLowerCase());
+    return alt && alt !== name ? `${name}|${alt}` : name;
+  };
+  // PostgREST 는 한 배치 안의 행이 같은 키를 가져야 한다. 이름을 모르는 행이 기존 힌트를
+  // null 로 덮지 않게 두 묶음으로 나눈다.
+  const named = fresh.filter(i => i.name).map(i => ({ spotify_id: i.id, entity: 'artist', hint: hint(i.name), created_at: at }));
+  const bare = fresh.filter(i => !i.name).map(i => ({ spotify_id: i.id, entity: 'artist', created_at: at }));
+  const supabase = createAdminClient();
+  for (const rows of [named, bare]) {
+    if (!rows.length) continue;
+    supabase.from('mb_resolve_queue')
+      .upsert(rows, { onConflict: 'spotify_id' })
+      .then(undefined, () => { /* 큐 기록 실패가 요청을 막지 않는다 */ });
+  }
+}
+
+// 같은 키의 동시 요청을 하나로 합친다. 인기 앨범을 여러 명이 동시에 처음 열 때
+// 캐시가 써지기 전에 Spotify 를 N 번 부르는 것을 막는다(인스턴스 안에서). 인스턴스 간에는
+// 전역 토큰버킷이 총량을 묶는다. Response 객체는 한 번만 읽히므로 반드시 파싱한 값을 공유한다.
+const inflight = new Map<string, Promise<any>>();
+function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const running = inflight.get(key);
+  if (running) return running as Promise<T>;
+  const p = fn().finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
 }
 
 const RATE_LIMITED_RESPONSE = () =>
@@ -435,6 +474,8 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
 
     if (canon && canon.length > 0) {
       const formatted = canon.map(toArtist);
+      // DB 에 이미 있어도 기록한다: 워커가 트랙리스트가 비었거나 오래된 아티스트를 채운다
+      enqueueDemand(formatted);
       searchCache.set(cacheKey, { data: formatted, timestamp: Date.now() });
       return formatted;
     }
@@ -494,6 +535,7 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
       });
 
       if (hasValidMatch) {
+        enqueueDemand(formatted);
         searchCache.set(cacheKey, { data: formatted, timestamp: Date.now() });
         return formatted;
       } else {
@@ -584,8 +626,8 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
 
   if (succeeded && allItems.length > 0) {
     saveArtistsToDbCache(allItems);
-    // canonical 에 없던 아티스트다. 워커가 나중에 채우면 다음부터는 Spotify 를 안 탄다.
-    enqueueResolve(allItems);
+    // canonical 에 없던 아티스트다. 워커가 채우면 다음부터는 Spotify 를 안 탄다.
+    enqueueDemand(allItems);
     searchCache.set(cacheKey, { data: allItems, timestamp: Date.now() });
     return allItems;
   }
@@ -696,6 +738,9 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     return { items: [], total: 0 };
   }
 
+  // 앨범 목록을 연 아티스트 = 사용한 아티스트. DB 화 대상으로 기록한다.
+  enqueueDemand([{ id: artistId }]);
+
   const cacheKey = `albums_${artistId}`;
   // items 는 절대 offset 으로 색인된 희소 배열이다.
   const cut = (items: any[], total: number) => ({
@@ -738,36 +783,40 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     console.warn("[Spotify Cache DB] DB getArtistAlbums failed, calling API:", e);
   }
 
-  // 3. Spotify — 요청된 offset 을 포함하는 블록 하나만 받는다
-  const blockStart = Math.floor(offset / albumPageSize) * albumPageSize;
-  let response = await spotifyFetch(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${albumPageSize}&offset=${blockStart}`
-  );
-
-  // limit=50 이 거부되면 한 번만 10 으로 낮춰 재시도하고, 이후로는 계속 10 을 쓴다
-  if ((response.status === 400 || response.status === 403) && albumPageSize !== 10) {
-    console.warn(`[Spotify API] limit=${albumPageSize} rejected (${response.status}). Falling back to 10.`);
-    albumPageSize = 10;
-    const retryStart = Math.floor(offset / 10) * 10;
-    response = await spotifyFetch(
-      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=${retryStart}`
+  // 3. Spotify — 요청된 offset 을 포함하는 블록 하나만 받는다. 같은 블록 동시 요청은 한 번으로 합친다.
+  const block = await singleFlight(`albums:${artistId}:${Math.floor(offset / albumPageSize)}:${albumPageSize}`, async () => {
+    let start = Math.floor(offset / albumPageSize) * albumPageSize;
+    let response = await spotifyFetch(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${albumPageSize}&offset=${start}`
     );
-  }
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
+    // limit=50 이 거부되면 한 번만 10 으로 낮춰 재시도하고, 이후로는 계속 10 을 쓴다
+    if ((response.status === 400 || response.status === 403) && albumPageSize !== 10) {
+      console.warn(`[Spotify API] limit=${albumPageSize} rejected (${response.status}). Falling back to 10.`);
+      albumPageSize = 10;
+      start = Math.floor(offset / 10) * 10;
+      response = await spotifyFetch(
+        `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=10&offset=${start}`
+      );
+    }
+
+    if (!response.ok) {
+      console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, await response.text());
+      return null;
+    }
+    const data = await response.json();
+    return { start, fetched: (data.items || []) as any[], total: (data.total || 0) as number };
+  });
+
+  if (!block) {
     // 부분 캐시라도 있으면 그거라도 돌려준다
     return total > 0 ? cut(items, total) : { items: [], total: 0 };
   }
 
-  const data = await response.json();
-  const fetched: any[] = data.items || [];
-  total = data.total || 0;
-
+  const { fetched } = block;
+  total = block.total;
   const merged = [...items];
-  const start = Math.floor(offset / albumPageSize) * albumPageSize;
-  for (let i = 0; i < fetched.length; i++) merged[start + i] = fetched[i];
+  for (let i = 0; i < fetched.length; i++) merged[block.start + i] = fetched[i];
   items = merged;
 
   // 4. Save to DB Cache (빈 배열이 영구 캐싱되지 않도록 유효성 검사 후)
@@ -792,9 +841,10 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
 };
 
 // 이보다 많은 앨범이 DB 에 없으면 전곡 로드를 포기하고 페이지 단위로 폴백한다.
-// ponytail: MB 커버리지가 낮은 아티스트(인디 일부)에서 Spotify 호출이 튀는 것을 막는 상한이다.
-// 실제로 자주 걸리면 워커로 그 아티스트를 먼저 채우는 편이 맞다.
-const DISCOGRAPHY_SPOTIFY_ALBUM_CAP = 30;
+// 요청 하나가 Spotify 를 수십 번 순차 호출하며 오래 붙잡히지 않게 작게 둔다. 이 아티스트는
+// getArtistAlbums 에서 수요 큐에 기록됐으므로 워커가 곧 채우고, 다음 사용자는 DB 에서 전곡을 받는다.
+// 신규 싱글 몇 개 정도만 DB 에 없는 경우는 여기서 바로 받아 전곡 선택을 살린다.
+const DISCOGRAPHY_SPOTIFY_ALBUM_CAP = 5;
 
 // Phase E-2: 싱글 아티스트 모드의 "전곡 자동 선택".
 //
@@ -856,6 +906,11 @@ export const getAlbumTracks = async (albumId: string) => {
     return cached.data;
   }
 
+  return singleFlight(`tracks:${cacheKey}`, () => loadAlbumTracks(albumId, lang, cacheKey));
+};
+
+// getAlbumTracks 의 캐시 미스 경로. 같은 앨범을 동시에 여는 요청은 singleFlight 로 한 번만 탄다.
+async function loadAlbumTracks(albumId: string, lang: string, cacheKey: string): Promise<any[]> {
   // 2. canonical — MusicBrainz 트랙리스트가 있으면 Spotify 를 부르지 않는다.
   //    트랙 id 는 MB 레코딩 ID 다. 이게 이번 전환의 목적이다:
   //    기존 카탈로그는 DB 에서, Spotify 는 DB 에 없는 앨범(신규 발매 등)만.
@@ -953,7 +1008,7 @@ export const getAlbumTracks = async (albumId: string) => {
   const decorated = withSpotifyId(allTracks);
   tracksCache.set(cacheKey, { data: decorated, timestamp: Date.now() });
   return decorated;
-};
+}
 
 // Fetch related artists (Fallback to random trending/genre artists due to Spotify API 403 restrictions on Client Credentials)
 export const getRelatedArtists = async (artistId: string) => {
@@ -1160,8 +1215,9 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
           items.forEach((item: any) => {
             allResultsMap.set(item.id, item);
           });
+          // 장르 목록에 스쳐 지나간 아티스트는 수요 큐에 넣지 않는다. 스크롤 한 번에 수십 명이 들어가서
+          // 사용자가 실제로 검색·선택한 아티스트가 뒤로 밀린다. 선택하면 getArtistAlbums 에서 기록된다.
           saveArtistsToDbCache(items);
-          enqueueResolve(items);
         } else {
           const errText = await response.text();
           console.warn(`[Spotify API] Individual search for genre [${genreId}] failed with status ${response.status}: ${errText}`);
