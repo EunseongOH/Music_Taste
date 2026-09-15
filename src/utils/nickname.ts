@@ -13,6 +13,16 @@ const musicNouns = [
 ];
 
 /**
+ * 화면에 보여줄 닉네임. 비었으면 기본값, 이메일 형태면 앞 3자만 남기고 가린다.
+ * (예전에 이메일이 닉네임으로 저장된 계정이 있다)
+ */
+export function displayNickname(name: string | null | undefined, fallback: string): string {
+  if (!name) return fallback;
+  if (name.includes("@")) return `${name.split("@")[0].slice(0, 3)}***`;
+  return name;
+}
+
+/**
  * 닉네임 오류 코드. DB 의 public.nickname_error / set_my_nickname 과 같은 값이다.
  * 규정의 원본은 DB(supabase/migrations/20260915000001_nickname.sql)이고,
  * 아래 validateNickname 은 입력 중 즉시 피드백을 주기 위한 사본이다.
