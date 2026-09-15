@@ -70,6 +70,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
         currentMatchIndex: draft.current_match_index,
         winners: draft.winners,
         eliminatedTracks: draft.eliminated_tracks,
+        skippedTracks: draft.skipped_tracks ?? [],
         byeCount: draft.bye_count,
         selectedByes: draft.selected_byes
       };

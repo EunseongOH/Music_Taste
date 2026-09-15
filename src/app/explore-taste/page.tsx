@@ -45,6 +45,17 @@ interface TournamentResult {
   created_at: string;
 }
 
+/** 월드컵에서 "모르는 곡"으로 뺀 곡 (listen_later_tracks). */
+interface ListenLaterTrack {
+  id: string;
+  track_id: string;
+  title: string;
+  artist_name: string | null;
+  album_image: string | null;
+  is_unreleased: boolean;
+  created_at: string;
+}
+
 const translations = {
   ko: {
     title: "내 취향 스페이스",
@@ -52,6 +63,11 @@ const translations = {
     bannerSub: "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요.",
     tabArchive: "내 보관함",
     tabSocial: "친구들의 피드",
+    tabListen: "들어볼 곡",
+    emptyListenTitle: "들어볼 곡이 없어요",
+    emptyListenDesc: "월드컵에서 모르는 곡을 위로 올려 빼면 여기에 모여요. 나중에 천천히 들어보세요!",
+    listenUnreleased: "미발매",
+    listenRemove: "목록에서 지우기",
     syncing: "데이터를 안전하게 동기화 중...",
     guestTitle: "취향 잠금 해제",
     guestDesc: "로그인하지 않으면 내 취향 스페이스에 음악들을 저장하거나 친구들의 피드를 구경할 수 없어요. 로그인해서 내 취향을 편안하게 남기고, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요!",
@@ -101,6 +117,11 @@ const translations = {
     bannerSub: "Browse the music you've gathered and explore the feeds of friends who share similar tastes.",
     tabArchive: "My Tastes",
     tabSocial: "Friends' Feeds",
+    tabListen: "Listen Later",
+    emptyListenTitle: "Nothing to listen to yet",
+    emptyListenDesc: "Songs you drag up to skip during a World Cup gather here. Give them a listen later!",
+    listenUnreleased: "Unreleased",
+    listenRemove: "Remove from list",
     syncing: "Loading your music space...",
     guestTitle: "Unlock Your Taste",
     guestDesc: "Without logging in, you cannot save your tracks to My Taste Space or view friends' feeds. Log in to store your tastes and browse others' feeds!",
@@ -163,8 +184,9 @@ export default function ExploreTastePage() {
   const { user, isLoading } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<"archive" | "social">("archive");
+  const [activeTab, setActiveTab] = useState<"archive" | "social" | "listen">("archive");
   const [completedResults, setCompletedResults] = useState<TournamentResult[]>([]);
+  const [listenTracks, setListenTracks] = useState<ListenLaterTrack[]>([]);
   const [otherUsersResults, setOtherUsersResults] = useState<TournamentResult[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -216,6 +238,15 @@ export default function ExploreTastePage() {
 
       if (othersError) throw othersError;
       setOtherUsersResults(othersData || []);
+
+      // 3. 들어볼 곡. 실패해도 위 두 탭은 보여야 하므로 따로 처리한다.
+      const { data: listenData, error: listenError } = await supabase
+        .from("listen_later_tracks")
+        .select("id, track_id, title, artist_name, album_image, is_unreleased, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (listenError) console.error("[ExploreTaste] Error fetching listen later:", listenError.message);
+      setListenTracks(listenData || []);
     } catch (err) {
       console.error("[ExploreTaste] Error fetching data:", err);
     } finally {
@@ -228,6 +259,16 @@ export default function ExploreTastePage() {
       fetchData();
     }
   }, [user, isLoading]);
+
+  const handleRemoveListen = async (id: string) => {
+    const prev = listenTracks;
+    setListenTracks(prev.filter((tr) => tr.id !== id));
+    const { error } = await supabase.from("listen_later_tracks").delete().eq("id", id);
+    if (error) {
+      console.error("[ExploreTaste] Error removing listen later:", error.message);
+      setListenTracks(prev);
+    }
+  };
 
   // Toggle record public/private state real-time
   const handleTogglePublic = async (resultId: string, currentStatus: boolean) => {
@@ -428,6 +469,16 @@ export default function ExploreTastePage() {
               <Sparkles size={13} className={activeTab === "social" ? "text-point animate-pulse" : ""} />
               {t.tabSocial}
             </button>
+            <button
+              onClick={() => setActiveTab("listen")}
+              className={`flex-1 py-3 text-center text-xs font-sans font-bold rounded-xl transition-all ${
+                activeTab === "listen"
+                  ? "bg-navy text-cream shadow-md"
+                  : "text-navy/60 hover:text-navy"
+              }`}
+            >
+              {t.tabListen} ({isLoadingData ? "..." : listenTracks.length})
+            </button>
           </div>
         </div>
 
@@ -603,6 +654,50 @@ export default function ExploreTastePage() {
                   </motion.div>
                 );
               })
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: 들어볼 곡 */}
+        {!isLoadingData && user && activeTab === "listen" && (
+          <div className="px-6 flex flex-col gap-3">
+            {listenTracks.length === 0 ? (
+              <div className="py-16 text-center border-2 border-dashed border-navy/20 rounded-[2rem] px-6 bg-white/30">
+                <Music size={48} className="text-navy/20 mx-auto mb-4" />
+                <h3 className="font-serif text-lg text-navy font-bold mb-1">{t.emptyListenTitle}</h3>
+                <p className="font-sans text-xs text-navy/50 leading-relaxed px-4 break-keep">{t.emptyListenDesc}</p>
+              </div>
+            ) : (
+              listenTracks.map((tr) => (
+                <div
+                  key={tr.id}
+                  className="flex items-center gap-3 p-3 bg-white/70 border border-navy/10 rounded-2xl shadow-sm"
+                >
+                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-navy/5 shrink-0">
+                    {tr.album_image && (
+                      <Image src={tr.album_image} alt={tr.title} fill sizes="48px" className="object-cover" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-sans text-sm font-bold text-navy truncate">{tr.title}</p>
+                    <p className="font-sans text-xs text-charcoal/70 truncate">
+                      {tr.artist_name}
+                      {tr.is_unreleased && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-navy/10 text-[10px] font-bold text-navy/70">
+                          {t.listenUnreleased}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveListen(tr.id)}
+                    aria-label={t.listenRemove}
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-navy/40 hover:text-navy hover:bg-navy/5 transition-colors cursor-pointer shrink-0"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))
             )}
           </div>
         )}

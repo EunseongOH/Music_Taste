@@ -256,7 +256,10 @@ export default function ResultPage() {
 
   // Auto-Save Effect: Triggered for logged-in users completing 16+ tracks
   useEffect(() => {
-    if (user && winners.length >= 16 && !isSaved && !isAutoSaving) {
+    // 16곡 기준은 월드컵을 시작한 곡 수다. "모르는 곡"으로 뺀 곡은 순위에 없으므로
+    // 더해서 센다 — 16곡 중 1곡을 뺐다고 자동 저장이 조용히 꺼지면 안 된다.
+    const skippedCount = Number(sessionStorage.getItem("worldcup_skipped_count")) || 0;
+    if (user && winners.length + skippedCount >= 16 && !isSaved && !isAutoSaving) {
       setIsAutoSaving(true);
       autoSaveRef.current = (async () => {
         try {
@@ -594,6 +597,7 @@ export default function ResultPage() {
 
   const executeExit = async () => {
     sessionStorage.removeItem("worldcup_ranking");
+    sessionStorage.removeItem("worldcup_skipped_count");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
     sessionStorage.removeItem("selected_genres");

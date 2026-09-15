@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, ArrowLeft, RefreshCw, Disc } from "lucide-react";
@@ -49,6 +49,15 @@ export default function WorldCupPage() {
   
   // Track ranking: losers get pushed here. Winner goes in at the end.
   const [eliminatedTracks, setEliminatedTracks] = useState<Track[]>([]);
+
+  /**
+   * "모르는 곡"으로 뺀 곡. 순위에는 들어가지 않고 들어볼 곡 목록으로 간다.
+   * 빼는 순간 상대 곡이 자동 진출하므로 대진표 크기는 변하지 않는다.
+   */
+  const [skippedTracks, setSkippedTracks] = useState<Track[]>([]);
+  /** 되돌리기 대기 중인 빼기. 확정 전까지 후보를 가리고 되돌리기 카드를 보여준다. */
+  const [pendingRemoval, setPendingRemoval] = useState<Track | null>(null);
+  const removalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // LP Player state
   const [droppedTrack, setDroppedTrack] = useState<Track | null>(null);
@@ -65,22 +74,26 @@ export default function WorldCupPage() {
 
   function getLocalizedRoundName(name: string, targetLocale: "ko" | "en"): string {
     if (!name) return "";
+    // 좁은 이름부터 본다. "준결승전"은 "결승"을, "4강 진출 예선전"은 "4강"을 포함하므로
+    // 넓은 조건을 먼저 보면 준결승이 결승으로, 예선전이 준결승으로 표시된다.
     if (targetLocale === "ko") {
+      const matchPlayin = name.match(/Play-in for Round of (\d+)/i);
+      if (matchPlayin) return `${matchPlayin[1]}강 진출 예선전`;
+      if (name.includes("예선전")) return name;
+      if (name.includes("Semifinal") || name.includes("준결승") || name === "4강") return "준결승전";
       if (name.includes("Final") || name.includes("결승")) return "결승전";
-      if (name.includes("Semifinal") || name.includes("준결승") || name.includes("4강")) return "준결승전";
       if (name.endsWith("강")) return name;
       const matchRoundN = name.match(/Round of (\d+)/i);
       if (matchRoundN) return `${matchRoundN[1]}강`;
-      const matchPlayin = name.match(/Play-in for Round of (\d+)/i);
-      if (matchPlayin) return `${matchPlayin[1]}강 진출 예선전`;
       return name;
     } else {
-      if (name.includes("결승") || name.includes("Final")) return "Final";
-      if (name.includes("준결승") || name.includes("4강") || name.includes("Semifinal")) return "Semifinal";
-      const matchRoundKo = name.match(/(\d+)강$/);
-      if (matchRoundKo) return `Round of ${matchRoundKo[1]}`;
       const matchPlayinKo = name.match(/(\d+)강 진출 예선전/);
       if (matchPlayinKo) return `Play-in for Round of ${matchPlayinKo[1]}`;
+      if (name.includes("Play-in")) return name;
+      if (name.includes("준결승") || name === "4강" || name.includes("Semifinal")) return "Semifinal";
+      if (name.includes("결승") || name.includes("Final")) return "Final";
+      const matchRoundKo = name.match(/(\d+)강$/);
+      if (matchRoundKo) return `Round of ${matchRoundKo[1]}`;
       return name;
     }
   }
@@ -121,6 +134,7 @@ export default function WorldCupPage() {
             setCurrentMatchIndex(draft.current_match_index || 0);
             setWinners(draft.winners || []);
             setEliminatedTracks(draft.eliminated_tracks || []);
+            setSkippedTracks(draft.skipped_tracks || []);
             return;
           }
         } catch (err) {
@@ -149,7 +163,9 @@ export default function WorldCupPage() {
           setMatches(st.matches);
           setCurrentMatchIndex(st.currentMatchIndex);
           setWinners(st.winners);
-          setEliminatedTracks(st.eliminated_tracks || []);
+          // 저장하는 쪽은 모두 eliminatedTracks 키를 쓴다. 예전 키도 읽어 둔다.
+          setEliminatedTracks(st.eliminatedTracks || st.eliminated_tracks || []);
+          setSkippedTracks(st.skippedTracks || []);
         } else {
           setTracks(parsedTracks);
           if (parsedTracks.length < 4) {
@@ -180,6 +196,7 @@ export default function WorldCupPage() {
       currentMatchIndex,
       winners,
       eliminatedTracks,
+      skippedTracks,
       byeCount: 0,
       selectedByes: []
     };
@@ -199,7 +216,7 @@ export default function WorldCupPage() {
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, user]);
+  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, user]);
 
   // Clear active tournament drafts in Supabase when finished
   useEffect(() => {
@@ -264,20 +281,19 @@ export default function WorldCupPage() {
     setPhase("playing");
   };
 
-  const handleDrop = (winner: Track) => {
-    setDroppedTrack(winner);
-    setIsPlaying(true);
-
-    // Play animation simulation
-    setTimeout(() => {
-       setIsPlaying(false);
-       
+  /**
+   * 현재 매치를 끝내고 다음으로 넘어간다. 선택(handleDrop)과 빼기(handleRemove)가
+   * 같이 쓴다. `removed` 면 진 곡은 순위(eliminated)가 아니라 뺀 곡(skipped)으로 간다.
+   */
+  const advance = (winner: Track, { removed = false }: { removed?: boolean } = {}) => {
        const newWinners = [...winners, winner];
        const loser = matches[currentMatchIndex].find(t => t.id !== winner.id);
-       
+
        let newEliminated = [...eliminatedTracks];
-       if (loser) newEliminated.unshift(loser); 
+       if (loser && !removed) newEliminated.unshift(loser);
        setEliminatedTracks(newEliminated);
+       const newSkipped = loser && removed ? [...skippedTracks, loser] : skippedTracks;
+       if (removed) setSkippedTracks(newSkipped);
 
        // Helper to calculate total rounds starting size
        const getInitialRoundSize = (count: number) => {
@@ -318,6 +334,8 @@ export default function WorldCupPage() {
            // Save final ranked list before finishing
            const finalRanking = [newWinners[0], ...newEliminated];
            sessionStorage.setItem("worldcup_ranking", JSON.stringify(finalRanking));
+           // 결과 화면의 자동 저장 기준(16곡)은 뺀 곡까지 센 원래 곡 수로 판단한다.
+           sessionStorage.setItem("worldcup_skipped_count", String(newSkipped.length));
            setWinners(newWinners);
            setPhase("finished");
          } else {
@@ -328,8 +346,78 @@ export default function WorldCupPage() {
            }, 500);
          }
        }
+  };
+
+  const handleDrop = (winner: Track) => {
+    if (pendingRemoval) return;
+    setDroppedTrack(winner);
+    setIsPlaying(true);
+
+    // Play animation simulation
+    setTimeout(() => {
+      setIsPlaying(false);
+      advance(winner);
     }, 1500);
   };
+
+  /** 되돌리기를 기다리는 시간. 짧으면 실수를 못 잡고, 길면 흐름이 끊긴다. */
+  const REMOVE_UNDO_MS = 3000;
+
+  /**
+   * 모르는 곡을 위로 올려 뺐다. 상대 곡이 자동 진출한다.
+   *
+   * 바로 확정하지 않고 되돌리기 카드를 잠깐 보여준다 — 위로 끄는 동작은 실수로도
+   * 나오기 쉽다. 확정되면 로그인 사용자의 들어볼 곡 목록에 담는다.
+   */
+  const handleRemove = (track: Track) => {
+    if (droppedTrack || pendingRemoval) return;
+    const opponent = matches[currentMatchIndex].find(t => t.id !== track.id);
+    if (!opponent) return;
+
+    setPendingRemoval(track);
+    trackEvent("tournament_track_removed", { round: currentRoundName, match: currentMatchIndex + 1 });
+
+    removalTimer.current = setTimeout(() => {
+      removalTimer.current = null;
+      setPendingRemoval(null);
+      if (user) {
+        const albumId = (track as Track & { albumId?: string }).albumId;
+        supabase
+          .from("listen_later_tracks")
+          .upsert(
+            {
+              user_id: user.id,
+              track_id: track.id,
+              title: track.title,
+              artist_name: track.artistName,
+              album_title: (track as Track & { albumTitle?: string }).albumTitle ?? null,
+              album_image: track.albumImage,
+              album_id: albumId ?? null,
+              // 미발매곡은 tracks 화면에서 가상 앨범 id 'al_unreleased_<id>' 를 받는다.
+              is_unreleased: !!albumId?.startsWith("al_unreleased_"),
+            },
+            { onConflict: "user_id,track_id", ignoreDuplicates: true }
+          )
+          .then(({ error }: { error: { message: string } | null }) => {
+            // 목록 저장이 실패해도 월드컵 진행은 막지 않는다.
+            if (error) console.error("[listen_later] 저장 실패:", error.message);
+          });
+      }
+      advance(opponent, { removed: true });
+    }, REMOVE_UNDO_MS);
+  };
+
+  const undoRemove = () => {
+    if (removalTimer.current) clearTimeout(removalTimer.current);
+    removalTimer.current = null;
+    setPendingRemoval(null);
+    trackEvent("tournament_track_remove_undo", {});
+  };
+
+  // 화면을 떠나면 확정 대기 중인 빼기를 버린다(되돌린 것과 같다).
+  useEffect(() => () => {
+    if (removalTimer.current) clearTimeout(removalTimer.current);
+  }, []);
 
   if (phase === "loading") return <div className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center font-sans text-sm text-navy">{locale === "en" ? "Loading..." : "불러오는 중..."}</div>;
 
@@ -398,6 +486,22 @@ export default function WorldCupPage() {
                <h2 className="font-sans text-lg xs:text-xl sm:text-2xl md:text-3xl text-navy whitespace-nowrap tracking-tight leading-none font-extrabold">
                  {getLocalizedRoundName(currentRoundName, locale)}
                </h2>
+
+               {/* 빼기 안내. LP 를 잡고 있을 때만 보인다. 위로 100px 이상 끌면 판정되는데
+                   (WorldCupCandidate), 스크롤 영역이 영역 밖으로 나간 LP 를 잘라내므로
+                   안내는 이 영역 안쪽에 둔다. */}
+               <AnimatePresence>
+                 {isAnyLpActive && (
+                   <motion.p
+                     initial={{ opacity: 0, y: 6 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: 6 }}
+                     className="mt-3 px-4 py-1.5 rounded-full border border-dashed border-navy/30 bg-cream font-sans text-xs font-bold text-navy/70"
+                   >
+                     {locale === "en" ? "↑ Don't know it? Drag up to skip" : "↑ 모르는 곡이면 위로 올려 빼두기"}
+                   </motion.p>
+                 )}
+               </AnimatePresence>
             </div>
 
             {/* Spacing to lower the candidate container and avoid overlap on short viewports */}
@@ -406,7 +510,31 @@ export default function WorldCupPage() {
             {/* Candidates (Forced Horizontal row with No-wrap & non-overlapping VS separator) */}
             <div className="flex flex-row flex-nowrap justify-center items-center gap-1 sm:gap-6 w-full px-1.5 relative z-50 min-h-[160px] sm:min-h-[220px] md:min-h-[240px] mb-2 sm:mb-6">
               <AnimatePresence mode="popLayout">
-                {!droppedTrack && (
+                {pendingRemoval && (
+                  <motion.div
+                    key="undo-remove"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="flex flex-col items-center gap-3 w-full max-w-[320px] px-5 py-5 bg-cream border border-navy/15 rounded-2xl shadow-sm text-center"
+                  >
+                    <p className="font-sans text-sm text-navy leading-relaxed break-keep">
+                      <strong className="font-bold">{pendingRemoval.title}</strong>
+                      {locale === "en" ? " added to Listen Later." : " 을(를) 들어볼 곡에 담았어요."}
+                      <br />
+                      <span className="text-xs text-navy/60">
+                        {locale === "en" ? "The other song moves on." : "상대 곡이 다음 라운드로 올라가요."}
+                      </span>
+                    </p>
+                    <button
+                      onClick={undoRemove}
+                      className="px-5 py-2 rounded-full bg-navy text-cream font-sans text-sm font-bold active:scale-[0.97] transition-transform cursor-pointer"
+                    >
+                      {locale === "en" ? "Undo" : "되돌리기"}
+                    </button>
+                  </motion.div>
+                )}
+                {!droppedTrack && !pendingRemoval && (
                   <>
                     {/* Left Candidate */}
                     <motion.div
@@ -417,7 +545,7 @@ export default function WorldCupPage() {
                       transition={{ type: "spring", stiffness: 200, damping: 22 }}
                       className="flex flex-col items-center flex-1 max-w-[120px] sm:max-w-[160px] md:max-w-[180px] lg:max-w-[200px] w-full"
                     >
-                      <WorldCupCandidate track={matches[currentMatchIndex][0]} onDrop={handleDrop} onActive={setIsAnyLpActive} />
+                      <WorldCupCandidate track={matches[currentMatchIndex][0]} onDrop={handleDrop} onRemove={handleRemove} onActive={setIsAnyLpActive} />
                     </motion.div>
 
                     {/* Central VS Separator */}
@@ -440,7 +568,7 @@ export default function WorldCupPage() {
                       transition={{ type: "spring", stiffness: 200, damping: 22 }}
                       className="flex flex-col items-center flex-1 max-w-[120px] sm:max-w-[160px] md:max-w-[180px] lg:max-w-[200px] w-full"
                     >
-                      <WorldCupCandidate track={matches[currentMatchIndex][1]} onDrop={handleDrop} onActive={setIsAnyLpActive} />
+                      <WorldCupCandidate track={matches[currentMatchIndex][1]} onDrop={handleDrop} onRemove={handleRemove} onActive={setIsAnyLpActive} />
                     </motion.div>
                   </>
                 )}
@@ -450,7 +578,7 @@ export default function WorldCupPage() {
             <div className="flex-1" />
 
             {/* Hint */}
-            {!isPlaying && !droppedTrack && (
+            {!isPlaying && !droppedTrack && !pendingRemoval && (
                 <motion.div 
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   className={`text-center font-sans text-sm font-medium mb-6 sm:mb-10 z-20 px-6 py-2 rounded-full transition-colors duration-300 shadow-sm relative

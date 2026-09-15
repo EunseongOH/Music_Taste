@@ -222,6 +222,7 @@ export default function Home() {
           currentMatchIndex: activeDraft.current_match_index,
           winners: activeDraft.winners,
           eliminatedTracks: activeDraft.eliminated_tracks,
+          skippedTracks: activeDraft.skipped_tracks ?? [],
           byeCount: activeDraft.bye_count,
           selectedByes: activeDraft.selected_byes
         };
