@@ -1,0 +1,68 @@
+/*
+ * 토스 빌드의 스타일 진입점.
+ *
+ * 웹의 globals.css 를 그대로 가져와 디자인 토큰(@theme inline)과 타이포 유틸리티를
+ * 공유한다. Tailwind v4 는 CSS 파일 위치를 기준으로 소스를 자동 탐색하므로,
+ * 이 파일이 toss/app/src 에 있으면 실제 src/ 의 클래스를 찾지 못한다.
+ * 그래서 @source 로 명시해야 한다 — 빼면 화면이 부분적으로 스타일 없이 렌더된다.
+ */
+@import "../../../src/app/globals.css";
+
+@source "../../../src";
+@source "./";
+
+/*
+ * WebView 에서 100vh 는 주소창/시스템 UI 때문에 실제 보이는 높이와 어긋난다.
+ * src/ 전역이 min-h-screen(= min-height:100vh)을 쓰므로, src 를 고치지 않고
+ * 여기서 동일 특이도로 덮어쓴다(나중에 선언된 쪽이 이긴다).
+ */
+.min-h-screen {
+  min-height: 100dvh;
+}
+.h-screen {
+  height: 100dvh;
+}
+
+/*
+ * 모달·바텀시트의 최대 높이도 같은 이유로 dvh 로 바꾼다.
+ * 90vh 짜리 모달은 WebView 에서 실제 보이는 높이를 넘겨 아래가 잘린다.
+ */
+.max-h-\[90vh\] {
+  max-height: 90dvh;
+}
+.max-h-\[60vh\] {
+  max-height: 60dvh;
+}
+
+/*
+ * 화면 아래 고정된 바·버튼이 홈 인디케이터에 가리지 않게 한다.
+ *
+ * 기존 패딩에 Safe Area 를 **더해야** 한다. 그래서 `bottom` 을 밀거나
+ * padding 을 통째로 덮어쓰지 않고, 각 요소가 이미 쓰는 Tailwind 패딩 값에
+ * 더한 값을 다시 선언한다(`.fixed.bottom-0.pb-7` 은 특이도가 높아 이긴다).
+ * `bottom` 을 밀면 바 아래로 배경이 비치고, padding 을 덮으면 원래 여백이
+ * 사라진다.
+ *
+ * 값은 Tailwind 기본 스케일이다: p-4=1rem, p-6=1.5rem, pb-7=1.75rem.
+ * 새로운 `fixed bottom-0` 요소가 생기면 여기에도 한 줄 추가해야 한다 —
+ * bundle-check 가 빠진 것을 잡아 준다.
+ *
+ * 변수가 없으면(토스 앱 밖) env() → 0px 로 떨어진다.
+ */
+.fixed.bottom-0.pb-7 {
+  padding-bottom: calc(1.75rem + var(--sai-bottom, env(safe-area-inset-bottom, 0px)));
+}
+.fixed.bottom-0.p-6 {
+  padding-bottom: calc(1.5rem + var(--sai-bottom, env(safe-area-inset-bottom, 0px)));
+}
+.fixed.bottom-0.p-4 {
+  padding-bottom: calc(1rem + var(--sai-bottom, env(safe-area-inset-bottom, 0px)));
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+}

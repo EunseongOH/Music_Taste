@@ -1,0 +1,95 @@
+<!doctype html>
+<!--
+  html/body 의 클래스는 src/app/layout.tsx 와 같아야 한다.
+  - h-full antialiased : layout.tsx 의 <html className=...>
+    antialiased 는 -webkit-font-smoothing 을 바꾸므로 빼면 글자가 다르게 그려진다.
+  - min-h-full flex flex-col font-sans : layout.tsx 의 <body className=...>
+  next/font 가 만들어 주던 --font-* 변수는 아래 <style> 에서 직접 정의한다.
+-->
+<html lang="ko" class="h-full antialiased">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      앱인토스 비게임 출시 가이드: 지도처럼 꼭 필요한 경우를 제외하고
+      제스처 기반 확대·축소는 비활성화해야 한다. viewport-fit=cover 는
+      Safe Area(env(safe-area-inset-*)) 를 쓰기 위한 전제다.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#F5F2ED" />
+    <title>Sortify</title>
+
+    <!--
+      제한된 WebView 대비 가드. 어떤 모듈보다 먼저 동기 실행돼야 하므로
+      type="module" 이 아닌 일반 script 로, 맨 앞에 둔다.
+      (src/app/layout.tsx 의 <head> 인라인 스크립트와 같은 내용)
+    -->
+    <script src="/sandbox-guard.js"></script>
+
+    <!--
+      Next 빌드는 next/font 로 폰트를 주입하지만 Vite 빌드에는 그 런타임이 없다.
+      Pretendard 는 번들에 포함하고, Playfair 는 Google Fonts 에서 받는다.
+      (자체 호스팅 전환은 후속 과제 — 네트워크 의존을 없애는 편이 낫다.)
+    -->
+    <style>
+      @font-face {
+        font-family: pretendard;
+        src: url('/fonts/PretendardVariable.woff2') format('woff2-variations');
+        font-weight: 45 920;
+        font-display: swap;
+      }
+
+      /*
+        next/font 가 자동 생성하던 메트릭 보정 폴백 페이스. 값은 실행 중인
+        Next 페이지의 CSSOM 에서 그대로 뽑아 왔다(직접 계산한 값이 아니다).
+
+        왜 필요한가: Playfair Display 에는 한글 글리프가 없어서 제목의 한글은
+        폴백으로 떨어진다. 이 페이스가 없으면 폰트 스택이 달라져 같은 문구의
+        폭이 달라진다(측정: 148.39px → 155.39px).
+
+        local(...) 폰트가 없는 환경(안드로이드 등)에서는 이 페이스가 로드되지
+        않고 시스템 기본 글꼴로 떨어지는데, 그건 기존 웹도 똑같다.
+      */
+      @font-face {
+        font-family: 'pretendard Fallback';
+        src: local('Arial');
+        ascent-override: 93.76%;
+        descent-override: 23.75%;
+        line-gap-override: 0%;
+        size-adjust: 101.55%;
+      }
+      @font-face {
+        font-family: 'Playfair Display Fallback';
+        src: local('Times New Roman');
+        ascent-override: 97.25%;
+        descent-override: 22.56%;
+        line-gap-override: 0%;
+        size-adjust: 111.26%;
+      }
+
+      /* layout.tsx 에서 next/font 가 html 클래스로 넣어 주던 값과 같아야 한다. */
+      :root {
+        --font-pretendard: 'pretendard', 'pretendard Fallback';
+        --font-playfair: 'Playfair Display', 'Playfair Display Fallback';
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="min-h-full flex flex-col font-sans">
+    <!--
+      전역 그레인 텍스처. layout.tsx:234 의 <div className="bg-grain" /> 와 같은
+      자리(body 첫 자식)에 둔다. mix-blend-mode: multiply 로 화면 전체를 덮기
+      때문에 빠지면 모든 픽셀이 미묘하게 밝아진다.
+    -->
+    <div class="bg-grain"></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

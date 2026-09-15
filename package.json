@@ -7,9 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:warmup": "npx tsx --env-file=.env.local scripts/warmup_artists.ts"
+    "db:warmup": "npx tsx --env-file=.env.local scripts/warmup_artists.ts",
+    "baseline:capture": "node toss/baseline/capture.mjs",
+    "baseline:verify": "node toss/baseline/verify.mjs",
+    "dev:toss": "vite --config toss/app/vite.config.mts",
+    "build:toss": "vite build --config toss/app/vite.config.mts && ait build",
+    "check:toss": "node toss/baseline/flow-check.mjs && node toss/baseline/router-check.mjs && node toss/baseline/deeplink-check.mjs && node toss/baseline/bundle-check.mjs",
+    "check:web": "node toss/baseline/web-regression.mjs && node toss/baseline/share-check.mjs && npm run baseline:verify"
   },
   "dependencies": {
+    "@apps-in-toss/web-framework": "^3.4.0",
     "@next/third-parties": "^16.2.9",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
@@ -26,10 +33,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react-swc": "^4.3.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.0"
   }
 }

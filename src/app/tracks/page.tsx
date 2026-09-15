@@ -1297,7 +1297,7 @@ export default function TracksPage() {
         <div className="flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
-            <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+            <h1 className="type-title-1 text-navy">{t.title}</h1>
           </div>
           <ProfileHeader locale={locale} className="" />
         </div>

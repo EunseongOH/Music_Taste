@@ -164,7 +164,7 @@ export default function TasteSharedPage() {
           <button onClick={handleBack} className="flex items-center justify-center border-none bg-transparent hover:bg-navy/5 w-8 h-8 rounded-full">
             <ArrowLeft size={20} className="text-navy" />
           </button>
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-12 px-6">
           <div className="w-16 h-16 rounded-full border-2 border-dashed border-navy/30 flex items-center justify-center bg-white/40">
@@ -201,7 +201,7 @@ export default function TasteSharedPage() {
           <button onClick={handleBack} className="flex items-center justify-center border-none bg-transparent hover:bg-navy/5 w-8 h-8 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-navy" />
           </button>
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
       </div>
 
@@ -370,8 +370,13 @@ export default function TasteSharedPage() {
 
       {/* Floating CTA footer */}
       <div className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center gap-3 z-50 bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)]/90 to-transparent pointer-events-none select-none">
-        <button 
-          onClick={() => router.push("/")}
+        <button
+          /*
+           * 이 취향표를 만든 모드 그대로 시작하게 한다.
+           * '최애 곡 줄 세우기'(단일 아티스트) 결과를 보고 들어온 사람에게
+           * '믹스 매치 월드컵'이 먼저 보이면 흐름이 끊긴다.
+           */
+          onClick={() => router.push(result.is_single_artist ? "/?mode=single" : "/?mode=multi")}
           className="w-full max-w-[380px] pointer-events-auto py-4 bg-point hover:bg-point/95 text-white rounded-full transition-all active:scale-[0.98] shadow-lg font-sans font-bold text-sm flex items-center justify-center gap-2"
         >
           {t.ctaCreate}

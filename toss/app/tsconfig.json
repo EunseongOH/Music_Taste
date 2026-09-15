@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      // vite.config.mts 의 alias 와 같은 매핑이어야 타입 검사가 실제 빌드를 반영한다.
+      "next/image": ["./src/shims/next-image.tsx"],
+      "next/link": ["./src/shims/next-link.tsx"],
+      "next/navigation": ["./src/shims/next-navigation.ts"],
+      "@/components/BackButton": ["./src/shims/BackButton.tsx"],
+      "@/components/LoginModal": ["./src/shims/LoginModal.tsx"],
+      "@/utils/gtag": ["./src/shims/gtag.ts"],
+      "@/utils/spotify": ["./src/shims/spotify.ts"],
+      "@/utils/platform": ["./src/platform.toss.ts"],
+      "@/*": ["../../src/*"]
+    }
+  },
+  "include": ["src", "vite.config.mts", "../../src"],
+  // Next 서버 전용 코드. 토스 번들에 들어가지 않고, shim 이 걸린 상태로
+  // 검사하면 서버에서만 쓰는 export(searchTracksByQuery 등)가 없다고 나온다.
+  "exclude": ["../../src/app/api", "../../src/utils/supabase/server.ts"]
+}

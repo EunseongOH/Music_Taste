@@ -1,0 +1,88 @@
+# Sortify 타이포그래피 시스템
+
+> 2026-09-15 제정 · 토큰 정의: `src/app/globals.css` (`type-*` 유틸, `--color-point-ink`)
+> 새 화면·수정 화면은 이 문서의 토큰만 쓴다. `text-[10px]` 같은 임의 크기를 직접 쓰지 않는다.
+
+## 1. 원칙
+
+1. **역할로 고른다.** 크기를 고르지 않는다. "행 제목이니까 `type-body-strong`" 식으로 정한다.
+2. **최소 12px.** 모바일 WebView(토스 미니앱 포함)에서 10px 이하는 읽기 어렵다.
+3. **굵기는 4단계.** 400 · 600 · 700, 그리고 `type-display` 전용 800. 단계가 많으면 위계가 흐려진다(KRDS).
+4. **행간은 약 1.5배.** KRDS 는 최소 150%, 토스 TDS 본문은 15/22.5 · 17/25.5 다.
+5. **한글은 Pretendard, 영문·숫자 강조만 Playfair.**
+   - Playfair 는 `latin` 서브셋만 로드한다(`src/app/layout.tsx`).
+   - `font-serif` 를 한글에 쓰면 실제로는 기기마다 다른 대체 글꼴로 보인다.
+   - Playfair 는 순위 숫자, 싱크 %, 영문 워드마크 "Sortify" 처럼 Sortify 톤을 내는 자리에만 쓴다.
+   - 탭·섹션 제목 옆 **개수는 Pretendard** 로 둔다. Playfair 숫자는 올드스타일(0·1 이 소문자 높이)이라 한글 바로 옆에서는 크기가 들쭉날쭉해 보인다. 숫자가 혼자 강조되는 자리(순위·%)에서만 Playfair 가 어울린다.
+6. **영문 대문자 라벨(eyebrow)은 쓰지 않는다.** 한글 화면에서는 장식에 가깝고 판독성이 떨어진다.
+
+## 2. 토큰
+
+토큰은 크기·행간·굵기·자간만 정한다. 글꼴은 기본(Pretendard)이며, Playfair 가 필요하면 `font-serif` 를 덧붙인다.
+
+| 토큰 | 크기 / 행간 | 굵기 | 자간 | 쓰는 곳 |
+|---|---|---|---|---|
+| `type-display` | 28 / 36 | 800 | -0.02em | 화면당 한 번 쓰는 큰 강조(히어로 숫자 등) |
+| `type-title-1` | 22 / 31 | 700 | -0.02em | 화면 제목(상단 헤더 h1), 모달·하단 시트 제목 |
+| `type-title-2` | 17 / 25.5 | 700 | -0.01em | 섹션 제목, 빈 상태 제목 |
+| `type-body-strong` | 15 / 22.5 | 600 | 0 | 목록 행 제목, 탭, 버튼 |
+| `type-body` | 15 / 22.5 | 400 | 0 | 설명 문단, 가사 |
+| `type-sub` | 13 / 19.5 | 400 | 0 | 행의 두 번째 줄, 보조 설명, 입력 라벨 |
+| `type-caption` | 12 / 18 | 400 | 0.01em | 날짜·닉네임·모드 같은 메타, 작은 표시("미발매") |
+
+### 참고한 시스템과의 대응
+
+| 역할 | Sortify | 토스 TDS Mobile | KRDS(범정부) 모바일 | Apple HIG(iOS) | Material 3 |
+|---|---|---|---|---|---|
+| 화면 제목 | title-1 22 | Typography 3 · 22/31 | Heading Medium 22 · 700 | Title 2 · 22 | Title Large 22/28 |
+| 섹션 제목 | title-2 17 | Typography 5 · 17/25.5 | Heading XSmall 17 · 700 | Headline 17 | Title Medium 16/24 |
+| 목록·본문 | body 15 | Typography 6 · 15/22.5 | Body Small 15 | Subheadline 15 | Body Medium 14/20 |
+| 보조 | sub 13 | Typography 7 · 13/19.5 | Body XSmall 13 | Footnote 13 | Body Small 12/16 |
+| 메타 | caption 12 | subTypography | Label XSmall 13 | Caption 1 · 12 | Label Small 11/16 |
+
+본문을 KRDS 기본값(17)이 아니라 15로 둔 이유: 목록 위주 화면이라 한 화면에 보이는 정보량이 중요하다. 이는 토스 TDS·iOS 목록 화면의 관행과 같다(2026-09-15 결정).
+
+## 3. 글자 색
+
+바탕 cream(#F5F2ED) 기준 대비값이다. 작은 글자(18.66px bold / 24px 미만)의 WCAG AA 기준은 4.5:1 이다.
+
+| 역할 | 클래스 | 대비 | 규칙 |
+|---|---|---|---|
+| 기본 | `text-navy` | 11.8:1 | 제목·행 제목·본문 |
+| 보조 | `text-navy/70` | 5.0:1 | 두 번째 줄·메타·설명. **정보 텍스트의 가장 옅은 단계** |
+| 비활성 | `text-navy/40` | 2.4:1 | placeholder, 비활성 상태에만. 정보를 담지 않는다 |
+| 강조 글자 | `text-point-ink` (#A65309) | 4.9:1 | 1~3위 순위 숫자, "공개" 같은 강조 텍스트 |
+| 강조 선·면 | `bg-point`, `border-point` (#E67E22) | 2.6:1 | 탭 밑줄, 스위치, 점. **글자에는 쓰지 않는다** |
+
+## 4. 조합 예
+
+```tsx
+{/* 섹션 제목 + 개수 */}
+<h2 className="type-title-2 text-navy">같은 1위 곡 <span className="text-navy/70">3</span></h2>
+
+{/* 목록 행 */}
+<p className="type-body-strong text-navy">내 마음의 레드벨벳</p>
+<p className="type-sub text-navy/70">1위 Feel My Rhythm · Red Velvet</p>
+<p className="type-caption text-navy/70">2026.09.11 · 최애 곡 줄 세우기</p>
+
+{/* 순위 숫자 — 숫자라서 Playfair */}
+<span className="type-title-2 font-serif text-point-ink">1</span>
+
+{/* 싱크 % */}
+<span className="type-title-2 font-serif text-point-ink">72.4%</span>
+```
+
+## 5. 적용 현황
+
+| 대상 | 상태 |
+|---|---|
+| 상단 헤더 h1 (월드컵·트랙·결과·공유·스페이스·아카이브) | 적용 |
+| 내 취향 스페이스 · 우리의 취향 아카이브 · 프로필 창 | 적용 |
+| 홈, 아티스트/장르 선택, 월드컵 본문, 결과 화면 본문 | 후속 과제 |
+| 결과 템플릿(`TasteTemplates`) | **적용하지 않음** — 내보내기 PNG 바이트 비교(`npm run baseline:verify`)가 걸려 있어, 바꾸려면 기준선을 새로 찍는 결정이 먼저 필요 |
+
+## 출처
+- 토스 TDS Mobile Typography — https://tossmini-docs.toss.im/tds-mobile/foundation/typography/
+- KRDS 타이포그래피 — https://www.krds.go.kr/html/site/style/style_03.html
+- Apple Human Interface Guidelines, Typography (iOS 기본 크기)
+- Material Design 3, Type scale

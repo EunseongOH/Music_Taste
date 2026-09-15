@@ -65,6 +65,22 @@ export default function Home() {
   // Read locale on mount
   useEffect(() => {
     setLocale(getSafeLocale());
+
+    /*
+     * 공유된 취향표에서 넘어온 경우, 그 취향표를 만든 모드의 카드를 먼저 보여준다.
+     * (taste/[id] 의 CTA 가 ?mode=single|multi 를 붙인다)
+     *
+     * useSearchParams 대신 location.search 를 직접 읽는다 — 이 코드베이스의
+     * 기존 방식이고, 토스 빌드의 라우터 shim 도 search 를 그대로 제공해서
+     * 두 빌드에서 같은 코드가 동작한다. 파라미터가 없으면 기존과 동일하게 0.
+     *
+     * 별도 effect 로 두지 않고 여기 합친 이유: 서버 렌더 때는 알 수 없는
+     * 값이라 useState 초기값으로 못 넣고(하이드레이션 불일치), 새 effect 를
+     * 만들면 "effect 안 동기 setState" 경고가 하나 더 생긴다.
+     */
+    const mode = new URLSearchParams(window.location.search).get("mode");
+    if (mode === "multi") setActiveCardIndex(1);
+    else if (mode === "single") setActiveCardIndex(0);
   }, []);
 
   const handleLanguageToggle = (lang: "ko" | "en") => {
@@ -206,6 +222,7 @@ export default function Home() {
           currentMatchIndex: activeDraft.current_match_index,
           winners: activeDraft.winners,
           eliminatedTracks: activeDraft.eliminated_tracks,
+          skippedTracks: activeDraft.skipped_tracks ?? [],
           byeCount: activeDraft.bye_count,
           selectedByes: activeDraft.selected_byes
         };
@@ -490,7 +507,7 @@ export default function Home() {
       <div className="w-full flex flex-col items-center justify-center mt-auto pt-16 pb-8 z-10 gap-4">
         <LPPlayer />
 
-        {(user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true) && (
+        {(user?.app_metadata?.is_admin === true) && (
           <motion.a
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

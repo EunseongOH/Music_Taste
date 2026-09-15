@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchTracksByQuery } from '@/utils/spotify';
+import { corsHeaders, preflight } from '../toss/cors';
 
 // Simple in-process cache: (cacheKey → { data, expiresAt })
 const cache = new Map<string, { data: SpotifySearchResult[]; expiresAt: number }>();
@@ -16,14 +17,24 @@ export interface SpotifySearchResult {
   albumImage: string;
 }
 
+/**
+ * 토스 미니앱(다른 origin)에서도 이 검색을 쓴다. 웹의 호출은 same-origin이라
+ * `Origin` 헤더를 보내지 않고, 그때 corsHeaders는 빈 객체를 돌려주므로
+ * 기존 응답은 한 바이트도 달라지지 않는다.
+ */
+export async function OPTIONS(request: NextRequest) {
+  return preflight(request);
+}
+
 export async function GET(request: NextRequest) {
+  const headers = corsHeaders(request.headers.get('origin'));
   const { searchParams } = request.nextUrl;
   const q = (searchParams.get('q') ?? '').trim();
   const artistIdsParam = (searchParams.get('artistIds') ?? '').trim();
   const artistNamesParam = (searchParams.get('artistNames') ?? '').trim();
 
   if (!q || !artistIdsParam) {
-    return NextResponse.json({ results: [] });
+    return NextResponse.json({ results: [] }, { headers });
   }
 
   // Normalise the artistIds set for filtering
@@ -37,7 +48,7 @@ export async function GET(request: NextRequest) {
   // Return cached result if still fresh
   const hit = cache.get(cacheKey);
   if (hit && Date.now() < hit.expiresAt) {
-    return NextResponse.json({ results: hit.data });
+    return NextResponse.json({ results: hit.data }, { headers });
   }
 
   try {
@@ -124,9 +135,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ results: unique });
+    return NextResponse.json({ results: unique }, { headers });
   } catch (err) {
     console.error('[spotify-search] Error:', err);
-    return NextResponse.json({ results: [], error: 'Search failed' }, { status: 500 });
+    return NextResponse.json({ results: [], error: 'Search failed' }, { status: 500, headers });
   }
 }

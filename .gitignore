@@ -41,9 +41,40 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# apps in toss (Vite 빌드 산출물)
+/toss/app/dist/
+/toss/*.ait
+
+# 내보내기 회귀 검증의 임시 결과물. 기준선(toss/baseline/refs)은 커밋한다 —
+# taste/page.tsx 리팩터 이후에는 다시 뜰 수 없기 때문.
+/toss/baseline/refs-verify/
+
+# 기준선 캡처용 브라우저 프로필. 실제 로그인 세션 토큰이 들어있다 — 절대 커밋 금지.
+/toss/baseline/.profile/
+
 # temp files
 temp_artists.json
 temp_code.ts
 temp_search_results.json
 /scratch/
 
+
+# 진단용 스크린샷
+/toss/baseline/probe.png
+/toss/baseline/refs-auth-verify/
+/toss/baseline/*.png
+/*.ait
+
+# 앱인토스 이식 — Next/Vite 화면 비교 산출물
+/toss/baseline/shim-out/
+
+# 콘솔 업로드용 이미지 — 스크립트로 다시 만들 수 있다
+/toss/store/out/
+
+# mTLS 인증서 base64 — 비밀값. 절대 커밋 금지
+/toss/mtls-out/
+*.key
+*.crt
+*.p12
+*.pfx
+*.pem

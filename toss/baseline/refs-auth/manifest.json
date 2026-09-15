@@ -1,0 +1,64 @@
+{
+  "fixedTime": "2026-01-15T00:00:00.000Z",
+  "trackCount": 20,
+  "mode": "authenticated",
+  "files": [
+    {
+      "name": "카더가든_Music_Taste_Pyramid.png",
+      "bytes": 556352,
+      "sha256": "a629ddf92ce978511a839bc3afa4284e72624d6cce22777e28e8b31abde0b8b4",
+      "from": "pyramid"
+    },
+    {
+      "name": "카더가든_Music_Taste_list_Part1.png",
+      "bytes": 440910,
+      "sha256": "2ff6a9c91904a2a2cf1ac871b1f8d19b093ec179846263c8398c10d9b38dbdbf",
+      "from": "list"
+    },
+    {
+      "name": "카더가든_Music_Taste_list_Part2.png",
+      "bytes": 397417,
+      "sha256": "2d8840d0ed44ab1c13e8304c941cee28ef57cc0b397970929b2ffec5cde0cfef",
+      "from": "list"
+    },
+    {
+      "name": "카더가든_Music_Taste_retro_Part1.png",
+      "bytes": 658829,
+      "sha256": "74d4f7972f339e2cd48e717afd913b059367fafca944b1b367b749097542ed0d",
+      "from": "retro"
+    },
+    {
+      "name": "카더가든_Music_Taste_retro_Part2.png",
+      "bytes": 528135,
+      "sha256": "24fa2a7c1d96b4f12aaa53f79db35e01ec6fcd1b3fc7e90375e887feffcc8033",
+      "from": "retro"
+    },
+    {
+      "name": "카더가든_Music_Ranking.csv",
+      "bytes": 2097,
+      "sha256": "e0072383e456948dadd0116bb573751b79d97ee689ea567fb7a1c4c8b48fd06b",
+      "from": "csv"
+    }
+  ],
+  "shares": [
+    {
+      "via": "clipboard",
+      "url": "http://localhost:3000/taste/e0cdc509-8182-4525-a162-2e434a66bef4"
+    },
+    {
+      "via": "window.open",
+      "url": "https://twitter.com/intent/tweet?text=%EC%B9%B4%EB%8D%94%EA%B0%80%EB%93%A0%20%EC%B7%A8%ED%96%A5%ED%91%9C%20TOP%2010%0A%0A1.%20Harmony%0A2.%20%EB%84%A4%20%EB%B2%88%EC%9D%98%20%EC%97%AC%EB%A6%84%0A3.%20%EB%82%B4%EC%9D%BC%EC%9D%98%20%EC%9A%B0%EB%A6%AC%0A4.%20%EC%98%A4%EB%9E%98%EB%90%9C%20%EC%9D%BC%0A5.%20%EB%82%B4%EA%B2%90%20%EA%B7%B8%20%EC%95%84%EB%AC%B4%EB%8F%84%20%EC%97%86%EC%9D%84%20%EA%B1%B0%EC%95%BC%0A6.%20Foolish%20World%0A7.%20My%20Old%20Friend%0A8.%20%EC%9D%98%EC%97%B0%ED%95%9C%20%EC%95%85%EC%88%98%0A9.%20A%20Kid%20From%20Bathroom%0A10.%20%EA%BF%88%EC%9D%84%20%EA%BF%A8%EC%96%B4%EC%9A%94&url=http%3A%2F%2Flocalhost%3A3000%2Ftaste%2Fe0cdc509-8182-4525-a162-2e434a66bef4"
+    },
+    {
+      "via": "navigator.share",
+      "url": "http://localhost:3000/taste/e0cdc509-8182-4525-a162-2e434a66bef4",
+      "title": "취향 기록표",
+      "text": "카더가든 취향표"
+    }
+  ],
+  "savedId": "e0cdc509-8182-4525-a162-2e434a66bef4",
+  "user": {
+    "id": "2231a8e0-42f5-46d2-99dd-0dfe9ad16894",
+    "nickname": "향기로운선율839"
+  }
+}

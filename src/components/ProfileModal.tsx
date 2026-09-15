@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Camera, User, Phone, Archive, ChevronRight, Calendar, Award, ArrowLeft, Disc } from "lucide-react";
+import { X, Camera, ChevronRight, ArrowLeft, Disc } from "lucide-react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
+import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -29,7 +31,6 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const [locale, setLocale] = useState<"ko" | "en">("ko");
   
   const { signOut, user } = useAuth();
-  const archives = user?.user_metadata?.archives || [];
   const [completedResults, setCompletedResults] = useState<any[]>([]);
   const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
   const [isLoadingArchives, setIsLoadingArchives] = useState(false);
@@ -69,6 +70,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
         currentMatchIndex: draft.current_match_index,
         winners: draft.winners,
         eliminatedTracks: draft.eliminated_tracks,
+        skippedTracks: draft.skipped_tracks ?? [],
         byeCount: draft.bye_count,
         selectedByes: draft.selected_byes
       };
@@ -157,7 +159,8 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       const currentImg = user?.user_metadata?.avatar_url || sessionStorage.getItem("userProfileImg") || "/default-profile.png";
       setProfileImg(currentImg);
       
-      const savedNickname = sessionStorage.getItem("userNickname");
+      // 서버 값(user_metadata)이 기준. 캐시는 로그인 직후 메타데이터가 비었을 때만.
+      const savedNickname = user?.user_metadata?.nickname || sessionStorage.getItem("userNickname");
       if (savedNickname) setNickname(savedNickname);
 
       const savedPhone = sessionStorage.getItem("userPhone");
@@ -176,8 +179,9 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedNickname = nickname.trim();
-    if (!trimmedNickname) {
-      setUpdateError(locale === "ko" ? "닉네임을 입력해 주세요." : "Please enter a nickname.");
+    const localError = validateNickname(trimmedNickname);
+    if (localError) {
+      setUpdateError(NICKNAME_ERROR_TEXT[locale][localError]);
       return;
     }
 
@@ -188,27 +192,20 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
     try {
       if (user) {
-        // 1. Check if the nickname is already used by ANOTHER user in historical results
-        const { data: dupData, error: dupError } = await supabase
-          .from("tournament_results")
-          .select("id")
-          .eq("user_nickname", trimmedNickname)
-          .neq("user_id", user.id);
-
-        if (dupError) {
-          console.error("Error checking nickname uniqueness:", dupError.message);
+        // 1. 닉네임은 서버 함수로만 바꾼다(규정·중복·결과 사본을 서버가 함께 처리).
+        //    프로필에서 직접 저장한 이름이므로 확인된 이름으로 기록된다.
+        if (trimmedNickname !== user.user_metadata?.nickname || !user.user_metadata?.nickname_confirmed) {
+          const saved = await saveNickname(trimmedNickname);
+          if (saved !== "ok") {
+            setUpdateError(NICKNAME_ERROR_TEXT[locale][saved]);
+            setIsUpdating(false);
+            return;
+          }
         }
 
-        if (dupData && dupData.length > 0) {
-          setUpdateError(locale === "ko" ? "이미 사용 중인 닉네임이에요." : "This nickname is already taken.");
-          setIsUpdating(false);
-          return;
-        }
-
-        // 2. Update Supabase Auth metadata
+        // 2. 나머지 프로필 정보. user_metadata 는 키 단위로 합쳐지므로 nickname 은 보내지 않는다.
         const { error: authError } = await supabase.auth.updateUser({
           data: {
-            nickname: trimmedNickname,
             phone: phone.trim() || null,
             avatar_url: profileImg
           }
@@ -224,13 +221,10 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
           return;
         }
 
-        // 3. Update all past results in tournament_results
+        // 3. 지난 결과의 프로필 이미지. 닉네임 사본은 1 에서 서버가 이미 맞췄다.
         await supabase
           .from("tournament_results")
-          .update({ 
-            user_nickname: trimmedNickname,
-            user_profile_image: profileImg
-          })
+          .update({ user_profile_image: profileImg })
           .eq("user_id", user.id);
       }
 
@@ -323,53 +317,63 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       phoneLabel: "전화번호",
       placeholderNickname: "내 닉네임",
       placeholderPhone: "010-0000-0000",
+      changePhoto: "프로필 사진 변경",
       logoutBtn: "로그아웃",
       saveBtn: "저장하기",
-      savingBtn: "저장 중...",
-      loadingArchives: "취향 기록을 불러오는 중...",
-      noArchives: "아직 저장된 취향 기록이나 진행 중인 곡들이 없어요.",
-      noArchivesSub: "나만의 멋진 취향을 완성하거나 진행 중인 곡들을 저장해 보세요!",
-      draftTitle: "[이어하기]",
-      draftStatus: "진행 중",
-      completedStatus: "완료됨",
+      savingBtn: "저장 중…",
+      close: "닫기",
+      back: "목록으로",
+      loadingArchives: "불러오는 중이에요",
+      noArchives: "아직 저장된 취향표나 진행 중인 월드컵이 없어요",
+      noArchivesSub: "월드컵을 끝내면 여기에서 다시 볼 수 있어요.",
+      sectionDrafts: "진행 중인 월드컵",
+      sectionCompleted: "완료한 취향표",
+      resume: "이어하기",
       stageArtist: "아티스트 선택 단계",
       stageTrack: "곡 선택 단계",
-      stageWorldCup: "취향 기록 진행 중",
+      stageWorldCup: "월드컵 진행 중",
       firstPlace: "1위",
       archiveRecord: "기록",
-      loadAndShare: "이 취향표 불러오기 & 공유",
+      loadAndShare: "불러와서 공유하기",
     },
     en: {
       title: "My Page",
       profileTab: "Edit Profile",
       archiveTab: "My Taste Space",
       nicknameLabel: "Nickname",
-      phoneLabel: "Phone Number",
+      phoneLabel: "Phone number",
       placeholderNickname: "My nickname",
       placeholderPhone: "Phone number",
-      logoutBtn: "Log Out",
+      changePhoto: "Change profile photo",
+      logoutBtn: "Log out",
       saveBtn: "Save",
-      savingBtn: "Saving...",
-      loadingArchives: "Loading my space...",
-      noArchives: "You don't have any saved taste records or drafts yet.",
-      noArchivesSub: "Line up your favorite tracks and save your progress!",
-      draftTitle: "[Resume]",
-      draftStatus: "In Progress",
-      completedStatus: "Completed",
-      stageArtist: "Artist Selection",
-      stageTrack: "Track Selection",
-      stageWorldCup: "In Progress",
+      savingBtn: "Saving…",
+      close: "Close",
+      back: "Back to list",
+      loadingArchives: "Loading",
+      noArchives: "No saved taste cards or World Cups in progress yet",
+      noArchivesSub: "Finish a World Cup to see it here.",
+      sectionDrafts: "World Cups in progress",
+      sectionCompleted: "Completed taste cards",
+      resume: "Resume",
+      stageArtist: "Choosing artists",
+      stageTrack: "Choosing songs",
+      stageWorldCup: "World Cup in progress",
       firstPlace: "#1",
       archiveRecord: "Record",
-      loadAndShare: "Load & Share Taste Card",
+      loadAndShare: "Load & share",
     }
   }[locale];
+
+  const inputClass =
+    "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/40";
+  const archiveCount = completedResults.length + activeDrafts.length;
 
   return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
       <div className="fixed inset-0 z-[9999] flex items-center justify-center">
         <motion.div
-          className="absolute inset-0 bg-navy/20 backdrop-blur-sm"
+          className="absolute inset-0 bg-navy/40"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -377,63 +381,50 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
         />
         <div className="p-4 pointer-events-none z-[10000] w-full flex justify-center max-w-[430px] mx-auto">
           <motion.div
-            className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 shadow-2xl relative pointer-events-auto flex flex-col items-center"
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            role="dialog"
+            aria-modal="true"
+            className="bg-cream w-full max-w-sm rounded-[1.75rem] p-6 shadow-2xl relative pointer-events-auto flex flex-col"
+            initial={{ opacity: 0, scale: 0.97, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            exit={{ opacity: 0, scale: 0.97, y: 10 }}
+            transition={{ type: "spring", stiffness: 320, damping: 28 }}
           >
-            <button 
-              onClick={onClose}
-              className="absolute top-5 right-5 text-navy hover:text-point transition-colors bg-navy/5 p-1.5 rounded-full"
-              aria-label="Close modal"
-            >
-              <X size={20} strokeWidth={2.5} />
-            </button>
-            
-            <h2 className="font-serif text-2xl text-navy mb-4 tracking-tight">{t.title}</h2>
-            
-            {/* Tabs Header - Only visible if not looking at detailed archive */}
+            <div className="flex items-center justify-between">
+              <h2 className="type-title-1 text-navy">{t.title}</h2>
+              <button
+                onClick={onClose}
+                aria-label={t.close}
+                className="-mr-2 w-9 h-9 flex items-center justify-center rounded-full text-navy hover:bg-navy/5"
+              >
+                <X size={20} strokeWidth={2.25} />
+              </button>
+            </div>
+
             {!selectedArchive && (
-              <div className="flex border-b border-navy/10 w-full mb-6 mt-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("profile")}
-                  className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 font-sans transition-colors ${
-                    activeTab === "profile" 
-                      ? "border-navy text-navy" 
-                      : "border-transparent text-navy/40 hover:text-navy/60"
-                  }`}
-                >
-                  {t.profileTab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("archive")}
-                  className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 font-sans transition-colors flex items-center justify-center gap-1.5 ${
-                    activeTab === "archive" 
-                      ? "border-navy text-navy" 
-                      : "border-transparent text-navy/40 hover:text-navy/60"
-                  }`}
-                >
-                  <Archive size={15} />
-                  {t.archiveTab} ({completedResults.length + activeDrafts.length})
-                </button>
+              <div className="mt-3 -mx-6 px-6">
+                <UnderlineTabs
+                  tabs={[
+                    { id: "profile" as const, label: t.profileTab },
+                    { id: "archive" as const, label: t.archiveTab, count: archiveCount > 0 ? archiveCount : null },
+                  ]}
+                  active={activeTab}
+                  onChange={setActiveTab}
+                />
               </div>
             )}
 
-            {/* TAB 1: Profile Edit */}
+            {/* 프로필 수정 */}
             {activeTab === "profile" && !selectedArchive && (
-              <form onSubmit={handleSave} className="w-full flex flex-col gap-4">
-                {/* Profile Image Edit */}
-                <div className="flex flex-col items-center gap-3 mb-2 relative mx-auto">
-                  <div className="relative w-24 h-24 rounded-full border-2 border-navy overflow-hidden bg-white shadow-sm">
-                    <Image src={profileImg} alt="Profile" width={96} height={96} className="object-cover w-full h-full" />
+              <form onSubmit={handleSave} className="w-full flex flex-col gap-5 pt-6">
+                <div className="relative mx-auto">
+                  <div className="relative rounded-full overflow-hidden bg-navy/5" style={{ width: 88, height: 88 }}>
+                    <Image src={profileImg} alt="Profile" width={88} height={88} className="object-cover w-full h-full" />
                   </div>
-                  <button 
+                  <button
                     type="button"
                     onClick={handleImageChangeClick}
-                    className="absolute bottom-0 right-0 bg-point text-white p-2 rounded-full border-2 border-cream shadow-md hover:scale-110 transition-transform"
+                    aria-label={t.changePhoto}
+                    className="absolute -bottom-1 -right-1 w-9 h-9 flex items-center justify-center rounded-full bg-navy text-cream border-2 border-cream"
                   >
                     <Camera size={16} />
                   </button>
@@ -446,218 +437,152 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   />
                 </div>
 
-                {/* Edit Fields */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="font-sans text-xs font-bold text-navy ml-1">{t.nicknameLabel}</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
-                        <User size={16} />
-                      </div>
-                      <input 
-                        type="text" 
-                        value={nickname}
-                        onChange={e => setNickname(e.target.value)}
-                        placeholder={t.placeholderNickname}
-                        className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="font-sans text-xs font-bold text-navy ml-1">{t.phoneLabel}</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
-                        <Phone size={16} />
-                      </div>
-                      <input 
-                        type="tel" 
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                        placeholder={t.placeholderPhone}
-                        className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
-                      />
-                    </div>
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="profile-nickname" className="type-sub font-semibold text-navy">{t.nicknameLabel}</label>
+                  <input
+                    id="profile-nickname"
+                    type="text"
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    placeholder={t.placeholderNickname}
+                    maxLength={12}
+                    className={inputClass}
+                  />
                 </div>
 
-                {updateError && (
-                  <div className="text-center text-xs font-bold text-red-500 mt-1">
-                    {updateError}
-                  </div>
-                )}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="profile-phone" className="type-sub font-semibold text-navy">{t.phoneLabel}</label>
+                  <input
+                    id="profile-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder={t.placeholderPhone}
+                    className={inputClass}
+                  />
+                </div>
 
-                <div className="flex gap-3 mt-4 w-full">
-                  <button 
+                {updateError && <p role="alert" className="type-sub text-red-700">{updateError}</p>}
+
+                <div className="flex gap-2 pt-1">
+                  <button
                     type="button"
                     onClick={handleLogout}
                     disabled={isUpdating}
-                    className="flex-1 py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 hover:border-red-200 font-bold text-base rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+                    className={`${secondaryButton} flex-1 !text-red-700`}
                   >
                     {t.logoutBtn}
                   </button>
-                  <button 
-                    type="submit"
-                    disabled={isUpdating}
-                    className="flex-[2] py-3.5 bg-navy text-cream font-bold text-base rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <button type="submit" disabled={isUpdating} className={`${primaryButton} flex-[2]`}>
                     {isUpdating ? t.savingBtn : t.saveBtn}
                   </button>
                 </div>
               </form>
             )}
 
-            {/* TAB 2: Archives List */}
+            {/* 내 취향 스페이스 목록 */}
             {activeTab === "archive" && !selectedArchive && (
-              <div className="w-full flex flex-col items-center">
-                {isLoadingArchives ? (
-                  <div className="py-12 text-center flex flex-col items-center gap-2">
-                    <Disc className="animate-spin text-point/80" size={24} />
-                    <p className="font-sans text-xs text-navy/60 font-medium">{t.loadingArchives}</p>
-                  </div>
-                ) : completedResults.length === 0 && activeDrafts.length === 0 ? (
-                  <div className="py-12 px-4 text-center">
-                    <Archive size={40} className="text-navy/20 mx-auto mb-3" />
-                    <p className="font-sans text-sm text-navy/50 font-medium">{t.noArchives}</p>
-                    <p className="font-sans text-xs text-navy/40 mt-1">{t.noArchivesSub}</p>
-                  </div>
-                ) : (
-                  <div className="w-full max-h-[300px] overflow-y-auto flex flex-col gap-2.5 pr-1">
-                    {/* Active Drafts */}
-                    {activeDrafts.map((draft: any) => {
-                      let stepText = t.stageArtist;
-                      if (draft.status === "track_selection") stepText = t.stageTrack;
-                      else if (draft.status === "pre_tournament" || draft.status === "playing") stepText = t.stageWorldCup;
-                      
-                      return (
-                        <button
-                          key={draft.id}
-                          type="button"
-                          onClick={() => handleResumeDraft(draft)}
-                          className="w-full p-4 bg-point/5 border-2 border-point/30 rounded-2xl hover:border-point hover:bg-point/10 text-left transition-all active:scale-[0.98] flex items-center justify-between group shadow-sm"
-                        >
-                          <div className="flex flex-col gap-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar size={13} className="text-point/70" />
-                              <span className="font-sans font-bold text-[10px] text-point">
-                                {new Date(draft.updated_at).toLocaleDateString(locale === "ko" ? 'ko-KR' : 'en-US', {
-                                  year: 'numeric',
-                                  month: '2-digit',
-                                  day: '2-digit'
-                                })} {t.draftTitle}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="px-2 py-0.5 rounded-full bg-point text-cream font-sans font-bold text-[9px] shrink-0">
-                                {t.draftStatus}
-                              </span>
-                              <span className="font-sans font-bold text-sm text-navy truncate">
-                                {draft.title} ({stepText})
-                              </span>
-                            </div>
-                          </div>
-                          <ChevronRight size={18} className="text-point/50 group-hover:text-point transition-colors shrink-0 ml-2" />
-                        </button>
-                      );
-                    })}
+              isLoadingArchives ? (
+                <div className="py-12 flex flex-col items-center gap-3">
+                  <Disc className="animate-spin text-point" size={24} />
+                  <p className="type-sub text-navy/70">{t.loadingArchives}</p>
+                </div>
+              ) : archiveCount === 0 ? (
+                <EmptyState title={t.noArchives} desc={t.noArchivesSub} />
+              ) : (
+                <div className="max-h-[360px] overflow-y-auto -mx-6 px-6 pt-5 flex flex-col gap-6">
+                  {activeDrafts.length > 0 && (
+                    <section>
+                      <SectionTitle title={t.sectionDrafts} count={activeDrafts.length} />
+                      <ul className="divide-y divide-navy/10 mt-1">
+                        {activeDrafts.map((draft: any) => {
+                          let stepText = t.stageArtist;
+                          if (draft.status === "track_selection") stepText = t.stageTrack;
+                          else if (draft.status === "pre_tournament" || draft.status === "playing") stepText = t.stageWorldCup;
+                          return (
+                            <li key={draft.id}>
+                              <button
+                                type="button"
+                                onClick={() => handleResumeDraft(draft)}
+                                className="w-full flex items-center gap-3 py-3 text-left"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="type-body-strong text-navy truncate">{draft.title}</p>
+                                  <p className="type-caption text-navy/70 truncate">
+                                    {stepText} · {formatDate(draft.updated_at, locale)}
+                                  </p>
+                                </div>
+                                <span className="type-sub font-semibold text-point-ink shrink-0">{t.resume}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  )}
 
-                    {/* Completed Results */}
-                    {completedResults.map((result: any) => {
-                      return (
-                        <button
-                          key={result.id}
-                          type="button"
-                          onClick={() => setSelectedArchive(result)}
-                          className="w-full p-4 bg-white/50 border-2 border-navy/15 rounded-2xl hover:border-point hover:bg-white text-left transition-all active:scale-[0.98] flex items-center justify-between group shadow-sm"
-                        >
-                          <div className="flex flex-col gap-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar size={13} className="text-navy/50" />
-                              <span className="font-sans font-bold text-xs text-navy">
-                                {new Date(result.created_at).toLocaleDateString(locale === "ko" ? 'ko-KR' : 'en-US', {
-                                  year: 'numeric',
-                                  month: '2-digit',
-                                  day: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="px-2 py-0.5 rounded-full bg-navy text-cream font-sans font-bold text-[9px] shrink-0">
-                                {t.completedStatus}
-                              </span>
-                              <span className="font-sans font-bold text-sm text-navy truncate">
-                                {t.firstPlace}: {result.winner_track_title} - {result.winner_track_artist}
-                              </span>
-                            </div>
-                          </div>
-                          <ChevronRight size={18} className="text-navy/30 group-hover:text-point transition-colors shrink-0 ml-2" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                  {completedResults.length > 0 && (
+                    <section>
+                      <SectionTitle title={t.sectionCompleted} count={completedResults.length} />
+                      <ul className="divide-y divide-navy/10 mt-1">
+                        {completedResults.map((result: any) => (
+                          <li key={result.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedArchive(result)}
+                              className="w-full flex items-center gap-3 py-3 text-left"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="type-body-strong text-navy truncate">
+                                  {t.firstPlace} {result.winner_track_title} · {result.winner_track_artist}
+                                </p>
+                                <p className="type-caption text-navy/70">{formatDate(result.created_at, locale)}</p>
+                              </div>
+                              <ChevronRight size={18} className="text-navy/70 shrink-0" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+              )
             )}
 
-            {/* TAB 2 SUBVIEW: Selected Archive Detail */}
+            {/* 취향표 상세 */}
             {selectedArchive && (() => {
               const tracks = getArchiveTracks(selectedArchive);
               return (
-                <div className="w-full flex flex-col items-center">
-                  {/* Back Button and Title */}
-                  <div className="flex items-center gap-2 w-full mb-4">
-                    <button 
+                <div className="flex flex-col pt-3">
+                  <div className="flex items-center gap-1">
+                    <button
                       type="button"
                       onClick={() => setSelectedArchive(null)}
-                      className="text-navy hover:text-point transition-colors bg-navy/5 p-1.5 rounded-full"
+                      aria-label={t.back}
+                      className="-ml-2 w-9 h-9 flex items-center justify-center rounded-full text-navy hover:bg-navy/5"
                     >
-                      <ArrowLeft size={16} />
+                      <ArrowLeft size={20} />
                     </button>
-                    <span className="font-sans text-sm text-navy font-bold">
-                      {new Date(selectedArchive.saved_at || selectedArchive.created_at).toLocaleDateString(locale === "ko" ? 'ko-KR' : 'en-US', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })} {t.archiveRecord}
+                    <span className="type-sub text-navy/70">
+                      {formatDate(selectedArchive.saved_at || selectedArchive.created_at, locale)} · {t.archiveRecord}
                     </span>
                   </div>
 
-                  {/* Track Rankings */}
-                  <div className="w-full max-h-[250px] overflow-y-auto flex flex-col gap-2 pr-1 mb-4">
-                    {tracks.map((track: any, idx: number) => (
-                      <div key={track.id} className="flex items-center gap-3 p-2 bg-white/60 border border-navy/10 rounded-xl">
-                        <div className="w-6 h-6 rounded-full bg-navy text-cream flex items-center justify-center font-sans font-bold text-[10px] shrink-0 shadow-sm">
-                          {idx + 1}
-                        </div>
-                        {track.albumImage && (
-                          <div className="w-9 h-9 rounded-md overflow-hidden relative shrink-0 border border-navy/10">
-                            <Image src={track.albumImage} alt={track.title} width={36} height={36} className="object-cover w-full h-full" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0 leading-tight">
-                          <div className="font-sans font-bold text-xs text-navy truncate">{track.title}</div>
-                          <div className="font-sans text-[10px] text-navy/60 truncate">{track.artistName}</div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="max-h-[300px] overflow-y-auto -mx-6 px-6 mt-2">
+                    <RankList tracks={tracks} />
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-2 w-full mt-2">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        sessionStorage.setItem("worldcup_ranking", JSON.stringify(tracks));
-                        onClose();
-                        router.push("/taste");
-                      }}
-                      className="w-full py-3 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-1.5"
-                    >
-                      {t.loadAndShare}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sessionStorage.setItem("worldcup_ranking", JSON.stringify(tracks));
+                      onClose();
+                      router.push("/taste");
+                    }}
+                    className={`${primaryButton} w-full mt-4`}
+                  >
+                    {t.loadAndShare}
+                  </button>
                 </div>
               );
             })()}

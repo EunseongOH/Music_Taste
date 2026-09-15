@@ -16,10 +16,12 @@ interface Track {
 interface WorldCupCandidateProps {
   track: Track;
   onDrop: (track: Track) => void;
+  /** 위로 끌어 올렸을 때 — 모르는 곡으로 뺀다. */
+  onRemove?: (track: Track) => void;
   onActive?: (isActive: boolean) => void;
 }
 
-export default function WorldCupCandidate({ track, onDrop, onActive }: WorldCupCandidateProps) {
+export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }: WorldCupCandidateProps) {
   const [isLP, setIsLP] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -59,6 +61,8 @@ export default function WorldCupCandidate({ track, onDrop, onActive }: WorldCupC
     // Play-in sensitive drag check 
     if (info.offset.y > 100) {
       onDrop(track);
+    } else if (info.offset.y < -100) {
+      onRemove?.(track);
     }
   };
 

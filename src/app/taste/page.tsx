@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Share2, Music, Archive, Check, X, FileSpreadsheet } from "lucide-react";
+import { Download, Share2, Music, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
 import Image from "next/image";
-import * as htmlToImage from "html-to-image";
+import * as platform from "@/utils/platform";
 import SnakePathTimeline, { getRowSizes } from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
@@ -15,6 +15,7 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
 import { trackEvent } from "@/utils/gtag";
+import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 
 const translations = {
   ko: {
@@ -46,14 +47,19 @@ const translations = {
     shareMainBtn: "공유하기",
     shareMenuTitle: "결과 공유하기",
     shareXOption: "X (트위터)로 공유",
-    shareThreadsOption: "스레드로 공유",
     shareKakaoOption: "카카오톡으로 공유",
     shareInstagramOption: "인스타그램 스토리에 공유",
     instagramGuideTitle: "인스타그램 스토리 공유 가이드",
     instagramGuideDesc: "취향표 이미지가 다운로드되었어요!\n인스타그램 스토리에서 내려받은 이미지를 선택해 공유해 보세요.",
     openInstagramBtn: "인스타그램 열기",
+    shareNativeOption: "다른 앱으로 공유하기",
     copyLinkOption: "취향표 링크 복사하기",
-    linkCopiedToast: "링크가 복사되었어요",
+    linkCopiedToast: "취향표가 복사되었어요",
+    linkCopyError: "링크를 복사하지 못했어요. 다시 시도해 주세요.",
+    shareFailed: "공유하지 못했어요. 다시 시도해 주세요.",
+    copyFallbackToast: "공유 창에서 '복사'를 눌러 주세요",
+    shareNameLabel: "공유할 때 보일 이름",
+    shareNameHint: "처음 한 번만 확인해요. 프로필 닉네임도 이 이름으로 바뀌어요.",
   },
   en: {
     title: "My Taste Card",
@@ -84,14 +90,19 @@ const translations = {
     shareMainBtn: "Share Results",
     shareMenuTitle: "Share Results",
     shareXOption: "Share on X (Twitter)",
-    shareThreadsOption: "Share on Threads",
     shareKakaoOption: "Share on KakaoTalk",
     shareInstagramOption: "Share on Instagram Story",
     instagramGuideTitle: "Instagram Story Share Guide",
     instagramGuideDesc: "The card image has been downloaded! Select it from your gallery on Instagram Story to share.",
     openInstagramBtn: "Open Instagram",
+    shareNativeOption: "Share to another app",
     copyLinkOption: "Copy Link",
-    linkCopiedToast: "Link copied to clipboard",
+    linkCopiedToast: "Taste card copied to clipboard",
+    linkCopyError: "Couldn't copy the link. Please try again.",
+    shareFailed: "Couldn't share. Please try again.",
+    copyFallbackToast: "Tap 'Copy' in the share sheet",
+    shareNameLabel: "Name shown when sharing",
+    shareNameHint: "Asked only once. Your profile nickname will change too.",
   }
 };
 
@@ -101,6 +112,35 @@ interface Track {
   artistName: string;
   albumImage: string;
 }
+
+/**
+ * 공유에 쓰는 TOP 10 텍스트.
+ *
+ * X 공유·링크 복사·공유 시트가 모두 이 함수를 쓴다. 같은 문구를 여러 곳에서
+ * 따로 만들면 한쪽만 고쳐져 서서히 갈라진다.
+ *
+ * ⚠️ 여기에 sortify.kr 주소를 넣지 말 것. 앱인토스는 "공유하기 링크가 자사
+ * 웹사이트로 랜딩되는 경우"를 제한한다 — 링크는 어댑터(`platform.shareUrl`)가
+ * 플랫폼에 맞게 따로 만든다.
+ */
+function buildShareText(winners: Track[], nickname?: string | null): string {
+  // 결과 화면의 isSingleArtistMode 는 선택 아티스트 유무로만 정해져 믹스 모드도
+  // true 가 되므로 쓰지 않는다. 실제 곡의 아티스트 수로 판단한다.
+  const mixed = new Set(winners.map((tr) => tr.artistName)).size > 1;
+  const topTracks = winners
+    .slice(0, 10)
+    .map((tr, i) => `${i + 1}. ${tr.title}${mixed ? ` - ${tr.artistName}` : ""}`)
+    .join("\n");
+  const subject = mixed ? "믹스 매치" : winners[0]?.artistName || "";
+  const owner = nickname ? `${nickname}님의 ` : "";
+  return `${owner}${subject} 취향표 TOP 10\n\n${topTracks}`;
+}
+
+/**
+ * 링크 바로 위에 붙는 참여 유도 문구. 주소는 넣지 않는다(위 경고와 같은 이유).
+ * 공유 본문은 항상 `본문 \n\n 유도 문구 \n 링크` 순서다.
+ */
+const SHARE_CTA = "내 진짜 최애곡을 알고 싶다면? Sortify에서 직접 뽑아보기 👇";
 
 export default function ResultPage() {
   const router = useRouter();
@@ -115,6 +155,15 @@ export default function ResultPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineWrapperRef = useRef<HTMLDivElement>(null);
+  /**
+   * 진행 중인 자동 저장. 공유 직전에 이걸 기다린다.
+   *
+   * 공유 버튼은 애니메이션이 끝나면 바로 활성화되는데(showButton), 그 시점에
+   * 자동 저장은 아직 끝나지 않았을 수 있다. 그러면 savedId 가 null 이라
+   * 남에게 의미 없는 링크가 나간다 — 웹은 `/taste`, 토스는 미니앱 홈.
+   * 상태가 아니라 ref 라서 리렌더를 유발하지 않는다.
+   */
+  const autoSaveRef = useRef<Promise<void> | null>(null);
   const [cameraRig, setCameraRig] = useState<{ xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[] } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [rawKeyframes, setRawKeyframes] = useState<{ x: number, y: number }[]>([]);
@@ -133,6 +182,10 @@ export default function ResultPage() {
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showExitSaveModal, setShowExitSaveModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  // 첫 공유 때 확인하는 이름. 모달이 열릴 때 현재 닉네임으로 채운다.
+  const [shareName, setShareName] = useState("");
+  const [shareNameError, setShareNameError] = useState("");
+  const needsNameConfirm = !!user && user.user_metadata?.nickname_confirmed !== true;
   const [showInstagramGuideModal, setShowInstagramGuideModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -203,9 +256,12 @@ export default function ResultPage() {
 
   // Auto-Save Effect: Triggered for logged-in users completing 16+ tracks
   useEffect(() => {
-    if (user && winners.length >= 16 && !isSaved && !isAutoSaving) {
+    // 16곡 기준은 월드컵을 시작한 곡 수다. "모르는 곡"으로 뺀 곡은 순위에 없으므로
+    // 더해서 센다 — 16곡 중 1곡을 뺐다고 자동 저장이 조용히 꺼지면 안 된다.
+    const skippedCount = Number(sessionStorage.getItem("worldcup_skipped_count")) || 0;
+    if (user && winners.length + skippedCount >= 16 && !isSaved && !isAutoSaving) {
       setIsAutoSaving(true);
-      (async () => {
+      autoSaveRef.current = (async () => {
         try {
           let artistId: string | null = null;
           let artistName: string | null = null;
@@ -240,7 +296,7 @@ export default function ResultPage() {
     }
   }, [user, winners.length, isSaved, isSingleArtistMode]);
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
       let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
       csvContent += "Rank,Title,Artist,Album\n";
@@ -254,13 +310,7 @@ export default function ResultPage() {
         csvContent += row + "\n";
       });
 
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `${winners[0]?.artistName || "Artist"}_Music_Ranking.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await platform.saveCsv(csvContent, `${winners[0]?.artistName || "Artist"}_Music_Ranking.csv`);
       setShowSaveSheet(false);
       trackEvent("funnel_excel_download", {});
     } catch (err) {
@@ -269,11 +319,72 @@ export default function ResultPage() {
     }
   };
 
-  const handleCopyLink = () => {
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    navigator.clipboard.writeText(url);
-    showToastMessage(t.linkCopiedToast);
-    trackEvent("funnel_copy_link", {});
+  /**
+   * 공유에 쓸 링크를 만든다. 모든 공유 경로가 이 하나를 지난다.
+   *
+   * 자동 저장이 진행 중이면 끝날 때까지 기다린다 — 그래야 savedId 가 생겨
+   * "그 사람의 취향표"로 가는 링크가 나간다. 덮어쓰기 모달로 빠진 경우에는
+   * 저장 없이 resolve 되므로 무한 대기는 생기지 않는다.
+   */
+  const resolveShareUrl = async () => {
+    try {
+      await autoSaveRef.current;
+    } catch {
+      // 저장 실패는 자동 저장 쪽에서 이미 로그를 남긴다. 공유는 계속 진행한다.
+    }
+    // 공유 링크의 미리보기 이미지로 1위 곡 앨범아트를 쓴다(토스 전용).
+    // 웹은 taste/[id]/layout.tsx 의 generateMetadata 가 같은 일을 한다.
+    const cover = winners[0]?.albumImage;
+    const ogImageUrl = cover?.startsWith("https://") ? cover : undefined;
+    return platform.shareUrl(savedId, ogImageUrl);
+  };
+
+  /**
+   * 공유 헤더에 쓸 이름을 정한다. 공유 버튼마다 먼저 부른다.
+   *
+   * 로그인했지만 아직 이름을 확인하지 않은 사용자(자동 생성 닉네임)는 모달 위쪽
+   * 입력칸의 값을 저장·확정한 뒤 쓴다. 입력칸은 자동 닉네임으로 미리 채워져
+   * 있어서 그대로 누르면 추가 조작이 없다. 한 번 확정하면 다시 묻지 않는다.
+   *
+   * 반환: 이름 / null(게스트 — 이름 없이 공유) / false(저장 실패 — 공유 중단)
+   */
+  const ensureShareName = async (): Promise<string | null | false> => {
+    if (!user) return null;
+    const current = user.user_metadata?.nickname;
+    if (!needsNameConfirm) {
+      return typeof current === "string" && !current.includes("@") ? current : null;
+    }
+    const result = await saveNickname(shareName);
+    if (result !== "ok") {
+      setShareNameError(NICKNAME_ERROR_TEXT[locale][result]);
+      return false;
+    }
+    trackEvent("nickname_confirmed_on_share", { changed: shareName.trim() !== current });
+    return shareName.trim();
+  };
+
+  /** 공유 본문(유도 문구까지). 링크는 호출부가 붙이거나 어댑터가 붙인다. */
+  const shareBody = (nickname: string | null) => `${buildShareText(winners, nickname)}\n\n${SHARE_CTA}`;
+
+  const handleCopyLink = async () => {
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
+    // 웹에서는 실패하지 않는 경로지만, WebView 어댑터는 권한 거부나 구버전
+    // 앱에서 실제로 실패할 수 있다. 잡지 않으면 버튼이 먹통처럼 보인다.
+    try {
+      const url = await resolveShareUrl();
+      // 링크만이 아니라 TOP 10 까지 함께 복사한다.
+      const result = await platform.copyText(`${shareBody(nickname)}\n${url}`);
+      // 토스에서 클립보드 쓰기가 막히면 어댑터가 공유 시트(복사 가능)를 대신 연다.
+      showToastMessage(result === "sheet" ? t.copyFallbackToast : t.linkCopiedToast);
+      trackEvent("funnel_copy_link", { result });
+    } catch (err) {
+      console.error("Failed to copy link", err);
+      // 어댑터가 사용자용 문구를 준 경우에는 그대로 보여준다.
+      // 그래야 "권한을 켜 주세요" 처럼 할 수 있는 일이 전달된다.
+      const msg = err instanceof platform.PlatformError ? err.message : t.linkCopyError;
+      showToastMessage(msg, "error");
+    }
   };
 
   const handleShareInstagram = async () => {
@@ -283,33 +394,50 @@ export default function ResultPage() {
     trackEvent("funnel_share_instagram", {});
   };
 
-  const handleShareX = () => {
-    const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
-    const artistName = winners[0]?.artistName || "";
-    const text = `${artistName} 취향표 TOP 10\n\n${topTracks}`;
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, "_blank");
+  const handleShareX = async () => {
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
+    const text = shareBody(nickname);
+    const url = await resolveShareUrl();
+    await platform.openExternal(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
     trackEvent("funnel_share_x", {});
   };
 
-  const handleShareThreads = () => {
-    const topTracks = winners.slice(0, 10).map((tr, i) => `${i + 1}. ${tr.title}`).join("\n");
-    const artistName = winners[0]?.artistName || "";
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    const text = `${artistName} 취향표 TOP 10\n\n${topTracks}\n\n${url}`;
-    window.open(`https://threads.net/intent/post?text=${encodeURIComponent(text)}`, "_blank");
-    trackEvent("funnel_share_threads", {});
+  /**
+   * OS 공유 시트를 열어 TOP 10 과 링크를 함께 내보낸다. (토스 빌드 전용)
+   *
+   * 사용자가 카카오톡·인스타 등 설치된 앱을 직접 고르므로, 개별 SNS 버튼을
+   * 두지 않아도 외부 공유가 열린다. 나가는 링크는 어댑터가 만든 토스 공유
+   * 링크 하나뿐이라 "자사 웹사이트 랜딩" 제한에도 걸리지 않는다.
+   */
+  const handleShareNative = async () => {
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
+    try {
+      const text = shareBody(nickname);
+      const url = await resolveShareUrl();
+      const shared = await platform.share({ title: t.title, text, url });
+      // ponytail: 어댑터의 share() 가 boolean 이라 "사용자 취소"와 "실패"를
+      // 구분하지 못한다. 그래서 폴백(자동 복사)을 돌리지 않는다 — 취소할 때마다
+      // 클립보드 권한 팝업이 뜨는 편이 더 나쁘다. 실기기에서 취소 동작을 확인한
+      // 뒤, 구분이 필요하면 share() 가 사유를 돌려주도록 넓힌다.
+      if (!shared) showToastMessage(t.shareFailed, "error");
+      trackEvent("funnel_share_native", {});
+    } catch (err) {
+      console.error("Failed to share", err);
+      const msg = err instanceof platform.PlatformError ? err.message : t.shareFailed;
+      showToastMessage(msg, "error");
+    }
   };
 
-  const handleShareKakao = () => {
-    const url = savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
-    if (navigator.share) {
-      navigator.share({
-        title: t.title,
-        text: `${winners[0]?.artistName || ""} 취향표`,
-        url: url,
-      }).catch(() => {});
-    } else {
+  const handleShareKakao = async () => {
+    const url = await resolveShareUrl();
+    const shared = await platform.share({
+      title: t.title,
+      text: `${winners[0]?.artistName || ""} 취향표`,
+      url: url,
+    });
+    if (!shared) {
       handleCopyLink();
     }
     trackEvent("funnel_share_kakao", {});
@@ -321,14 +449,7 @@ export default function ResultPage() {
       if (template === "pyramid") {
         const el = document.getElementById("export-card-pyramid");
         if (!el) return;
-        const dataUrl = await htmlToImage.toPng(el, {
-          cacheBust: true,
-          pixelRatio: 5,
-        });
-        const link = document.createElement('a');
-        link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`;
-        link.href = dataUrl;
-        link.click();
+        await platform.saveImage(el, `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`);
       } else {
         const pageSize = template === "list" ? 15 : 10;
         const totalPages = Math.ceil(winners.length / pageSize);
@@ -353,14 +474,10 @@ export default function ResultPage() {
 
           await new Promise((resolve) => setTimeout(resolve, i * 450));
 
-          const dataUrl = await htmlToImage.toPng(el, {
-            cacheBust: true,
-            pixelRatio: 5,
-          });
-          const link = document.createElement('a');
-          link.download = `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`;
-          link.href = dataUrl;
-          link.click();
+          await platform.saveImage(
+            el,
+            `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`
+          );
         }
       }
       setShowSaveSheet(false);
@@ -480,6 +597,7 @@ export default function ResultPage() {
 
   const executeExit = async () => {
     sessionStorage.removeItem("worldcup_ranking");
+    sessionStorage.removeItem("worldcup_skipped_count");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
     sessionStorage.removeItem("selected_genres");
@@ -503,7 +621,9 @@ export default function ResultPage() {
       }
     }
 
-    window.location.href = "/";
+    // 하드 내비게이션(window.location.href) 대신 라우터로 이동한다.
+    // 문서 전체를 다시 로드하지 않으므로 앱인토스 WebView 에서 번들 재로드를 피할 수 있다.
+    router.push("/");
   };
 
   const handleExit = async () => {
@@ -619,7 +739,7 @@ export default function ResultPage() {
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
-          <h1 className="font-serif text-2xl text-navy tracking-tight">{t.title}</h1>
+          <h1 className="type-title-1 text-navy">{t.title}</h1>
         </div>
         <button
           onClick={handleExit}
@@ -757,7 +877,11 @@ export default function ResultPage() {
               </button>
 
               <button
-                onClick={() => setShowShareModal(true)}
+                onClick={() => {
+                  setShareName(user?.user_metadata?.nickname ?? "");
+                  setShareNameError("");
+                  setShowShareModal(true);
+                }}
                 className="flex-1 h-[48px] bg-navy text-cream font-sans font-bold text-sm rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md hover:bg-[#111A3E]"
               >
                 <Share2 size={18} />
@@ -796,13 +920,18 @@ export default function ResultPage() {
                 {/* 1. Save to Space */}
                 <button
                   onClick={handleSaveToSpace}
-                  className="w-full h-[52px] px-5 bg-white border border-navy/20 hover:bg-navy/5 text-navy font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-between shadow-sm"
+                  disabled={isSavingArchive}
+                  className="w-full h-[52px] px-5 bg-white border border-navy/20 hover:bg-navy/5 text-navy font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-between shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                 >
                   <div className="flex items-center gap-3">
                     <Archive size={20} className="text-point" />
                     <span>{t.saveToSpaceOption}</span>
                   </div>
-                  {isSaved && <Check size={18} className="text-emerald-600" />}
+                  {isSavingArchive ? (
+                    <Loader2 size={18} className="text-navy/60 animate-spin" />
+                  ) : (
+                    isSaved && <Check size={18} className="text-emerald-600" />
+                  )}
                 </button>
 
                 {/* 2. Download 9:16 Image */}
@@ -985,8 +1114,31 @@ export default function ResultPage() {
                 {t.shareMenuTitle}
               </h2>
 
+              {needsNameConfirm && (
+                <div className="w-full mb-4">
+                  <label htmlFor="share-name" className="block font-sans text-xs font-bold text-navy/70 mb-1.5">
+                    {t.shareNameLabel}
+                  </label>
+                  <input
+                    id="share-name"
+                    value={shareName}
+                    onChange={(e) => {
+                      setShareName(e.target.value);
+                      setShareNameError("");
+                    }}
+                    maxLength={12}
+                    autoComplete="off"
+                    className="w-full h-[48px] px-4 bg-white border border-navy/20 rounded-xl text-navy font-sans font-bold text-sm focus:outline-none focus:border-navy"
+                  />
+                  <p className={`mt-1.5 font-sans text-xs ${shareNameError ? "text-red-500" : "text-navy/50"}`}>
+                    {shareNameError || t.shareNameHint}
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col gap-3 w-full mb-4">
                 {/* 1. X (Twitter) */}
+                {platform.shareTargets.includes("x") && (
                 <button
                   onClick={handleShareX}
                   className="w-full h-[52px] px-5 bg-[#0F1419] hover:bg-[#20262E] active:bg-[#2C353D] text-white font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -996,8 +1148,10 @@ export default function ResultPage() {
                   </svg>
                   <span>{t.shareXOption}</span>
                 </button>
+                )}
 
                 {/* 2. KakaoTalk */}
+                {platform.shareTargets.includes("kakao") && (
                 <button
                   onClick={handleShareKakao}
                   className="w-full h-[52px] px-5 bg-[#FEE500] hover:bg-[#F5DC00] active:bg-[#EDD100] text-black font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -1007,8 +1161,10 @@ export default function ResultPage() {
                   </svg>
                   <span className="opacity-90">{t.shareKakaoOption}</span>
                 </button>
+                )}
 
                 {/* 3. Instagram Story */}
+                {platform.shareTargets.includes("instagram") && (
                 <button
                   onClick={handleShareInstagram}
                   className="w-full h-[52px] px-5 bg-gradient-to-r from-[#f09433] via-[#dc2743] to-[#bc1888] hover:opacity-95 text-white font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
@@ -1018,8 +1174,21 @@ export default function ResultPage() {
                   </svg>
                   <span>{t.shareInstagramOption}</span>
                 </button>
+                )}
 
-                {/* 4. Copy Link */}
+                {/* 4. 다른 앱으로 공유 (OS 공유 시트) — 토스 빌드에서만 렌더된다.
+                     웹은 위의 X·카카오·인스타 버튼이 같은 일을 나눠 맡는다. */}
+                {platform.shareTargets.includes("native") && (
+                <button
+                  onClick={handleShareNative}
+                  className="w-full h-[52px] px-5 bg-navy hover:bg-navy/90 active:bg-navy/80 text-cream font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
+                >
+                  <Share2 size={18} />
+                  <span>{t.shareNativeOption}</span>
+                </button>
+                )}
+
+                {/* 5. Copy Link */}
                 <button
                   onClick={handleCopyLink}
                   className="w-full h-[52px] px-5 bg-white border border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
