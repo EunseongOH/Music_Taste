@@ -14,6 +14,8 @@
  * 사용법:
  *   npm run mb:seed     ARTIST_TRANSLATION_MAP + curatedArtists + 기존 캐시를 큐에 투입
  *   npm run mb:resolve  큐를 소비 (기본 200 건)
+ *   npm run mb:albums   확인된 아티스트의 앨범 매핑·발매판 다시 채우기
+ *   npm run mb:tracks   발매판 트랙리스트 채우기 (트랙 키 = MB 레코딩 ID)
  */
 import { createAdminClient } from "../src/utils/supabase/admin";
 import { ARTIST_TRANSLATION_MAP } from "../src/utils/artistNames";
@@ -48,6 +50,20 @@ async function mb(path: string, tries = 4): Promise<any> {
     return { __status: res.status };
   }
   return { __throttled: true };
+}
+
+/**
+ * Supabase(PostgREST)는 한 요청에 최대 1000 행만 돌려준다. .limit(5000) 을 줘도 조용히 잘린다.
+ * 실제로 첫 시드가 캐시 아티스트 2587 명 중 1000 명만 큐에 넣었다. 전부 읽어야 하는 곳은 이걸 쓴다.
+ */
+async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await page(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) return out;
+  }
 }
 
 const hasHangul = (s: string) => /[가-힣]/.test(s || "");
@@ -95,8 +111,12 @@ async function byName(name: string): Promise<{ mbid: string; matched: string } |
   return null;
 }
 
-/** 아티스트 1 명의 canonical 행 + 디스코그래피를 채운다. MB 호출 2~3 회. */
-async function fillArtist(mbid: string) {
+/**
+ * 아티스트 1 명의 canonical 행 + 디스코그래피를 채운다. MB 호출 2~3 회.
+ * trusted(url_rel/manual 로 확인된 아티스트)일 때만 발매판 매핑을 남긴다 — 이름 매칭(정확도 57%)
+ * 아티스트의 트랙리스트까지 받느라 MB 호출을 쓸 이유가 없다.
+ */
+async function fillArtist(mbid: string, trusted: boolean) {
   // inc 에 tags 를 넣지 않는다 (CC-BY-NC-SA).
   const a = await mb(`artist/${mbid}?inc=aliases&fmt=json`);
   if (a?.__throttled || a?.__status) return { ok: false, releaseGroups: 0, albums: 0 };
@@ -131,6 +151,7 @@ async function fillArtist(mbid: string) {
   //   추가 Spotify 호출 0 회, 추가 MB 호출도 사실상 0 회다.
   const rgById = new Map<string, any>();
   const albumMap = new Map<string, string>();  // spotify album id -> rg mbid
+  const albumRelease = new Map<string, { release: string; rg: string }>();  // spotify album id -> 발매판
 
   // 다작 아티스트는 release 가 수백 개다. 5 페이지(500 개)에서 자른다.
   // ponytail: 500 넘는 아티스트는 최근 발매분 일부가 빠질 수 있다. 실제로 문제되면 상한을 올린다.
@@ -149,7 +170,11 @@ async function fillArtist(mbid: string) {
       if (sp) {
         const albumId = String(sp.url.resource).split("/album/")[1]?.split(/[?#/]/)[0];
         // 한 RG 에 여러 판(리패키지 등)이 있어도 Spotify 앨범 ID 는 서로 다르다 — 전부 매핑한다
-        if (albumId) albumMap.set(albumId, rg.id);
+        if (albumId) {
+          albumMap.set(albumId, rg.id);
+          // 트랙리스트는 RG 가 아니라 이 발매판 기준이어야 Spotify 앨범과 곡 순서가 맞는다
+          if (!albumRelease.has(albumId)) albumRelease.set(albumId, { release: rel.id, rg: rg.id });
+        }
       }
     }
 
@@ -176,6 +201,17 @@ async function fillArtist(mbid: string) {
     }));
     const { error } = await supabase.from("mb_spotify_map").upsert(rows, { onConflict: "spotify_id" });
     if (error) console.error(`  ! album map upsert 실패: ${error.message}`);
+  }
+
+  if (trusted && albumRelease.size > 0) {
+    // ignoreDuplicates: 이미 트랙리스트를 채운 행의 tracks_filled_at 을 되돌리지 않는다
+    const rows = [...albumRelease.entries()].map(([spotify_album_id, v]) => ({
+      spotify_album_id, release_mbid: v.release, release_group_mbid: v.rg,
+    }));
+    const { error } = await supabase
+      .from("mb_album_release")
+      .upsert(rows, { onConflict: "spotify_album_id", ignoreDuplicates: true });
+    if (error) console.error(`  ! album release upsert 실패: ${error.message}`);
   }
 
   return { ok: true, releaseGroups: rgById.size, albums: albumMap.size };
@@ -215,7 +251,7 @@ async function resolveOne(row: { spotify_id: string; entity: string; hint: strin
     return { status: "retry" as const };
   }
 
-  const filled = await fillArtist(mbid);
+  const filled = await fillArtist(mbid, confidence === "url_rel");
   if (!filled.ok) {
     await supabase.from("mb_resolve_queue").update({ attempts: row.attempts + 1 }).eq("spotify_id", spotify_id);
     return { status: "retry" as const };
@@ -237,29 +273,108 @@ async function resolveOne(row: { spotify_id: string; entity: string; hint: strin
 async function backfillAlbums() {
   const supabase = createAdminClient();
 
-  const { data: maps } = await supabase
+  const maps = await fetchAll<{ mbid: string }>((f, t) => supabase
     .from("mb_spotify_map")
     .select("mbid")
     .eq("entity", "artist")
-    .in("confidence", ["url_rel", "manual"]);
-  const trusted = new Set((maps ?? []).map(m => m.mbid));
+    .in("confidence", ["url_rel", "manual"])
+    .order("spotify_id")
+    .range(f, t));
+  const trusted = new Set(maps.map(m => m.mbid));
 
-  const { data: artists } = await supabase
+  // 전부 가져와서 거른다. 오래된 순으로 일부만 가져오면 그 구간이 전부 이름 매칭(격리)
+  // 아티스트일 때 대상이 0 명이 된다(실제로 겪음).
+  // ponytail: 아티스트가 수만 명이 되면 신뢰 목록을 뷰로 조인해서 DB 에서 거른다.
+  const artists = await fetchAll<{ mbid: string; name: string; updated_at: string }>((f, t) => supabase
     .from("mb_artist")
     .select("mbid, name, updated_at")
     .order("updated_at", { ascending: true })
-    .limit(BATCH * 2);  // name 매칭분이 섞여 있으니 여유 있게 가져와서 거른다
+    .range(f, t));
 
-  const targets = (artists ?? []).filter(a => trusted.has(a.mbid)).slice(0, BATCH);
+  const targets = artists.filter(a => trusted.has(a.mbid)).slice(0, BATCH);
   console.log(`앨범 백필 ${targets.length} 명 (신뢰 아티스트 ${trusted.size} 명 중)`);
 
   let rgs = 0, albums = 0, ok = 0;
   for (const a of targets) {
-    const r = await fillArtist(a.mbid);
+    const r = await fillArtist(a.mbid, true);
     if (r.ok) { ok++; rgs += r.releaseGroups; albums += r.albums; }
     console.log(`  ${r.ok ? "O" : "-"} ${a.name} rg=${r.releaseGroups} album=${r.albums}`);
   }
   console.log(`\n백필 완료 ${ok}/${targets.length} · 릴리스그룹 ${rgs} · Spotify 앨범 매핑 ${albums} · MB 호출 ${mbCalls}회`);
+}
+
+/**
+ * 트랙리스트 채우기: mb_album_release 중 아직 안 채운 발매판의 곡 목록을 받는다. 발매판 1 개당 MB 1 회.
+ * tracks_filled_at 이 곧 진행 상태라 여러 번 나눠 돌려도 이어서 진행된다.
+ * 서로 다른 Spotify 앨범 ID 가 같은 발매판을 가리키면 MB 호출 없이 표시만 한다.
+ */
+async function fillTracklists() {
+  const supabase = createAdminClient();
+  const done = new Set<string>();
+  let filled = 0, tracks = 0, failed = 0, seen = 0;
+  // keyset 페이지네이션: 한 요청 1000 행 제한을 넘기고, 실패해서 NULL 로 남은 행을
+  // 같은 실행 안에서 무한히 다시 집어오지 않게 한다.
+  let after = "";
+
+  while (seen < BATCH) {
+    const { data: rows, error } = await supabase
+      .from("mb_album_release")
+      .select("spotify_album_id, release_mbid")
+      .is("tracks_filled_at", null)
+      .gt("spotify_album_id", after)
+      .order("spotify_album_id", { ascending: true })
+      .limit(Math.min(1000, BATCH - seen));
+    if (error) { console.error("조회 실패:", error.message); process.exit(1); }
+    if (!rows?.length) break;
+    after = rows[rows.length - 1].spotify_album_id;
+    seen += rows.length;
+    if (seen === rows.length) console.log(`트랙리스트 처리 시작 (최대 ${BATCH} 건)`);
+
+  for (const row of rows) {
+    const markFilled = () => supabase
+      .from("mb_album_release")
+      .update({ tracks_filled_at: new Date().toISOString() })
+      .eq("spotify_album_id", row.spotify_album_id);
+
+    if (done.has(row.release_mbid)) { await markFilled(); continue; }
+
+    const d = await mb(`release/${row.release_mbid}?inc=recordings&fmt=json`);
+    if (d?.__throttled || d?.__status) {
+      failed++;
+      // 404 는 MB 에서 발매판이 병합·삭제된 경우다. 다시 시도해도 소용없으니 채운 것으로 표시한다.
+      if (d?.__status === 404) await markFilled();
+      continue;
+    }
+
+    const trackRows = (d.media || []).flatMap((m: any) =>
+      (m.tracks || [])
+        .filter((t: any) => t.recording?.id)
+        .map((t: any) => ({
+          release_mbid: row.release_mbid,
+          disc: m.position ?? 1,
+          position: t.position ?? (Number(t.number) || 0),
+          recording_mbid: t.recording.id,
+          title: t.title ?? t.recording.title,
+          length_ms: t.length ?? t.recording.length ?? null,
+        }))
+    );
+
+    if (trackRows.length > 0) {
+      const { error: e } = await supabase
+        .from("mb_release_track")
+        .upsert(trackRows, { onConflict: "release_mbid,disc,position" });
+      if (e) { console.error(`  ! ${row.release_mbid}: ${e.message}`); failed++; continue; }
+    }
+
+    await markFilled();
+    done.add(row.release_mbid);
+    filled++; tracks += trackRows.length;
+    if (filled % 200 === 0) console.log(`  … ${filled} 발매판 / 곡 ${tracks}`);
+  }
+  }
+
+  if (seen === 0) { console.log("채울 트랙리스트가 없다."); return; }
+  console.log(`\n트랙리스트 완료 ${filled} 발매판 · 곡 ${tracks} · 실패 ${failed} · MB 호출 ${mbCalls}회`);
 }
 
 /** 초기 시드: 자체 자산을 전부 큐에 넣는다. */
@@ -275,13 +390,23 @@ async function seed() {
   }
 
   // 2) 기존 Spotify 캐시에 쌓인 아티스트 (실사용 흔적이라 우선순위가 높다)
-  const { data: cached } = await supabase
+  const cached = await fetchAll<{ id: string; name: string }>((f, t) => supabase
     .from("spotify_cache_artists")
     .select("id, name")
-    .limit(5000);
-  for (const a of cached ?? []) {
+    .order("id")
+    .range(f, t));
+  for (const a of cached) {
     if (a.id && !rows.has(a.id)) rows.set(a.id, { spotify_id: a.id, entity: "artist", hint: a.name });
   }
+
+  // 이미 리졸브된 아티스트는 큐에서 빠진 상태라, 다시 넣으면 MB 호출을 또 쓴다. 제외한다.
+  const mapped = await fetchAll<{ spotify_id: string }>((f, t) => supabase
+    .from("mb_spotify_map")
+    .select("spotify_id")
+    .eq("entity", "artist")
+    .order("spotify_id")
+    .range(f, t));
+  for (const m of mapped) rows.delete(m.spotify_id);
 
   const list = [...rows.values()];
   for (let i = 0; i < list.length; i += 500) {
@@ -305,6 +430,10 @@ async function main() {
   }
   if (process.argv.includes("--albums")) {
     await backfillAlbums();
+    return;
+  }
+  if (process.argv.includes("--tracks")) {
+    await fillTracklists();
     return;
   }
 

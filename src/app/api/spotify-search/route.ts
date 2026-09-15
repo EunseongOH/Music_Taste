@@ -7,7 +7,8 @@ const cache = new Map<string, { data: SpotifySearchResult[]; expiresAt: number }
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export interface SpotifySearchResult {
-  trackId: string;
+  trackId: string;        // DB 에 있는 곡이면 MB 레코딩 ID, 아니면 Spotify track ID
+  spotifyId: string;      // 항상 Spotify track ID (검색 결과는 전부 Spotify 에서 온다)
   title: string;
   duration: string;       // "3:42"
   artistId: string;
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
 
         return {
           trackId: t.id,
+          spotifyId: t.spotify_id ?? t.id,
           title: t.name,
           duration: `${mins}:${secs}`,
           artistId: matchedArtist?.id ?? t.artists[0]?.id ?? '',
@@ -106,6 +108,7 @@ export async function GET(request: NextRequest) {
 
           return {
             trackId: t.id,
+            spotifyId: t.spotify_id ?? t.id,
             title: t.name,
             duration: `${mins}:${secs}`,
             artistId: matchedArtist?.id ?? t.artists[0]?.id ?? '',

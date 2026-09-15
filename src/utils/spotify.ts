@@ -181,6 +181,74 @@ const toArtist = (a: any) => ({
   popularity: a.popularity ?? 50,
 });
 
+/**
+ * Spotify 앨범 ID 들 -> MB 트랙리스트. 트랙 키는 MusicBrainz 레코딩 ID 다.
+ *
+ * Spotify 트랙 ID 를 영구 매핑하지 않는 이유: 약관 IV.3.1 이 API 로 받은 데이터로 DB 를
+ * 만들거나 무기한 저장하는 것을 금지한다. 여기 쓰는 앨범 ID·발매판·트랙리스트는 전부
+ * MusicBrainz(CC0) 출처다. 실측: Spotify 앨범과 곡 수 12/12, 곡 단위 제목 97% 일치.
+ *
+ * 돌려주는 모양은 Spotify simplified track 과 같다 — 호출부를 안 바꾸려고.
+ * 트랙리스트가 아직 안 채워진 앨범은 결과 Map 에 없다.
+ */
+async function canonicalTracksByAlbum(albumIds: string[]): Promise<Map<string, any[]>> {
+  const out = new Map<string, any[]>();
+  const ids = [...new Set(albumIds.filter(Boolean))];
+  if (!ids.length) return out;
+
+  try {
+    const supabase = createAdminClient();
+    const releaseOf = new Map<string, string>();  // album id -> release mbid
+    for (let i = 0; i < ids.length; i += 50) {
+      const { data } = await supabase
+        .from('mb_album_release')
+        .select('spotify_album_id, release_mbid')
+        .in('spotify_album_id', ids.slice(i, i + 50))
+        .not('tracks_filled_at', 'is', null);
+      for (const r of data ?? []) releaseOf.set(r.spotify_album_id, r.release_mbid);
+    }
+    if (!releaseOf.size) return out;
+
+    const tracksOf = new Map<string, any[]>();  // release mbid -> tracks
+    const releases = [...new Set(releaseOf.values())];
+    // 발매판 20 개씩 + 행 페이지네이션: PostgREST 는 한 요청에 1000 행까지만 준다
+    for (let i = 0; i < releases.length; i += 20) {
+      for (let from = 0; ; from += 1000) {
+        const { data } = await supabase
+          .from('mb_release_track')
+          .select('release_mbid, disc, position, recording_mbid, title, length_ms')
+          .in('release_mbid', releases.slice(i, i + 20))
+          .order('release_mbid').order('disc').order('position')
+          .range(from, from + 999);
+        for (const t of data ?? []) {
+          const list = tracksOf.get(t.release_mbid) ?? [];
+          list.push({
+            id: t.recording_mbid,
+            name: t.title,
+            duration_ms: t.length_ms ?? 0,
+            disc_number: t.disc,
+            track_number: t.position,
+            preview_url: null,
+          });
+          tracksOf.set(t.release_mbid, list);
+        }
+        if (!data || data.length < 1000) break;
+      }
+    }
+
+    for (const [album, release] of releaseOf) {
+      const list = tracksOf.get(release);
+      if (list?.length) out.set(album, list);
+    }
+  } catch (e) {
+    console.warn("[canonical] tracklist lookup failed:", e);
+  }
+  return out;
+}
+
+/** Spotify 에서 온 트랙에는 원래 ID 를 spotify_id 로 남긴다. 키 체계가 둘이라 판별용이다. */
+const withSpotifyId = (tracks: any[]) => tracks.map(t => ({ ...t, spotify_id: t.spotify_id ?? t.id }));
+
 /** canonical miss 를 리졸버 큐에 던진다. await 하지 않는다 — 요청 지연 0. */
 function enqueueResolve(items: { id: string; name?: string }[]) {
   if (!items.length) return;
@@ -723,59 +791,51 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   return cut(items, total);
 };
 
-// Phase E-2: 싱글 아티스트 모드의 "전곡 자동 선택"을 Spotify 호출 0 회로 되살린다.
+// 이보다 많은 앨범이 DB 에 없으면 전곡 로드를 포기하고 페이지 단위로 폴백한다.
+// ponytail: MB 커버리지가 낮은 아티스트(인디 일부)에서 Spotify 호출이 튀는 것을 막는 상한이다.
+// 실제로 자주 걸리면 워커로 그 아티스트를 먼저 채우는 편이 맞다.
+const DISCOGRAPHY_SPOTIFY_ALBUM_CAP = 30;
+
+// Phase E-2: 싱글 아티스트 모드의 "전곡 자동 선택".
 //
-// 이미 캐시에 앨범 목록 전체와 모든 앨범의 트랙이 들어 있는 아티스트(warm)에만 동작하고,
-// 하나라도 비면 빈 결과를 돌려준다. 그러면 호출부는 페이지 단위 로드로 폴백한다.
-//
-// canonical(MusicBrainz)만으로 하지 않는 이유: 월드컵·취향표는 트랙을 Spotify 트랙 ID 로
-// 저장하는데, MB 에는 트랙 단위 Spotify 링크가 거의 없다(레코딩의 2.4%, 실측 Ditto 0/1).
-// 앨범 단위 링크는 MB 에서 받을 수 있지만 트랙 ID 는 Spotify 에서 한 번은 받아야 한다.
-// 읽는 곳은 TTL 21일 임시 캐시라 약관 IV.3.2 "temporary caching" 범위 안이다.
+// 앨범 목록은 getArtistAlbums(50 개당 1 회, 21일 캐시)로 받는다 — 신규 발매를 알아채는 유일한 창구다.
+// 트랙은 DB(MusicBrainz)에 있는 앨범이면 Spotify 를 부르지 않고, 없는 앨범(신규 발매 등)만
+// getAlbumTracks 로 Spotify 에서 받는다. 즉 Spotify 는 "DB 에 없는 것"에만 쓴다.
+// 없는 앨범이 상한을 넘거나 하나라도 실패하면 빈 결과 -> 호출부가 페이지 단위로 폴백한다.
 export const getArtistDiscography = async (artistId: string) => {
   const empty = { albums: [] as any[], total: 0 };
   if (!artistId) return empty;
 
   try {
-    const supabase = createAdminClient();
-    const now = new Date().toISOString();
-
-    const { data: row } = await supabase
-      .from('spotify_album_cache_v2')
-      .select('items, total')
-      .eq('artist_id', artistId)
-      .gt('expires_at', now)
-      .maybeSingle();
-
-    const items: any[] = Array.isArray(row?.items) ? row!.items : [];
-    const total = row?.total ?? 0;
-    // 앨범 목록이 빈틈 없이 전부 있어야 한다
-    if (total === 0 || items.length < total || items.slice(0, total).some(a => !a)) return empty;
-
-    const albums = items.slice(0, total);
-    const ids = albums.map(a => a.id);
-
-    const { data: trackRows } = await supabase
-      .from('spotify_cache_album_tracks')
-      .select('album_id, items')
-      .in('album_id', ids)
-      .gt('expires_at', now);
-
-    const tracksByAlbum = new Map<string, any[]>();
-    for (const t of trackRows ?? []) {
-      if (Array.isArray(t.items) && t.items.length > 0 && !tracksByAlbum.has(t.album_id)) {
-        tracksByAlbum.set(t.album_id, t.items);
-      }
+    const first = await getArtistAlbums(artistId, 0, 50);
+    const total = first.total;
+    const albums: any[] = [...first.items];
+    // albumPageSize 가 10 으로 폴백된 경우에도 맞게, 받은 개수 기준으로 이어 받는다
+    while (albums.length < total) {
+      const page = await getArtistAlbums(artistId, albums.length, 50);
+      if (!page.items.length) break;
+      albums.push(...page.items);
     }
-    // 앨범 하나라도 트랙이 비어 있으면 warm 이 아니다
-    if (ids.some(id => !tracksByAlbum.has(id))) return empty;
+    if (total === 0 || albums.length < total) return empty;
+
+    const ids = albums.map(a => a.id);
+    const canon = await canonicalTracksByAlbum(ids);
+    const missing = ids.filter(id => !canon.has(id));
+    if (missing.length > DISCOGRAPHY_SPOTIFY_ALBUM_CAP) return empty;
+
+    const tracksByAlbum = new Map(canon);
+    for (const id of missing) {
+      const tracks = await getAlbumTracks(id);  // 임시 캐시 -> Spotify
+      if (!tracks.length) return empty;
+      tracksByAlbum.set(id, tracks);
+    }
 
     return {
       albums: albums.map(a => ({ ...a, tracks: tracksByAlbum.get(a.id) })),
       total,
     };
   } catch (e) {
-    console.warn("[discography] cache read failed:", e);
+    console.warn("[discography] failed:", e);
     return empty;
   }
 };
@@ -796,7 +856,16 @@ export const getAlbumTracks = async (albumId: string) => {
     return cached.data;
   }
 
-  // 2. DB Cache check
+  // 2. canonical — MusicBrainz 트랙리스트가 있으면 Spotify 를 부르지 않는다.
+  //    트랙 id 는 MB 레코딩 ID 다. 이게 이번 전환의 목적이다:
+  //    기존 카탈로그는 DB 에서, Spotify 는 DB 에 없는 앨범(신규 발매 등)만.
+  const canon = (await canonicalTracksByAlbum([albumId])).get(albumId);
+  if (canon?.length) {
+    tracksCache.set(cacheKey, { data: canon, timestamp: Date.now() });
+    return canon;
+  }
+
+  // 3. Spotify 임시 캐시 (TTL 21일)
   try {
     const supabase = createAdminClient();
     const now = new Date().toISOString();
@@ -810,8 +879,9 @@ export const getAlbumTracks = async (albumId: string) => {
 
     // 오염된 빈 캐시가 아닌 유효한 트랙 데이터가 있을 때만 복원
     if (!error && dbTracks && dbTracks.items && dbTracks.items.length > 0) {
-      tracksCache.set(cacheKey, { data: dbTracks.items, timestamp: Date.now() });
-      return dbTracks.items;
+      const items = withSpotifyId(dbTracks.items);
+      tracksCache.set(cacheKey, { data: items, timestamp: Date.now() });
+      return items;
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB getAlbumTracks failed, calling API:", e);
@@ -879,8 +949,10 @@ export const getAlbumTracks = async (albumId: string) => {
     }
   }
 
-  tracksCache.set(cacheKey, { data: allTracks, timestamp: Date.now() });
-  return allTracks; // Array of track objects
+  // 캐시에는 Spotify 원본을 두고, 돌려줄 때만 spotify_id 를 붙인다
+  const decorated = withSpotifyId(allTracks);
+  tracksCache.set(cacheKey, { data: decorated, timestamp: Date.now() });
+  return decorated;
 };
 
 // Fetch related artists (Fallback to random trending/genre artists due to Spotify API 403 restrictions on Client Credentials)
@@ -1157,7 +1229,18 @@ export const searchTracksByQuery = async (query: string): Promise<any[]> => {
   }
 
   const data = await response.json();
-  const items = data.tracks?.items ?? [];
+  const raw: any[] = data.tracks?.items ?? [];
+
+  // 앨범 경로와 같은 곡에 같은 id 를 주도록 맞춘다. 안 그러면 검색으로 넣은 곡(Spotify id)과
+  // 앨범에서 넣은 곡(MB id)이 월드컵에 중복으로 들어간다.
+  // DB 에 트랙리스트가 있는 앨범이면 디스크·트랙 번호로 MB 레코딩을 찾는다(곡 수 12/12 일치 실측).
+  const canon = await canonicalTracksByAlbum(raw.map(t => t.album?.id));
+  const items = raw.map(t => {
+    const match = canon.get(t.album?.id)?.find(
+      c => c.disc_number === (t.disc_number ?? 1) && c.track_number === t.track_number
+    );
+    return { ...t, spotify_id: t.id, id: match?.id ?? t.id };
+  });
 
   searchCache.set(cacheKey, { data: items, timestamp: Date.now() });
   return items;

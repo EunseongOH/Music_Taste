@@ -287,21 +287,27 @@ export default function ExploreTastePage() {
     }));
   };
 
-  // Normalize standard tracks
-  const getNormalizedTrackId = (track: any): string => {
-    return track.id || track.i || "";
-  };
+  // 한 곡이 가질 수 있는 키 전부. 트랙 키가 두 체계라서다:
+  //  - DB(MusicBrainz)에 있는 곡은 id 가 MB 레코딩 ID
+  //  - 그 밖의 곡과 옛 취향표는 id 가 Spotify track ID
+  //  - Spotify 에서 온 곡은 spotifyId 도 함께 갖는다
+  // 둘 중 하나라도 겹치면 같은 곡으로 본다. (MB 에서만 온 곡은 spotifyId 가 없어서
+  //  옛 취향표의 같은 곡과는 못 맞춘다 — 기존 46 개 취향표 마이그레이션 전까지의 한계)
+  const getTrackKeys = (track: any): string[] =>
+    [track?.id || track?.i, track?.spotifyId].filter(Boolean);
 
   // Get Top 10 tracks helper
-  const getTop10Ids = (result: TournamentResult): string[] => {
+  const getTop10Keys = (result: TournamentResult): string[][] => {
     const ranking = result.ranking || [];
-    return ranking.slice(0, 10).map((t: any) => getNormalizedTrackId(t)).filter(Boolean);
+    return ranking.slice(0, 10).map((t: any) => getTrackKeys(t)).filter(k => k.length > 0);
   };
+
+  const sameTrack = (a: string[], b: string[]) => a.some(k => b.includes(k));
 
   // Rank-weighted similarity calculator (higher rank matches yield higher scores)
   const getJaccardSimilarity = (myResult: TournamentResult, otherResult: TournamentResult): number => {
-    const myIds = getTop10Ids(myResult);
-    const otherIds = getTop10Ids(otherResult);
+    const myIds = getTop10Keys(myResult);
+    const otherIds = getTop10Keys(otherResult);
 
     if (myIds.length === 0 || otherIds.length === 0) return 0;
 
@@ -309,7 +315,7 @@ export default function ExploreTastePage() {
     const maxScore = 55; // Sum of weights from 10 down to 1 (10+9+8+7+6+5+4+3+2+1)
 
     myIds.forEach((myId, i) => {
-      const otherIndex = otherIds.indexOf(myId);
+      const otherIndex = otherIds.findIndex(o => sameTrack(myId, o));
       if (otherIndex !== -1) {
         const myWeight = 10 - i;             // Rank 1 gets 10, Rank 10 gets 1
         const otherWeight = 10 - otherIndex; // Rank 1 gets 10, Rank 10 gets 1
@@ -339,8 +345,11 @@ export default function ExploreTastePage() {
 
     otherUsersResults.forEach(other => {
       // 1. Same winner song mate
+      // 우승곡은 ranking[0] 이다. winner_track_id 컬럼만 비교하면 키 체계가 다른 같은 곡을 놓친다.
+      const baseWinnerKeys = [baseResult.winner_track_id, ...getTrackKeys(baseResult.ranking?.[0])];
+      const otherWinnerKeys = [other.winner_track_id, ...getTrackKeys(other.ranking?.[0])];
       if (
-        other.winner_track_id === baseResult.winner_track_id &&
+        sameTrack(baseWinnerKeys.filter(Boolean), otherWinnerKeys.filter(Boolean)) &&
         !seenSongMateUsers.has(other.user_id)
       ) {
         seenSongMateUsers.add(other.user_id);

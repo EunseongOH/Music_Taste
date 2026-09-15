@@ -127,9 +127,10 @@ const translations = {
 
 // --- DUMMY DATA STRUCTURE ---
 interface Track {
-  id: string;
+  id: string;          // DB(MusicBrainz)에 있는 곡이면 레코딩 ID, 아니면 Spotify track ID
   title: string;
   duration: string;
+  spotifyId?: string;  // Spotify 에서 온 곡에만 있다. 취향 유사도에서 옛 취향표와 맞춰보는 데 쓴다
 }
 
 interface Album {
@@ -608,7 +609,7 @@ export default function TracksPage() {
         const totalSeconds = Math.floor(t.duration_ms / 1000);
         const mins = Math.floor(totalSeconds / 60);
         const secs = String(totalSeconds % 60).padStart(2, '0');
-        return { id: t.id, title: t.name, duration: `${mins}:${secs}`, previewUrl: t.preview_url };
+        return { id: t.id, title: t.name, duration: `${mins}:${secs}`, previewUrl: t.preview_url, spotifyId: t.spotify_id };
       }),
     }));
 
@@ -628,7 +629,8 @@ export default function TracksPage() {
           artistName,
           albumTitle: album.title,
           albumImage: album.image,
-          albumId: album.id
+          albumId: album.id,
+          spotifyId: track.spotifyId
         };
       }));
       return next;
@@ -888,7 +890,8 @@ export default function TracksPage() {
           id: t.id,
           title: t.name,
           duration: `${mins}:${secs}`,
-          previewUrl: t.preview_url
+          previewUrl: t.preview_url,
+          spotifyId: t.spotify_id
         };
       });
 
@@ -922,6 +925,7 @@ export default function TracksPage() {
     albumTitle: string;
     albumImage: string;
     albumId?: string;
+    spotifyId?: string;
   }) => {
     const newSelected = new Set(selectedTrackIds);
     const newMetadata = { ...selectedTracksMetadata };
@@ -949,7 +953,8 @@ export default function TracksPage() {
                 artistName: artist.name,
                 albumTitle: album.title,
                 albumImage: album.image,
-                albumId: album.id
+                albumId: album.id,
+                spotifyId: t.spotifyId
               };
               found = true;
             }
@@ -1231,7 +1236,8 @@ export default function TracksPage() {
                         artistName: result.artistName,
                         albumTitle: result.albumTitle,
                         albumImage: result.albumImage,
-                        albumId: result.albumId
+                        albumId: result.albumId,
+                        spotifyId: result.spotifyId
                       });
                     }}
                     className={`flex items-center justify-between p-4 rounded-3xl cursor-pointer transition-all active:scale-[0.98] border ${

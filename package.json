@@ -16,7 +16,8 @@
     "check:web": "node toss/baseline/web-regression.mjs && node toss/baseline/share-check.mjs && npm run baseline:verify",
     "mb:seed": "npx tsx --env-file=.env.local scripts/mb_resolve.ts --seed",
     "mb:resolve": "npx tsx --env-file=.env.local scripts/mb_resolve.ts",
-    "mb:albums": "npx tsx --env-file=.env.local scripts/mb_resolve.ts --albums"
+    "mb:albums": "npx tsx --env-file=.env.local scripts/mb_resolve.ts --albums",
+    "mb:tracks": "npx tsx --env-file=.env.local scripts/mb_resolve.ts --tracks"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^3.4.0",
