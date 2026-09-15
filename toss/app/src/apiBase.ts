@@ -14,7 +14,8 @@
  * CORS·절대 URL 경로가 dev 에서 한 번도 실행되지 않아, 운영에서 처음 터진다.
  */
 export const API_BASE = import.meta.env.DEV
-  ? 'http://localhost:3000'
+  ? // 3000 을 다른 앱이 쓰고 있으면 VITE_DEV_API_BASE 로 바꾼다.
+    (import.meta.env.VITE_DEV_API_BASE ?? 'http://localhost:3000')
   : (import.meta.env.VITE_API_BASE ?? 'https://sortify.kr');
 
 const originalFetch = window.fetch.bind(window);

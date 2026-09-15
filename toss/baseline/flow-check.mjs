@@ -17,7 +17,8 @@
 import { chromium } from 'playwright';
 
 const VITE = 'http://localhost:5173';
-const NEXT = 'http://localhost:3000';
+// 3000 을 다른 앱이 쓰고 있으면 NEXT_BASE 로 바꾼다(토스 dev 서버는 VITE_DEV_API_BASE 도 같이).
+const NEXT = process.env.NEXT_BASE ?? 'http://localhost:3000';
 
 /** 아이유 — 기준선(fixture.json)에서 쓰는 것과 같은 아티스트다. */
 const ARTIST = { id: '7c1HgFDe8ogy5NOZ1ANCJQ', name: 'IU', image: '' };

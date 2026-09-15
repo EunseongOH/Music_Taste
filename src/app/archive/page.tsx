@@ -713,7 +713,7 @@ export default function ArchivePage() {
                         <p className="type-sub text-navy/70 truncate">
                           {t.winnerPrefix} {result.winner_track_title} · {result.winner_track_artist}
                         </p>
-                        <p className="flex items-center gap-1.5 type-caption text-navy/70 min-w-0">
+                        <div className="flex items-center gap-1.5 type-caption text-navy/70 min-w-0">
                           <span className="relative w-4 h-4 shrink-0 overflow-hidden rounded-full bg-navy/5">
                             <SafeImage
                               src={result.user_profile_image || "/default-profile.png"}
@@ -728,7 +728,7 @@ export default function ArchivePage() {
                             {nickname} · {formatDate(result.created_at, locale)} ·{" "}
                             {result.is_single_artist ? t.singleDiscography : t.mixLabel}
                           </span>
-                        </p>
+                        </div>
                       </div>
                     </button>
                   </li>

@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
-const WEB = 'http://localhost:3000';
+const WEB = process.env.NEXT_BASE ?? 'http://localhost:3000';
 const ARTIST = { id: '7c1HgFDe8ogy5NOZ1ANCJQ', name: 'IU', image: '' };
 
 let failed = 0;
