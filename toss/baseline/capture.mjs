@@ -58,12 +58,12 @@ await page.clock.setFixedTime(FIXED_TIME);
 
 // 원격 앨범 아트를 결정적인 응답으로 대체한다.
 //
-// html-to-image는 `cacheBust: true`로 매 호출마다 이미지를 새로 받는다. 실제
-// 네트워크에 의존하면 같은 입력으로도 결과 PNG가 달라져(타이밍에 따라 일부
-// 이미지가 누락) 바이트 비교가 성립하지 않는다. URL에서 유도한 색을 쓰므로
-// 슬롯이 뒤바뀌는 회귀는 그대로 잡힌다.
+// 앱은 커버를 미리 data URL 로 받아 두고(useInlinedCovers) 저장한다. 실제
+// 네트워크에 의존하면 같은 입력으로도 결과 PNG가 달라지므로 결정적인 응답으로
+// 바꾼다. URL에서 유도한 색을 쓰므로 슬롯이 뒤바뀌는 회귀는 그대로 잡힌다.
+// (예전 cacheBust 는 `?<타임스탬프>` 를 붙였다 — 혹시 남아 있어도 색이 같게 떼어 낸다.)
 await context.route('**://i.scdn.co/**', async (route) => {
-  const url = route.request().url().replace(/[?&]t=\d+/g, ''); // cacheBust 제거
+  const url = route.request().url().replace(/[?&](t=)?\d{10,}$/g, '');
   let h = 0;
   for (let i = 0; i < url.length; i++) h = (url.charCodeAt(i) + ((h << 5) - h)) | 0;
   const hue = Math.abs(h) % 360;

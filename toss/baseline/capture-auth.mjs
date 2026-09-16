@@ -51,7 +51,7 @@ await page.clock.setFixedTime(FIXED_TIME);
 
 // 원격 앨범아트를 결정적 응답으로 대체 (capture.mjs 와 동일 규칙).
 await context.route('**://i.scdn.co/**', async (route) => {
-  const url = route.request().url().replace(/[?&]t=\d+/g, '');
+  const url = route.request().url().replace(/[?&](t=)?\d{10,}$/g, ''); // capture.mjs 와 같은 규칙
   let h = 0;
   for (let i = 0; i < url.length; i++) h = (url.charCodeAt(i) + ((h << 5) - h)) | 0;
   const hue = Math.abs(h) % 360;

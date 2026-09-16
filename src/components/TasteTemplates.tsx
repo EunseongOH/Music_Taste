@@ -80,6 +80,7 @@ export function EmotionalListTemplate({ tracks, isExport = false, pageIndex = 0,
                     fill 
                     className="object-cover"
                     sizes="40px"
+                    priority={isExport}
                   />
                 </div>
 
@@ -157,6 +158,7 @@ export function VintageVinylTemplate({ tracks, isExport = false, pageIndex = 0, 
                 fill 
                 className="object-cover animate-[spin_10s_linear_infinite]" 
                 sizes="64px"
+                priority={isExport}
               />
             </div>
             
@@ -216,6 +218,7 @@ export function VintageVinylTemplate({ tracks, isExport = false, pageIndex = 0, 
                     fill 
                     className="object-cover"
                     sizes="32px"
+                    priority={isExport}
                   />
                   {/* Vinyl center hole dot */}
                   <div className="absolute inset-0 m-auto w-1.5 h-1.5 bg-[#FAF7F2] rounded-full border border-navy/10 z-10" />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, Share2, Music, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
@@ -16,6 +16,7 @@ import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedRe
 import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
+import { useInlinedCovers } from "@/utils/useInlinedCovers";
 
 const translations = {
   ko: {
@@ -165,6 +166,15 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const { user } = useAuth();
   const supabase = createClient();
   const [winners, setWinners] = useState<Track[]>([]);
+  /**
+   * 내보내기 카드에 쓸 순위. 커버만 미리 받아 둔 data URL 로 바꿔 둔다.
+   * 화면에 보이는 템플릿은 그대로 원격 주소를 쓴다 — 저장되는 건 오프스크린 카드뿐이다.
+   */
+  const coverMap = useInlinedCovers(winners.map((w) => w.albumImage));
+  const exportWinners = useMemo(
+    () => winners.map((w) => (coverMap[w.albumImage] ? { ...w, albumImage: coverMap[w.albumImage] } : w)),
+    [winners, coverMap]
+  );
   const [isExporting, setIsExporting] = useState(false);
   const [showButton, setShowButton] = useState(false);
   const [isSavingArchive, setIsSavingArchive] = useState(false);
@@ -1414,7 +1424,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                     }}
                   >
                     <SnakePathTimeline
-                      tracks={winners}
+                      tracks={exportWinners}
                       drawDuration={0.1}
                       isCompleted={true}
                     />
@@ -1442,7 +1452,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               >
                 {template === "list" ? (
                   <EmotionalListTemplate
-                    tracks={winners}
+                    tracks={exportWinners}
                     isExport
                     pageIndex={pIdx}
                     pageSize={15}
@@ -1450,7 +1460,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   />
                 ) : (
                   <VintageVinylTemplate
-                    tracks={winners}
+                    tracks={exportWinners}
                     isExport
                     pageIndex={pIdx}
                     pageSize={10}

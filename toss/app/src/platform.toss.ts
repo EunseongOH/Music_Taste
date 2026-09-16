@@ -75,7 +75,8 @@ export async function saveImage(el: HTMLElement, fileName: string): Promise<void
   let dataUrl: string | null = null;
   for (const pixelRatio of [3, 2]) {
     try {
-      dataUrl = await htmlToImage.toPng(el, { cacheBust: true, pixelRatio });
+      // cacheBust 없음 — 커버는 useInlinedCovers 가 미리 data URL 로 바꿔 둔다(웹과 동일).
+      dataUrl = await htmlToImage.toPng(el, { pixelRatio });
       break;
     } catch (err) {
       if (pixelRatio === 2) throw err;
