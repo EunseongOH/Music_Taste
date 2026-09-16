@@ -3,34 +3,40 @@
   "trackCount": 20,
   "files": [
     {
-      "name": "카더가든_Music_Taste_Pyramid.png",
-      "bytes": 555609,
-      "sha256": "fd6064d40705773a986e7cc4c1c9caf9425f9fa43ab30392050012f95eaf4051",
-      "from": "pyramid"
-    },
-    {
       "name": "카더가든_Music_Taste_list_Part1.png",
-      "bytes": 440862,
-      "sha256": "26014ff04817eda14a0a7b3288f26bd25da9893ca93074bec3a3db4453110eea",
+      "bytes": 407349,
+      "sha256": "b5a88b8662460506266c1829ccfb1a8d410b6b835edb028694e34a2a03b6a8b2",
       "from": "list"
     },
     {
       "name": "카더가든_Music_Taste_list_Part2.png",
-      "bytes": 397189,
-      "sha256": "26c81ec42a1ffe5f62821de1c1789bc4dbe432d9623d90f5ba5cbe386f6a1028",
+      "bytes": 437787,
+      "sha256": "cb9c90d30684947ad50937de410dfbab03f3f72f0747c6afd31edb03513198a2",
       "from": "list"
     },
     {
       "name": "카더가든_Music_Taste_retro_Part1.png",
-      "bytes": 657505,
-      "sha256": "80c3960d8cb2b53d22a36d3df42336283c4afb1bc5925b7f58cb2787a3cc5b21",
+      "bytes": 494818,
+      "sha256": "c72eb4a063c44d185c9e6e8f6820be9889ad58d6f0c1945ecb20bfde1dc59ebc",
       "from": "retro"
     },
     {
       "name": "카더가든_Music_Taste_retro_Part2.png",
-      "bytes": 528435,
-      "sha256": "0436981c925f0a8cd231501a3122c8a30acaba16085366a7f6a5efc820085f43",
+      "bytes": 484543,
+      "sha256": "b7bf33536f9153a1aab39fc42f85d79fb835deea91d91e3038087d504efd8544",
       "from": "retro"
+    },
+    {
+      "name": "카더가든_Music_Taste_mosaic.png",
+      "bytes": 544855,
+      "sha256": "e383cc439c0d75969710eef3a6c3fff9dbbdf71115a7804d4701f23ada0ca117",
+      "from": "mosaic"
+    },
+    {
+      "name": "카더가든_Music_Taste_poster.png",
+      "bytes": 587234,
+      "sha256": "5e629599de143b644821617e84a52178ccf4f71ca920bf7209a8d6528a82069d",
+      "from": "poster"
     },
     {
       "name": "카더가든_Music_Ranking.csv",
@@ -39,14 +45,5 @@
       "from": "csv"
     }
   ],
-  "dialogs": [
-    {
-      "type": "confirm",
-      "message": "전체 랭킹(20곡)을 인스타그램 스토리용 이미지 2장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP 15이 있는 1페이지만 다운로드돼요.)"
-    },
-    {
-      "type": "confirm",
-      "message": "전체 랭킹(20곡)을 인스타그램 스토리용 이미지 2장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP 10이 있는 1페이지만 다운로드돼요.)"
-    }
-  ]
+  "dialogs": []
 }

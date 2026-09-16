@@ -36,9 +36,10 @@ const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 const FIXED_TIME = new Date('2026-01-15T09:00:00+09:00');
 
 const TEMPLATES = [
-  { key: 'pyramid', tab: '피라미드형' },
   { key: 'list', tab: '리스트형' },
   { key: 'retro', tab: '레코드형' },
+  { key: 'mosaic', tab: '모자이크형' },
+  { key: 'poster', tab: '포스터형' },
 ];
 
 mkdirSync(OUT, { recursive: true });
@@ -116,7 +117,7 @@ await page.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_0
 
 // 시네마틱 리빌이 끝나면 템플릿 탭(showButton)이 나타난다.
 log('  리빌 애니메이션 대기…');
-await page.getByRole('button', { name: '피라미드형' }).waitFor({ state: 'visible', timeout: 180_000 });
+await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
 log('  템플릿 탭 노출됨');
 
 // 리빌이 끝난 뒤 CSS 애니메이션/트랜지션을 정지시킨다.
@@ -186,12 +187,16 @@ async function openSaveSheet() {
 // 템플릿별 이미지 내보내기
 for (const tpl of TEMPLATES) {
   log(`  [${tpl.key}]`);
-  await page.getByRole('button', { name: tpl.tab }).click();
+  await page.getByRole('tab', { name: tpl.tab }).click();
   await page.waitForTimeout(2500); // 레이아웃/모션이 완전히 정착할 시간
   await waitImages();
 
   await openSaveSheet();
   await page.getByRole('button', { name: '9:16 이미지 저장' }).click();
+  // 여러 장이면 확인 시트가 뜬다("N장 저장하기").
+  const saveAll = page.getByRole('button', { name: /장 저장하기$/ });
+  await saveAll.waitFor({ state: 'visible', timeout: 1500 }).catch(() => {});
+  if (await saveAll.count()) await saveAll.click();
 
   // pixelRatio 5 (2250×4000)라 렌더가 느리다. 시트가 닫히면 완료.
   await page

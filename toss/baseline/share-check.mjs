@@ -108,7 +108,7 @@ const acts = () => page.evaluate(() => window.__acts);
 try {
   console.log(`\n대상: ${BASE}${TOSS ? ' (토스 빌드)' : ' (웹)'}`);
   await page.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.getByRole('button', { name: '피라미드형' }).waitFor({ state: 'visible', timeout: 180_000 });
+  await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
   await page.waitForTimeout(1500);
 
   await page.getByRole('button', { name: '공유하기' }).first().click();
@@ -241,7 +241,7 @@ try {
         };
       }, clipboardFails);
       await p.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-      await p.getByRole('button', { name: '피라미드형' }).waitFor({ state: 'visible', timeout: 180_000 });
+      await p.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
       await p.waitForTimeout(1500);
       await p.getByRole('button', { name: '공유하기' }).first().click();
       await p.waitForTimeout(1200);

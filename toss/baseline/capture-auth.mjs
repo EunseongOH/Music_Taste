@@ -27,9 +27,10 @@ const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 const FIXED_TIME = new Date('2026-01-15T09:00:00+09:00');
 
 const TEMPLATES = [
-  { key: 'pyramid', tab: '피라미드형' },
   { key: 'list', tab: '리스트형' },
   { key: 'retro', tab: '레코드형' },
+  { key: 'mosaic', tab: '모자이크형' },
+  { key: 'poster', tab: '포스터형' },
 ];
 
 if (!existsSync(PROFILE)) {
@@ -122,7 +123,7 @@ const log = (...a) => console.log(...a);
 log(`→ ${BASE}/taste  (로그인 프로필, ${RANKING.length}곡)`);
 await page.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 
-await page.getByRole('button', { name: '피라미드형' }).waitFor({ state: 'visible', timeout: 180_000 });
+await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
 log('  템플릿 탭 노출됨');
 
 await page.addStyleTag({
@@ -205,11 +206,15 @@ const openSheet = async () => {
 
 for (const tpl of TEMPLATES) {
   log(`  [${tpl.key}]`);
-  await page.getByRole('button', { name: tpl.tab }).click();
+  await page.getByRole('tab', { name: tpl.tab }).click();
   await page.waitForTimeout(2500);
   await settle();
   await openSheet();
   await page.getByRole('button', { name: '9:16 이미지 저장' }).click();
+  // 여러 장이면 확인 시트가 뜬다("N장 저장하기").
+  const saveAll = page.getByRole('button', { name: /장 저장하기$/ });
+  await saveAll.waitFor({ state: 'visible', timeout: 1500 }).catch(() => {});
+  if (await saveAll.count()) await saveAll.click();
   await page
     .getByRole('button', { name: '9:16 이미지 저장' })
     .waitFor({ state: 'hidden', timeout: 180_000 })

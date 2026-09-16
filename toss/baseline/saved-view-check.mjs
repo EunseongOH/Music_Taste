@@ -93,7 +93,7 @@ async function run(label, fakeLogin) {
   // 실제 흐름처럼 앱 안의 다른 화면에서 들어온다(나가기 = 뒤로 가기가 앱 화면으로 돌아가야 한다).
   await page.goto(`${BASE}/explore-taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.goto(`${BASE}/my-taste?id=${SHARED_ID}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  const tab = page.getByRole('button', { name: '피라미드형' });
+  const tab = page.getByRole('tab', { name: '리스트형' });
   await tab.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
   check((await tab.count()) > 0, '연출 없이 바로 완성된 취향표가 뜬다');
   await page.waitForTimeout(6000); // 예전 자동 저장이 돌던 시간만큼 기다린다

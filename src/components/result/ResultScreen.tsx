@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Share2, Music, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
-import Image from "next/image";
+import { Download, Share2, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
 import * as platform from "@/utils/platform";
-import SnakePathTimeline, { getRowSizes } from "@/components/SnakePathTimeline";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import LoginModal from "@/components/LoginModal";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
-import { EmotionalListTemplate, VintageVinylTemplate } from "@/components/TasteTemplates";
+import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
+import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/exportLayout";
+import { ConfirmSheet, UnderlineTabs } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
@@ -25,13 +25,18 @@ const translations = {
     savedMissingTitle: "취향표를 열 수 없어요",
     savedMissingDesc: "삭제됐거나 볼 수 없는 취향표예요.",
     savedMissingAction: "내 취향 스페이스로 가기",
-    templatePyramid: "피라미드형",
     templateList: "리스트형",
     templateRetro: "레코드형",
-    skipBtn: "스킵",
-    confirmDownloadAll: "전체 랭킹({count}곡)을 인스타그램 스토리용 이미지 {pages}장으로 나누어 다운로드할까요?\n\n(취소를 누르면 TOP {pageSize}이 있는 1페이지만 다운로드돼요.)",
+    templateMosaic: "모자이크형",
+    templatePoster: "포스터형",
+    shapeLabel: { heart: "하트", star: "별", circle: "원", triangle: "피라미드" },
+    multiPageTitle: "이미지 {pages}장으로 저장할까요?",
+    multiPageDesc: "{count}곡이 한 장에 다 들어가지 않아 나눠서 저장해요.",
+    multiPageConfirm: "{pages}장 저장하기",
     saveImageError: "이미지를 저장하지 못했어요. 다시 시도해 주세요.",
-    unsavedExitConfirm: "아직 취향표를 저장하지 않았어요. 저장하지 않고 홈으로 돌아갈까요?",
+    unsavedExitTitle: "저장하지 않고 나갈까요?",
+    unsavedExitDesc: "나가면 이 취향표는 다시 볼 수 없어요.",
+    unsavedExitConfirm: "나가기",
     saveBtn: "저장하기",
     savedBtn: "저장됨",
     saveSheetTitle: "저장하기",
@@ -72,13 +77,18 @@ const translations = {
     savedMissingTitle: "Can't open this taste card",
     savedMissingDesc: "It was deleted or isn't available to you.",
     savedMissingAction: "Go to My Taste Space",
-    templatePyramid: "Pyramid",
     templateList: "List",
     templateRetro: "Vinyl",
-    skipBtn: "Skip",
-    confirmDownloadAll: "Do you want to download the entire ranking of {count} tracks across {pages} images for Instagram Stories?\n\n(If canceled, only the first page with TOP {pageSize} will be downloaded.)",
+    templateMosaic: "Mosaic",
+    templatePoster: "Poster",
+    shapeLabel: { heart: "Heart", star: "Star", circle: "Circle", triangle: "Pyramid" },
+    multiPageTitle: "Save as {pages} images?",
+    multiPageDesc: "{count} songs don't fit on one image, so they're split.",
+    multiPageConfirm: "Save {pages} images",
     saveImageError: "Failed to save image. Please try again.",
-    unsavedExitConfirm: "Your taste card hasn't been saved yet. Go back to Home without saving?",
+    unsavedExitTitle: "Leave without saving?",
+    unsavedExitDesc: "You won't be able to see this taste card again.",
+    unsavedExitConfirm: "Leave",
     saveBtn: "Save",
     savedBtn: "Saved",
     saveSheetTitle: "Save",
@@ -176,28 +186,28 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     [winners, coverMap]
   );
   const [isExporting, setIsExporting] = useState(false);
-  // 1위 공개는 월드컵 화면(WinnerReveal)에서 끝낸다. 여기서는 처음부터 완성된 취향표를 보여준다.
-  const [showButton, setShowButton] = useState(true);
   const [isSavingArchive, setIsSavingArchive] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const timelineWrapperRef = useRef<HTMLDivElement>(null);
   /**
    * 진행 중인 자동 저장. 공유 직전에 이걸 기다린다.
    *
-   * 공유 버튼은 애니메이션이 끝나면 바로 활성화되는데(showButton), 그 시점에
+   * 공유 버튼은 화면이 뜨자마자 누를 수 있는데, 그 시점에
    * 자동 저장은 아직 끝나지 않았을 수 있다. 그러면 savedId 가 null 이라
    * 남에게 의미 없는 링크가 나간다 — 웹은 `/taste`, 토스는 미니앱 홈.
    * 상태가 아니라 ref 라서 리렌더를 유발하지 않는다.
    */
   const autoSaveRef = useRef<Promise<void> | null>(null);
-  const [cameraRig, setCameraRig] = useState<{ xKeyframes: string[], yKeyframes: string[], scaleKeyframes: number[], times: number[] } | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [rawKeyframes, setRawKeyframes] = useState<{ x: number, y: number }[]>([]);
-  const [timelineViewBoxHeight, setTimelineViewBoxHeight] = useState(600);
-  const [template, setTemplate] = useState<"pyramid" | "list" | "retro">("pyramid");
+  /**
+   * 결과 템플릿. 피라미드형(SnakePathTimeline)은 탭에서 뺐다 — 컴포넌트는 남아 있어
+   * 되돌리려면 이 유니온과 탭·renderCards 에 다시 넣으면 된다.
+   */
+  const [template, setTemplate] = useState<"list" | "retro" | "mosaic" | "poster">("list");
+  const [shape, setShape] = useState<Shape>("heart");
+  /** 여러 장 저장 확인 시트에 띄울 장 수(null 이면 닫힘) */
+  const [pendingPages, setPendingPages] = useState<number | null>(null);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [showOverwriteModal, setShowOverwriteModal] = useState(false);
@@ -290,7 +300,6 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         setIsSingleArtistMode(!!data.is_single_artist);
         setSavedId(data.id);
         setIsSaved(true);
-        setShowButton(true); // 연출 없이 바로 완성된 취향표를 보여준다
         setSavedLoadState("ready");
       })();
       return;
@@ -458,7 +467,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
   const handleShareInstagram = async () => {
     setShowShareModal(false);
-    await handleDownloadImage();
+    await saveCards(1); // 스토리에는 첫 장 한 장이면 된다
     setShowInstagramGuideModal(true);
     trackEvent("funnel_share_instagram", {});
   };
@@ -512,50 +521,36 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     trackEvent("funnel_share_kakao", {});
   };
 
-  const handleDownloadImage = async () => {
+  /** 지금 템플릿이 몇 장의 카드로 저장되는지. 오프스크린 카드 id 는 export-card-0.. */
+  const exportCardCount =
+    template === "list" ? listPages(winners.length).length : template === "retro" ? recordPages(winners.length).length : 1;
+
+  const saveCards = async (count: number) => {
     setIsExporting(true);
     try {
-      if (template === "pyramid") {
-        const el = document.getElementById("export-card-pyramid");
-        if (!el) return;
-        await platform.saveImage(el, `${winners[0]?.artistName || "Artist"}_Music_Taste_Pyramid.png`);
-      } else {
-        const pageSize = template === "list" ? 15 : 10;
-        const totalPages = Math.ceil(winners.length / pageSize);
-
-        let exportPages = [0];
-
-        if (totalPages > 1) {
-          const msg = t.confirmDownloadAll
-            .replace("{count}", String(winners.length))
-            .replace("{pages}", String(totalPages))
-            .replace("{pageSize}", String(pageSize));
-          const confirmAll = window.confirm(msg);
-          if (confirmAll) {
-            exportPages = Array.from({ length: totalPages }, (_, i) => i);
-          }
-        }
-
-        for (let i = 0; i < exportPages.length; i++) {
-          const pIdx = exportPages[i];
-          const el = document.getElementById(`export-card-page-${pIdx}`);
-          if (!el) continue;
-
-          await new Promise((resolve) => setTimeout(resolve, i * 450));
-
-          await platform.saveImage(
-            el,
-            `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}_Part${pIdx + 1}.png`
-          );
-        }
+      const base = `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}`;
+      for (let i = 0; i < count; i++) {
+        const el = document.getElementById(`export-card-${i}`);
+        if (!el) continue;
+        // 연속 다운로드를 브라우저가 막지 않게 조금씩 띄운다.
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 450));
+        await platform.saveImage(el, count > 1 ? `${base}_Part${i + 1}.png` : `${base}.png`);
       }
       setShowSaveSheet(false);
     } catch (err) {
-      console.error('Failed to export image', err);
+      console.error("Failed to export image", err);
       showToastMessage(t.saveImageError, "error");
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleDownloadImage = async () => {
+    if (exportCardCount > 1) {
+      setPendingPages(exportCardCount);
+      return;
+    }
+    await saveCards(1);
   };
 
   const executeSaveArchive = async (overwrite: boolean, isAuto: boolean = false) => {
@@ -708,105 +703,38 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     }
 
     if (user) {
-      const confirmExit = window.confirm(t.unsavedExitConfirm);
-      if (confirmExit) {
-        await executeExit();
-      }
+      setShowExitConfirm(true);
     } else {
       setShowExitSaveModal(true);
     }
   };
 
-  const S = 3.8;
-  const panDuration = Math.max(12.0, winners.length * 1.2);
-  const startDelay = 1.0;
-  const holdDuration = 1.5;
-  const zoomOutDuration = 1.2;
-  const totalDuration = startDelay + panDuration + holdDuration + zoomOutDuration;
 
-  useEffect(() => {
-    const el = timelineWrapperRef.current;
-    if (!el) return;
-
-    const updateDimensions = () => {
-      if (timelineWrapperRef.current) {
-        setDimensions({
-          width: timelineWrapperRef.current.clientWidth,
-          height: timelineWrapperRef.current.clientHeight
-        });
-      }
+  const cardMeta: CardMeta = (() => {
+    const h = cardHeading(winners, locale);
+    const single = isSingleArtistMode || h.single;
+    return {
+      heading: single ? winners[0]?.artistName ?? h.heading : h.heading,
+      single,
+      date: testDate,
+      total: winners.length,
+      locale,
     };
+  })();
 
-    updateDimensions();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateDimensions();
-    });
-
-    resizeObserver.observe(el);
-    window.addEventListener("resize", updateDimensions);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", updateDimensions);
-    };
-  }, []);
-
-  const handleLayoutComplete = useCallback((keyframes: { x: number, y: number }[], viewBoxHeight: number) => {
-    setRawKeyframes(keyframes);
-    setTimelineViewBoxHeight(viewBoxHeight);
-  }, []);
-
-  useEffect(() => {
-    const K = rawKeyframes.length;
-    if (K === 0) return;
-
-    const W = dimensions.width || (timelineWrapperRef.current ? timelineWrapperRef.current.clientWidth : 360) || 360;
-    const H = dimensions.height || (timelineWrapperRef.current ? timelineWrapperRef.current.clientHeight : 500) || 500;
-
-    const xKeyframes = rawKeyframes.map(k => `${S * W * (50 - k.x) / 100}px`);
-    const yKeyframes = rawKeyframes.map(k => `${S * (H / 2 - k.y)}px`);
-
-    let totalDist = 0;
-    const dists = [0];
-    for (let i = 1; i < K; i++) {
-      const dx = rawKeyframes[i].x - rawKeyframes[i - 1].x;
-      const dy_scaled = (rawKeyframes[i].y - rawKeyframes[i - 1].y) * (100 * 16 / 9) / timelineViewBoxHeight;
-      totalDist += Math.sqrt(dx * dx + dy_scaled * dy_scaled);
-      dists.push(totalDist);
+  /** 지금 템플릿의 카드들. 화면용(winners)과 저장용(exportWinners)이 같은 함수를 쓴다. */
+  const renderCards = (tracks: Track[]): React.ReactNode[] => {
+    if (template === "list") {
+      const pages = listPages(tracks.length);
+      return pages.map((pg, i) => <ListCard key={i} tracks={tracks} meta={cardMeta} page={pg} index={i} count={pages.length} />);
     }
-    if (totalDist === 0) totalDist = 1;
-
-    const startFraction = startDelay / totalDuration;
-    const panFraction = panDuration / totalDuration;
-    const holdFraction = holdDuration / totalDuration;
-
-    const holdStartFraction = startFraction + panFraction;
-    const holdEndFraction = holdStartFraction + holdFraction;
-
-    const times = [
-      0.0,
-      ...dists.map(d => startFraction + (d / totalDist) * panFraction),
-      holdEndFraction,
-      1.0
-    ];
-
-    const firstX = xKeyframes[0];
-    const firstY = yKeyframes[0];
-    const finalX = xKeyframes[xKeyframes.length - 1];
-    const finalY = yKeyframes[yKeyframes.length - 1];
-
-    const extendedXKeyframes = [firstX, ...xKeyframes, finalX, "0px"];
-    const extendedYKeyframes = [firstY, ...yKeyframes, finalY, "0px"];
-    const scaleKeyframes = [S, ...xKeyframes.map(() => S), S, 1];
-
-    setCameraRig({
-      xKeyframes: extendedXKeyframes,
-      yKeyframes: extendedYKeyframes,
-      scaleKeyframes,
-      times
-    });
-  }, [rawKeyframes, timelineViewBoxHeight, dimensions, winners.length]);
+    if (template === "retro") {
+      const pages = recordPages(tracks.length);
+      return pages.map((pg, i) => <RecordCard key={i} tracks={tracks} meta={cardMeta} page={pg} index={i} count={pages.length} />);
+    }
+    if (template === "mosaic") return [<MosaicCard key="mosaic" tracks={tracks} meta={cardMeta} shape={shape} />];
+    return [<PosterCard key={`poster-${tracks.length}`} tracks={tracks} meta={cardMeta} />];
+  };
 
   // saved 모드: 불러오는 중이거나 찾을 수 없을 때(삭제됐거나, 남의 비공개 취향표)
   if (isSavedView && savedLoadState !== "ready") {
@@ -853,118 +781,51 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         </button>
       </div>
 
-      {/* Main Results Canvas */}
-      <motion.div
-        layout
-        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-        ref={containerRef}
-        className={showButton
-          ? "flex-1 w-full max-w-2xl relative bg-[#F5F2ED] flex flex-col min-h-screen py-4 px-2 sm:px-6 mx-auto pb-32 overflow-y-auto scrollbar-none"
-          : "fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 bg-[#F5F2ED] overflow-hidden flex flex-col"
-        }
-      >
-        <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />
+      {/* 결과 카드 — 화면에 보이는 카드가 그대로 저장된다 */}
+      <div className="flex-1 w-full max-w-md mx-auto px-4 pt-2 pb-32">
+        <UnderlineTabs
+          tabs={[
+            { id: "list", label: t.templateList },
+            { id: "retro", label: t.templateRetro },
+            { id: "mosaic", label: t.templateMosaic },
+            { id: "poster", label: t.templatePoster },
+          ]}
+          active={template}
+          onChange={(id) => {
+            setTemplate(id);
+            trackEvent("change_template", { template_type: id });
+          }}
+        />
 
-        {/* Segmented Design Customization Selector */}
-        {showButton && (
-          <div className="relative z-30 w-full max-w-md mx-auto px-4 mt-2 mb-4 select-none">
-            <div className="flex bg-[#1A2A6C]/5 p-1.5 rounded-2xl border border-[#1A2A6C]/10 backdrop-blur-sm gap-0.5">
+        {template === "mosaic" && (
+          <div role="radiogroup" aria-label={t.templateMosaic} className="flex gap-2 mt-4">
+            {SHAPES.map((sh) => (
               <button
-                onClick={() => { setTemplate("pyramid"); trackEvent("change_template", { template_type: "pyramid" }); }}
-                className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${template === "pyramid"
-                  ? "bg-white text-navy shadow-sm"
-                  : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
-                  }`}
+                key={sh}
+                role="radio"
+                aria-checked={shape === sh}
+                onClick={() => {
+                  setShape(sh);
+                  trackEvent("change_shape", { shape: sh });
+                }}
+                className={`h-9 px-4 rounded-full type-sub cursor-pointer transition-colors ${
+                  shape === sh ? "bg-navy text-cream" : "bg-navy/5 text-navy/70 hover:text-navy"
+                }`}
               >
-                {t.templatePyramid}
+                {t.shapeLabel[sh]}
               </button>
-              <button
-                onClick={() => { setTemplate("list"); trackEvent("change_template", { template_type: "list" }); }}
-                className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${template === "list"
-                  ? "bg-white text-navy shadow-sm"
-                  : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
-                  }`}
-              >
-                {t.templateList}
-              </button>
-              <button
-                onClick={() => { setTemplate("retro"); trackEvent("change_template", { template_type: "retro" }); }}
-                className={`flex-1 py-2.5 rounded-xl font-sans font-bold text-xs transition-all duration-200 cursor-pointer ${template === "retro"
-                  ? "bg-white text-navy shadow-sm"
-                  : "text-navy/60 hover:text-navy/90 hover:bg-navy/5"
-                  }`}
-              >
-                {t.templateRetro}
-              </button>
-            </div>
+            ))}
           </div>
         )}
 
-        {/* Floating Skip Button */}
-        {!showButton && (
-          <button
-            onClick={() => setShowButton(true)}
-            className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-          >
-            {t.skipBtn}
-          </button>
-        )}
-
-        <motion.div
-          layout
-          ref={timelineWrapperRef}
-          className={`relative z-10 w-full mt-4 ${showButton ? "h-auto overflow-visible pb-20" : "flex-1 overflow-hidden"
-            }`}
-        >
-          {winners.length > 0 && (
-            <>
-              {template === "pyramid" && (
-                <motion.div
-                  initial={cameraRig ? { scale: S, x: cameraRig.xKeyframes[0], y: cameraRig.yKeyframes[0] } : false}
-                  animate={showButton ? { scale: 1, x: "0px", y: "0px" } : (cameraRig ? {
-                    scale: cameraRig.scaleKeyframes,
-                    x: cameraRig.xKeyframes,
-                    y: cameraRig.yKeyframes
-                  } : {})}
-                  transition={showButton ? { duration: 0.1 } : {
-                    duration: totalDuration,
-                    times: cameraRig?.times,
-                    ease: "linear"
-                  }}
-                  className={showButton ? "w-full origin-center" : "w-full h-full origin-center"}
-                  style={showButton ? { height: timelineViewBoxHeight } : {}}
-                  onAnimationComplete={() => {
-                    if (!showButton) setShowButton(true);
-                  }}
-                >
-                  <SnakePathTimeline
-                    tracks={winners}
-                    drawDuration={panDuration}
-                    onLayoutComplete={handleLayoutComplete}
-                    isCompleted={showButton}
-                  />
-                </motion.div>
-              )}
-
-              {showButton && template === "list" && (
-                <div className="w-full max-w-md mx-auto">
-                  <EmotionalListTemplate tracks={winners} testDate={testDate} />
-                </div>
-              )}
-
-              {showButton && template === "retro" && (
-                <div className="w-full max-w-md mx-auto">
-                  <VintageVinylTemplate tracks={winners} />
-                </div>
-              )}
-            </>
-          )}
-        </motion.div>
-      </motion.div>
+        <div className="mt-5 flex flex-col gap-5">
+          {winners.length > 0 && renderCards(winners).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)}
+        </div>
+      </div>
 
       {/* Streamlined Bottom Floating Actions (2 Buttons: Save & Share) */}
       <AnimatePresence>
-        {showButton && (
+        {winners.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1387,91 +1248,41 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
           className="absolute top-[-9999px] left-[-9999px] pointer-events-none select-none"
           style={{ width: "450px" }}
         >
-          {/* 1. Pyramid Export Card */}
-          {(() => {
-            const sizes = getRowSizes(winners.length);
-            const maxS = sizes[sizes.length - 1] || 5;
-            const expansionFactor = Math.max(1, maxS / 4);
-            const requiredWidthRatio = 1.3 * expansionFactor;
-            const exportScaleFactor = Math.min(1.0, 1 / requiredWidthRatio, 600 / timelineViewBoxHeight);
-
-            const dateObj = testDate ? new Date(testDate) : new Date();
-            const formattedDate = `${dateObj.getFullYear()}. ${(dateObj.getMonth() + 1).toString().padStart(2, '0')}. ${dateObj.getDate().toString().padStart(2, '0')}`;
-
-            return (
-              <div
-                id="export-card-pyramid"
-                className="w-[450px] h-[800px] bg-[#F5F2ED] relative flex flex-col justify-between p-7 overflow-hidden"
-              >
-                {/* Header */}
-                <div className="text-center flex flex-col items-center">
-                  <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-navy/5 text-navy mb-1.5">
-                    <Music size={16} />
-                  </div>
-                  <h3 className="font-serif text-2xl text-navy leading-none tracking-tight">My Taste</h3>
-                  <p className="font-sans font-bold text-[8px] uppercase tracking-[0.2em] text-[#E67E22] mt-1.5">
-                    {formattedDate}
-                  </p>
-                </div>
-
-                {/* Vector Scaled Timeline Container */}
-                <div className="relative flex-1 w-full my-3 overflow-hidden flex justify-center" style={{ height: "600px" }}>
-                  <div
-                    style={{
-                      width: "394px",
-                      height: `${timelineViewBoxHeight}px`,
-                      transform: `scale(${exportScaleFactor})`,
-                      transformOrigin: "top center",
-                    }}
-                  >
-                    <SnakePathTimeline
-                      tracks={exportWinners}
-                      drawDuration={0.1}
-                      isCompleted={true}
-                    />
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="border-t border-navy/15 pt-2 flex items-center justify-between text-navy/40 text-[10px] font-bold">
-                  <span className="font-serif text-navy/70">Sortify</span>
-                  <span className="font-sans uppercase tracking-wider">Total {winners.length} tracks</span>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* 2. Paginated Export Cards for List and Retro Templates */}
-          {(() => {
-            const pageSize = template === "list" ? 15 : 10;
-            const totalPages = Math.ceil(winners.length / pageSize);
-            return Array.from({ length: totalPages }).map((_, pIdx) => (
-              <div
-                key={`export-page-${pIdx}`}
-                id={`export-card-page-${pIdx}`}
-                className="w-[450px] h-[800px] bg-[#FAF7F2] relative flex flex-col justify-between overflow-hidden"
-              >
-                {template === "list" ? (
-                  <EmotionalListTemplate
-                    tracks={exportWinners}
-                    isExport
-                    pageIndex={pIdx}
-                    pageSize={15}
-                    testDate={testDate}
-                  />
-                ) : (
-                  <VintageVinylTemplate
-                    tracks={exportWinners}
-                    isExport
-                    pageIndex={pIdx}
-                    pageSize={10}
-                  />
-                )}
-              </div>
-            ));
-          })()}
+          {renderCards(exportWinners).map((card, i) => (
+            <div key={`${template}-${i}`} id={`export-card-${i}`} className="w-[450px] h-[800px]">
+              {card}
+            </div>
+          ))}
         </div>
       )}
+
+      <ConfirmSheet
+        open={pendingPages !== null}
+        title={t.multiPageTitle.replace("{pages}", String(pendingPages ?? 0))}
+        desc={t.multiPageDesc.replace("{count}", String(winners.length))}
+        confirmLabel={t.multiPageConfirm.replace("{pages}", String(pendingPages ?? 0))}
+        cancelLabel={t.cancel}
+        busy={isExporting}
+        onClose={() => setPendingPages(null)}
+        onConfirm={async () => {
+          const pages = pendingPages ?? 1;
+          setPendingPages(null);
+          await saveCards(pages);
+        }}
+      />
+
+      <ConfirmSheet
+        open={showExitConfirm}
+        title={t.unsavedExitTitle}
+        desc={t.unsavedExitDesc}
+        confirmLabel={t.unsavedExitConfirm}
+        cancelLabel={t.cancel}
+        onClose={() => setShowExitConfirm(false)}
+        onConfirm={async () => {
+          setShowExitConfirm(false);
+          await executeExit();
+        }}
+      />
 
       {/* Sortify Cream & Navy Toast Feedback */}
       <AnimatePresence>

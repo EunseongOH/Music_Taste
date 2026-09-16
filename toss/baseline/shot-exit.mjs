@@ -39,7 +39,7 @@ await page.addInitScript(
 );
 
 await page.goto('http://localhost:3000/taste', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-await page.getByRole('button', { name: '피라미드형' }).waitFor({ state: 'visible', timeout: 180_000 });
+await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
 await page.waitForTimeout(1200);
 
 // 이 표식이 살아남으면 문서 리로드가 없었다는 뜻이다.

@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * 피라미드형 취향표(뱀 모양 경로). 2026-09 결과 템플릿 재설계로 탭에서 뺐다 — 지금은 어디서도 쓰지 않는다.
+ * 되돌리려면 ResultScreen 의 template 유니온·탭·renderCards 에 다시 넣으면 된다(git log 로 이전 연결 참고).
+ */
+
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
 
@@ -350,7 +355,7 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                       </div>
                     )}
 
-                    <div className={`absolute rounded-full flex items-center justify-center font-serif font-bold z-30 shadow-md border border-white ${dims.badgeClass}`}>
+                    <div className={`absolute rounded-full flex items-center justify-center font-num font-bold z-30 shadow-md border border-white ${dims.badgeClass}`}>
                       {pt.rank}
                     </div>
                     

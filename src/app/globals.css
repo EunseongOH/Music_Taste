@@ -12,11 +12,6 @@
   --font-wordmark: var(--font-playfair);
   /* 숫자만 혼자 강조되는 자리(순위·%·큰 숫자). 문장 속 숫자는 Pretendard 그대로. */
   --font-num: var(--font-wanted);
-  /*
-   * 임시: 결과 템플릿(TasteTemplates·SnakePathTimeline)만 아직 font-serif 를 쓴다.
-   * 템플릿 재디자인(내보내기 기준선 재촬영과 함께) 때 지운다. 새 코드에서 쓰지 말 것.
-   */
-  --font-serif: var(--font-playfair);
 }
 
 /*

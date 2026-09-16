@@ -107,7 +107,7 @@ try {
     const { ctx, page } = await open('/taste', {
       worldcup_ranking: JSON.stringify(RANKING),
     });
-    await page.getByRole('button', { name: '피라미드형' }).waitFor({ timeout: 120000 });
+    await page.getByRole('tab', { name: '리스트형' }).waitFor({ timeout: 120000 });
     await page.waitForTimeout(1500);
 
     // 전체 리로드가 일어나면 사라지는 표식

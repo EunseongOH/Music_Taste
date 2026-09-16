@@ -89,7 +89,7 @@
 | 상단 헤더 h1 (월드컵·곡 선택·결과·공유·스페이스·아카이브) | 적용 |
 | 내 취향 스페이스 · 우리의 취향 아카이브 · 프로필 창 | 적용 |
 | 모든 화면의 `font-serif` 제거(워드마크 → `font-wordmark`, 숫자 → `font-num`) | 적용 |
-| 결과 템플릿(`TasteTemplates`, `SnakePathTimeline`) | **재디자인 때 적용.** 내보내기 PNG 바이트 비교(`npm run baseline:verify`)가 걸려 있어, 템플릿을 새로 만들고 기준선을 다시 찍을 때 함께 바꾼다. 그때까지만 `--font-serif` 토큰을 남겨 둔다 |
+| 결과 템플릿(`TasteTemplates`) | 적용. 9:16 카드는 고정 크기 이미지라 px 크기를 쓰되 최소 11px(저장 시 55px), 순위 숫자는 `font-num tabular-nums`. `--font-serif` 토큰 제거 |
 
 ## 출처
 - 토스 TDS Mobile Typography — https://tossmini-docs.toss.im/tds-mobile/foundation/typography/
