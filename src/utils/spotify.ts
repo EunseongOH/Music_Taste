@@ -4,10 +4,9 @@ import { createAdminClient } from "./supabase/admin";
 import { ARTIST_TRANSLATION_MAP } from "./artistNames";
 
 const DB_CACHE_TTL_DAYS = 21;
-// 아티스트의 앨범 목록은 신규 발매를 알아채는 유일한 창구라 짧게 둔다. 21일이면 어제 캐시된 아티스트의
-// 신곡이 최대 3주 동안 목록에 안 뜬다. 앨범 50개당 Spotify 1회라 하루 한 번 새로 받아도 부담이 작다.
-// (이미 나온 앨범의 트랙리스트는 바뀌지 않으므로 그쪽은 21일 그대로)
-const ALBUM_LIST_TTL_DAYS = 1;
+// 앨범 목록(/v1/artists/{id}/albums)은 2026-09-16 일일 쿼터가 소진된 엔드포인트다. 신곡 감지는 최대 7일 늦어지지만
+// Spotify 제한 회피가 최우선이므로 아티스트당 주 1회로 묶는다.
+const ALBUM_LIST_TTL_DAYS = 7;
 
 const getCacheExpiresAt = (days = DB_CACHE_TTL_DAYS) => {
   const d = new Date();
