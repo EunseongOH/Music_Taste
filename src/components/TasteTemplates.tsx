@@ -7,6 +7,7 @@ import {
   LIST_TOP_GAP,
   MOSAIC_LIST_GAP,
   MOSAIC_LIST_ROW_H,
+  RECORD_GROUP_RATIO,
   RECORD_INFO_H,
   mosaicLayout,
   shapeSvg,
@@ -53,7 +54,8 @@ const text = {
     winner: "1위",
     more: (n: number) => `외 ${n}곡`,
     lineup: "취향 라인업",
-    headliner: "헤드라이너",
+    // 페스티벌의 "헤드라이너" 자리. 서비스에서 이미 쓰는 말(최애 곡 줄 세우기)로 부른다.
+    headliner: "최애 곡",
     fine: (label: string, total: number, shown: number) =>
       `${label} · 전체 ${total}곡${shown < total ? ` 중 TOP ${shown}` : ""}`,
   },
@@ -66,7 +68,7 @@ const text = {
     winner: "No. 1",
     more: (n: number) => `+${n} more`,
     lineup: "Taste lineup",
-    headliner: "Headliner",
+    headliner: "Top pick",
     fine: (label: string, total: number, shown: number) =>
       `${label} · ${shown < total ? `Top ${shown} of ` : ""}${total} songs`,
   },
@@ -282,7 +284,8 @@ export function RecordCard({
     <CardFrame meta={meta} sub={page.hero ? undefined : t.range(page.from + 1, page.to)} page={index + 1} pages={count}>
       {page.hero && top && (
         <>
-          <div className="relative mb-4" style={{ height: sleeve }}>
+          {/* 슬리브와 빠져나온 LP 를 한 묶음으로 가운데 둔다. */}
+          <div className="relative mb-4 mx-auto" style={{ width: Math.round(sleeve * RECORD_GROUP_RATIO), height: sleeve }}>
             <div
               className="absolute rounded-full"
               style={{ left: Math.round(sleeve * 0.51), top: Math.round((sleeve - disc) / 2), width: disc, height: disc, background: DISC_BACKGROUND }}
@@ -296,10 +299,10 @@ export function RecordCard({
               className="absolute left-0 top-0 !rounded-none shadow-[0_10px_24px_-10px_rgba(26,42,108,0.45)]"
             />
           </div>
-          <div className="mb-4 flex flex-col justify-end gap-1" style={{ height: RECORD_INFO_H }}>
+          <div className="mb-4 flex flex-col justify-end items-center text-center gap-1" style={{ height: RECORD_INFO_H }}>
             <span className="text-[13px] leading-[18px] font-bold text-point-ink">{t.winner}</span>
             <h3 className="text-[26px] leading-[31px] font-extrabold tracking-[-0.03em] line-clamp-2 break-keep">{top.title}</h3>
-            <p className="text-[14px] leading-[20px] text-navy/70 truncate">{top.artistName}</p>
+            <p className="text-[14px] leading-[20px] text-navy/70 truncate max-w-full">{top.artistName}</p>
           </div>
         </>
       )}

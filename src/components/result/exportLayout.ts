@@ -102,7 +102,9 @@ const RECORD_HERO_ROW_MAX = 44;
 /** 2장 이후 행 최대 높이. 곡이 적은 장은 행과 레코드를 키워 채운다. */
 export const RECORD_ROW_MAX = 96;
 const SLEEVE_MIN = 180;
-const SLEEVE_MAX = 280;
+/** 슬리브 + 옆으로 빠져나온 LP 묶음 폭은 슬리브의 1.44배 — 카드 폭(386) 안에 들어가는 최대치. */
+export const RECORD_GROUP_RATIO = 1.44;
+const SLEEVE_MAX = Math.floor(CARD_INNER_W / RECORD_GROUP_RATIO);
 
 export interface RecordPage {
   from: number;
