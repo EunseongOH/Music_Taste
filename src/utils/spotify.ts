@@ -149,9 +149,9 @@ export const getSpotifyAccessToken = async (): Promise<string> => {
 // Supabase 단일 행에 버킷을 두고 여기서만 통과시킨다.
 // 거부 시 합성 429 를 돌려주면 기존 호출부의 429 처리 경로가 그대로 재사용된다.
 // RPC 자체가 실패하면 fail-open — 가드가 서비스를 죽여서는 안 된다.
-async function takeQuotaToken(): Promise<boolean> {
+async function takeQuotaToken(endpoint: string): Promise<boolean> {
   try {
-    const { data, error } = await createAdminClient().rpc('spotify_take_token');
+    const { data, error } = await createAdminClient().rpc('spotify_take_token_v2', { ep: endpoint });
     if (error) return true;
     return data !== false;
   } catch {
@@ -159,9 +159,29 @@ async function takeQuotaToken(): Promise<boolean> {
   }
 }
 
+// Spotify 쿼터는 엔드포인트별 일일 한도다. 22자 ID 를 {id} 로 접어 엔드포인트 키를 만든다.
+// 예: https://api.spotify.com/v1/artists/4pz4.../albums?limit=50 → /v1/artists/{id}/albums
+function endpointKey(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/[0-9A-Za-z]{22}/g, '{id}');
+  } catch {
+    return url.split('?')[0];
+  }
+}
+
+// rate limit(전역, 최대 1시간) 과 쿼터 초과(해당 엔드포인트만, Retry-After 그대로) 를 구분한다.
+// 2026-09-16: 앨범 목록 엔드포인트 쿼터 초과가 전역 차단기로 들어가 검색까지 하루 멈출 뻔했다.
+const GLOBAL_BREAKER_CAP_SECS = 3600;
+
 async function tripQuotaBreaker(secs: number) {
   try {
-    await createAdminClient().rpc('spotify_trip_breaker', { secs });
+    await createAdminClient().rpc('spotify_trip_breaker', { secs: Math.min(secs, GLOBAL_BREAKER_CAP_SECS) });
+  } catch { /* 계측 실패가 요청을 죽이지 않는다 */ }
+}
+
+async function blockEndpoint(endpoint: string, secs: number) {
+  try {
+    await createAdminClient().rpc('spotify_block_endpoint', { ep: endpoint, secs });
   } catch { /* 계측 실패가 요청을 죽이지 않는다 */ }
 }
 
@@ -316,7 +336,8 @@ async function spotifyFetch(
   options: RequestInit = {},
   retries = 3
 ): Promise<Response> {
-  if (!(await takeQuotaToken())) {
+  const endpoint = endpointKey(url);
+  if (!(await takeQuotaToken(endpoint))) {
     lastSpotifyError = "429";
     return RATE_LIMITED_RESPONSE();
   }
@@ -368,9 +389,17 @@ async function spotifyFetch(
     // Add safety cap: if Spotify asks us to wait for more than 5 seconds, 
     // do not block the server thread. Return the 429 response so the caller handles it gracefully.
     if (retryAfterSeconds > 5) {
-      console.warn(`[Spotify API] 429 Rate limited. Spotify requested ${retryAfterSeconds}s delay which exceeds safety cap. Tripping breaker.`);
       // 한 인스턴스가 맞은 429 를 전 인스턴스가 함께 존중한다.
-      await tripQuotaBreaker(retryAfterSeconds);
+      // 쿼터 초과(reason=QUOTA_EXCEEDED, 보통 Retry-After 수만 초)는 그 엔드포인트만 막는다 —
+      // 다른 엔드포인트는 각자 쿼터가 남아 있으므로 전역으로 멈추면 검색까지 하루 죽는다.
+      const reason = await response.clone().json().then((b) => b?.error?.reason).catch(() => undefined);
+      if (reason === 'QUOTA_EXCEEDED') {
+        console.warn(`[Spotify API] 429 QUOTA_EXCEEDED on ${endpoint}. Blocking that endpoint for ${retryAfterSeconds}s.`);
+        await blockEndpoint(endpoint, retryAfterSeconds);
+      } else {
+        console.warn(`[Spotify API] 429 Rate limited. Spotify requested ${retryAfterSeconds}s delay which exceeds safety cap. Tripping breaker.`);
+        await tripQuotaBreaker(retryAfterSeconds);
+      }
       return response;
     }
     
