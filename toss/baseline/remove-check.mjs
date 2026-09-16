@@ -112,7 +112,12 @@ try {
     const removed2 = finalists[1];
     await drag(page, 1, -180);
     await page.waitForTimeout(UNDO_WAIT + 800);
-    check((await page.getByText('내가 꼽은 최고의 명곡은').count()) > 0, '결승에서 빼면 상대가 우승하고 종료');
+    const cta = page.getByRole('button', { name: '취향표 보기' });
+    await cta.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    check((await cta.count()) > 0, '결승에서 빼면 상대가 우승하고 1위 공개로');
+    check((await page.locator('h1').first().textContent())?.trim() === finalists[0], '1위 공개 제목 = 남은 곡', await page.locator('h1').first().textContent());
+    // 모른다고 뺀 곡을 "결승 상대"(이긴 곡)로 부르면 안 된다.
+    check((await page.getByText('결승 상대').count()) === 0, '뺀 곡은 결승 상대로 보이지 않음');
 
     const ranking = JSON.parse((await page.evaluate(() => sessionStorage.getItem('worldcup_ranking'))) ?? '[]');
     const rankTitles = ranking.map((t) => t.title);

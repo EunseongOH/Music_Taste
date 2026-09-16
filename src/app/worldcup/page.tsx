@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, ArrowLeft, RefreshCw, Disc } from "lucide-react";
-import Image from "next/image";
+import WinnerReveal from "@/components/result/WinnerReveal";
 import BackButton from "@/components/BackButton";
 import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
@@ -422,27 +421,24 @@ export default function WorldCupPage() {
   if (phase === "loading") return <div className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center font-sans text-sm text-navy">{locale === "en" ? "Loading..." : "불러오는 중..."}</div>;
 
   if (phase === "finished") {
+    const champion = winners[0];
+    // 2위는 결승 대진에서 구한다. 결승을 "빼기"로 끝내면 진 곡은 eliminated 가 아니라
+    // skipped 로 가서, eliminatedTracks[0] 은 준결승 탈락곡이 된다.
+    const finalists = matches[matches.length - 1] ?? [];
+    const rival = finalists.find((t) => t.id !== champion.id) ?? null;
+    const rivalWasSkipped = !!rival && skippedTracks.some((t) => t.id === rival.id);
     return (
-      <main className="flex flex-col min-h-screen items-center justify-center bg-[var(--app-bg)] p-6">
-        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
-          <Trophy size={64} className="text-point mb-6" />
-          <h1 className="text-3xl text-navy mb-2">{locale === "en" ? "My Favorite is..." : "내가 꼽은 최고의 명곡은..."}</h1>
-          <div className="w-64 h-64 relative rounded-xl border-4 border-point shadow-lg overflow-hidden mt-6">
-             <Image src={winners[0].albumImage} alt={winners[0].title} fill className="object-cover" />
-          </div>
-          <h2 className="font-sans font-bold text-2xl text-navy mt-6">{winners[0].title}</h2>
-          <p className="font-sans text-charcoal">{winners[0].artistName}</p>
-          
-          <button 
-            onClick={() => {
-              router.push(isSingleArtistMode ? "/taste?mode=single" : "/taste");
-            }}
-            className="mt-12 px-8 py-3 rounded-full bg-navy text-cream font-bold hover:bg-navy/90 hover:scale-105 transition-all shadow-[0_10px_30px_rgba(26,42,108,0.3)] cursor-pointer"
-          >
-            {locale === "en" ? "Bake my music taste card" : "나만의 취향표 구워보기"}
-          </button>
-        </motion.div>
-      </main>
+      <WinnerReveal
+        champion={champion}
+        runnerUp={rivalWasSkipped ? null : rival}
+        championOnLeft={finalists[0]?.id === champion.id}
+        totalTracks={tracks.length}
+        // 진 곡 하나 = 고른 횟수 하나. 빼기로 넘어간 매치는 세지 않는다.
+        choices={eliminatedTracks.length}
+        isSingleArtistMode={isSingleArtistMode}
+        locale={locale}
+        onContinue={() => router.push(isSingleArtistMode ? "/taste?mode=single" : "/taste")}
+      />
     );
   }
 

@@ -176,7 +176,8 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     [winners, coverMap]
   );
   const [isExporting, setIsExporting] = useState(false);
-  const [showButton, setShowButton] = useState(false);
+  // 1위 공개는 월드컵 화면(WinnerReveal)에서 끝낸다. 여기서는 처음부터 완성된 취향표를 보여준다.
+  const [showButton, setShowButton] = useState(true);
   const [isSavingArchive, setIsSavingArchive] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
