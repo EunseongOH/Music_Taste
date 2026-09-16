@@ -23,6 +23,8 @@ interface WinnerRevealProps {
   isSingleArtistMode: boolean;
   locale: "ko" | "en";
   onContinue: () => void;
+  /** 점검 페이지처럼 틀 안에 넣을 때: 화면 높이 대신 부모 높이를 채운다. */
+  embedded?: boolean;
 }
 
 const copy = {
@@ -68,6 +70,7 @@ export default function WinnerReveal({
   isSingleArtistMode,
   locale,
   onContinue,
+  embedded = false,
 }: WinnerRevealProps) {
   const t = copy[locale];
   const reduce = useReducedMotion();
@@ -89,7 +92,7 @@ export default function WinnerReveal({
 
   return (
     <main
-      className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-8 select-none"
+      className={`${embedded ? "h-full" : "min-h-screen"} bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-8 select-none`}
       onClick={() => setSkipped(true)}
     >
       <p className="type-caption text-navy/70">{meta}</p>

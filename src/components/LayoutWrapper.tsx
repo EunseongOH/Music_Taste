@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAdminPage = pathname?.startsWith("/manager-taste-control");
+  // 어드민·개발용 점검 페이지는 여러 카드를 나란히 봐야 해서 모바일 폭 제한을 두지 않는다.
+  const isAdminPage = pathname?.startsWith("/manager-taste-control") || pathname?.startsWith("/dev/");
 
   if (isAdminPage) {
     // 어드민 페이지는 화면 전체를 채우는 래퍼 사용

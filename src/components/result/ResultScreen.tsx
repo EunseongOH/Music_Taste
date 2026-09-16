@@ -17,6 +17,7 @@ import { ConfirmSheet, UnderlineTabs } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
+import { normalizeRanking } from "@/utils/ranking";
 
 const translations = {
   ko: {
@@ -286,13 +287,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
           return;
         }
         // 압축 형식({i,t,a,m})으로 저장된 예전 순위도 같은 모양으로 맞춘다.
-        type StoredTrack = Partial<Track> & { i?: string; t?: string; a?: string; m?: string };
-        const ranking: Track[] = ((data.ranking || []) as StoredTrack[]).map((tr) => ({
-          id: tr.id || tr.i || "",
-          title: tr.title || tr.t || "",
-          artistName: tr.artistName || tr.a || "",
-          albumImage: tr.albumImage || (tr.m ? (tr.m.startsWith("http") ? tr.m : `https://i.scdn.co/image/${tr.m}`) : ""),
-        }));
+        const ranking: Track[] = normalizeRanking(data.ranking);
         const created = new Date(data.created_at);
         setTestDate(`${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, "0")}.${String(created.getDate()).padStart(2, "0")}`);
         setWinners(ranking);
@@ -336,6 +331,8 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     // 더해서 센다 — 16곡 중 1곡을 뺐다고 자동 저장이 조용히 꺼지면 안 된다.
     // 저장해 둔 취향표를 다시 연 화면에서는 절대 저장하지 않는다(중복 저장 방지).
     if (isSavedView) return;
+    // 개발용 점검 페이지(/dev/result-lab)에서 연 결과 화면은 운영 DB 에 자동 저장하지 않는다.
+    if (new URLSearchParams(window.location.search).get("preview") === "1") return;
     const skippedCount = Number(sessionStorage.getItem("worldcup_skipped_count")) || 0;
     if (user && winners.length + skippedCount >= 16 && !isSaved && !isAutoSaving) {
       setIsAutoSaving(true);
