@@ -350,3 +350,182 @@ export function mosaicBodyHeight(l: MosaicLayout): number {
   if (l.labelMode === "overlay") return l.height;
   return l.height + MOSAIC_LIST_GAP + (l.listRows + (l.listCount < l.total ? 1 : 0)) * MOSAIC_LIST_ROW_H;
 }
+
+// ---------------------------------------------------------------------------
+// 피라미드형 — 1위가 꼭대기, 순위가 뱀 모양 경로로 이어진다
+// ---------------------------------------------------------------------------
+
+/** 윗줄부터 1, 2, 3 … 곡씩. 남는 곡은 아랫줄부터 하나씩 더 얹는다. */
+export function pyramidRowSizes(n: number): number[] {
+  if (n <= 0) return [];
+  const sizes: number[] = [];
+  let current = 1;
+  let remaining = n;
+  while (remaining >= current) {
+    sizes.push(current);
+    remaining -= current;
+    current++;
+  }
+  let idx = sizes.length - 1;
+  while (remaining > 0) {
+    sizes[idx]++;
+    remaining--;
+    idx--;
+    if (idx < 1) idx = sizes.length - 1;
+  }
+  return sizes;
+}
+
+export interface PyramidNode {
+  /** 0 = 1위 */
+  rank: number;
+  row: number;
+  /** 노드 중심 */
+  x: number;
+  y: number;
+  /** 원 지름 */
+  d: number;
+  /** 제목 칸 폭 */
+  labelW: number;
+}
+
+export interface PyramidLayout {
+  width: number;
+  height: number;
+  /** 순위 순서(0 = 1위) */
+  nodes: PyramidNode[];
+  /** 꼴찌에서 1위까지 이어지는 SVG path(아래에서 위로 그린다) */
+  path: string;
+  /** 경로 시작부터 각 순위 노드에 닿을 때까지의 거리(순위 순서) */
+  reachAt: number[];
+  pathLength: number;
+  showTitles: boolean;
+  /** 제목을 못 넣는 크기면 아래에 붙일 번호 목록 */
+  listCount: number;
+  listRows: number;
+  total: number;
+}
+
+const PYR_ROW_CAP = [150, 96, 80, 68];
+const PYR_GAP_X = 8;
+/** 이보다 작은 원에는 제목을 달지 않는다(12px 한글 두 줄이 원 폭 안에서 읽히지 않는다). */
+export const PYR_TITLE_MIN_D = 44;
+export const PYR_MIN_D = 18;
+const PYR_LABEL_GAP = 4;
+
+export function pyrLabelH(d: number) {
+  return (d >= 80 ? 2 * 17 : 2 * 15) + PYR_LABEL_GAP;
+}
+
+function cubicLength(p0: Pt, p1: Pt, p2: Pt, p3: Pt): number {
+  let len = 0;
+  let prev = p0;
+  for (let s = 1; s <= 16; s++) {
+    const t = s / 16;
+    const mt = 1 - t;
+    const x = mt ** 3 * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t ** 3 * p3[0];
+    const y = mt ** 3 * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t ** 3 * p3[1];
+    len += Math.hypot(x - prev[0], y - prev[1]);
+    prev = [x, y];
+  }
+  return len;
+}
+
+/**
+ * 피라미드 배치. 줄마다 원 크기를 폭에 맞추고(윗줄일수록 크게), 전체 높이가 maxH 안에
+ * 들어갈 때까지 배율을 줄인다. 원이 작아 제목을 못 달면 아래 번호 목록 자리를 남긴다.
+ */
+export function pyramidLayout(n: number, width = CARD_INNER_W, maxH = CARD_BODY_H): PyramidLayout {
+  const sizes = pyramidRowSizes(n);
+  if (n <= 0) return { width, height: 0, nodes: [], path: "", reachAt: [], pathLength: 1, showTitles: true, listCount: 0, listRows: 0, total: 0 };
+
+  type Pick = { ds: number[]; rowGap: number; showTitles: boolean; rowsH: number; listRows: number; listCount: number };
+  let best: Pick | null = null;
+  for (let k = 1.6; k >= 0.2; k -= 0.04) {
+    const ds: number[] = [];
+    sizes.forEach((S, r) => {
+      const cap = PYR_ROW_CAP[Math.min(r, PYR_ROW_CAP.length - 1)] * k;
+      const fitW = (width - PYR_GAP_X * (S - 1)) / S;
+      const prev = r > 0 ? ds[r - 1] : Infinity;
+      ds.push(Math.floor(Math.max(PYR_MIN_D, Math.min(cap, fitW, prev))));
+    });
+    const minD = Math.min(...ds);
+    const showTitles = minD >= PYR_TITLE_MIN_D;
+    const rowGap = Math.max(6, Math.min(14, Math.round(minD * 0.35)));
+    const rowsH = ds.reduce((a, d) => a + d + (showTitles ? pyrLabelH(d) : 0), 0) + rowGap * (sizes.length - 1);
+
+    let listRows = 0;
+    let listCount = 0;
+    let fits = rowsH <= maxH;
+    if (fits && !showTitles) {
+      const rowsFit = Math.floor((maxH - rowsH - MOSAIC_LIST_GAP) / MOSAIC_LIST_ROW_H);
+      const needRows = Math.ceil(n / 2);
+      // 제목을 못 다는 크기면 목록이 곡을 알려주는 유일한 곳이다 — 최소 20곡(또는 전곡)은 보이게
+      // 피라미드를 더 줄인다.
+      const minRows = Math.min(needRows, 11);
+      if (rowsFit < minRows) {
+        fits = false;
+      } else if (needRows <= rowsFit) {
+        listRows = needRows;
+        listCount = n;
+      } else {
+        listRows = rowsFit - 1; // 마지막 줄은 "외 n곡"
+        listCount = listRows * 2;
+      }
+    }
+    best = { ds, rowGap, showTitles, rowsH, listRows, listCount };
+    if (fits) break;
+  }
+  const { ds, rowGap, showTitles, rowsH, listRows, listCount } = best as Pick;
+
+  // 순위 → 좌표. 줄마다 방향을 바꿔(지그재그) 경로가 끊기지 않게 한다.
+  const nodes: PyramidNode[] = new Array(n);
+  let top = 0;
+  let rank = 0;
+  sizes.forEach((S, r) => {
+    const d = ds[r];
+    const pitch = Math.min(width / S, d + Math.max(PYR_GAP_X, d * 0.6));
+    const offset = (width - pitch * S) / 2;
+    const leftToRight = r % 2 === 1;
+    for (let j = 0; j < S; j++) {
+      const col = leftToRight ? j : S - 1 - j;
+      nodes[rank] = { rank, row: r, x: offset + pitch * (col + 0.5), y: top + d / 2, d, labelW: Math.max(d, pitch - 4) };
+      rank++;
+    }
+    top += d + (showTitles ? pyrLabelH(d) : 0) + rowGap;
+  });
+
+  // 꼴찌 → 1위 경로
+  const reachAt = new Array(n).fill(0);
+  let dPath = `M${nodes[n - 1].x.toFixed(1)} ${nodes[n - 1].y.toFixed(1)}`;
+  let acc = 0;
+  for (let i = n - 1; i > 0; i--) {
+    const a = nodes[i];
+    const b = nodes[i - 1];
+    const p0: Pt = [a.x, a.y];
+    const p3: Pt = [b.x, b.y];
+    let p1: Pt;
+    let p2: Pt;
+    if (a.row === b.row) {
+      p1 = [a.x + (b.x - a.x) / 3, a.y];
+      p2 = [a.x + (2 * (b.x - a.x)) / 3, b.y];
+    } else {
+      // 윗줄로 올라갈 때는 바깥쪽으로 둥글게 돌아 제목을 가로지르지 않게 한다.
+      const side = a.x >= width / 2 ? 1 : -1;
+      const dy = a.y - b.y;
+      const out = Math.max(10, Math.min(28, a.d * 0.5));
+      p1 = [a.x + side * out, a.y - dy * 0.45];
+      p2 = [b.x + side * out, b.y + dy * 0.45];
+    }
+    dPath += ` C${p1[0].toFixed(1)} ${p1[1].toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)} ${p3[0].toFixed(1)} ${p3[1].toFixed(1)}`;
+    acc += a.row === b.row ? Math.hypot(b.x - a.x, b.y - a.y) : cubicLength(p0, p1, p2, p3);
+    reachAt[i - 1] = acc;
+  }
+
+  return { width, height: rowsH, nodes, path: dPath, reachAt, pathLength: acc || 1, showTitles, listCount, listRows, total: n };
+}
+
+export function pyramidBodyHeight(l: PyramidLayout): number {
+  if (l.showTitles) return l.height;
+  return l.height + MOSAIC_LIST_GAP + (l.listRows + (l.listCount < l.total ? 1 : 0)) * MOSAIC_LIST_ROW_H;
+}

@@ -4,8 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
-import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
-import { listPages, recordPages, mosaicLayout, SHAPES, type Shape } from "@/components/result/exportLayout";
+import { ListCard, RecordCard, MosaicCard, PosterCard, PyramidCard, ScaledCard, cardHeading, pyramidIntroTiming, type CardMeta } from "@/components/TasteTemplates";
+import { listPages, recordPages, mosaicLayout, pyramidLayout, SHAPES, type Shape } from "@/components/result/exportLayout";
 import WinnerReveal from "@/components/result/WinnerReveal";
 import fixture from "../../../../toss/baseline/fixture.json";
 
@@ -62,6 +62,7 @@ export default function ResultLab() {
   const [count, setCount] = useState(20);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
   const [revealKey, setRevealKey] = useState(0);
+  const [introKey, setIntroKey] = useState(0);
 
   // 공개 취향표 최근 30개. DB 읽기만 한다(Spotify 호출 없음).
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function ResultLab() {
     locale,
   };
 
+  const pl = pyramidLayout(tracks.length);
   const lp = listPages(tracks.length);
   const rp = recordPages(tracks.length);
 
@@ -201,6 +203,23 @@ export default function ResultLab() {
             모션 다시 보기
           </button>
         </div>
+      </Row>
+
+      <Row
+        title="피라미드형"
+        note={`줄 ${new Set(pl.nodes.map((x) => x.row)).size} · 1위 ${pl.nodes[0]?.d ?? 0}px · 가장 작은 원 ${Math.min(...pl.nodes.map((x) => x.d))}px · ${pl.showTitles ? "제목" : `목록 ${pl.listCount}곡`} · 인트로 ${pyramidIntroTiming(tracks.length).total.toFixed(1)}초`}
+      >
+        <div className="shrink-0 flex flex-col gap-2">
+          <Frame caption="인트로(결과 화면 첫 진입)">
+            <PyramidCard key={`intro-${introKey}-${tracks.length}-${source}`} tracks={tracks} meta={meta} intro />
+          </Frame>
+          <button onClick={() => setIntroKey((k) => k + 1)} className="self-start h-9 px-4 rounded-full bg-navy/5 text-navy type-sub cursor-pointer">
+            인트로 다시 보기
+          </button>
+        </div>
+        <Frame caption="완성(저장 이미지)">
+          <PyramidCard tracks={tracks} meta={meta} />
+        </Frame>
       </Row>
 
       <Row title="리스트형" note={lp.map((p) => `${p.from + 1}–${p.to}위 (행 ${p.rowH}px)`).join(" · ")}>

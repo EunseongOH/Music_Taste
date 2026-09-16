@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import {
   LIST_FEATURE_H,
   LIST_TOP_GAP,
@@ -10,6 +11,7 @@ import {
   RECORD_GROUP_RATIO,
   RECORD_INFO_H,
   mosaicLayout,
+  pyramidLayout,
   shapeSvg,
   type ListPage,
   type RecordPage,
@@ -315,6 +317,218 @@ export function RecordCard({
   );
 }
 
+/** 2단 번호 목록. 모자이크·피라미드에서 커버만으로 곡을 알 수 없을 때 붙인다. */
+function RankTitleList({ tracks, count, rows, locale, className = "", style }: { tracks: CardTrack[]; count: number; rows: number; locale: "ko" | "en"; className?: string; style?: React.CSSProperties }) {
+  const t = text[locale];
+  return (
+    <div className={`shrink-0 ${className}`} style={{ marginTop: MOSAIC_LIST_GAP, ...style }}>
+      <ol className="grid grid-cols-2 gap-x-4 grid-flow-col" style={{ gridTemplateRows: `repeat(${rows}, ${MOSAIC_LIST_ROW_H}px)` }}>
+        {tracks.slice(0, count).map((tr, i) => (
+          <li key={`${tr.id}-${i}`} className="flex items-baseline gap-1.5 min-w-0" style={{ fontSize: 12, lineHeight: `${MOSAIC_LIST_ROW_H}px` }}>
+            <span className={`font-num tabular-nums font-bold w-[18px] text-right shrink-0 ${rankColor(i + 1)}`}>{i + 1}</span>
+            <span className="truncate font-semibold">{tr.title}</span>
+          </li>
+        ))}
+      </ol>
+      {count < tracks.length && (
+        <p className="text-navy/70" style={{ fontSize: 12, lineHeight: `${MOSAIC_LIST_ROW_H}px` }}>
+          {t.more(tracks.length - count)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 피라미드형 — 1위가 꼭대기, 순위가 뱀 모양 경로로 이어진다
+// ---------------------------------------------------------------------------
+
+/**
+ * 결과 화면 첫 인트로 시간(초). 경로가 꼴찌에서 1위까지 그려지는 동안 카메라가 따라 올라가고,
+ * 끝에서 전체가 보이도록 빠진다. 곡이 많을수록 조금 길어진다.
+ */
+export function pyramidIntroTiming(n: number) {
+  const hold = 0.6;
+  const draw = Math.min(9, Math.max(3.5, 2 + n * 0.1));
+  const zoomOut = 1.0;
+  return { hold, draw, zoomOut, total: hold + draw + zoomOut };
+}
+
+export function PyramidCard({
+  tracks,
+  meta,
+  intro = false,
+  onIntroEnd,
+}: {
+  tracks: CardTrack[];
+  meta: CardMeta;
+  /** true 면 경로를 따라 올라가는 인트로를 재생한다(저장 카드는 false). */
+  intro?: boolean;
+  onIntroEnd?: () => void;
+}) {
+  const n = tracks.length;
+  const layout = useMemo(() => pyramidLayout(n), [n]);
+  const timing = pyramidIntroTiming(n);
+  const playing = intro && n > 1;
+  // 첫 프레임을 "꺼진" 상태로 그린 뒤 켜야 CSS 전환(지연 점등)이 걸린다.
+  const [started, setStarted] = useState(!playing);
+  useEffect(() => {
+    if (!playing) return;
+    const id = requestAnimationFrame(() => setStarted(true));
+    return () => cancelAnimationFrame(id);
+  }, [playing]);
+
+  const minD = Math.min(...layout.nodes.map((x) => x.d));
+  const W = layout.width;
+  const H = layout.height;
+
+  // 카메라: 경로가 지나는 순서(꼴찌 → 1위)대로 머리를 화면 가운데에 둔다.
+  const camera = useMemo(() => {
+    if (!playing) return null;
+    const Z = Math.min(3, Math.max(1.6, 56 / minD));
+    const clampX = (v: number) => Math.min(0, Math.max(W - W * Z, v));
+    const clampY = (v: number) => Math.min(0, Math.max(H - H * Z, v));
+    const order = [...layout.nodes].reverse();
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const ss: number[] = [];
+    const times: number[] = [];
+    const push = (node: { x: number; y: number }, time: number) => {
+      xs.push(clampX(W / 2 - Z * node.x));
+      ys.push(clampY(H / 2 - Z * node.y));
+      ss.push(Z);
+      times.push(time / timing.total);
+    };
+    push(order[0], 0);
+    order.forEach((node) => push(node, timing.hold + (layout.reachAt[node.rank] / layout.pathLength) * timing.draw));
+    push(order[order.length - 1], timing.hold + timing.draw);
+    xs.push(0);
+    ys.push(0);
+    ss.push(1);
+    times.push(1);
+    return { xs, ys, ss, times };
+  }, [playing, layout, minD, W, H, timing.hold, timing.draw, timing.total]);
+
+  const litDelay = (rank: number) => (playing ? timing.hold + (layout.reachAt[rank] / layout.pathLength) * timing.draw - 0.1 : 0);
+
+  return (
+    <CardFrame meta={meta}>
+      <div className="h-full flex flex-col justify-center overflow-hidden">
+        <motion.div
+          className="relative mx-auto shrink-0"
+          style={{ width: W, height: H, transformOrigin: "0 0" }}
+          initial={camera ? { x: camera.xs[0], y: camera.ys[0], scale: camera.ss[0] } : false}
+          animate={camera ? { x: camera.xs, y: camera.ys, scale: camera.ss } : { x: 0, y: 0, scale: 1 }}
+          transition={camera ? { duration: timing.total, times: camera.times, ease: "linear" } : { duration: 0 }}
+          onAnimationComplete={() => {
+            if (playing) onIntroEnd?.();
+          }}
+        >
+          <svg className="absolute inset-0 overflow-visible" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none">
+            <path d={layout.path} stroke="rgba(26,42,108,0.12)" strokeWidth={2} strokeLinecap="round" />
+            <motion.path
+              d={layout.path}
+              stroke="#E67E22"
+              strokeWidth={minD >= 44 ? 2.5 : 2}
+              strokeLinecap="round"
+              initial={playing ? { pathLength: 0 } : false}
+              animate={{ pathLength: 1 }}
+              transition={playing ? { delay: timing.hold, duration: timing.draw, ease: "linear" } : { duration: 0 }}
+            />
+          </svg>
+
+          {layout.nodes.map((node) => {
+            const track = tracks[node.rank];
+            const rank = node.rank + 1;
+            const lit = started;
+            const fade: React.CSSProperties = playing
+              ? { opacity: lit ? 1 : 0.18, transition: "opacity 0.35s ease-out", transitionDelay: `${litDelay(node.rank)}s` }
+              : {};
+            const badge = Math.max(15, Math.min(22, Math.round(node.d * 0.22)));
+            return (
+              <React.Fragment key={`${track.id}-${node.rank}`}>
+                <div
+                  className="absolute rounded-full"
+                  style={{
+                    left: node.x - node.d / 2,
+                    top: node.y - node.d / 2,
+                    width: node.d,
+                    height: node.d,
+                    boxShadow:
+                      rank === 1
+                        ? "0 0 0 3px #F5F2ED, 0 0 0 5px #E67E22, 0 10px 22px -10px rgba(26,42,108,0.55)"
+                        : "0 0 0 2px #F5F2ED, 0 6px 14px -8px rgba(26,42,108,0.45)",
+                    ...fade,
+                  }}
+                >
+                  <img src={track.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover rounded-full" />
+                  {node.d >= 36 && (
+                    // 레코드 가운데 구멍
+                    <span
+                      className="absolute inset-0 m-auto rounded-full bg-[#F5F2ED] border border-navy/15"
+                      style={{ width: Math.round(node.d * 0.11), height: Math.round(node.d * 0.11) }}
+                    />
+                  )}
+                  {/* 원이 작으면 배지가 커버를 덮는다 — 10위까지만 달고 나머지는 경로·목록으로 읽는다. */}
+                  {(node.d >= 32 || rank <= 10) && (
+                  <span
+                    className={`absolute rounded-full font-num tabular-nums font-bold flex items-center justify-center ${
+                      rank === 1 ? "bg-point text-white" : "bg-navy text-cream"
+                    }`}
+                    style={{
+                      left: node.d * 0.15 - badge / 2,
+                      top: node.d * 0.15 - badge / 2,
+                      minWidth: badge,
+                      height: badge,
+                      padding: "0 3px",
+                      fontSize: badge >= 20 ? 12 : 11,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {rank}
+                  </span>
+                  )}
+                </div>
+                {layout.showTitles && (
+                  <div
+                    className="absolute text-center"
+                    style={{ left: node.x - node.labelW / 2, top: node.y + node.d / 2 + 4, width: node.labelW, ...fade }}
+                  >
+                    {meta.single ? (
+                      <p className="font-semibold line-clamp-2 break-keep" style={{ fontSize: node.d >= 80 ? 13 : 11.5, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
+                        {track.title}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="font-semibold truncate" style={{ fontSize: node.d >= 80 ? 13 : 11.5, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
+                          {track.title}
+                        </p>
+                        <p className="truncate text-navy/70" style={{ fontSize: 11, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
+                          {track.artistName}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </motion.div>
+
+        {!layout.showTitles && (
+          <RankTitleList
+            tracks={tracks}
+            count={layout.listCount}
+            rows={layout.listRows}
+            locale={meta.locale}
+            style={playing ? { opacity: started ? 1 : 0, transition: "opacity 0.5s ease-out", transitionDelay: `${timing.total - 0.4}s` } : undefined}
+          />
+        )}
+      </div>
+    </CardFrame>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 모자이크형 — 커버를 모양 틀 안에
 // ---------------------------------------------------------------------------
@@ -392,21 +606,7 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
             {!meta.single && <p className="text-[14px] leading-[20px] text-navy/70 truncate">{top.artistName}</p>}
           </div>
         ) : (
-          <div className="shrink-0" style={{ marginTop: MOSAIC_LIST_GAP }}>
-            <ol className="grid grid-cols-2 gap-x-4 grid-flow-col" style={{ gridTemplateRows: `repeat(${layout.listRows}, ${MOSAIC_LIST_ROW_H}px)` }}>
-              {tracks.slice(0, layout.listCount).map((tr, i) => (
-                <li key={`${tr.id}-${i}`} className="flex items-baseline gap-1.5 min-w-0" style={{ fontSize: 12, lineHeight: `${MOSAIC_LIST_ROW_H}px` }}>
-                  <span className={`font-num tabular-nums font-bold w-[16px] text-right shrink-0 ${rankColor(i + 1)}`}>{i + 1}</span>
-                  <span className="truncate font-semibold">{tr.title}</span>
-                </li>
-              ))}
-            </ol>
-            {layout.listCount < tracks.length && (
-              <p className="text-navy/70" style={{ fontSize: 12, lineHeight: `${MOSAIC_LIST_ROW_H}px` }}>
-                {t.more(tracks.length - layout.listCount)}
-              </p>
-            )}
-          </div>
+          <RankTitleList tracks={tracks} count={layout.listCount} rows={layout.listRows} locale={meta.locale} />
         )}
       </div>
     </CardFrame>

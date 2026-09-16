@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Download, Share2, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
 import * as platform from "@/utils/platform";
 import BackButton from "@/components/BackButton";
@@ -11,7 +11,7 @@ import LoginModal from "@/components/LoginModal";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
-import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
+import { ListCard, RecordCard, MosaicCard, PosterCard, PyramidCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
 import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/exportLayout";
 import { ConfirmSheet, UnderlineTabs } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
@@ -26,6 +26,8 @@ const translations = {
     savedMissingTitle: "취향표를 열 수 없어요",
     savedMissingDesc: "삭제됐거나 볼 수 없는 취향표예요.",
     savedMissingAction: "내 취향 스페이스로 가기",
+    templatePyramid: "피라미드형",
+    skipIntro: "건너뛰기",
     templateList: "리스트형",
     templateRetro: "레코드형",
     templateMosaic: "모자이크형",
@@ -78,6 +80,8 @@ const translations = {
     savedMissingTitle: "Can't open this taste card",
     savedMissingDesc: "It was deleted or isn't available to you.",
     savedMissingAction: "Go to My Taste Space",
+    templatePyramid: "Pyramid",
+    skipIntro: "Skip",
     templateList: "List",
     templateRetro: "Vinyl",
     templateMosaic: "Mosaic",
@@ -200,11 +204,11 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 상태가 아니라 ref 라서 리렌더를 유발하지 않는다.
    */
   const autoSaveRef = useRef<Promise<void> | null>(null);
-  /**
-   * 결과 템플릿. 피라미드형(SnakePathTimeline)은 탭에서 뺐다 — 컴포넌트는 남아 있어
-   * 되돌리려면 이 유니온과 탭·renderCards 에 다시 넣으면 된다.
-   */
-  const [template, setTemplate] = useState<"list" | "retro" | "mosaic" | "poster">("list");
+  /** 결과 템플릿. 첫 화면은 피라미드형 — 월드컵 직후에는 순위가 아래에서 위로 올라가는 인트로를 재생한다. */
+  const [template, setTemplate] = useState<"pyramid" | "list" | "retro" | "mosaic" | "poster">("pyramid");
+  /** 인트로가 끝났는지. 불러온 취향표(saved)는 인트로 없이 바로 보여준다. */
+  const [introDone, setIntroDone] = useState(isSavedView);
+  const reduceMotion = useReducedMotion();
   const [shape, setShape] = useState<Shape>("heart");
   /** 여러 장 저장 확인 시트에 띄울 장 수(null 이면 닫힘) */
   const [pendingPages, setPendingPages] = useState<number | null>(null);
@@ -520,7 +524,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
   /** 지금 템플릿이 몇 장의 카드로 저장되는지. 오프스크린 카드 id 는 export-card-0.. */
   const exportCardCount =
-    template === "list" ? listPages(winners.length).length : template === "retro" ? recordPages(winners.length).length : 1;
+    template === "list" ? listPages(winners.length).length : template === "retro" ? recordPages(winners.length).length : 1; // 피라미드·모자이크·포스터는 1장
 
   const saveCards = async (count: number) => {
     setIsExporting(true);
@@ -719,8 +723,22 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     };
   })();
 
+  /** 인트로 재생 중: 탭·하단 버튼을 숨기고 피라미드 카드만 보여준다. */
+  const showIntro = !introDone && !reduceMotion && winners.length > 1;
+
   /** 지금 템플릿의 카드들. 화면용(winners)과 저장용(exportWinners)이 같은 함수를 쓴다. */
-  const renderCards = (tracks: Track[]): React.ReactNode[] => {
+  const renderCards = (tracks: Track[], onScreen = false): React.ReactNode[] => {
+    if (template === "pyramid") {
+      return [
+        <PyramidCard
+          key="pyramid"
+          tracks={tracks}
+          meta={cardMeta}
+          intro={onScreen && showIntro}
+          onIntroEnd={() => setIntroDone(true)}
+        />,
+      ];
+    }
     if (template === "list") {
       const pages = listPages(tracks.length);
       return pages.map((pg, i) => <ListCard key={i} tracks={tracks} meta={cardMeta} page={pg} index={i} count={pages.length} />);
@@ -780,8 +798,16 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
       {/* 결과 카드 — 화면에 보이는 카드가 그대로 저장된다 */}
       <div className="flex-1 w-full max-w-md mx-auto px-4 pt-2 pb-32">
+        {showIntro ? (
+          <div className="flex justify-end pt-2">
+            <button onClick={() => setIntroDone(true)} className="h-9 px-4 rounded-full bg-navy/5 text-navy type-sub cursor-pointer">
+              {t.skipIntro}
+            </button>
+          </div>
+        ) : (
         <UnderlineTabs
           tabs={[
+            { id: "pyramid", label: t.templatePyramid },
             { id: "list", label: t.templateList },
             { id: "retro", label: t.templateRetro },
             { id: "mosaic", label: t.templateMosaic },
@@ -793,6 +819,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
             trackEvent("change_template", { template_type: id });
           }}
         />
+        )}
 
         {template === "mosaic" && (
           <div role="radiogroup" aria-label={t.templateMosaic} className="flex gap-2 mt-4">
@@ -816,13 +843,13 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         )}
 
         <div className="mt-5 flex flex-col gap-5">
-          {winners.length > 0 && renderCards(winners).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)}
+          {winners.length > 0 && renderCards(winners, true).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)}
         </div>
       </div>
 
       {/* Streamlined Bottom Floating Actions (2 Buttons: Save & Share) */}
       <AnimatePresence>
-        {winners.length > 0 && (
+        {winners.length > 0 && !showIntro && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

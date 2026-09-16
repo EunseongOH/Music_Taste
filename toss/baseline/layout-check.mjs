@@ -12,6 +12,7 @@
 import {
   CARD_BODY_H, LIST_ROW_MAX, RECORD_ROW_MAX, listPages, listPageHeight, recordPages, recordPageHeight,
   mosaicLayout, mosaicBodyHeight, SHAPES, MOSAIC_MIN_TILE, shapeSvg,
+  pyramidLayout, pyramidBodyHeight, PYR_MIN_D, PYR_TITLE_MIN_D,
 } from '../../src/components/result/exportLayout.ts';
 
 let failed = 0;
@@ -39,6 +40,26 @@ for (let n = 1; n <= 100; n++) {
   checkPages('리스트형', listPages(n), n, listPageHeight);
   checkPages('레코드형', recordPages(n), n, recordPageHeight);
 
+  {
+    const p = pyramidLayout(n);
+    if (p.nodes.length !== n || p.nodes.some((x) => !x)) fail(`피라미드 ${n}곡: 노드 누락`);
+    if (pyramidBodyHeight(p) > CARD_BODY_H + 0.5) fail(`피라미드 ${n}곡: 본문 높이 ${pyramidBodyHeight(p).toFixed(0)} > ${CARD_BODY_H}`);
+    for (const node of p.nodes) {
+      if (node.d < PYR_MIN_D) fail(`피라미드 ${n}곡: ${node.rank + 1}위 원 ${node.d}px`);
+      if (node.x - node.d / 2 < -0.5 || node.x + node.d / 2 > p.width + 0.5) fail(`피라미드 ${n}곡: ${node.rank + 1}위가 폭 밖`);
+      if (p.showTitles && node.d < PYR_TITLE_MIN_D) fail(`피라미드 ${n}곡: 제목을 다는데 원이 ${node.d}px`);
+    }
+    // 같은 줄 원끼리 겹치지 않는다
+    const byRow = new Map();
+    for (const node of p.nodes) byRow.set(node.row, [...(byRow.get(node.row) ?? []), node]);
+    for (const row of byRow.values()) {
+      const xs = row.sort((a, b) => a.x - b.x);
+      for (let i = 1; i < xs.length; i++) if (xs[i].x - xs[i - 1].x < xs[i].d - 0.5) fail(`피라미드 ${n}곡: ${xs[i].row + 1}번째 줄 원이 겹침`);
+    }
+    // 경로는 꼴찌에서 시작해 1위에서 끝난다(모션이 아래에서 위로)
+    if (p.reachAt[n - 1] !== 0 || (n > 1 && Math.abs(p.reachAt[0] - p.pathLength) > 0.01)) fail(`피라미드 ${n}곡: 경로 시작·끝이 순위와 어긋남`);
+  }
+
   for (const shape of SHAPES) {
     const l = mosaicLayout(n, shape);
     const ranks = l.cells.filter((c) => c.rank !== null).map((c) => c.rank).sort((a, b) => a - b);
@@ -62,6 +83,7 @@ for (const shape of SHAPES) {
     return `${n}곡→${l.shown === n ? '전곡' : 'TOP' + l.shown} 타일${l.tile.toFixed(0)} 칸${l.cells.length}`;
   }).join(' · '));
 }
+for (const n of [1, 4, 16, 32, 64, 100]) { const p = pyramidLayout(n); console.log(`  피라미드 ${n}곡 → 줄 ${new Set(p.nodes.map((x) => x.row)).size} · 1위 ${p.nodes[0].d}px · 가장 작은 원 ${Math.min(...p.nodes.map((x) => x.d))}px · ${p.showTitles ? '제목' : `목록 ${p.listCount}곡`} · 높이 ${pyramidBodyHeight(p).toFixed(0)}`); }
 for (const n of [4, 16, 32, 64]) console.log(`  리스트형 ${n}곡 → ` + listPages(n).map((p) => `${p.from + 1}–${p.to}(행${p.rowH})`).join(' / '));
 for (const n of [4, 10, 32, 64]) console.log(`  레코드형 ${n}곡 → ` + recordPages(n).map((p) => `${p.from + 1}–${p.to}(${p.hero ? `LP${p.sleeve} ` : ''}행${p.rowH})`).join(' / '));
 

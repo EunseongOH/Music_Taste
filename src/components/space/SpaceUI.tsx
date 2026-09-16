@@ -67,7 +67,7 @@ export function UnderlineTabs<T extends string>({
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(tab.id)}
-            className={`relative flex-1 py-3 type-body-strong transition-colors cursor-pointer ${
+            className={`relative flex-1 py-3 type-body-strong whitespace-nowrap transition-colors cursor-pointer ${
               selected ? "text-navy" : "text-navy/70 hover:text-navy"
             }`}
           >
