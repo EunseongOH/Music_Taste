@@ -205,11 +205,50 @@ export const getSpotifyAccessToken = async (): Promise<string> => {
 // 3. 401 Unauthorized (Token invalidation/refresh)
 // 4. Retries up to a maximum limit
 // 5. Bypasses Next.js file fetch cache to avoid caching HTTP error responses permanently
+//
+// 엔드포인트 가드 (2026-09-17). Spotify 개발 모드 쿼터는 엔드포인트 묶음별 일일 한도이고, 넘으면
+// 429 QUOTA_EXCEEDED + Retry-After 약 24시간이 온다. 이 가드가 없으면 차단된 동안에도 이용자 요청마다
+// Spotify 를 다시 부른다. 긴 Retry-After 를 받으면 그 엔드포인트를 전 인스턴스에서 막고, 호출 수를 센다.
+// RPC 가 실패하면 그냥 통과시킨다 — 가드가 서비스를 죽여서는 안 된다.
+function endpointKey(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/[0-9A-Za-z]{22}/g, '{id}');
+  } catch {
+    return url.split('?')[0];
+  }
+}
+
+async function passEndpointGate(endpoint: string): Promise<boolean> {
+  try {
+    const { data, error } = await createAdminClient().rpc('spotify_endpoint_gate', { ep: endpoint });
+    return error ? true : data !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function record429(endpoint: string, secs: number, reason: string | undefined) {
+  try {
+    // 쿼터 초과는 Retry-After 그대로, 그 외 긴 429 는 최대 1시간만 막는다
+    const block = reason === 'QUOTA_EXCEEDED' ? secs : Math.min(secs, 3600);
+    await createAdminClient().rpc('spotify_record_429', { ep: endpoint, secs: block, why: reason ?? 'RATE_LIMIT' });
+  } catch { /* 기록 실패가 요청을 죽이지 않는다 */ }
+}
+
 async function spotifyFetch(
   url: string,
   options: RequestInit = {},
   retries = 3
 ): Promise<Response> {
+  const endpoint = endpointKey(url);
+  if (!(await passEndpointGate(endpoint))) {
+    lastSpotifyError = "429";
+    return new Response('{"error":{"status":429,"message":"endpoint blocked locally"}}', {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const token = await getSpotifyAccessToken();
 
   const lang = await getLocaleCookie();
@@ -257,7 +296,9 @@ async function spotifyFetch(
     // Add safety cap: if Spotify asks us to wait for more than 5 seconds, 
     // do not block the server thread. Return the 429 response so the caller handles it gracefully.
     if (retryAfterSeconds > 5) {
-      console.warn(`[Spotify API] 429 Rate limited. Spotify requested ${retryAfterSeconds}s delay which exceeds safety cap. Returning error response.`);
+      const reason = await response.clone().json().then((b) => b?.error?.reason).catch(() => undefined);
+      console.warn(`[Spotify API] 429 ${reason ?? 'Rate limited'} on ${endpoint}. Retry-After ${retryAfterSeconds}s. Blocking endpoint.`);
+      await record429(endpoint, retryAfterSeconds, reason);
       return response;
     }
     
@@ -951,7 +992,9 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
         .from('spotify_cache_artists')
         .select('*')
         .eq('locale', 'ko')
-        .contains('genres', [genreId.toLowerCase()])
+        // genres 는 jsonb 라 배열을 넘기면 Postgres 배열 리터럴({k-pop})로 보내져 json 오류가 난다.
+        // 오류가 나면 장르마다 Spotify 검색으로 넘어가 전곡 모드 화면마다 검색 3회를 불렀다 (2026-09-17 확인).
+        .contains('genres', JSON.stringify([genreId.toLowerCase()]))
         .gt('expires_at', now)
         .range(offset, offset + limitPerGenre - 1);
 
