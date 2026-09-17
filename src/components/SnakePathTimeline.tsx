@@ -51,47 +51,52 @@ export const getRowSizes = (n: number) => {
   return sizes;
 };
 
+/**
+ * CD 가운데 구멍 지름(원 지름 대비). 커버를 뚫는 마스크와 구멍 테두리(주황 원)가 **같은 값**을 쓴다.
+ * 예전에는 마스크가 `radial-gradient(circle, … 12%)` 라 기준이 원 모서리 거리(한 변의 0.707배)였고
+ * 구멍 지름이 약 17%, 테두리는 20–24% 로 그려져 안쪽 원이 구멍과 어긋났다.
+ * `closest-side` 면 100% 가 반지름이라 H 가 곧 지름 비율이 된다.
+ */
+const HOLE = 22;
+const HOLE_MASK = `radial-gradient(circle closest-side, transparent ${HOLE}%, black calc(${HOLE}% + 0.6px))`;
+
 const getNodeDimensions = (S: number, isWinner: boolean) => {
   if (isWinner) {
     return {
       albumClass: "w-20 h-20 border-point shadow-[0_0_20px_rgba(230,126,34,0.5)] animate-pulse-ring",
-      badgeClass: "min-w-8 h-8 px-1.5 text-[15px] -top-3 -left-3 bg-point text-white",
+      badgeClass: "min-w-7 h-7 px-1.5 text-[14px] -top-1.5 -left-1.5 bg-point text-white",
       titleClass: "text-[11px] sm:text-[12px] font-extrabold text-navy tracking-tight",
       artistClass: "text-[8px] sm:text-[9px] text-navy/60 font-semibold",
       safeWidth: "95px", // 컴포넌트 전체가 가질 안전 너비
-      holeClass: "w-[24%] h-[24%]"
     };
   }
   
   if (S <= 2) {
     return {
       albumClass: "w-14 h-14 border-navy/20 shadow-md",
-      badgeClass: "min-w-[22px] h-[22px] px-1 text-[11px] -top-2 -left-2 bg-navy text-cream",
+      badgeClass: "min-w-5 h-5 px-1 text-[11px] -top-1 -left-1 bg-navy text-cream",
       titleClass: "text-[9.5px] sm:text-[10.5px] font-bold text-navy tracking-tight",
       artistClass: "text-[7.5px] sm:text-[8.5px] text-navy/60",
       safeWidth: "85px",
-      holeClass: "w-[22%] h-[22%]"
     };
   }
   
   if (S <= 4) {
     return {
       albumClass: "w-11 h-11 border-navy/20 shadow-md",
-      badgeClass: "min-w-5 h-5 px-1 text-[10px] -top-1.5 -left-1.5 bg-navy text-cream",
+      badgeClass: "min-w-[18px] h-[18px] px-1 text-[10px] -top-1 -left-1 bg-navy text-cream",
       titleClass: "text-[8px] sm:text-[9px] font-bold text-navy tracking-tight",
       artistClass: "text-[6px] sm:text-[7px] text-navy/60",
       safeWidth: "75px",
-      holeClass: "w-[22%] h-[22%]"
     };
   }
 
   return {
     albumClass: "w-9 h-9 border-navy/15 shadow-sm",
-    badgeClass: "min-w-[17px] h-[17px] px-[3px] text-[9px] -top-1 -left-1 bg-navy text-cream",
+    badgeClass: "min-w-[15px] h-[15px] px-[3px] text-[9px] -top-0.5 -left-0.5 bg-navy text-cream",
     titleClass: "text-[7.5px] sm:text-[8px] font-bold text-navy tracking-tight",
     artistClass: "text-[6px] sm:text-[6.5px] text-navy/60",
     safeWidth: "70px", 
-    holeClass: "w-[20%] h-[20%]"
   };
 };
 
@@ -349,7 +354,7 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                   {/* 수정 포인트 1: h-0을 완전히 제거하고, CD 자체 크기를 유지하여 이미지가 사라지는 현상을 원천 방지합니다. */}
                   {/* transform -translate-y-1/2를 통해 CD의 정중앙이 베지어 곡선 라인에 완벽히 교차하도록 정렬합니다. */}
                   <div className={`relative flex items-center justify-center flex-shrink-0 rounded-full border-2 bg-[#F5F2ED] ${dims.albumClass} transform -translate-y-1/2`}>
-                    <div className={`absolute rounded-full flex items-center justify-center font-num tabular-nums font-bold leading-none z-30 shadow-sm border-2 border-[#F5F2ED] ${dims.badgeClass}`}>
+                    <div className={`absolute rounded-full flex items-center justify-center font-num tabular-nums font-bold leading-none z-30 shadow-[0_1px_3px_rgba(26,42,108,0.35)] ${dims.badgeClass}`}>
                       {pt.rank}
                     </div>
                     
@@ -357,8 +362,8 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                     <div 
                       className="absolute inset-0 w-full h-full rounded-full overflow-hidden"
                       style={{
-                        maskImage: "radial-gradient(circle, transparent 12%, black 12.5%)",
-                        WebkitMaskImage: "radial-gradient(circle, transparent 12%, black 12.5%)"
+                        maskImage: HOLE_MASK,
+                        WebkitMaskImage: HOLE_MASK
                       }}
                     >
                       <img 
@@ -370,7 +375,7 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                       />
                     </div>
                     
-                    <div className={`absolute inset-0 m-auto ${dims.holeClass} border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20`} />
+                    <div className="absolute inset-0 m-auto border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20" style={{ width: `${HOLE}%`, height: `${HOLE}%` }} />
                   </div>
                   
                   {/* 수정 포인트 3: CD가 공중으로 반만큼 뜬 공간(translate)을 메우기 위해, 명시적인 음수 마진(Negative Margin)을 주어 타이틀을 바짝 붙입니다. */}

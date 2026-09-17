@@ -205,8 +205,11 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 상태가 아니라 ref 라서 리렌더를 유발하지 않는다.
    */
   const autoSaveRef = useRef<Promise<void> | null>(null);
-  /** 결과 템플릿. 첫 화면은 피라미드형 — 월드컵 직후에는 순위가 아래에서 위로 올라가는 인트로를 재생한다. */
-  const [template, setTemplate] = useState<"pyramid" | "list" | "retro" | "mosaic" | "poster">("pyramid");
+  /**
+   * 결과 템플릿. 월드컵 직후에는 피라미드 인트로를 재생하고, 끝나면 기본으로 레코드형을 보여준다.
+   * 불러온 취향표(saved)는 인트로 없이 바로 레코드형.
+   */
+  const [template, setTemplate] = useState<"pyramid" | "list" | "retro" | "mosaic" | "poster">(isSavedView ? "retro" : "pyramid");
   /** 인트로가 끝났는지. 불러온 취향표(saved)는 인트로 없이 바로 보여준다. */
   const [introDone, setIntroDone] = useState(isSavedView);
   const reduceMotion = useReducedMotion();
@@ -792,9 +795,9 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         {!showIntro && (
         <UnderlineTabs
           tabs={[
-            { id: "pyramid", label: t.templatePyramid },
-            { id: "list", label: t.templateList },
             { id: "retro", label: t.templateRetro },
+            { id: "list", label: t.templateList },
+            { id: "pyramid", label: t.templatePyramid },
             { id: "mosaic", label: t.templateMosaic },
             { id: "poster", label: t.templatePoster },
           ]}
@@ -831,7 +834,16 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
           {winners.length > 0 &&
             (template === "pyramid" ? (
               // 피라미드형 화면은 예전 연출 그대로(인트로 → 화면 흐름 안의 피라미드). 저장은 PyramidCard.
-              <PyramidStage tracks={winners} playing={showIntro} onDone={() => setIntroDone(true)} skipLabel={t.skipIntro} />
+              <PyramidStage
+                tracks={winners}
+                playing={showIntro}
+                onDone={() => {
+                  // 인트로를 막 끝낸 경우에만 기본 탭(레코드형)으로. 탭에서 피라미드형을 다시 고르면 그대로 둔다.
+                  if (!introDone) setTemplate("retro");
+                  setIntroDone(true);
+                }}
+                skipLabel={t.skipIntro}
+              />
             ) : (
               renderCards(winners).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)
             ))}
