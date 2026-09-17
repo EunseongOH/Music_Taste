@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import {
   LIST_FEATURE_H,
   LIST_TOP_GAP,
@@ -343,127 +342,31 @@ function RankTitleList({ tracks, count, rows, locale, className = "", style }: {
 // 피라미드형 — 1위가 꼭대기, 순위가 뱀 모양 경로로 이어진다
 // ---------------------------------------------------------------------------
 
-/**
- * 결과 화면 첫 인트로 시간(초). 예전 피라미드 연출의 수치를 그대로 쓴다:
- * 1초 대기 → 경로를 max(12초, 곡 수 × 1.2초) 동안 그리며 3.8배로 따라감 → 1위에서 1.5초 멈춤
- * → 1.2초 동안 전체로 빠짐.
- */
-export const PYRAMID_INTRO_ZOOM = 3.8;
-export function pyramidIntroTiming(n: number) {
-  const hold = 1.0;
-  const draw = Math.max(12, n * 1.2);
-  const holdEnd = 1.5;
-  const zoomOut = 1.2;
-  return { hold, draw, holdEnd, zoomOut, total: hold + draw + holdEnd + zoomOut };
-}
-
-export function PyramidCard({
-  tracks,
-  meta,
-  intro = false,
-  onIntroEnd,
-}: {
-  tracks: CardTrack[];
-  meta: CardMeta;
-  /** true 면 경로를 따라 올라가는 인트로를 재생한다(저장 카드는 false). */
-  intro?: boolean;
-  onIntroEnd?: () => void;
-}) {
+/** 피라미드형 9:16 카드(저장 이미지). 결과 화면의 인트로·피라미드 보기는 PyramidStage(예전 연출). */
+export function PyramidCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMeta }) {
   const n = tracks.length;
   const layout = useMemo(() => pyramidLayout(n), [n]);
-  const timing = pyramidIntroTiming(n);
-  const playing = intro && n > 1;
-  // 첫 프레임을 "꺼진" 상태로 그린 뒤 켜야 CSS 전환(지연 점등)이 걸린다.
-  const [started, setStarted] = useState(!playing);
-  useEffect(() => {
-    if (!playing) return;
-    const id = requestAnimationFrame(() => setStarted(true));
-    return () => cancelAnimationFrame(id);
-  }, [playing]);
-
   const minD = Math.min(...layout.nodes.map((x) => x.d));
   const W = layout.width;
   const H = layout.height;
 
-  // 카메라: 경로 머리를 3.8배로 따라 올라간다(예전 연출과 같은 배율·속도).
-  const camera = useMemo(() => {
-    if (!playing) return null;
-    const Z = PYRAMID_INTRO_ZOOM;
-    const xs: number[] = [];
-    const ys: number[] = [];
-    const ss: number[] = [];
-    const times: number[] = [];
-    const push = (pt: { x: number; y: number }, time: number, scale = Z) => {
-      xs.push(W / 2 - scale * pt.x);
-      ys.push(H / 2 - scale * pt.y);
-      ss.push(scale);
-      times.push(time / timing.total);
-    };
-    const trail = layout.trail;
-    push(trail[0], 0);
-    trail.forEach((pt) => push(pt, timing.hold + (pt.at / layout.pathLength) * timing.draw));
-    push(trail[trail.length - 1], timing.hold + timing.draw + timing.holdEnd);
-    xs.push(0);
-    ys.push(0);
-    ss.push(1);
-    times.push(1);
-    return { xs, ys, ss, times };
-  }, [playing, layout, W, H, timing.hold, timing.draw, timing.holdEnd, timing.total]);
-
-  /** 예전처럼 카메라가 닿기 조금 전(2.5초 또는 경로 시간의 7%)에 곡이 선명해진다. */
-  const litDelay = (rank: number) => {
-    if (!playing) return 0;
-    const lead = Math.max(2.5, timing.draw * 0.07);
-    return Math.max(0, timing.hold + (layout.reachAt[rank] / layout.pathLength) * timing.draw - lead);
-  };
-
   return (
     <CardFrame meta={meta}>
       <div className="h-full flex flex-col justify-center overflow-hidden">
-        <motion.div
-          className="relative mx-auto shrink-0"
-          style={{ width: W, height: H, transformOrigin: "0 0" }}
-          initial={camera ? { x: camera.xs[0], y: camera.ys[0], scale: camera.ss[0] } : false}
-          animate={camera ? { x: camera.xs, y: camera.ys, scale: camera.ss } : { x: 0, y: 0, scale: 1 }}
-          transition={camera ? { duration: timing.total, times: camera.times, ease: "linear" } : { duration: 0 }}
-          onAnimationComplete={() => {
-            if (playing) onIntroEnd?.();
-          }}
-        >
+        <div className="relative mx-auto shrink-0" style={{ width: W, height: H }}>
           <svg className="absolute inset-0 overflow-visible" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none">
             <path d={layout.path} stroke="rgba(26,42,108,0.12)" strokeWidth={2} strokeLinecap="round" />
-            <motion.path
-              d={layout.path}
-              stroke="#E67E22"
-              strokeWidth={minD >= 44 ? 2.5 : 2}
-              strokeLinecap="round"
-              initial={playing ? { pathLength: 0 } : false}
-              animate={{ pathLength: 1 }}
-              transition={playing ? { delay: timing.hold, duration: timing.draw, ease: "linear" } : { duration: 0 }}
-            />
+            <path d={layout.path} stroke="#E67E22" strokeWidth={minD >= 44 ? 2.5 : 2} strokeLinecap="round" />
           </svg>
 
           {layout.nodes.map((node) => {
             const track = tracks[node.rank];
             const rank = node.rank + 1;
-            const lit = started;
-            // 켜지기 전: 흐리고 살짝 번진 상태(예전 값 그대로)
-            const fade: React.CSSProperties = playing
-              ? {
-                  opacity: lit ? 1 : 0.42,
-                  filter: lit ? "blur(0px) grayscale(0%)" : "blur(1.8px) grayscale(15%)",
-                  transition: "opacity 0.15s ease-out, filter 0.15s ease-out",
-                  transitionDelay: `${litDelay(node.rank)}s`,
-                }
-              : {};
             const badge = Math.max(15, Math.min(22, Math.round(node.d * 0.22)));
             return (
               <React.Fragment key={`${track.id}-${node.rank}`}>
-                <motion.div
+                <div
                   className="absolute rounded-full"
-                  initial={playing ? { scale: 0, y: 15 } : false}
-                  animate={{ scale: 1, y: 0 }}
-                  transition={playing ? { type: "spring", stiffness: 450, damping: 24, delay: 0.05 + (n - 1 - node.rank) * 0.02 } : { duration: 0 }}
                   style={{
                     left: node.x - node.d / 2,
                     top: node.y - node.d / 2,
@@ -473,7 +376,6 @@ export function PyramidCard({
                       rank === 1
                         ? "0 0 0 3px #F5F2ED, 0 0 0 5px #E67E22, 0 10px 22px -10px rgba(26,42,108,0.55)"
                         : "0 0 0 2px #F5F2ED, 0 6px 14px -8px rgba(26,42,108,0.45)",
-                    ...fade,
                   }}
                 >
                   <img src={track.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover rounded-full" />
@@ -503,11 +405,11 @@ export function PyramidCard({
                     {rank}
                   </span>
                   )}
-                </motion.div>
+                </div>
                 {layout.showTitles && (
                   <div
                     className="absolute text-center"
-                    style={{ left: node.x - node.labelW / 2, top: node.y + node.d / 2 + 4, width: node.labelW, ...fade }}
+                    style={{ left: node.x - node.labelW / 2, top: node.y + node.d / 2 + 4, width: node.labelW }}
                   >
                     {meta.single ? (
                       <p className="font-semibold line-clamp-2 break-keep" style={{ fontSize: node.d >= 80 ? 13 : 11.5, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
@@ -528,7 +430,7 @@ export function PyramidCard({
               </React.Fragment>
             );
           })}
-        </motion.div>
+        </div>
 
         {!layout.showTitles && (
           <RankTitleList
@@ -536,7 +438,6 @@ export function PyramidCard({
             count={layout.listCount}
             rows={layout.listRows}
             locale={meta.locale}
-            style={playing ? { opacity: started ? 1 : 0, transition: "opacity 0.5s ease-out", transitionDelay: `${timing.total - timing.zoomOut}s` } : undefined}
           />
         )}
       </div>

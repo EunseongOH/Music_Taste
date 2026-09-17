@@ -17,6 +17,7 @@ import { ConfirmSheet, UnderlineTabs } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
+import PyramidStage from "@/components/result/PyramidStage";
 import { normalizeRanking } from "@/utils/ranking";
 
 const translations = {
@@ -723,22 +724,12 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     };
   })();
 
-  /** 인트로 재생 중: 탭·하단 버튼을 숨기고 피라미드 카드만 보여준다. */
+  /** 인트로 재생 중: 화면 전체를 피라미드 연출이 덮고, 탭·하단 버튼은 숨긴다. */
   const showIntro = !introDone && !reduceMotion && winners.length > 1;
 
   /** 지금 템플릿의 카드들. 화면용(winners)과 저장용(exportWinners)이 같은 함수를 쓴다. */
-  const renderCards = (tracks: Track[], onScreen = false): React.ReactNode[] => {
-    if (template === "pyramid") {
-      return [
-        <PyramidCard
-          key="pyramid"
-          tracks={tracks}
-          meta={cardMeta}
-          intro={onScreen && showIntro}
-          onIntroEnd={() => setIntroDone(true)}
-        />,
-      ];
-    }
+  const renderCards = (tracks: Track[]): React.ReactNode[] => {
+    if (template === "pyramid") return [<PyramidCard key="pyramid" tracks={tracks} meta={cardMeta} />];
     if (template === "list") {
       const pages = listPages(tracks.length);
       return pages.map((pg, i) => <ListCard key={i} tracks={tracks} meta={cardMeta} page={pg} index={i} count={pages.length} />);
@@ -798,13 +789,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
       {/* 결과 카드 — 화면에 보이는 카드가 그대로 저장된다 */}
       <div className="flex-1 w-full max-w-md mx-auto px-4 pt-2 pb-32">
-        {showIntro ? (
-          <div className="flex justify-end pt-2">
-            <button onClick={() => setIntroDone(true)} className="h-9 px-4 rounded-full bg-navy/5 text-navy type-sub cursor-pointer">
-              {t.skipIntro}
-            </button>
-          </div>
-        ) : (
+        {!showIntro && (
         <UnderlineTabs
           tabs={[
             { id: "pyramid", label: t.templatePyramid },
@@ -843,7 +828,13 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         )}
 
         <div className="mt-5 flex flex-col gap-5">
-          {winners.length > 0 && renderCards(winners, true).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)}
+          {winners.length > 0 &&
+            (template === "pyramid" ? (
+              // 피라미드형 화면은 예전 연출 그대로(인트로 → 화면 흐름 안의 피라미드). 저장은 PyramidCard.
+              <PyramidStage tracks={winners} playing={showIntro} onDone={() => setIntroDone(true)} skipLabel={t.skipIntro} />
+            ) : (
+              renderCards(winners).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)
+            ))}
         </div>
       </div>
 

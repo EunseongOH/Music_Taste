@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
-import { ListCard, RecordCard, MosaicCard, PosterCard, PyramidCard, ScaledCard, cardHeading, pyramidIntroTiming, type CardMeta } from "@/components/TasteTemplates";
+import { ListCard, RecordCard, MosaicCard, PosterCard, PyramidCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
+import PyramidStage from "@/components/result/PyramidStage";
 import { listPages, recordPages, mosaicLayout, pyramidLayout, SHAPES, type Shape } from "@/components/result/exportLayout";
 import WinnerReveal from "@/components/result/WinnerReveal";
 import fixture from "../../../../toss/baseline/fixture.json";
@@ -207,12 +208,13 @@ export default function ResultLab() {
 
       <Row
         title="피라미드형"
-        note={`줄 ${new Set(pl.nodes.map((x) => x.row)).size} · 1위 ${pl.nodes[0]?.d ?? 0}px · 가장 작은 원 ${Math.min(...pl.nodes.map((x) => x.d))}px · ${pl.showTitles ? "제목" : `목록 ${pl.listCount}곡`} · 인트로 ${pyramidIntroTiming(tracks.length).total.toFixed(1)}초`}
+        note={`줄 ${new Set(pl.nodes.map((x) => x.row)).size} · 1위 ${pl.nodes[0]?.d ?? 0}px · 가장 작은 원 ${Math.min(...pl.nodes.map((x) => x.d))}px · ${pl.showTitles ? "제목" : `목록 ${pl.listCount}곡`} · 인트로 ${(1 + Math.max(12, tracks.length * 1.2) + 1.5 + 1.2).toFixed(1)}초`}
       >
         <div className="shrink-0 flex flex-col gap-2">
-          <Frame caption="인트로(결과 화면 첫 진입)">
-            <PyramidCard key={`intro-${introKey}-${tracks.length}-${source}`} tracks={tracks} meta={meta} intro />
-          </Frame>
+          {/* 인트로는 화면 전체(fixed)를 덮는다 — transform 을 준 틀 안에 가둬 휴대폰 크기로 본다. */}
+          <div className="w-[390px] h-[760px] rounded-[28px] overflow-hidden shadow-[0_0_0_6px_#1B1F2E] relative bg-[#F5F2ED]" style={{ transform: "translateZ(0)" }}>
+            <PyramidStage key={`intro-${introKey}-${tracks.length}-${source}`} tracks={tracks} playing onDone={() => {}} skipLabel="건너뛰기" />
+          </div>
           <button onClick={() => setIntroKey((k) => k + 1)} className="self-start h-9 px-4 rounded-full bg-navy/5 text-navy type-sub cursor-pointer">
             인트로 다시 보기
           </button>

@@ -396,11 +396,6 @@ export interface PyramidLayout {
   nodes: PyramidNode[];
   /** 꼴찌에서 1위까지 이어지는 SVG path(아래에서 위로 그린다) */
   path: string;
-  /** 경로 시작부터 각 순위 노드에 닿을 때까지의 거리(순위 순서) */
-  reachAt: number[];
-  /** 카메라가 따라갈 경로 위 점들(꼴찌 → 1위). 구간마다 1/3·2/3·끝 지점 */
-  trail: { x: number; y: number; at: number }[];
-  pathLength: number;
   showTitles: boolean;
   /** 제목을 못 넣는 크기면 아래에 붙일 번호 목록 */
   listCount: number;
@@ -419,27 +414,13 @@ export function pyrLabelH(d: number) {
   return (d >= 80 ? 2 * 17 : 2 * 15) + PYR_LABEL_GAP;
 }
 
-function cubicLength(p0: Pt, p1: Pt, p2: Pt, p3: Pt): number {
-  let len = 0;
-  let prev = p0;
-  for (let s = 1; s <= 16; s++) {
-    const t = s / 16;
-    const mt = 1 - t;
-    const x = mt ** 3 * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t ** 3 * p3[0];
-    const y = mt ** 3 * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t ** 3 * p3[1];
-    len += Math.hypot(x - prev[0], y - prev[1]);
-    prev = [x, y];
-  }
-  return len;
-}
-
 /**
  * 피라미드 배치. 줄마다 원 크기를 폭에 맞추고(윗줄일수록 크게), 전체 높이가 maxH 안에
  * 들어갈 때까지 배율을 줄인다. 원이 작아 제목을 못 달면 아래 번호 목록 자리를 남긴다.
  */
 export function pyramidLayout(n: number, width = CARD_INNER_W, maxH = CARD_BODY_H): PyramidLayout {
   const sizes = pyramidRowSizes(n);
-  if (n <= 0) return { width, height: 0, nodes: [], path: "", reachAt: [], trail: [], pathLength: 1, showTitles: true, listCount: 0, listRows: 0, total: 0 };
+  if (n <= 0) return { width, height: 0, nodes: [], path: "", showTitles: true, listCount: 0, listRows: 0, total: 0 };
 
   type Pick = { ds: number[]; rowGap: number; showTitles: boolean; rowsH: number; listRows: number; listCount: number };
   let best: Pick | null = null;
@@ -498,14 +479,10 @@ export function pyramidLayout(n: number, width = CARD_INNER_W, maxH = CARD_BODY_
   });
 
   // 꼴찌 → 1위 경로
-  const reachAt = new Array(n).fill(0);
-  const trail: { x: number; y: number; at: number }[] = [{ x: nodes[n - 1].x, y: nodes[n - 1].y, at: 0 }];
   let dPath = `M${nodes[n - 1].x.toFixed(1)} ${nodes[n - 1].y.toFixed(1)}`;
-  let acc = 0;
   for (let i = n - 1; i > 0; i--) {
     const a = nodes[i];
     const b = nodes[i - 1];
-    const p0: Pt = [a.x, a.y];
     const p3: Pt = [b.x, b.y];
     let p1: Pt;
     let p2: Pt;
@@ -521,20 +498,9 @@ export function pyramidLayout(n: number, width = CARD_INNER_W, maxH = CARD_BODY_
       p2 = [b.x + side * out, b.y + dy * 0.45];
     }
     dPath += ` C${p1[0].toFixed(1)} ${p1[1].toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)} ${p3[0].toFixed(1)} ${p3[1].toFixed(1)}`;
-    const segLen = a.row === b.row ? Math.hypot(b.x - a.x, b.y - a.y) : cubicLength(p0, p1, p2, p3);
-    for (const t of [1 / 3, 2 / 3, 1]) {
-      const mt = 1 - t;
-      trail.push({
-        x: mt ** 3 * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t ** 3 * p3[0],
-        y: mt ** 3 * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t ** 3 * p3[1],
-        at: acc + segLen * t,
-      });
-    }
-    acc += segLen;
-    reachAt[i - 1] = acc;
   }
 
-  return { width, height: rowsH, nodes, path: dPath, reachAt, trail, pathLength: acc || 1, showTitles, listCount, listRows, total: n };
+  return { width, height: rowsH, nodes, path: dPath, showTitles, listCount, listRows, total: n };
 }
 
 export function pyramidBodyHeight(l: PyramidLayout): number {
