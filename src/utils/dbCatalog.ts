@@ -107,14 +107,15 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         for (const r of m ?? []) if (!byAlbum.has(r.spotify_album_id)) byAlbum.set(r.spotify_album_id, { release: null, discogs: Number(r.release_id) });
       }
     }
-    if (!byAlbum.size) return [];
-
     const ids = [...byAlbum.keys()];
-    const skip = await unverifiedAlbumIds(supabase, ids);
+    const skip = ids.length ? await unverifiedAlbumIds(supabase, ids) : new Set<string>();
 
     // 앨범 메타데이터: MusicBrainz 발매그룹 (제목·발매일·종류)
-    const { data: linkRows } = await supabase.from("mb_album_release").select("spotify_album_id, release_group_mbid").in("spotify_album_id", ids.slice(0, 1000));
-    const rgOf = new Map((linkRows ?? []).map((r) => [r.spotify_album_id, r.release_group_mbid]));
+    const rgOf = new Map<string, string>();
+    if (ids.length) {
+      const { data: linkRows } = await supabase.from("mb_album_release").select("spotify_album_id, release_group_mbid").in("spotify_album_id", ids.slice(0, 1000));
+      for (const r of linkRows ?? []) if (r.release_group_mbid) rgOf.set(r.spotify_album_id, r.release_group_mbid);
+    }
     const rgIds = [...new Set([...rgOf.values()].filter(Boolean))] as string[];
     const rgInfo = new Map<string, any>();
     for (let i = 0; i < rgIds.length; i += 200) {
@@ -144,7 +145,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
 
     // 재킷 2순위용: 이 앨범에 연결된 Deezer 앨범 (Cover Art Archive 에 재킷이 없을 때 쓴다)
     const dzCoverOf = new Map<string, number>();
-    for (let i = 0; i < ids.length; i += 200) {
+    for (let i = 0; ids.length && i < ids.length; i += 200) {
       const { data } = await supabase.from("deezer_album_match")
         .select("spotify_album_id, deezer_album_id").in("spotify_album_id", ids.slice(i, i + 200));
       for (const r of data ?? []) dzCoverOf.set(r.spotify_album_id, Number(r.deezer_album_id));
@@ -180,7 +181,53 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         source: "db",
       });
     }
-    // 3) Deezer: Spotify 앨범 ID 가 없는 앨범도 낸다 (앨범 ID 는 "deezer:<번호>")
+    // 3) MusicBrainz 단독: Spotify 앨범 ID 가 없는 발매그룹도 낸다 (앨범 ID 는 "mb:<발매그룹>")
+    //    같은 아티스트의 같은 발매판에서 온 트랙리스트라 출처 대조가 필요 없다. 재킷도 발매그룹 ID 로 정해진다.
+    const servedRg = new Set([...rgOf.values()]);
+    const { data: allRg } = await supabase.from("mb_release_group")
+      .select("mbid, title, primary_type, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
+    const restRg = (allRg ?? []).filter((g) => !servedRg.has(g.mbid));
+    if (restRg.length) {
+      const rgRel = new Map<string, string>();
+      for (let i = 0; i < restRg.length; i += 200) {
+        const { data } = await supabase.from("mb_rg_release").select("release_group_mbid, release_mbid")
+          .in("release_group_mbid", restRg.slice(i, i + 200).map((g) => g.mbid)).not("tracks_filled_at", "is", null);
+        for (const r of data ?? []) rgRel.set(r.release_group_mbid, r.release_mbid);
+      }
+      const relIds2 = [...new Set(rgRel.values())];
+      const titles2 = new Map<string, Set<string>>();
+      for (let i = 0; i < relIds2.length; i += 50) {
+        const { data } = await supabase.from("mb_release_track").select("release_mbid, title").in("release_mbid", relIds2.slice(i, i + 50)).limit(10000);
+        for (const t of data ?? []) {
+          const set = titles2.get(t.release_mbid) ?? new Set<string>();
+          set.add(normTrack(t.title));
+          titles2.set(t.release_mbid, set);
+        }
+      }
+      for (const g of restRg) {
+        const rel = rgRel.get(g.mbid);
+        if (!rel) continue;
+        const total = titles2.get(rel)?.size ?? 0;
+        if (!total) continue;
+        const release_date = String(g.first_release_date ?? "").slice(0, 10) || "";
+        const key = `${normAlbum(g.title)}|${release_date.slice(0, 4)}|${total}`;
+        const looseKey = `${normAlbum(g.title)}|${release_date.slice(0, 4)}`;
+        if (seen.has(key) || seenLoose.has(looseKey)) continue;
+        seen.add(key); seenLoose.add(looseKey);
+        const type = String(g.primary_type ?? "").toLowerCase();
+        out.push({
+          id: `mb:${g.mbid}`,
+          name: g.title,
+          album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
+          release_date,
+          total_tracks: total,
+          images: [{ url: caaCover(g.mbid) }],
+          source: "db",
+        });
+      }
+    }
+
+    // 4) Deezer: Spotify 앨범 ID 가 없는 앨범도 낸다 (앨범 ID 는 "deezer:<번호>")
     const { data: dz } = await supabase.from("deezer_artist").select("deezer_artist_id").eq("mbid", map.mbid).eq("matched_by", "name+album");
     for (const a of dz ?? []) {
       const { data: dzAlbums } = await supabase.from("deezer_album")
@@ -229,14 +276,41 @@ function dedupeTracks(map: Record<string, DbTrack[]>) {
   }
 }
 
-/** 앨범 ID -> DB 트랙리스트. Spotify 앨범 ID 와 "deezer:<번호>" 를 모두 받는다. 없는 앨범은 결과에 없다. */
+/** 앨범 ID -> DB 트랙리스트. Spotify 앨범 ID, "mb:<발매그룹>", "deezer:<번호>" 를 모두 받는다. */
 export const getDbTracksByAlbum = async (albumIds: string[]): Promise<Record<string, DbTrack[]>> => {
   const out: Record<string, DbTrack[]> = {};
   const all = [...new Set((albumIds ?? []).filter(Boolean))];
-  const ids = all.filter((id) => !id.startsWith("deezer:"));
+  const ids = all.filter((id) => !id.includes(":"));
   const dzIds = all.filter((id) => id.startsWith("deezer:"));
+  const mbIds = all.filter((id) => id.startsWith("mb:"));
   try {
     const supabase = createAdminClient();
+
+    // MusicBrainz 단독 앨범 (발매그룹 -> 대표 발매판 -> 트랙)
+    if (mbIds.length) {
+      const relOf = new Map<string, string>();
+      for (let i = 0; i < mbIds.length; i += 50) {
+        const { data } = await supabase.from("mb_rg_release").select("release_group_mbid, release_mbid")
+          .in("release_group_mbid", mbIds.slice(i, i + 50).map((id) => id.slice(3))).not("tracks_filled_at", "is", null);
+        for (const r of data ?? []) relOf.set(r.release_group_mbid, r.release_mbid);
+      }
+      const rels = [...new Set(relOf.values())];
+      const byRelease = new Map<string, DbTrack[]>();
+      for (let i = 0; i < rels.length; i += 20) {
+        const { data } = await supabase.from("mb_release_track")
+          .select("release_mbid, disc, position, recording_mbid, title, length_ms")
+          .in("release_mbid", rels.slice(i, i + 20)).order("release_mbid").order("disc").order("position").limit(2000);
+        for (const t of data ?? []) {
+          const list = byRelease.get(t.release_mbid) ?? [];
+          list.push({ id: t.recording_mbid, name: t.title, duration_ms: t.length_ms ?? 0, disc_number: t.disc, track_number: t.position, preview_url: null, source: "db" });
+          byRelease.set(t.release_mbid, list);
+        }
+      }
+      for (const [rg, rel] of relOf) {
+        const list = byRelease.get(rel);
+        if (list?.length) out[`mb:${rg}`] = list;
+      }
+    }
 
     // Deezer 앨범 (우리 자체 ID)
     if (dzIds.length) {
@@ -261,10 +335,7 @@ export const getDbTracksByAlbum = async (albumIds: string[]): Promise<Record<str
         }
       }
     }
-    if (!ids.length) {
-      dedupeTracks(out);
-      return out;
-    }
+    if (!ids.length) { dedupeTracks(out); return out; }
     const skip = await unverifiedAlbumIds(supabase, ids);
     const usable = ids.filter((id) => !skip.has(id));
     if (!usable.length) { dedupeTracks(out); return out; }
