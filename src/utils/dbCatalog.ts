@@ -4,6 +4,8 @@
 // 출처와 라이선스
 //   - MusicBrainz core (CC0): 아티스트·발매그룹·발매판·트랙 (mb_* 테이블)
 //   - Discogs 월간 덤프 (CC0): MusicBrainz 에 없는 앨범의 트랙리스트 (discogs_* 테이블)
+//   - Deezer (deezer_* 테이블): Spotify 앨범 ID 가 없는 앨범도 낼 수 있다. 앨범 ID 는 "deezer:<번호>" 를 쓴다.
+//     Deezer 약관은 비상업 이용을 전제한다 — 수익화 시 deezer_* 만 지우면 서비스에서 빠진다
 //   - Spotify: 앨범·트랙 ID 와 커버 URL 만. 서술 정보는 저장하지 않는다 (약관 IV.3.1)
 //
 // 정확도 규칙 (부정확한 트랙리스트를 내보내지 않는다)
@@ -45,6 +47,15 @@ const normAlbum = (s: string) =>
 
 /** 곡 제목용: 문장부호·공백만 정리한다 (버전 표기는 남긴다) */
 const normTrack = (s: string) => (s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+/**
+ * 앨범 재킷 URL. 저장하지 않고 ID 에서 계산한다.
+ *   1순위 Cover Art Archive (CC0). 없는 앨범이 3분의 1쯤 되고, 그때는 404 가 온다.
+ *   2순위 Deezer 커버 (앨범 ID 만 있으면 URL 이 정해진다. 이미지를 우리 쪽에 저장하지 않는다)
+ * 화면(SafeImage)이 1순위가 실패하면 2순위로, 그것도 없으면 대체 이미지로 내려간다.
+ */
+const caaCover = (releaseGroupMbid: string) => `https://coverartarchive.org/release-group/${releaseGroupMbid}/front-500`;
+const deezerCover = (deezerAlbumId: number | string) => `https://api.deezer.com/album/${deezerAlbumId}/image?size=big`;
 
 /** 검증되지 않은 제목 대조 연결은 제외한다. */
 async function unverifiedAlbumIds(supabase: ReturnType<typeof createAdminClient>, ids: string[]) {
@@ -131,8 +142,17 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     }
     const trackCount = new Map<string, number>([...titlesOf].map(([k, v]) => [k, v.size]));
 
+    // 재킷 2순위용: 이 앨범에 연결된 Deezer 앨범 (Cover Art Archive 에 재킷이 없을 때 쓴다)
+    const dzCoverOf = new Map<string, number>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await supabase.from("deezer_album_match")
+        .select("spotify_album_id, deezer_album_id").in("spotify_album_id", ids.slice(i, i + 200));
+      for (const r of data ?? []) dzCoverOf.set(r.spotify_album_id, Number(r.deezer_album_id));
+    }
+
     const out: DbAlbum[] = [];
-    const seen = new Set<string>();
+    const seen = new Set<string>();          // 제목+연도+곡수
+    const seenLoose = new Set<string>();     // 제목+연도 (곡 수가 다른 같은 앨범도 하나만 낸다)
     for (const [albumId, src] of byAlbum) {
       if (skip.has(albumId)) continue;
       const rg = rgOf.get(albumId) ? rgInfo.get(rgOf.get(albumId)!) : null;
@@ -143,8 +163,9 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       const total = src.release ? (trackCount.get(src.release) ?? 0) : (d?.track_count ?? 0);
       if (!total) continue;
       const key = `${normAlbum(name)}|${release_date.slice(0, 4)}|${total}`;
-      if (seen.has(key)) continue;   // 같은 앨범의 다른 판 중복 제거
-      seen.add(key);
+      const looseKey = `${normAlbum(name)}|${release_date.slice(0, 4)}`;
+      if (seen.has(key) || seenLoose.has(looseKey)) continue;   // 같은 앨범의 다른 판 중복 제거
+      seen.add(key); seenLoose.add(looseKey);
       const type = (rg?.primary_type ?? "").toLowerCase();
       out.push({
         id: albumId,
@@ -152,11 +173,38 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
         release_date,
         total_tracks: total,
-        // 커버는 Cover Art Archive (mbid 로 URL 이 정해진다). 없으면 화면에서 대체 이미지가 뜬다
-        images: rgOf.get(albumId) ? [{ url: `https://coverartarchive.org/release-group/${rgOf.get(albumId)}/front-500` }] : [],
+        images: [
+          ...(rgOf.get(albumId) ? [{ url: caaCover(rgOf.get(albumId)!) }] : []),
+          ...(dzCoverOf.has(albumId) ? [{ url: deezerCover(dzCoverOf.get(albumId)!) }] : []),
+        ],
         source: "db",
       });
     }
+    // 3) Deezer: Spotify 앨범 ID 가 없는 앨범도 낸다 (앨범 ID 는 "deezer:<번호>")
+    const { data: dz } = await supabase.from("deezer_artist").select("deezer_artist_id").eq("mbid", map.mbid).eq("matched_by", "name+album");
+    for (const a of dz ?? []) {
+      const { data: dzAlbums } = await supabase.from("deezer_album")
+        .select("deezer_album_id, title, release_date, record_type, nb_tracks")
+        .eq("deezer_artist_id", a.deezer_artist_id).limit(500);
+      for (const alb of dzAlbums ?? []) {
+        if (!alb.nb_tracks) continue;
+        const key = `${normAlbum(alb.title)}|${String(alb.release_date ?? "").slice(0, 4)}|${alb.nb_tracks}`;
+        const looseKey = `${normAlbum(alb.title)}|${String(alb.release_date ?? "").slice(0, 4)}`;
+        if (seen.has(key) || seenLoose.has(looseKey)) continue;   // 위에서 이미 낸 앨범이면 건너뛴다
+        seen.add(key); seenLoose.add(looseKey);
+        const type = String(alb.record_type ?? "").toLowerCase();
+        out.push({
+          id: `deezer:${alb.deezer_album_id}`,
+          name: alb.title,
+          album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
+          release_date: String(alb.release_date ?? "").slice(0, 10),
+          total_tracks: alb.nb_tracks,
+          images: [{ url: deezerCover(alb.deezer_album_id) }],
+          source: "db",
+        });
+      }
+    }
+
     out.sort((a, b) => String(b.release_date).localeCompare(String(a.release_date)));
     return out;
   } catch (e) {
@@ -165,16 +213,61 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
   }
 };
 
-/** Spotify 앨범 ID -> DB 트랙리스트. 없는 앨범은 결과에 없다. */
+/**
+ * 한 앨범 안 중복 곡 제거. 곡은 "(English Ver.)" 같은 표기가 붙으면 다른 곡이므로
+ * 에디션 표기를 떼지 않고, 완전히 같은 제목만 걸러낸다.
+ */
+function dedupeTracks(map: Record<string, DbTrack[]>) {
+  for (const [album, list] of Object.entries(map)) {
+    const seen = new Set<string>();
+    map[album] = list.filter((t) => {
+      const k = normTrack(t.name);
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+}
+
+/** 앨범 ID -> DB 트랙리스트. Spotify 앨범 ID 와 "deezer:<번호>" 를 모두 받는다. 없는 앨범은 결과에 없다. */
 export const getDbTracksByAlbum = async (albumIds: string[]): Promise<Record<string, DbTrack[]>> => {
   const out: Record<string, DbTrack[]> = {};
-  const ids = [...new Set((albumIds ?? []).filter(Boolean))];
-  if (!ids.length) return out;
+  const all = [...new Set((albumIds ?? []).filter(Boolean))];
+  const ids = all.filter((id) => !id.startsWith("deezer:"));
+  const dzIds = all.filter((id) => id.startsWith("deezer:"));
   try {
     const supabase = createAdminClient();
+
+    // Deezer 앨범 (우리 자체 ID)
+    if (dzIds.length) {
+      const nums = dzIds.map((id) => Number(id.slice(7))).filter((n) => Number.isFinite(n));
+      for (let i = 0; i < nums.length; i += 20) {
+        const { data } = await supabase.from("deezer_track")
+          .select("deezer_album_id, idx, disk, position, title, duration_s")
+          .in("deezer_album_id", nums.slice(i, i + 20)).order("deezer_album_id").order("idx").limit(2000);
+        for (const t of data ?? []) {
+          const key = `deezer:${t.deezer_album_id}`;
+          const list = out[key] ?? [];
+          list.push({
+            id: `deezer:${t.deezer_album_id}:${t.idx}`,
+            name: t.title,
+            duration_ms: (t.duration_s ?? 0) * 1000,
+            disc_number: t.disk ?? 1,
+            track_number: t.position ?? t.idx + 1,
+            preview_url: null,
+            source: "db",
+          });
+          out[key] = list;
+        }
+      }
+    }
+    if (!ids.length) {
+      dedupeTracks(out);
+      return out;
+    }
     const skip = await unverifiedAlbumIds(supabase, ids);
     const usable = ids.filter((id) => !skip.has(id));
-    if (!usable.length) return out;
+    if (!usable.length) { dedupeTracks(out); return out; }
 
     // 1) MusicBrainz
     const releaseOf = new Map<string, string>();
@@ -241,17 +334,7 @@ export const getDbTracksByAlbum = async (albumIds: string[]): Promise<Record<str
       }
     }
 
-    // 한 앨범 안 중복 곡 제거. 곡은 "(English Ver.)" 같은 표기가 붙으면 다른 곡이므로
-    // 에디션 표기를 떼지 않고, 완전히 같은 제목만 걸러낸다.
-    for (const [album, list] of Object.entries(out)) {
-      const seen = new Set<string>();
-      out[album] = list.filter((t) => {
-        const k = normTrack(t.name);
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-    }
+    dedupeTracks(out);
   } catch (e) {
     console.warn("[dbCatalog] getDbTracksByAlbum failed:", e);
   }

@@ -770,6 +770,8 @@ export const getAlbumTracks = async (albumId: string) => {
     tracksCache.set(cacheKey, { data: fromDb, timestamp: Date.now() });
     return fromDb;
   }
+  // "deezer:" 로 시작하는 앨범은 우리 DB 에만 있는 앨범이다. Spotify 에 물어볼 수 없다.
+  if (albumId.startsWith("deezer:")) return [];
 
   // 2. DB Cache check
   try {

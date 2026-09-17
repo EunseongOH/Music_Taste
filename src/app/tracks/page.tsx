@@ -15,6 +15,7 @@ import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/u
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { coverPlaceholder } from "@/utils/coverPlaceholder";
 
 const translations = {
   ko: {
@@ -138,6 +139,8 @@ interface Album {
   type: "Album" | "Single" | "EP";
   year: string;
   image: string;
+  /** 재킷 2순위 (1순위가 404 일 때) */
+  image2?: string;
   tracks: Track[];
   totalTracks?: number;
 }
@@ -606,7 +609,8 @@ export default function TracksPage() {
           title: albumRaw.name,
           type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
           year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-          image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+          image: albumRaw.images?.[0]?.url || coverPlaceholder(albumRaw.id),
+          image2: albumRaw.images?.[1]?.url || "",
           tracks: [],
           totalTracks: albumRaw.total_tracks || 0
         }));
@@ -708,7 +712,8 @@ export default function TracksPage() {
             title: albumRaw.name,
             type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
             year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-            image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+            image: albumRaw.images?.[0]?.url || coverPlaceholder(albumRaw.id),
+            image2: albumRaw.images?.[1]?.url || "",
             tracks: [], 
             totalTracks: albumRaw.total_tracks || 0
           }));
@@ -722,7 +727,7 @@ export default function TracksPage() {
                 const youtubeId = getYouTubeVideoId(t.videoUrl || t.video_url || "");
                 const coverImage = youtubeId 
                   ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-                  : `https://picsum.photos/seed/${t.id}/300/300`;
+                  : coverPlaceholder(t.id);
                 
                 const trackYear = t.releaseDate 
                   ? t.releaseDate.substring(0, 4) 
@@ -904,7 +909,8 @@ export default function TracksPage() {
         title: albumRaw.name,
         type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
         year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-        image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+        image: albumRaw.images?.[0]?.url || coverPlaceholder(albumRaw.id),
+        image2: albumRaw.images?.[1]?.url || "",
         tracks: [],
         totalTracks: albumRaw.total_tracks || 0
       }));
@@ -1115,7 +1121,7 @@ export default function TracksPage() {
     const youtubeId = getYouTubeVideoId(unreleasedForm.videoUrl);
     const coverImage = youtubeId 
       ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-      : `https://picsum.photos/seed/${newTrackId}/300/300`;
+      : coverPlaceholder(newTrackId);
     
     const trackYear = unreleasedForm.date 
       ? unreleasedForm.date.substring(0, 4) 
@@ -1569,7 +1575,7 @@ export default function TracksPage() {
                                                 <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
                                                 {/* LP Label (Inner circle) */}
                                                 <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                  <SafeImage src={album.image} alt={album.title} fill fallbackType="track" className="object-cover" />
+                                                  <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill fallbackType="track" className="object-cover" />
                                                 </div>
                                                 {/* Center hole */}
                                                 <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
@@ -1590,7 +1596,7 @@ export default function TracksPage() {
                                            className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
                                            style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
                                          >
-                                           <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                           <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
                                            {!isExpanded && (
                                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
                                            )}
@@ -1782,7 +1788,7 @@ export default function TracksPage() {
                                                      <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
                                                      {/* LP Label */}
                                                      <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                       <SafeImage src={album.image} alt={album.title} fill fallbackType="track" className="object-cover" />
+                                                       <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill fallbackType="track" className="object-cover" />
                                                      </div>
                                                      {/* Center hole */}
                                                      <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
@@ -1803,7 +1809,7 @@ export default function TracksPage() {
                                                 className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
                                                 style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
                                               >
-                                                <SafeImage src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
                                                 {!isExpanded && (
                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
                                                 )}
