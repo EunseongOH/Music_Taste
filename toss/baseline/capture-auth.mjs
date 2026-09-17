@@ -27,7 +27,6 @@ const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 const FIXED_TIME = new Date('2026-01-15T09:00:00+09:00');
 
 const TEMPLATES = [
-  { key: 'pyramid', tab: '피라미드형' },
   { key: 'list', tab: '리스트형' },
   { key: 'retro', tab: '레코드형' },
   { key: 'mosaic', tab: '모자이크형' },

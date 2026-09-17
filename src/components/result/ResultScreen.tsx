@@ -11,7 +11,7 @@ import LoginModal from "@/components/LoginModal";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
-import { ListCard, RecordCard, MosaicCard, PosterCard, PyramidCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
+import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
 import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/exportLayout";
 import { ConfirmSheet, UnderlineTabs } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
@@ -27,7 +27,6 @@ const translations = {
     savedMissingTitle: "취향표를 열 수 없어요",
     savedMissingDesc: "삭제됐거나 볼 수 없는 취향표예요.",
     savedMissingAction: "내 취향 스페이스로 가기",
-    templatePyramid: "피라미드형",
     skipIntro: "건너뛰기",
     templateList: "리스트형",
     templateRetro: "레코드형",
@@ -81,7 +80,6 @@ const translations = {
     savedMissingTitle: "Can't open this taste card",
     savedMissingDesc: "It was deleted or isn't available to you.",
     savedMissingAction: "Go to My Taste Space",
-    templatePyramid: "Pyramid",
     skipIntro: "Skip",
     templateList: "List",
     templateRetro: "Vinyl",
@@ -206,10 +204,10 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    */
   const autoSaveRef = useRef<Promise<void> | null>(null);
   /**
-   * 결과 템플릿. 월드컵 직후에는 피라미드 인트로를 재생하고, 끝나면 기본으로 레코드형을 보여준다.
-   * 불러온 취향표(saved)는 인트로 없이 바로 레코드형.
+   * 결과 템플릿. 기본은 레코드형. 월드컵 직후에는 그 전에 피라미드 인트로(PyramidStage)를 재생한다 —
+   * 피라미드는 인트로 모션으로만 쓰고 취향표 템플릿으로는 두지 않는다.
    */
-  const [template, setTemplate] = useState<"pyramid" | "list" | "retro" | "mosaic" | "poster">(isSavedView ? "retro" : "pyramid");
+  const [template, setTemplate] = useState<"list" | "retro" | "mosaic" | "poster">("retro");
   /** 인트로가 끝났는지. 불러온 취향표(saved)는 인트로 없이 바로 보여준다. */
   const [introDone, setIntroDone] = useState(isSavedView);
   const reduceMotion = useReducedMotion();
@@ -528,7 +526,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
   /** 지금 템플릿이 몇 장의 카드로 저장되는지. 오프스크린 카드 id 는 export-card-0.. */
   const exportCardCount =
-    template === "list" ? listPages(winners.length).length : template === "retro" ? recordPages(winners.length).length : 1; // 피라미드·모자이크·포스터는 1장
+    template === "list" ? listPages(winners.length).length : template === "retro" ? recordPages(winners.length).length : 1; // 모자이크·포스터는 1장
 
   const saveCards = async (count: number) => {
     setIsExporting(true);
@@ -732,7 +730,6 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
   /** 지금 템플릿의 카드들. 화면용(winners)과 저장용(exportWinners)이 같은 함수를 쓴다. */
   const renderCards = (tracks: Track[]): React.ReactNode[] => {
-    if (template === "pyramid") return [<PyramidCard key="pyramid" tracks={tracks} meta={cardMeta} />];
     if (template === "list") {
       const pages = listPages(tracks.length);
       return pages.map((pg, i) => <ListCard key={i} tracks={tracks} meta={cardMeta} page={pg} index={i} count={pages.length} />);
@@ -797,7 +794,6 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
           tabs={[
             { id: "retro", label: t.templateRetro },
             { id: "list", label: t.templateList },
-            { id: "pyramid", label: t.templatePyramid },
             { id: "mosaic", label: t.templateMosaic },
             { id: "poster", label: t.templatePoster },
           ]}
@@ -832,18 +828,9 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
         <div className="mt-5 flex flex-col gap-5">
           {winners.length > 0 &&
-            (template === "pyramid" ? (
-              // 피라미드형 화면은 예전 연출 그대로(인트로 → 화면 흐름 안의 피라미드). 저장은 PyramidCard.
-              <PyramidStage
-                tracks={winners}
-                playing={showIntro}
-                onDone={() => {
-                  // 인트로를 막 끝낸 경우에만 기본 탭(레코드형)으로. 탭에서 피라미드형을 다시 고르면 그대로 둔다.
-                  if (!introDone) setTemplate("retro");
-                  setIntroDone(true);
-                }}
-                skipLabel={t.skipIntro}
-              />
+            (showIntro ? (
+              // 월드컵 직후 인트로: 예전 피라미드 모션 그대로. 끝나면 기본 템플릿(레코드형) 카드로.
+              <PyramidStage tracks={winners} playing onDone={() => setIntroDone(true)} skipLabel={t.skipIntro} />
             ) : (
               renderCards(winners).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)
             ))}

@@ -3,12 +3,6 @@
   "trackCount": 20,
   "files": [
     {
-      "name": "카더가든_Music_Taste_pyramid.png",
-      "bytes": 850755,
-      "sha256": "d42eed111f8158cbee75d4de167c611ea3f4b2468f786fb1a9a30e0eda073186",
-      "from": "pyramid"
-    },
-    {
       "name": "카더가든_Music_Taste_list_Part1.png",
       "bytes": 407349,
       "sha256": "b5a88b8662460506266c1829ccfb1a8d410b6b835edb028694e34a2a03b6a8b2",

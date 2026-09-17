@@ -10,7 +10,6 @@ import {
   RECORD_GROUP_RATIO,
   RECORD_INFO_H,
   mosaicLayout,
-  pyramidLayout,
   shapeSvg,
   type ListPage,
   type RecordPage,
@@ -316,7 +315,7 @@ export function RecordCard({
   );
 }
 
-/** 2단 번호 목록. 모자이크·피라미드에서 커버만으로 곡을 알 수 없을 때 붙인다. */
+/** 2단 번호 목록. 모자이크형에서 커버만으로 곡을 알 수 없을 때 붙인다. */
 function RankTitleList({ tracks, count, rows, locale, className = "", style }: { tracks: CardTrack[]; count: number; rows: number; locale: "ko" | "en"; className?: string; style?: React.CSSProperties }) {
   const t = text[locale];
   return (
@@ -335,113 +334,6 @@ function RankTitleList({ tracks, count, rows, locale, className = "", style }: {
         </p>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 피라미드형 — 1위가 꼭대기, 순위가 뱀 모양 경로로 이어진다
-// ---------------------------------------------------------------------------
-
-/** 피라미드형 9:16 카드(저장 이미지). 결과 화면의 인트로·피라미드 보기는 PyramidStage(예전 연출). */
-export function PyramidCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMeta }) {
-  const n = tracks.length;
-  const layout = useMemo(() => pyramidLayout(n), [n]);
-  const minD = Math.min(...layout.nodes.map((x) => x.d));
-  const W = layout.width;
-  const H = layout.height;
-
-  return (
-    <CardFrame meta={meta}>
-      <div className="h-full flex flex-col justify-center overflow-hidden">
-        <div className="relative mx-auto shrink-0" style={{ width: W, height: H }}>
-          <svg className="absolute inset-0 overflow-visible" width={W} height={H} viewBox={`0 0 ${W} ${H}`} fill="none">
-            <path d={layout.path} stroke="rgba(26,42,108,0.12)" strokeWidth={2} strokeLinecap="round" />
-            <path d={layout.path} stroke="#E67E22" strokeWidth={minD >= 44 ? 2.5 : 2} strokeLinecap="round" />
-          </svg>
-
-          {layout.nodes.map((node) => {
-            const track = tracks[node.rank];
-            const rank = node.rank + 1;
-            const badge = Math.max(15, Math.min(22, Math.round(node.d * 0.22)));
-            return (
-              <React.Fragment key={`${track.id}-${node.rank}`}>
-                <div
-                  className="absolute rounded-full"
-                  style={{
-                    left: node.x - node.d / 2,
-                    top: node.y - node.d / 2,
-                    width: node.d,
-                    height: node.d,
-                    boxShadow:
-                      rank === 1
-                        ? "0 0 0 3px #F5F2ED, 0 0 0 5px #E67E22, 0 10px 22px -10px rgba(26,42,108,0.55)"
-                        : "0 0 0 2px #F5F2ED, 0 6px 14px -8px rgba(26,42,108,0.45)",
-                  }}
-                >
-                  <img src={track.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover rounded-full" />
-                  {node.d >= 36 && (
-                    // 레코드 가운데 구멍
-                    <span
-                      className="absolute inset-0 m-auto rounded-full bg-[#F5F2ED] border border-navy/15"
-                      style={{ width: Math.round(node.d * 0.11), height: Math.round(node.d * 0.11) }}
-                    />
-                  )}
-                  {/* 원이 작으면 배지가 커버를 덮는다 — 10위까지만 달고 나머지는 경로·목록으로 읽는다. */}
-                  {(node.d >= 32 || rank <= 10) && (
-                  <span
-                    className={`absolute rounded-full font-num tabular-nums font-bold flex items-center justify-center ${
-                      rank === 1 ? "bg-point text-white" : "bg-navy text-cream"
-                    }`}
-                    style={{
-                      left: node.d * 0.15 - badge / 2,
-                      top: node.d * 0.15 - badge / 2,
-                      minWidth: badge,
-                      height: badge,
-                      padding: "0 3px",
-                      fontSize: badge >= 20 ? 12 : 11,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {rank}
-                  </span>
-                  )}
-                </div>
-                {layout.showTitles && (
-                  <div
-                    className="absolute text-center"
-                    style={{ left: node.x - node.labelW / 2, top: node.y + node.d / 2 + 4, width: node.labelW }}
-                  >
-                    {meta.single ? (
-                      <p className="font-semibold line-clamp-2 break-keep" style={{ fontSize: node.d >= 80 ? 13 : 11.5, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
-                        {track.title}
-                      </p>
-                    ) : (
-                      <>
-                        <p className="font-semibold truncate" style={{ fontSize: node.d >= 80 ? 13 : 11.5, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
-                          {track.title}
-                        </p>
-                        <p className="truncate text-navy/70" style={{ fontSize: 11, lineHeight: node.d >= 80 ? "17px" : "15px" }}>
-                          {track.artistName}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
-
-        {!layout.showTitles && (
-          <RankTitleList
-            tracks={tracks}
-            count={layout.listCount}
-            rows={layout.listRows}
-            locale={meta.locale}
-          />
-        )}
-      </div>
-    </CardFrame>
   );
 }
 
