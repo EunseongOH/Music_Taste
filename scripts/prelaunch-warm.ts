@@ -3,7 +3,8 @@
 // 사용:
 //   npx tsx --env-file=.env.local scripts/prelaunch-warm.ts targets            대상 명단 만들기 (Spotify 0회)
 //   npx tsx --env-file=.env.local scripts/prelaunch-warm.ts plan               남은 작업량 계산 (Spotify 0회)
-//   npx tsx --env-file=.env.local scripts/prelaunch-warm.ts albums S 150 --go  앨범 목록 채우기 (등급, 호출 예산)
+//   npx tsx --env-file=.env.local scripts/prelaunch-warm.ts artists 10 --go     전곡 모드 선정 아티스트 정보 갱신
+//   npx tsx --env-file=.env.local scripts/prelaunch-warm.ts albums S 150 --go  앨범 목록 채우기 (등급 S|A, P=전곡 모드 선정, 호출 예산)
 //   npx tsx --env-file=.env.local scripts/prelaunch-warm.ts tracks S 300 --go  앨범 트랙 채우기
 //   --go 가 없으면 호출하지 않고 무엇을 할지만 출력한다.
 //
@@ -13,7 +14,8 @@
 //   - 429 를 받으면 기록하고 즉시 종료 (재시도 없음)
 //   - 호출 간격 1.5초 (30초 이동 창 기준 20회)
 //   - 운영과 같은 키로 저장: 앨범 목록 (artist_id, 'ko', offset=10 단위, limit=10), 트랙 (album_id, 'ko'), 만료 21일
-//     앨범 목록은 limit=50 으로 받아 10개씩 잘라 저장한다 (호출 1/5)
+//     2026-09-17 확인: 이 앱은 앨범 목록·트랙 모두 limit 최대 10 (50 은 400 Invalid limit, 그 호출도 쿼터에 잡히는 것으로 보임)
+//     앨범 목록 1페이지(10개) = 1회 = 운영 캐시 행 1개
 
 import { readFileSync, existsSync } from "node:fs";
 import { createAdminClient } from "../src/utils/supabase/admin";
@@ -110,6 +112,12 @@ async function liveTrackAlbums(albumIds: string[]) {
 }
 
 async function loadTargets(tier?: string) {
+  if (tier === "P") {
+    const { data, error } = await sb.from("explore_genre_picks").select("spotify_id, name, rank, genre").order("rank").order("genre");
+    if (error) throw new Error(error.message);
+    const seen = new Set<string>();
+    return (data ?? []).filter((r) => !seen.has(r.spotify_id) && seen.add(r.spotify_id)).map((r) => ({ spotify_id: r.spotify_id, name: r.name, tier: "P" }));
+  }
   let q = sb.from("prelaunch_targets").select("spotify_id, name, tier");
   if (tier) q = q.eq("tier", tier);
   const { data, error } = await q;
@@ -179,36 +187,69 @@ async function warmAlbums(tier: string, budget: number, go: boolean) {
   await preflight();
   let artists = 0;
   for (const a of todo) {
-    const items: any[] = [];
     let total = 0;
-    for (let offset = 0; ; offset += 50) {
+    let got = 0;
+    for (let offset = 0; ; offset += 10) {
       const j = await spotify(
-        `https://api.spotify.com/v1/artists/${a.spotify_id}/albums?include_groups=album,single,ep&limit=50&offset=${offset}&market=KR`,
+        `https://api.spotify.com/v1/artists/${a.spotify_id}/albums?include_groups=album,single,ep&limit=10&offset=${offset}&market=KR`,
         "/v1/artists/{id}/albums", budget,
       );
       if (!j) break;
       total = j.total ?? 0;
-      items.push(...(j.items ?? []));
-      if (items.length >= total || !(j.items ?? []).length) break;
+      const items = j.items ?? [];
+      if (!items.length) break;
+      // 페이지 하나 = 운영 캐시 행 하나. 예산이 중간에 끊겨도 받은 페이지는 운영이 바로 쓴다
+      const now = new Date().toISOString();
+      const { error } = await sb.from("spotify_cache_artist_albums").upsert(
+        { artist_id: a.spotify_id, locale: LOCALE, offset, limit: 10, items, total, cached_at: now, expires_at: expiresAt() },
+        { onConflict: "artist_id,locale,offset,limit" },
+      );
+      if (error) throw new Error(error.message);
+      got += items.length;
+      if (got >= total) break;
     }
-    if (!total || items.length < total) continue; // 불완전하면 저장하지 않는다 (운영이 빈/부분 캐시를 쓰지 않게)
-    const now = new Date().toISOString();
-    const rows = [];
-    for (let k = 0; k * 10 < total; k++) {
-      rows.push({ artist_id: a.spotify_id, locale: LOCALE, offset: k * 10, limit: 10, items: items.slice(k * 10, k * 10 + 10), total, cached_at: now, expires_at: expiresAt() });
+    if (total && got >= total) {
+      const now = new Date().toISOString();
+      await sb.from("prelaunch_targets").update({ spotify_albums: total, albums_warmed_at: now, checked_at: now }).eq("spotify_id", a.spotify_id);
+      artists++;
     }
-    const { error } = await sb.from("spotify_cache_artist_albums").upsert(rows, { onConflict: "artist_id,locale,offset,limit" });
-    if (error) throw new Error(error.message);
-    await sb.from("prelaunch_targets").update({ spotify_albums: total, albums_warmed_at: now, checked_at: now }).eq("spotify_id", a.spotify_id);
-    artists++;
   }
   console.log(`[albums ${tier}] 완료 아티스트 ${artists} · 호출 ${calls}`);
+}
+
+// DB 에 이미 연결된 Spotify 앨범 ID (아티스트 순서 유지, 아티스트 안에서는 최신 발매 먼저)
+async function dbAlbumIds(spotifyArtistIds: string[]): Promise<string[][]> {
+  const { data: maps } = await sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("spotify_id", spotifyArtistIds);
+  const mbidOf = new Map((maps ?? []).map((m) => [m.spotify_id, m.mbid]));
+  const out: string[][] = [];
+  for (const id of spotifyArtistIds) {
+    const mbid = mbidOf.get(id);
+    if (!mbid) { out.push([]); continue; }
+    const { data: rel } = await sb.from("mb_album_release_artist").select("spotify_album_id, release_mbid").eq("artist_mbid", mbid).limit(500);
+    if (!rel?.length) { out.push([]); continue; }
+    const { data: ar } = await sb.from("mb_album_release").select("spotify_album_id, release_group_mbid").in("spotify_album_id", rel.map((r) => r.spotify_album_id));
+    const rgs = [...new Set((ar ?? []).map((r) => r.release_group_mbid).filter(Boolean))];
+    const dateOf = new Map<string, string>();
+    for (let i = 0; i < rgs.length; i += 200) {
+      const { data: g } = await sb.from("mb_release_group").select("mbid, first_release_date").in("mbid", rgs.slice(i, i + 200));
+      for (const x of g ?? []) dateOf.set(x.mbid, x.first_release_date ?? "");
+    }
+    const sorted = (ar ?? []).sort((a, b) => (dateOf.get(b.release_group_mbid) ?? "").localeCompare(dateOf.get(a.release_group_mbid) ?? ""));
+    out.push(sorted.map((r) => r.spotify_album_id));
+  }
+  return out;
 }
 
 async function warmTracks(tier: string, budget: number, go: boolean) {
   const t = await loadTargets(tier);
   const done = await liveAlbumPages(t.map((x) => x.spotify_id));
-  const albumIds = [...new Set([...done.values()].flat())];
+  // 아티스트별: 앨범 목록 캐시(운영 순서 = 최신 먼저) + DB 매핑 앨범(최신 먼저), 아티스트당 최대 PER_ARTIST 개.
+  // 그다음 아티스트를 돌아가며 하나씩 뽑아 예산이 한 아티스트에 몰리지 않게 한다.
+  const PER_ARTIST = 30;
+  const dbLists = await dbAlbumIds(t.map((x) => x.spotify_id));
+  const perArtist = t.map((x, i) => [...new Set([...(done.get(x.spotify_id) ?? []), ...(dbLists[i] ?? [])])].slice(0, PER_ARTIST));
+  const albumIds: string[] = [];
+  for (let k = 0; k < PER_ARTIST; k++) for (const list of perArtist) if (list[k]) albumIds.push(list[k]);
   const live = await liveTrackAlbums(albumIds);
   const todo = albumIds.filter((id) => !live.has(id));
   console.log(`[tracks ${tier}] 앨범 ${albumIds.length} · 캐시 없음 ${todo.length} · 예산 ${budget}회${go ? "" : " · 미실행(--go 없음)"}`);
@@ -218,8 +259,8 @@ async function warmTracks(tier: string, budget: number, go: boolean) {
   for (const id of todo) {
     const items: any[] = [];
     let total = 0;
-    for (let offset = 0; ; offset += 50) {
-      const j = await spotify(`https://api.spotify.com/v1/albums/${id}/tracks?limit=50&offset=${offset}&market=KR`, "/v1/albums/{id}/tracks", budget);
+    for (let offset = 0; ; offset += 10) {
+      const j = await spotify(`https://api.spotify.com/v1/albums/${id}/tracks?limit=10&offset=${offset}&market=KR`, "/v1/albums/{id}/tracks", budget);
       if (!j) break;
       total = j.total ?? 0;
       items.push(...(j.items ?? []));
@@ -236,12 +277,56 @@ async function warmTracks(tier: string, budget: number, go: boolean) {
   console.log(`[tracks ${tier}] 완료 앨범 ${albums} · 호출 ${calls}`);
 }
 
+async function warmArtists(budget: number, go: boolean) {
+  const { data: picks, error } = await sb.from("explore_genre_picks").select("spotify_id, genre").order("rank");
+  if (error) throw new Error(error.message);
+  const tags = new Map<string, string[]>();
+  for (const p of picks ?? []) tags.set(p.spotify_id, [...(tags.get(p.spotify_id) ?? []), p.genre].sort());
+  const ids = [...tags.keys()];
+  const { data: rows } = await sb.from("spotify_cache_artists").select("id, images, expires_at").eq("locale", LOCALE).in("id", ids);
+  const fresh = new Set((rows ?? []).filter((r) => r.expires_at > new Date().toISOString() && Array.isArray(r.images) && r.images.length).map((r) => r.id));
+  const todo = ids.filter((id) => !fresh.has(id));
+  console.log(`[artists] 선정 ${ids.length} · 갱신 필요 ${todo.length} · 예산 ${budget}회${go ? "" : " · 미실행(--go 없음)"}`);
+  if (!go || !todo.length) return;
+  await preflight();
+  const save = async (items: any[]) => {
+    const up = items.filter(Boolean).map((a) => ({
+      id: a.id, locale: LOCALE, name: a.name, images: a.images ?? [], genres: tags.get(a.id) ?? [],
+      popularity: a.popularity ?? 0, cached_at: new Date().toISOString(), expires_at: expiresAt(),
+    }));
+    if (!up.length) return 0;
+    const { error: e } = await sb.from("spotify_cache_artists").upsert(up, { onConflict: "id,locale" });
+    if (e) throw new Error(e.message);
+    return up.length;
+  };
+  let saved = 0;
+  // 여러 명 조회를 먼저 한 번 시험한다 (2026-02 개편에서 신규 앱은 막혔고 기존 앱은 유예 상태)
+  // 2026-09-17 확인: 여러 명 조회(/v1/artists?ids=)는 이 앱에서 막혀 있다. 시험 호출을 반복하지 않는다
+  const first: any = null;
+  if (first?.artists) {
+    saved += await save(first.artists);
+    for (let i = 50; i < todo.length; i += 50) {
+      const j = await spotify(`https://api.spotify.com/v1/artists?ids=${todo.slice(i, i + 50).join(",")}&market=KR`, "/v1/artists", budget);
+      if (!j?.artists) break;
+      saved += await save(j.artists);
+    }
+  } else {
+    console.log("[artists] 여러 명 조회 불가 — 한 명씩 조회");
+    for (const id of todo) {
+      const a = await spotify(`https://api.spotify.com/v1/artists/${id}`, "/v1/artists/{id}", budget);
+      saved += await save([a]);
+    }
+  }
+  console.log(`[artists] 저장 ${saved} · 호출 ${calls}`);
+}
+
 async function main() {
   const [cmd, tier = "S", budgetArg = "0"] = process.argv.slice(2);
   const go = process.argv.includes("--go");
   const budget = Number(budgetArg);
   try {
     if (cmd === "targets") await targets();
+    else if (cmd === "artists") await warmArtists(Number(process.argv[3] ?? "0"), go);
     else if (cmd === "plan") await plan();
     else if (cmd === "albums") await warmAlbums(tier, budget, go);
     else if (cmd === "tracks") await warmTracks(tier, budget, go);
