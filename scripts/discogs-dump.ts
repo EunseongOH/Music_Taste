@@ -191,14 +191,22 @@ async function match(ndjson?: string) {
 
   const file = ndjson ?? ndjsonFor("20260901");
   if (!existsSync(file)) throw new Error(`${file} 없음. parse 먼저`);
+  // 1차 읽기: 연결 판단에 필요한 최소 필드만 색인 (곡 목록은 버린다 — 파일이 GB 단위라 통째로 올리면 메모리가 모자란다)
+  const needArtists = new Set([...discOfSpotify.values()].flat());
   const releasesByArtist = new Map<number, any[]>();
-  for await (const line of createInterface({ input: createReadStream(file, { encoding: "utf8" }), crlfDelay: Infinity })) {
+  const readLines = () => createInterface({ input: createReadStream(file, { encoding: "utf8" }), crlfDelay: Infinity });
+  for await (const line of readLines()) {
     if (!line) continue;
     const r = JSON.parse(line);
-    r.track_count = r.tracks.length;
-    for (const a of r.artists) releasesByArtist.set(a, [...(releasesByArtist.get(a) ?? []), r]);
+    const artists = (r.artists as number[]).filter((x) => needArtists.has(x));
+    if (!artists.length) continue;
+    const slim = { release_id: r.release_id, title: r.title, released: r.released, track_count: r.tracks.length, is_main_release: r.is_main_release, artists };
+    for (const x of artists) {
+      const list = releasesByArtist.get(x);
+      if (list) list.push(slim); else releasesByArtist.set(x, [slim]);
+    }
   }
-  console.log(`로컬 발매판 아티스트 ${releasesByArtist.size}명`);
+  console.log(`로컬 발매판 색인 아티스트 ${releasesByArtist.size}명`);
   const loadArtist = async (did: number) => releasesByArtist.get(did) ?? [];
   const dump = file.match(/releases_(\d{8})/)?.[1] ?? "unknown";
 
@@ -215,10 +223,65 @@ async function match(ndjson?: string) {
     // 같은 앨범의 여러 발매판(나라·형식별)은 트랙리스트가 같다. 메인 발매판을 우선, 없으면 가장 작은 ID
     const best = cands.find((c) => c.is_main_release) ?? cands.sort((x, y) => x.release_id - y.release_id)[0];
     if (cands.length > 1) ambiguous++;
-    out.push({ spotify_album_id: spotifyId, release_id: best.release_id, release: best, artist: discOfSpotify.get(a.artist)!.find((d) => best.artists.includes(d)) ?? best.artists[0] });
+    out.push({ spotify_album_id: spotifyId, release_id: best.release_id, release: null as any, artist: discOfSpotify.get(a.artist)!.find((d) => best.artists.includes(d)) ?? best.artists[0] });
   }
+  // 품질 기준 (2026-09-17 표본 검수 결과):
+  //  - Discogs 는 한국·일본 곡을 영어 번역 제목으로 올린 판이 많고, 같은 앨범이라도 곡 순서가 다른 판이 있다.
+  //  - Spotify 트랙 캐시가 있으면 순서대로 비교한 곡 제목이 90% 이상 같을 때만 연결한다.
+  //  - 캐시가 없으면 해외 아티스트이거나, 한국·일본 아티스트는 곡 제목에 한글·일본 문자가 있을 때만 연결한다.
+  const countryOfSpotify = new Map<string, string | null>();
+  {
+    const mbids = [...new Set(artistMap.map((m) => m.mbid))];
+    for (let i = 0; i < mbids.length; i += 300) {
+      const { data } = await sb.from("mb_artist").select("mbid, country").in("mbid", mbids.slice(i, i + 300));
+      const c = new Map((data ?? []).map((x) => [x.mbid, x.country]));
+      for (const m of artistMap) if (c.has(m.mbid)) countryOfSpotify.set(m.spotify_id, c.get(m.mbid) ?? null);
+    }
+  }
+  const spotifyTracks = new Map<string, string[]>();
+  {
+    const ids = out.map((o) => o.spotify_album_id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data } = await sb.from("spotify_cache_album_tracks").select("album_id, items").eq("locale", "ko").in("album_id", ids.slice(i, i + 100));
+      for (const r of data ?? []) spotifyTracks.set(r.album_id, (r.items ?? []).map((t: any) => String(t.name ?? "")));
+    }
+  }
+  const NATIVE = /[가-힣ぁ-んァ-ン一-龯]/;
+  const loose = (x: string) => (x || "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const albumArtist = new Map(targets.map(([id, a]) => [id, a.artist]));
+  let rejected = 0;
+  const pass = (o: any, full: any) => {
+    const titles: string[] = full.tracks.map((t: any) => t.title);
+    const sp = spotifyTracks.get(o.spotify_album_id);
+    if (sp?.length) {
+      const agree = sp.filter((st, i) => {
+        const d = loose(titles[i] ?? ""), q = loose(st);
+        return d && (q === d || q.startsWith(d) || d.startsWith(q));
+      }).length / sp.length;
+      return agree >= 0.9;
+    }
+    const country = countryOfSpotify.get(albumArtist.get(o.spotify_album_id) ?? "");
+    return !(country === "KR" || country === "JP") || titles.some((t) => NATIVE.test(t));
+  };
+
+  // 2차 읽기: 연결된 발매판만 전체 필드(곡 목록 포함)를 가져온다
+  const wantedReleases = new Set(out.map((o) => o.release_id));
+  const full = new Map<number, any>();
+  if (wantedReleases.size) {
+    for await (const line of readLines()) {
+      if (!line) continue;
+      const id = Number(line.slice(14, 40).match(/^(\d+)/)?.[1]); // {"release_id":667,...
+      if (!wantedReleases.has(id)) continue;
+      full.set(id, JSON.parse(line));
+    }
+  }
+  for (const o of out) {
+    const f = full.get(o.release_id);
+    if (f && pass(o, f)) o.release = f; else { o.release = null; rejected++; }
+  }
+  console.log(`품질 기준 탈락 ${rejected}`);
   // 연결된 발매판만 DB 에 올린다 (발매판 -> 곡 -> 연결 순서: 연결이 있으면 곡이 반드시 있다)
-  const uniq = new Map(out.map((o) => [o.release_id, o]));
+  const uniq = new Map(out.filter((o) => o.release).map((o) => [o.release_id, o]));
   const relRows = [...uniq.values()].map(({ release: r, artist }) => ({
     release_id: r.release_id, discogs_artist_id: artist, master_id: r.master_id, is_main_release: r.is_main_release,
     title: r.title, released: r.released, country: r.country, formats: r.formats, genres: r.genres, styles: r.styles,
@@ -233,13 +296,13 @@ async function match(ndjson?: string) {
     const { error } = await sb.from("discogs_track").upsert(trackRows.slice(i, i + 2000), { onConflict: "release_id,idx" });
     if (error) throw new Error(error.message);
   }
-  const matchRows = out.map((o) => ({ spotify_album_id: o.spotify_album_id, release_id: o.release_id }));
+  const matchRows = out.filter((o) => o.release).map((o) => ({ spotify_album_id: o.spotify_album_id, release_id: o.release_id }));
   for (let i = 0; i < matchRows.length; i += 500) {
     const { error } = await sb.from("discogs_album_match").upsert(matchRows.slice(i, i + 500), { onConflict: "spotify_album_id" });
     if (error) throw new Error(error.message);
   }
   console.log(`업로드 · 발매판 ${relRows.length} · 곡 ${trackRows.length}`);
-  console.log(`연결 ${out.length} (후보 여러 개 중 선택 ${ambiguous})`);
+  console.log(`연결 ${matchRows.length} (조건 일치 ${out.length}, 후보 여러 개 중 선택 ${ambiguous})`);
 }
 
 const [cmd, arg] = process.argv.slice(2);
