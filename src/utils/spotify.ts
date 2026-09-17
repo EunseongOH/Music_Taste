@@ -266,6 +266,56 @@ async function canonicalTracksByAlbum(albumIds: string[]): Promise<Map<string, a
   } catch (e) {
     console.warn("[canonical] tracklist lookup failed:", e);
   }
+
+  // MusicBrainz 에 없는 앨범은 Discogs 월간 덤프(CC0) 트랙리스트로 채운다.
+  // 연결(discogs_album_match)은 제목·발매연도·곡 수가 모두 같을 때만 만들어진다 (scripts/discogs-dump.ts match).
+  const rest = ids.filter((id) => !out.has(id));
+  if (rest.length) {
+    try {
+      const supabase = createAdminClient();
+      const releaseOf = new Map<string, number>();
+      for (let i = 0; i < rest.length; i += 50) {
+        const { data } = await supabase.from('discogs_album_match').select('spotify_album_id, release_id').in('spotify_album_id', rest.slice(i, i + 50));
+        for (const r of data ?? []) releaseOf.set(r.spotify_album_id, Number(r.release_id));
+      }
+      const releases = [...new Set(releaseOf.values())];
+      const tracksOf = new Map<number, any[]>();
+      for (let i = 0; i < releases.length; i += 20) {
+        for (let from = 0; ; from += 1000) {
+          const { data } = await supabase
+            .from('discogs_track')
+            .select('release_id, idx, position, title, duration')
+            .in('release_id', releases.slice(i, i + 20))
+            .order('release_id').order('idx')
+            .range(from, from + 999);
+          for (const t of data ?? []) {
+            const [m, s] = String(t.duration ?? '').split(':').map(Number);
+            const list = tracksOf.get(Number(t.release_id)) ?? [];
+            // 여러 장짜리는 Discogs 순번이 "2-3" 형식이다. Spotify 곡 검색 결과를 순번으로 맞출 때 쓰인다 (searchTracksByQuery)
+            const pos = String(t.position ?? '').match(/^(?:CD)?(\d+)[-.](\d+)$/i);
+            const disc = pos ? Number(pos[1]) : 1;
+            const prevSameDisc = list.filter((x) => x.disc_number === disc).length;
+            list.push({
+              id: `discogs:${t.release_id}:${t.idx}`,
+              name: t.title,
+              duration_ms: Number.isFinite(m) && Number.isFinite(s) ? (m * 60 + s) * 1000 : 0,
+              disc_number: disc,
+              track_number: pos ? Number(pos[2]) : prevSameDisc + 1,
+              preview_url: null,
+            });
+            tracksOf.set(Number(t.release_id), list);
+          }
+          if (!data || data.length < 1000) break;
+        }
+      }
+      for (const [album, release] of releaseOf) {
+        const list = tracksOf.get(release);
+        if (list?.length) out.set(album, list);
+      }
+    } catch (e) {
+      console.warn("[canonical] discogs tracklist lookup failed:", e);
+    }
+  }
   return out;
 }
 
