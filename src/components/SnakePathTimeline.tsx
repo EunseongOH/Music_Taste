@@ -55,7 +55,7 @@ const getNodeDimensions = (S: number, isWinner: boolean) => {
   if (isWinner) {
     return {
       albumClass: "w-20 h-20 border-point shadow-[0_0_20px_rgba(230,126,34,0.5)] animate-pulse-ring",
-      badgeClass: "w-8 h-8 text-sm -top-4 -left-4 bg-[#E67E22] text-white",
+      badgeClass: "min-w-8 h-8 px-1.5 text-[15px] -top-3 -left-3 bg-point text-white",
       titleClass: "text-[11px] sm:text-[12px] font-extrabold text-navy tracking-tight",
       artistClass: "text-[8px] sm:text-[9px] text-navy/60 font-semibold",
       safeWidth: "95px", // 컴포넌트 전체가 가질 안전 너비
@@ -66,7 +66,7 @@ const getNodeDimensions = (S: number, isWinner: boolean) => {
   if (S <= 2) {
     return {
       albumClass: "w-14 h-14 border-navy/20 shadow-md",
-      badgeClass: "w-5.5 h-5.5 text-[9px] -top-2.5 -left-2.5 bg-cream text-navy",
+      badgeClass: "min-w-[22px] h-[22px] px-1 text-[11px] -top-2 -left-2 bg-navy text-cream",
       titleClass: "text-[9.5px] sm:text-[10.5px] font-bold text-navy tracking-tight",
       artistClass: "text-[7.5px] sm:text-[8.5px] text-navy/60",
       safeWidth: "85px",
@@ -77,7 +77,7 @@ const getNodeDimensions = (S: number, isWinner: boolean) => {
   if (S <= 4) {
     return {
       albumClass: "w-11 h-11 border-navy/20 shadow-md",
-      badgeClass: "w-5 h-5 text-[8.5px] -top-2 -left-2 bg-cream text-navy",
+      badgeClass: "min-w-5 h-5 px-1 text-[10px] -top-1.5 -left-1.5 bg-navy text-cream",
       titleClass: "text-[8px] sm:text-[9px] font-bold text-navy tracking-tight",
       artistClass: "text-[6px] sm:text-[7px] text-navy/60",
       safeWidth: "75px",
@@ -87,7 +87,7 @@ const getNodeDimensions = (S: number, isWinner: boolean) => {
 
   return {
     albumClass: "w-9 h-9 border-navy/15 shadow-sm",
-    badgeClass: "w-4 h-4 text-[7px] -top-1.5 -left-1.5 bg-cream text-navy",
+    badgeClass: "min-w-[17px] h-[17px] px-[3px] text-[9px] -top-1 -left-1 bg-navy text-cream",
     titleClass: "text-[7.5px] sm:text-[8px] font-bold text-navy tracking-tight",
     artistClass: "text-[6px] sm:text-[6.5px] text-navy/60",
     safeWidth: "70px", 
@@ -125,7 +125,7 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
     const sizes = getRowSizes(tracks.length); 
     const maxS = sizes[sizes.length - 1] || 5; 
     
-    // ✨ 변경 1: 확장 계수 기준을 5에서 4로 낮추어 수평 열 간격(Gap)을 물리적으로 더 넓게 벌려 마진을 확보합니다.
+    // 변경 1: 확장 계수 기준을 5에서 4로 낮추어 수평 열 간격(Gap)을 물리적으로 더 넓게 벌려 마진을 확보합니다.
     const expansionFactor = Math.max(1, maxS / 4); 
 
     const PADDING_Y = 80;
@@ -346,20 +346,14 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                       : 'scale-100 z-10 hover:z-30 hover:scale-110'
                   }`}
                 >
-                  {/* 🟢 수정 포인트 1: h-0을 완전히 제거하고, CD 자체 크기를 유지하여 이미지가 사라지는 현상을 원천 방지합니다. */}
+                  {/* 수정 포인트 1: h-0을 완전히 제거하고, CD 자체 크기를 유지하여 이미지가 사라지는 현상을 원천 방지합니다. */}
                   {/* transform -translate-y-1/2를 통해 CD의 정중앙이 베지어 곡선 라인에 완벽히 교차하도록 정렬합니다. */}
                   <div className={`relative flex items-center justify-center flex-shrink-0 rounded-full border-2 bg-[#F5F2ED] ${dims.albumClass} transform -translate-y-1/2`}>
-                    {isWinner && (
-                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-30 text-yellow-500 text-base drop-shadow-md select-none animate-bounce">
-                        👑
-                      </div>
-                    )}
-
-                    <div className={`absolute rounded-full flex items-center justify-center font-num font-bold z-30 shadow-md border border-white ${dims.badgeClass}`}>
+                    <div className={`absolute rounded-full flex items-center justify-center font-num tabular-nums font-bold leading-none z-30 shadow-sm border-2 border-[#F5F2ED] ${dims.badgeClass}`}>
                       {pt.rank}
                     </div>
                     
-                    {/* 🟢 수정 포인트 2: absolute inset-0 구조로 이미지가 고정 크기 원형 배너 안에 가득 차도록 채웁니다. */}
+                    {/* 수정 포인트 2: absolute inset-0 구조로 이미지가 고정 크기 원형 배너 안에 가득 차도록 채웁니다. */}
                     <div 
                       className="absolute inset-0 w-full h-full rounded-full overflow-hidden"
                       style={{
@@ -379,7 +373,7 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                     <div className={`absolute inset-0 m-auto ${dims.holeClass} border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20`} />
                   </div>
                   
-                  {/* 🟢 수정 포인트 3: CD가 공중으로 반만큼 뜬 공간(translate)을 메우기 위해, 명시적인 음수 마진(Negative Margin)을 주어 타이틀을 바짝 붙입니다. */}
+                  {/* 수정 포인트 3: CD가 공중으로 반만큼 뜬 공간(translate)을 메우기 위해, 명시적인 음수 마진(Negative Margin)을 주어 타이틀을 바짝 붙입니다. */}
                   <div 
                     className={`flex flex-col items-center transition-all ${isWinner ? 'scale-110' : 'scale-100'} w-full`}
                     style={{
