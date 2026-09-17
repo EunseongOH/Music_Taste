@@ -24,6 +24,15 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
       },
+      {
+        // 자체 DB 앨범 커버 (Cover Art Archive, CC0). archive.org 로 리다이렉트된다
+        protocol: "https",
+        hostname: "coverartarchive.org",
+      },
+      {
+        protocol: "https",
+        hostname: "**.archive.org",
+      },
     ],
   },
   // Increase HTTP header size limit to prevent HTTP 431 errors from large cookies

@@ -1,6 +1,7 @@
 "use server";
 // src/utils/spotify.ts
 import { createAdminClient } from "./supabase/admin";
+import { getDbArtistAlbums, getDbTracksByAlbum } from "./dbCatalog";
 
 const DB_CACHE_TTL_DAYS = 21;
 
@@ -603,6 +604,53 @@ export const getInitialArtists = async () => {
   return results;
 };
 
+// 앨범 목록 엔드포인트는 개발 모드 일일 쿼터가 낮다 (2026-09-17 실측: 80회 남짓에서 차단).
+// DB 로 답할 수 있는 아티스트는 이 예산을 넘긴 뒤로는 Spotify 를 부르지 않는다.
+const ALBUM_ENDPOINT_DAILY_BUDGET = 50;
+
+async function albumBudgetLeft(): Promise<boolean> {
+  try {
+    const { data } = await createAdminClient()
+      .from('spotify_endpoint_quota')
+      .select('calls_today, day, blocked_until')
+      .eq('endpoint', '/v1/artists/{id}/albums')
+      .maybeSingle();
+    if (!data) return true;
+    if (data.blocked_until && new Date(data.blocked_until) > new Date()) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    if (data.day !== today) return true;
+    return (data.calls_today ?? 0) < ALBUM_ENDPOINT_DAILY_BUDGET;
+  } catch {
+    return true;   // 계측 실패가 서비스를 막지 않는다
+  }
+}
+
+/** 같은 앨범이 두 번 보이지 않게 합친다: Spotify 앨범 ID 로 1차, 정규화한 제목+발매연도로 2차 */
+const EDITION_SUFFIX = /\s*[([][^)\]]*(deluxe|edition|remaster|remastered|version|ver\.|repackage|anniversary|expanded|bonus)[^)\]]*[)\]]/gi;
+const albumKey = (a: any) => {
+  const name = String(a?.name ?? "").normalize("NFKC").toLowerCase()
+    .replace(EDITION_SUFFIX, "")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  return `${name}|${String(a?.release_date ?? "").slice(0, 4)}`;
+};
+
+function mergeAlbums(spotifyItems: any[], db: any[]) {
+  const out: any[] = [];
+  const ids = new Set<string>();
+  const keys = new Set<string>();
+  for (const a of [...spotifyItems, ...db]) {   // Spotify 표기를 우선한다
+    if (!a?.id || ids.has(a.id) || keys.has(albumKey(a))) continue;
+    ids.add(a.id); keys.add(albumKey(a));
+    out.push(a);
+  }
+  return out.sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
+}
+
+function dbPage(db: any[], offset: number, limit: number) {
+  const items = mergeAlbums([], db);
+  return { items: items.slice(offset, offset + limit), total: items.length };
+}
+
 // Fetch artist's albums (Paged to prevent excessive rate limiting)
 export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) => {
   if (!artistId) {
@@ -619,11 +667,15 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     return cached.data;
   }
 
+  // 1-b. 자체 DB(MusicBrainz·Discogs) 앨범 목록. Spotify 목록이 캐시에 있으면 합치고, 없으면 DB 만으로 답한다.
+  //      Spotify 앨범 목록 엔드포인트는 개발 모드 일일 쿼터가 낮아(실측 80회 수준) 여기서 최대한 아낀다.
+  const dbAlbums = await getDbArtistAlbums(artistId);
+
   // 2. DB Cache check
   try {
     const supabase = createAdminClient();
     const now = new Date().toISOString();
-    const { data: dbAlbums, error } = await supabase
+    const { data: cachedPage, error } = await supabase
       .from('spotify_cache_artist_albums')
       .select('*')
       .eq('artist_id', artistId)
@@ -634,13 +686,21 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
       .single();
 
     // 오염된 빈 캐시 데이터가 아닌 유효한 앨범 데이터가 있을 때만 캐시 복원
-    if (!error && dbAlbums && dbAlbums.total > 0 && dbAlbums.items && dbAlbums.items.length > 0) {
-      const result = { items: dbAlbums.items, total: dbAlbums.total };
+    if (!error && cachedPage && cachedPage.total > 0 && cachedPage.items && cachedPage.items.length > 0) {
+      // Spotify 캐시가 이 페이지를 갖고 있으면 그대로 쓴다 (표기·커버가 Spotify 것이라 화면이 일관된다)
+      const result = { items: cachedPage.items, total: cachedPage.total };
       albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB getArtistAlbums failed, calling API:", e);
+  }
+
+  // DB 로 답할 수 있으면 예산을 넘긴 뒤에는 Spotify 를 부르지 않는다
+  if (dbAlbums.length && !(await albumBudgetLeft())) {
+    const result = dbPage(dbAlbums, offset, limit);
+    albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   }
 
   // Fetch only the requested page to minimize requests
@@ -651,17 +711,19 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-    return { items: [], total: 0 };
+    // 쿼터 소진·오류 시 자체 DB 목록으로 답한다 (없으면 빈 목록)
+    return dbPage(dbAlbums, offset, limit);
   }
 
   const data = await response.json();
+  const merged = mergeAlbums(data.items || [], dbAlbums);
   const result = {
-    items: data.items || [],
-    total: data.total || 0
+    items: merged.slice(offset, offset + limit).length ? merged.slice(offset, offset + limit) : (data.items || []),
+    total: Math.max(data.total || 0, merged.length),
   };
 
   // 3. Save to DB Cache (오류로 인한 빈 배열이 영구 캐싱되지 않도록 유효성 검사 후 저장)
-  if (result.total > 0 && result.items.length > 0) {
+  if ((data.total || 0) > 0 && (data.items || []).length > 0) {
     try {
       const supabase = createAdminClient();
       const expiresAt = getCacheExpiresAt();
@@ -672,8 +734,8 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
           locale: lang,
           offset,
           limit,
-          items: result.items,
-          total: result.total,
+          items: data.items || [],
+          total: data.total || 0,
           expires_at: expiresAt
         }, { onConflict: 'artist_id,locale,offset,limit' });
     } catch (e) {
@@ -699,6 +761,14 @@ export const getAlbumTracks = async (albumId: string) => {
   const cached = tracksCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
+  }
+
+  // 1-b. 자체 DB(MusicBrainz·Discogs) 트랙리스트. 있으면 Spotify 를 부르지 않는다.
+  //      검증되지 않은 연결은 dbCatalog 에서 이미 걸러진다 (부정확한 트랙리스트를 내보내지 않는다).
+  const fromDb = (await getDbTracksByAlbum([albumId]))[albumId];
+  if (fromDb?.length) {
+    tracksCache.set(cacheKey, { data: fromDb, timestamp: Date.now() });
+    return fromDb;
   }
 
   // 2. DB Cache check

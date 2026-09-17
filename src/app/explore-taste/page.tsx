@@ -327,10 +327,28 @@ export default function ExploreTastePage() {
     return track.id || track.i || "";
   };
 
+  // 곡 비교 키: 곡 ID 는 출처에 따라 다르다 (Spotify 곡 ID / MusicBrainz 녹음 ID).
+  // 같은 곡이 다른 ID 로 저장돼도 취향 비교가 되도록 제목+아티스트로 비교한다.
+  const trackKey = (t: any): string => {
+    const title = String(t?.title ?? t?.t ?? "").normalize("NFKC").toLowerCase()
+      .replace(/s*[-([][^)]]*(remaster|remastered|version|ver.|live|inst.?|instrumental|feat.?[^)]]*)[)]]?s*$/gi, "")
+      .replace(/[^p{L}p{N}]/gu, "");
+    const artist = String(t?.artistName ?? t?.a ?? "").normalize("NFKC").toLowerCase().replace(/[^p{L}p{N}]/gu, "");
+    return title ? `${title}|${artist}` : "";
+  };
+
   // Get Top 10 tracks helper
   const getTop10Ids = (result: TournamentResult): string[] => {
     const ranking = result.ranking || [];
-    return ranking.slice(0, 10).map((t: any) => getNormalizedTrackId(t)).filter(Boolean);
+    return ranking.slice(0, 10).map((t: any) => trackKey(t) || getNormalizedTrackId(t)).filter(Boolean);
+  };
+
+  /** 1위 곡이 같은지: 곡 ID 가 같거나, 제목+아티스트가 같으면 같은 곡으로 본다 */
+  const sameWinner = (a: TournamentResult, b: TournamentResult): boolean => {
+    if (a.winner_track_id && a.winner_track_id === b.winner_track_id) return true;
+    const ka = trackKey({ title: a.winner_track_title, artistName: a.winner_track_artist });
+    const kb = trackKey({ title: b.winner_track_title, artistName: b.winner_track_artist });
+    return !!ka && ka === kb;
   };
 
   // Rank-weighted similarity calculator (higher rank matches yield higher scores)
@@ -375,7 +393,7 @@ export default function ExploreTastePage() {
     otherUsersResults.forEach(other => {
       // 1. Same winner song mate
       if (
-        other.winner_track_id === baseResult.winner_track_id &&
+        sameWinner(other, baseResult) &&
         !seenSongMateUsers.has(other.user_id)
       ) {
         seenSongMateUsers.add(other.user_id);
