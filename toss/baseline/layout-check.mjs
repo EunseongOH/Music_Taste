@@ -44,6 +44,8 @@ for (let n = 1; n <= 100; n++) {
     const ranks = l.cells.filter((c) => c.rank !== null).map((c) => c.rank).sort((a, b) => a - b);
     if (ranks.length !== l.shown || ranks.some((r, i) => r !== i)) fail(`모자이크 ${shape} ${n}곡: 순위 배치 누락/중복`);
     if (l.tile < MOSAIC_MIN_TILE) fail(`모자이크 ${shape} ${n}곡: 타일 ${l.tile.toFixed(1)}px < ${MOSAIC_MIN_TILE}`);
+    if (l.labelMode === 'badge' && l.tile < 48 && l.badgeCount > 10) fail(`모자이크 ${shape} ${n}곡: 작은 타일인데 배지 ${l.badgeCount}개`);
+    if (l.labelMode === 'badge' && l.badgeCount < Math.min(10, l.shown)) fail(`모자이크 ${shape} ${n}곡: 10위 안 배지 누락`);
     // 별은 뿔이 가늘어 칸이 적다 — 40곡까지만 전곡을 보장하고 그 이상은 TOP N 을 허용한다.
     const guaranteed = shape === 'star' ? 40 : 64;
     if (n <= guaranteed && l.shown !== n) fail(`모자이크 ${shape} ${n}곡: ${l.shown}곡만 들어감`);

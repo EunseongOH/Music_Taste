@@ -393,14 +393,18 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
                     </span>
                   </div>
                 ) : (
-                  <span
-                    className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 min-w-[16px] h-[15px] px-[3px] rounded-[3px] font-num tabular-nums font-bold flex items-center justify-center ${
-                      rank === 1 ? "bg-point text-white" : "bg-[#F5F2ED]/90 text-navy"
-                    }`}
-                    style={{ fontSize: 11, lineHeight: 1 }}
-                  >
-                    {rank}
-                  </span>
+                  // 순위 숫자: 작은 반투명 칩을 왼쪽 아래 모서리에(모양에 잘리는 칸만 가운데).
+                  // 타일이 작으면 10위까지만 단다 — 나머지는 아래 목록으로.
+                  rank <= layout.badgeCount && (
+                    <span
+                      className={`absolute min-w-[16px] h-[13px] px-[3px] rounded-[3px] font-num tabular-nums font-bold flex items-center justify-center ${
+                        rank === 1 ? "bg-point text-white" : "bg-navy/75 text-white"
+                      } ${c.cornerSafe ? "left-[3px] bottom-[3px]" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"}`}
+                      style={{ fontSize: 10, lineHeight: 1 }}
+                    >
+                      {rank}
+                    </span>
+                  )
                 )}
               </div>
             );

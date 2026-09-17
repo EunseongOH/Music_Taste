@@ -227,6 +227,8 @@ export interface MosaicCell {
   h: number;
   /** 이 칸에 놓인 곡의 순위 인덱스(0 = 1위). 곡이 없는 채움 칸이면 null */
   rank: number | null;
+  /** 왼쪽 아래 모서리의 순위 숫자 자리가 모양 안에 보이는지(아니면 칸 가운데에 둔다) */
+  cornerSafe: boolean;
 }
 
 export interface MosaicLayout {
@@ -240,6 +242,11 @@ export interface MosaicLayout {
   tile: number;
   /** 9곡 이하처럼 타일이 크면 제목을 타일 위에, 아니면 순위 배지 + 아래 목록 */
   labelMode: "overlay" | "badge";
+  /**
+   * badge 모드에서 순위 숫자를 달 곡 수. 타일이 작으면 숫자가 커버를 가리므로 10위까지만 달고
+   * 나머지는 아래 목록이 알려준다.
+   */
+  badgeCount: number;
   /** badge 모드에서 아래 목록에 넣을 곡 수 */
   listCount: number;
   listRows: number;
@@ -250,6 +257,8 @@ export const MOSAIC_GAP = 2;
 export const MOSAIC_MIN_TILE = 28;
 export const MOSAIC_LIST_ROW_H = 19;
 export const MOSAIC_LIST_GAP = 14;
+/** 이 크기 이상 타일이면 모든 곡에 순위 숫자를 단다(작은 칩이 커버를 크게 가리지 않는다). */
+export const MOSAIC_BADGE_ALL_TILE = 48;
 const OVERLAY_MAX = 9;
 /** 곡을 놓을 수 있는 칸: 가운데가 모양 안이고, 칸의 절반 가까이가 보여야 한다. */
 const MIN_VISIBLE = 0.45;
@@ -277,9 +286,17 @@ function gridFor(shape: Shape, width: number, height: number, cols: number) {
       const mx = ((x + tileW / 2) / width) * 100;
       const my = ((y + tileH / 2) / height) * 100;
       const eligible = seen / 16 >= MIN_VISIBLE && inside([mx, my], poly);
+      // 왼쪽 아래 숫자 칩(약 16×13px, 3px 안쪽)의 네 귀퉁이가 모두 모양 안이어야 모서리에 둔다.
+      const chip = [
+        [x + 3, y + tileH - 3],
+        [x + 19, y + tileH - 3],
+        [x + 3, y + tileH - 16],
+        [x + 19, y + tileH - 16],
+      ];
+      const cornerSafe = chip.every(([cxp, cyp]) => inside([(cxp / width) * 100, (cyp / height) * 100], poly));
       // 세로는 조금 더 무겁게 — 같은 거리면 위쪽 행이 먼저 온다.
       const dist = Math.hypot(mx - cx, (my - cy) * 1.15) + r * 0.01 + c * 0.001;
-      cells.push({ x, y, w: tileW, h: tileH, rank: null, eligible, dist });
+      cells.push({ x, y, w: tileW, h: tileH, rank: null, cornerSafe, eligible, dist });
     }
   }
   return { cells, tile: Math.min(tileW, tileH), eligibleCount: cells.filter((c) => c.eligible).length };
@@ -325,7 +342,7 @@ export function mosaicLayout(n: number, shape: Shape, bodyH = CARD_BODY_H): Mosa
   const order = grid.cells.filter((c) => c.eligible).sort((a, b) => a.dist - b.dist);
   order.slice(0, shown).forEach((c, i) => (c.rank = i));
 
-  const cells = grid.cells.map(({ x, y, w, h, rank }) => ({ x, y, w, h, rank }));
+  const cells = grid.cells.map(({ x, y, w, h, rank, cornerSafe }) => ({ x, y, w, h, rank, cornerSafe }));
 
   let listCount = 0;
   let listRows = 0;
@@ -342,7 +359,8 @@ export function mosaicLayout(n: number, shape: Shape, bodyH = CARD_BODY_H): Mosa
     }
   }
 
-  return { width, height, cells, total: want, shown, tile: grid.tile, labelMode, listCount, listRows };
+  const badgeCount = labelMode === "badge" ? (grid.tile >= MOSAIC_BADGE_ALL_TILE ? shown : Math.min(shown, 10)) : 0;
+  return { width, height, cells, total: want, shown, tile: grid.tile, labelMode, badgeCount, listCount, listRows };
 }
 
 /** badge 모드 본문 높이(모양 + 간격 + 목록 + "외 n곡" 줄). overlay 모드는 모양 높이만. */
