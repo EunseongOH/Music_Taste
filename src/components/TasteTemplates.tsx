@@ -344,14 +344,17 @@ function RankTitleList({ tracks, count, rows, locale, className = "", style }: {
 // ---------------------------------------------------------------------------
 
 /**
- * 결과 화면 첫 인트로 시간(초). 경로가 꼴찌에서 1위까지 그려지는 동안 카메라가 따라 올라가고,
- * 끝에서 전체가 보이도록 빠진다. 곡이 많을수록 조금 길어진다.
+ * 결과 화면 첫 인트로 시간(초). 예전 피라미드 연출의 수치를 그대로 쓴다:
+ * 1초 대기 → 경로를 max(12초, 곡 수 × 1.2초) 동안 그리며 3.8배로 따라감 → 1위에서 1.5초 멈춤
+ * → 1.2초 동안 전체로 빠짐.
  */
+export const PYRAMID_INTRO_ZOOM = 3.8;
 export function pyramidIntroTiming(n: number) {
-  const hold = 0.6;
-  const draw = Math.min(9, Math.max(3.5, 2 + n * 0.1));
-  const zoomOut = 1.0;
-  return { hold, draw, zoomOut, total: hold + draw + zoomOut };
+  const hold = 1.0;
+  const draw = Math.max(12, n * 1.2);
+  const holdEnd = 1.5;
+  const zoomOut = 1.2;
+  return { hold, draw, holdEnd, zoomOut, total: hold + draw + holdEnd + zoomOut };
 }
 
 export function PyramidCard({
@@ -382,34 +385,37 @@ export function PyramidCard({
   const W = layout.width;
   const H = layout.height;
 
-  // 카메라: 경로가 지나는 순서(꼴찌 → 1위)대로 머리를 화면 가운데에 둔다.
+  // 카메라: 경로 머리를 3.8배로 따라 올라간다(예전 연출과 같은 배율·속도).
   const camera = useMemo(() => {
     if (!playing) return null;
-    const Z = Math.min(3, Math.max(1.6, 56 / minD));
-    const clampX = (v: number) => Math.min(0, Math.max(W - W * Z, v));
-    const clampY = (v: number) => Math.min(0, Math.max(H - H * Z, v));
-    const order = [...layout.nodes].reverse();
+    const Z = PYRAMID_INTRO_ZOOM;
     const xs: number[] = [];
     const ys: number[] = [];
     const ss: number[] = [];
     const times: number[] = [];
-    const push = (node: { x: number; y: number }, time: number) => {
-      xs.push(clampX(W / 2 - Z * node.x));
-      ys.push(clampY(H / 2 - Z * node.y));
-      ss.push(Z);
+    const push = (pt: { x: number; y: number }, time: number, scale = Z) => {
+      xs.push(W / 2 - scale * pt.x);
+      ys.push(H / 2 - scale * pt.y);
+      ss.push(scale);
       times.push(time / timing.total);
     };
-    push(order[0], 0);
-    order.forEach((node) => push(node, timing.hold + (layout.reachAt[node.rank] / layout.pathLength) * timing.draw));
-    push(order[order.length - 1], timing.hold + timing.draw);
+    const trail = layout.trail;
+    push(trail[0], 0);
+    trail.forEach((pt) => push(pt, timing.hold + (pt.at / layout.pathLength) * timing.draw));
+    push(trail[trail.length - 1], timing.hold + timing.draw + timing.holdEnd);
     xs.push(0);
     ys.push(0);
     ss.push(1);
     times.push(1);
     return { xs, ys, ss, times };
-  }, [playing, layout, minD, W, H, timing.hold, timing.draw, timing.total]);
+  }, [playing, layout, W, H, timing.hold, timing.draw, timing.holdEnd, timing.total]);
 
-  const litDelay = (rank: number) => (playing ? timing.hold + (layout.reachAt[rank] / layout.pathLength) * timing.draw - 0.1 : 0);
+  /** 예전처럼 카메라가 닿기 조금 전(2.5초 또는 경로 시간의 7%)에 곡이 선명해진다. */
+  const litDelay = (rank: number) => {
+    if (!playing) return 0;
+    const lead = Math.max(2.5, timing.draw * 0.07);
+    return Math.max(0, timing.hold + (layout.reachAt[rank] / layout.pathLength) * timing.draw - lead);
+  };
 
   return (
     <CardFrame meta={meta}>
@@ -441,14 +447,23 @@ export function PyramidCard({
             const track = tracks[node.rank];
             const rank = node.rank + 1;
             const lit = started;
+            // 켜지기 전: 흐리고 살짝 번진 상태(예전 값 그대로)
             const fade: React.CSSProperties = playing
-              ? { opacity: lit ? 1 : 0.18, transition: "opacity 0.35s ease-out", transitionDelay: `${litDelay(node.rank)}s` }
+              ? {
+                  opacity: lit ? 1 : 0.42,
+                  filter: lit ? "blur(0px) grayscale(0%)" : "blur(1.8px) grayscale(15%)",
+                  transition: "opacity 0.15s ease-out, filter 0.15s ease-out",
+                  transitionDelay: `${litDelay(node.rank)}s`,
+                }
               : {};
             const badge = Math.max(15, Math.min(22, Math.round(node.d * 0.22)));
             return (
               <React.Fragment key={`${track.id}-${node.rank}`}>
-                <div
+                <motion.div
                   className="absolute rounded-full"
+                  initial={playing ? { scale: 0, y: 15 } : false}
+                  animate={{ scale: 1, y: 0 }}
+                  transition={playing ? { type: "spring", stiffness: 450, damping: 24, delay: 0.05 + (n - 1 - node.rank) * 0.02 } : { duration: 0 }}
                   style={{
                     left: node.x - node.d / 2,
                     top: node.y - node.d / 2,
@@ -488,7 +503,7 @@ export function PyramidCard({
                     {rank}
                   </span>
                   )}
-                </div>
+                </motion.div>
                 {layout.showTitles && (
                   <div
                     className="absolute text-center"
@@ -521,7 +536,7 @@ export function PyramidCard({
             count={layout.listCount}
             rows={layout.listRows}
             locale={meta.locale}
-            style={playing ? { opacity: started ? 1 : 0, transition: "opacity 0.5s ease-out", transitionDelay: `${timing.total - 0.4}s` } : undefined}
+            style={playing ? { opacity: started ? 1 : 0, transition: "opacity 0.5s ease-out", transitionDelay: `${timing.total - timing.zoomOut}s` } : undefined}
           />
         )}
       </div>

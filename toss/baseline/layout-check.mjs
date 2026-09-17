@@ -56,6 +56,10 @@ for (let n = 1; n <= 100; n++) {
       const xs = row.sort((a, b) => a.x - b.x);
       for (let i = 1; i < xs.length; i++) if (xs[i].x - xs[i - 1].x < xs[i].d - 0.5) fail(`피라미드 ${n}곡: ${xs[i].row + 1}번째 줄 원이 겹침`);
     }
+    // 카메라 경로: 꼴찌 노드에서 시작해 구간마다 3점, 1위 노드에서 끝나고 거리는 늘어나기만 한다
+    if (p.trail.length !== 1 + 3 * (n - 1)) fail(`피라미드 ${n}곡: 카메라 경로 점 수 ${p.trail.length}`);
+    if (p.trail.some((pt, i) => i > 0 && pt.at < p.trail[i - 1].at)) fail(`피라미드 ${n}곡: 카메라 경로가 되돌아감`);
+    if (n > 1 && Math.hypot(p.trail.at(-1).x - p.nodes[0].x, p.trail.at(-1).y - p.nodes[0].y) > 0.5) fail(`피라미드 ${n}곡: 카메라가 1위에서 끝나지 않음`);
     // 경로는 꼴찌에서 시작해 1위에서 끝난다(모션이 아래에서 위로)
     if (p.reachAt[n - 1] !== 0 || (n > 1 && Math.abs(p.reachAt[0] - p.pathLength) > 0.01)) fail(`피라미드 ${n}곡: 경로 시작·끝이 순위와 어긋남`);
   }
