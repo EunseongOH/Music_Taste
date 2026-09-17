@@ -1,7 +1,8 @@
 // Deezer 로 자체 음악 DB 를 채운다. Spotify 호출 0회.
 //
 // 사용:
-//   npx tsx --env-file=.env.local scripts/deezer-catalog.ts artists [최대명수]   아티스트 찾기 (이름 + 앨범 제목 교차 확인)
+//   npx tsx --env-file=.env.local scripts/deezer-catalog.ts artists [최대명수] [장르]   아티스트 찾기 (이름 + 앨범 제목 교차 확인)
+//     장르를 주면 전곡 모드 첫 화면 선정(explore_genre_picks)의 그 장르 아티스트만 본다. 예: "k-pop", "korean rock"
 //   npx tsx --env-file=.env.local scripts/deezer-catalog.ts albums [최대명수]    찾은 아티스트의 앨범·트랙 수집
 //   npx tsx --env-file=.env.local scripts/deezer-catalog.ts match              Spotify 앨범 캐시 ↔ Deezer 앨범 연결 (제목·연도·곡 수 + 곡 제목 대조)
 //
@@ -47,18 +48,30 @@ async function fetchAll<T>(page: (f: number, t: number) => PromiseLike<{ data: T
   }
 }
 
-/** 우리 아티스트 목록: 트랙리스트가 부족한 쪽부터 */
-async function targetArtists(limit: number) {
+/** 우리 아티스트 목록: 빠진 앨범이 많은 쪽부터. 장르를 주면 그 장르 선정 아티스트만. */
+async function targetArtists(limit: number, genres?: string[]) {
   await sb.rpc("refresh_artist_coverage_snapshot");
-  const rows = await fetchAll<any>((f, t) => sb.from("artist_coverage_snapshot")
-    .select("spotify_id, mbid, name, name_ko, country, albums_with_tracks")
+  const rows = await fetchAll<any>((f, t) => sb.from("artist_deezer_target")
+    .select("spotify_id, mbid, name, name_ko, country, albums_with_tracks, release_groups, gap")
     .in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t));
   const done = new Set((await fetchAll<any>((f, t) => sb.from("deezer_artist").select("mbid").not("mbid", "is", null).order("deezer_artist_id").range(f, t))).map((r) => r.mbid));
-  return rows.filter((r) => !done.has(r.mbid)).sort((a, b) => (a.albums_with_tracks ?? 0) - (b.albums_with_tracks ?? 0)).slice(0, limit);
+  let pool = rows.filter((r) => !done.has(r.mbid));
+  if (genres?.length) {
+    const picks = await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id, genre, rank").in("genre", genres).order("rank").range(f, t));
+    const rank = new Map<string, number>();
+    for (const p of picks) if (!rank.has(p.spotify_id)) rank.set(p.spotify_id, p.rank);
+    pool = pool.filter((r) => rank.has(r.spotify_id)).sort((a, b) => (rank.get(a.spotify_id)! - rank.get(b.spotify_id)!));
+    return pool.slice(0, limit);
+  }
+  // 국내·홍보 대상 아티스트를 먼저, 그 안에서 빠진 앨범이 많은 쪽부터.
+  // (잔나비처럼 "앨범 일부만 뜨는" 아티스트가 여기 먼저 걸린다. 해외 롱테일은 뒤로 민다)
+  const warm = new Set((await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id));
+  const pri = (r: any) => (warm.has(r.spotify_id) || r.country === "KR" ? 0 : r.country === "JP" ? 1 : 2);
+  return pool.sort((a, b) => pri(a) - pri(b) || (b.gap ?? 0) - (a.gap ?? 0)).slice(0, limit);
 }
 
-async function artists(limit: number) {
-  const todo = await targetArtists(limit);
+async function artists(limit: number, genres?: string[]) {
+  const todo = await targetArtists(limit, genres);
   console.log(`대상 ${todo.length}명`);
   // 우리 쪽 앨범 제목 (교차 확인용)
   const titlesOf = new Map<string, Set<string>>();
@@ -206,7 +219,7 @@ async function match() {
   console.log(`연결 · 검증 통과 ${ok} · 검증 실패로 제외 ${rejected} · 대조할 Spotify 트랙 없음 ${unverified}`);
 }
 
-const [cmd, n] = process.argv.slice(2);
-(cmd === "artists" ? artists(Number(n ?? 100)) : cmd === "albums" ? albums(Number(n ?? 50)) : cmd === "match" ? match()
+const [cmd, n, ...rest] = process.argv.slice(2);
+(cmd === "artists" ? artists(Number(n ?? 100), rest.length ? rest : undefined) : cmd === "albums" ? albums(Number(n ?? 50)) : cmd === "match" ? match()
   : Promise.resolve(console.log("명령: artists [명수] | albums [명수] | match")))
   .catch((e) => { console.error(e); process.exit(1); });
