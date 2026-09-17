@@ -63,6 +63,12 @@ export default function WorldCupPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAnyLpActive, setIsAnyLpActive] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  /**
+   * 같이 소트하기(실험, docs/together-sort.md)로 들어온 판인지. `?challenge=1` 로만 켜진다.
+   * 켜지면 ① 이어하기 드래프트를 불러오지 않고 ② 서버에 진행을 저장하지 않고
+   * ③ 끝났을 때 취향표 대신 일치율 화면으로 간다 — 평소 흐름은 그대로다.
+   */
+  const [isChallenge, setIsChallenge] = useState(false);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
@@ -101,6 +107,7 @@ export default function WorldCupPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       setIsSingleArtistMode(params.get("mode") === "single");
+      setIsChallenge(params.get("challenge") === "1");
     }
   }, []);
 
@@ -110,7 +117,9 @@ export default function WorldCupPage() {
       let savedState = sessionStorage.getItem("worldcup_progress") || localStorage.getItem("worldcup_progress");
 
       // 1. Try loading from active draft in Supabase if logged in
-      if (user) {
+      //    (같이 소트하기로 들어온 판은 링크의 곡 세트를 그대로 써야 해서 건너뛴다)
+      const challengeRun = new URLSearchParams(window.location.search).get("challenge") === "1";
+      if (user && !challengeRun) {
         try {
           const params = new URLSearchParams(window.location.search);
           const isSingle = params.get("mode") === "single";
@@ -204,7 +213,8 @@ export default function WorldCupPage() {
     sessionStorage.setItem("worldcup_progress", progressData);
     localStorage.setItem("worldcup_progress", progressData);
 
-    if (user) {
+    // 같이 소트하기 판은 사용자의 이어하기를 덮지 않는다.
+    if (user && !isChallenge) {
       const saveToDb = async () => {
         const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
         const storedTracks = JSON.parse(sessionStorage.getItem("worldcup_tracks") || "[]");
@@ -215,11 +225,11 @@ export default function WorldCupPage() {
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, user]);
+  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, user, isChallenge]);
 
   // Clear active tournament drafts in Supabase when finished
   useEffect(() => {
-    if (phase === "finished" && user && winners.length > 0) {
+    if (phase === "finished" && user && !isChallenge && winners.length > 0) {
       const clearDraft = async () => {
         await deleteActiveDraft(isSingleArtistMode);
         sessionStorage.removeItem("worldcup_progress");
@@ -227,7 +237,7 @@ export default function WorldCupPage() {
       };
       clearDraft();
     }
-  }, [phase, user, winners, eliminatedTracks]);
+  }, [phase, user, winners, eliminatedTracks, isChallenge]);
 
   // The mathematical Play-in Wildcard Round matching logic
   const startRound = (participants: Track[]) => {
@@ -437,7 +447,11 @@ export default function WorldCupPage() {
         choices={eliminatedTracks.length}
         isSingleArtistMode={isSingleArtistMode}
         locale={locale}
-        onContinue={() => router.push(isSingleArtistMode ? "/taste?mode=single" : "/taste")}
+        onContinue={() => {
+          // 같이 소트하기로 들어온 판이면 취향표 대신 일치율 화면으로 보낸다.
+          const code = isChallenge ? sessionStorage.getItem("together_code") : null;
+          router.push(code ? `/together/${code}/result` : isSingleArtistMode ? "/taste?mode=single" : "/taste");
+        }}
       />
     );
   }
