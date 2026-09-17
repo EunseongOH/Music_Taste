@@ -224,7 +224,7 @@ export function ListCard({
 // 레코드형 — 1위는 슬리브에서 반쯤 나온 LP
 // ---------------------------------------------------------------------------
 
-const DISC_BACKGROUND =
+export const DISC_BACKGROUND =
   "radial-gradient(circle, transparent 0 19%, rgba(255,255,255,0.08) 19% 19.6%, transparent 19.6%), " +
   "repeating-radial-gradient(circle, #161616 0 1.5px, #232323 1.5px 3px)";
 

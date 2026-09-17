@@ -267,7 +267,7 @@ try {
     const shared = await ctx.newPage();
     await shared.goto(`${base}${sharedRoute}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await shared.waitForTimeout(4000);
-    const cta = shared.getByRole('button', { name: '나도 나만의 취향표 소트하기' }).last();
+    const cta = shared.getByRole('button', { name: '나도 취향표 만들기' }).last();
     if ((await cta.count()) === 0) {
       check(false, `${label} — 공유 화면에 CTA 있음`, '버튼 없음');
     } else {

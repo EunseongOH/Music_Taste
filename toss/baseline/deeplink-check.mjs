@@ -67,7 +67,7 @@ try {
       imgs: root?.querySelectorAll('img').length ?? 0,
     };
   });
-  check(view.text.includes('공개 취향 리스트'), '공유된 취향표 화면이 열림', view.text);
+  check(view.text.includes('공유된 취향표'), '공유된 취향표 화면이 열림', view.text);
   check(view.imgs > 0, '트랙 이미지가 렌더됨', `${view.imgs}개`);
   check(errors.length === 0, '콘솔/페이지 오류 없음', [...new Set(errors)].slice(0, 3).join(' | '));
 
