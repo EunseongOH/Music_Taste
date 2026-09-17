@@ -992,7 +992,9 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
         .from('spotify_cache_artists')
         .select('*')
         .eq('locale', 'ko')
-        .contains('genres', [genreId.toLowerCase()])
+        // genres 는 jsonb 라 배열을 넘기면 Postgres 배열 리터럴({k-pop})로 보내져 json 오류가 난다.
+        // 오류가 나면 장르마다 Spotify 검색으로 넘어가 전곡 모드 화면마다 검색 3회를 불렀다 (2026-09-17 확인).
+        .contains('genres', JSON.stringify([genreId.toLowerCase()]))
         .gt('expires_at', now)
         .range(offset, offset + limitPerGenre - 1);
 
