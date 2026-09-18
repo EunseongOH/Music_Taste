@@ -82,7 +82,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       .from("mb_spotify_map")
       .select("mbid, confidence")
       .eq("spotify_id", spotifyArtistId).eq("entity", "artist")
-      .in("confidence", ["url_rel", "manual"])
+      // Wikidata(CC0) 는 한 항목에 Spotify ID 와 MusicBrainz ID 를 함께 갖고 있어 URL 링크와 같은 수준의 근거다
+      .in("confidence", ["url_rel", "manual", "wikidata"])
       .maybeSingle();
     if (!map?.mbid) return [];
 
