@@ -48,7 +48,7 @@ async function fetchAll<T>(page: (f: number, t: number) => PromiseLike<{ data: T
 async function targetArtists(limit: number) {
   const rows = await fetchAll<any>((f, t) => sb.from("artist_deezer_target")
     .select("spotify_id, mbid, name, country, gap, release_groups")
-    .in("confidence", ["url_rel", "manual"]).gt("release_groups", 0).order("spotify_id").range(f, t));
+    .in("confidence", ["url_rel", "manual", "wikidata"]).gt("release_groups", 0).order("spotify_id").range(f, t));
   const warm = new Set((await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id));
   const pri = (r: any) => (warm.has(r.spotify_id) ? 0 : r.country === "KR" ? 1 : r.country === "JP" ? 2 : 3);
   return rows.sort((a, b) => pri(a) - pri(b) || (b.gap ?? 0) - (a.gap ?? 0)).slice(0, limit);

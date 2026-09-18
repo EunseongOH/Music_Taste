@@ -47,7 +47,7 @@ async function mb(path: string): Promise<any> {
 }
 
 async function links() {
-  const maps = await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t));
+  const maps = await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual", "wikidata"]).order("spotify_id").range(f, t));
   const done = new Set((await fetchAll<any>((f, t) => sb.from("mb_artist_discogs").select("mbid").order("mbid").range(f, t))).map((r) => r.mbid));
   const checked = new Set<string>();
   const todo = [...new Set(maps.map((m) => m.mbid))].filter((m) => !done.has(m));
@@ -179,7 +179,7 @@ async function match(ndjson?: string) {
   const already = new Set((await fetchAll<any>((f, t) => sb.from("discogs_album_match").select("spotify_album_id").order("spotify_album_id").range(f, t))).map((r) => r.spotify_album_id));
 
   // 아티스트: Spotify ID -> MB -> Discogs ID
-  const artistMap = await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t));
+  const artistMap = await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual", "wikidata"]).order("spotify_id").range(f, t));
   const disc = await fetchAll<any>((f, t) => sb.from("mb_artist_discogs").select("mbid, discogs_artist_id").order("mbid").range(f, t));
   const discOfMb = new Map<string, number[]>();
   for (const d of disc) discOfMb.set(d.mbid, [...(discOfMb.get(d.mbid) ?? []), Number(d.discogs_artist_id)]);

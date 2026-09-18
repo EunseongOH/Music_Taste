@@ -285,7 +285,7 @@ async function backfillAlbums() {
     .from("mb_spotify_map")
     .select("mbid")
     .eq("entity", "artist")
-    .in("confidence", ["url_rel", "manual"])
+    .in("confidence", ["url_rel", "manual", "wikidata"])
     .order("spotify_id")
     .range(f, t));
   const trusted = new Set(maps.map(m => m.mbid));

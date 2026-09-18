@@ -54,7 +54,7 @@ async function match() {
     ...(await fetchAll<any>((f, t) => sb.from("discogs_album_match").select("spotify_album_id").order("spotify_album_id").range(f, t))).map((r) => r.spotify_album_id),
     ...(await fetchAll<any>((f, t) => sb.from("mb_album_title_match").select("spotify_album_id").order("spotify_album_id").range(f, t))).map((r) => r.spotify_album_id),
   ]);
-  const artistMb = new Map((await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t))).map((m) => [m.spotify_id, m.mbid]));
+  const artistMb = new Map((await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual", "wikidata"]).order("spotify_id").range(f, t))).map((m) => [m.spotify_id, m.mbid]));
 
   const todo = [...albums.values()].filter((a) => !linked.has(a.id) && artistMb.has(a.artist));
   const mbids = [...new Set(todo.map((a) => artistMb.get(a.artist)))];

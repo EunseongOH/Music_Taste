@@ -37,7 +37,7 @@ async function main() {
   await sb.rpc("refresh_artist_coverage_snapshot");
   const snap = await fetchAll<any>((f, t) => sb.from("artist_coverage_snapshot")
     .select("spotify_id, mbid, name, name_ko, country, confidence, albums_with_tracks, tracks")
-    .in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t));
+    .in("confidence", ["url_rel", "manual", "wikidata"]).order("spotify_id").range(f, t));
 
   // MB 발매그룹(앨범 목록) 수
   const rgCount = new Map<string, number>();

@@ -88,7 +88,7 @@ async function main() {
   await sb.rpc("refresh_artist_coverage_snapshot");
   const cov = await fetchAll<any>((f, t) => sb.from("artist_coverage_snapshot")
     .select("spotify_id, name, name_ko, country, albums_with_tracks, tracks, mbid")
-    .in("confidence", ["url_rel", "manual"]).gt("albums_with_tracks", 0).order("spotify_id").range(f, t));
+    .in("confidence", ["url_rel", "manual", "wikidata"]).gt("albums_with_tracks", 0).order("spotify_id").range(f, t));
   const aliases = await fetchAll<any>((f, t) => sb.from("mb_artist").select("mbid, aliases").order("mbid").range(f, t));
   const aliasOf = new Map(aliases.map((a) => [a.mbid, (a.aliases ?? []).map((x: any) => x.name)]));
   const byName = new Map<string, any[]>();
@@ -103,7 +103,7 @@ async function main() {
   // 트랙리스트 없는 정식 매핑 (모자란 장르 보충용)
   const bare = await fetchAll<any>((f, t) => sb.from("artist_coverage_snapshot")
     .select("spotify_id, name, name_ko, country, albums_with_tracks, tracks, mbid")
-    .in("confidence", ["url_rel", "manual"]).eq("albums_with_tracks", 0).order("spotify_id").range(f, t));
+    .in("confidence", ["url_rel", "manual", "wikidata"]).eq("albums_with_tracks", 0).order("spotify_id").range(f, t));
   const bareByName = new Map<string, any[]>();
   for (const c of bare) for (const n of [c.name, c.name_ko]) if (n) bareByName.set(norm(n), [...(bareByName.get(norm(n)) ?? []), c]);
   const imgRows = await fetchAll<any>((f, t) => sb.from("spotify_cache_artists").select("id, images").order("id").range(f, t));

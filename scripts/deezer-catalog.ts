@@ -53,7 +53,7 @@ async function targetArtists(limit: number, genres?: string[]) {
   await sb.rpc("refresh_artist_coverage_snapshot");
   const rows = await fetchAll<any>((f, t) => sb.from("artist_deezer_target")
     .select("spotify_id, mbid, name, name_ko, country, albums_with_tracks, release_groups, gap")
-    .in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t));
+    .in("confidence", ["url_rel", "manual", "wikidata"]).order("spotify_id").range(f, t));
   const done = new Set((await fetchAll<any>((f, t) => sb.from("deezer_artist").select("mbid").not("mbid", "is", null).order("deezer_artist_id").range(f, t))).map((r) => r.mbid));
   let pool = rows.filter((r) => !done.has(r.mbid));
   if (genres?.length) {
@@ -167,7 +167,7 @@ async function match() {
     ...(await fetchAll<any>((f, t) => sb.from("discogs_album_match").select("spotify_album_id").order("spotify_album_id").range(f, t))).map((r) => r.spotify_album_id),
     ...(await fetchAll<any>((f, t) => sb.from("deezer_album_match").select("spotify_album_id").order("spotify_album_id").range(f, t))).map((r) => r.spotify_album_id),
   ]);
-  const artistMb = new Map((await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual"]).order("spotify_id").range(f, t))).map((m) => [m.spotify_id, m.mbid]));
+  const artistMb = new Map((await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid").eq("entity", "artist").in("confidence", ["url_rel", "manual", "wikidata"]).order("spotify_id").range(f, t))).map((m) => [m.spotify_id, m.mbid]));
   const dzOfMb = new Map<string, number[]>();
   for (const d of await fetchAll<any>((f, t) => sb.from("deezer_artist").select("mbid, deezer_artist_id").not("mbid", "is", null).order("deezer_artist_id").range(f, t))) {
     dzOfMb.set(d.mbid, [...(dzOfMb.get(d.mbid) ?? []), Number(d.deezer_artist_id)]);
