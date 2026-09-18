@@ -16,6 +16,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { coverPlaceholder } from "@/utils/coverPlaceholder";
+import { songKey, betterTitle } from "@/utils/songKey";
 
 const translations = {
   ko: {
@@ -1249,12 +1250,22 @@ export default function TracksPage() {
       } catch (e) {}
     }
 
-    if (selectedTracksData.length < 4) {
+    // 마지막 안전장치: 같은 곡이 두 번 들어가면 월드컵에서 같은 곡끼리 붙는다.
+    // 앨범을 따로따로 골랐을 때도 여기서 걸린다. 판 표기가 없는 쪽을 남긴다.
+    const bySong = new Map<string, any>();
+    for (const t of selectedTracksData) {
+      const k = songKey(t.artistName ?? "", t.title ?? "");
+      const prev = bySong.get(k);
+      if (!prev || betterTitle(prev.title, t.title) > 0) bySong.set(k, t);
+    }
+    const uniqueTracks = [...bySong.values()];
+
+    if (uniqueTracks.length < 4) {
       setCustomAlert(locale === "en" ? translations.en.needAtLeast4 : translations.ko.needAtLeast4);
       return;
     }
 
-    const tracksStr = JSON.stringify(selectedTracksData);
+    const tracksStr = JSON.stringify(uniqueTracks);
     sessionStorage.setItem("worldcup_tracks", tracksStr);
     localStorage.setItem("worldcup_tracks", tracksStr);
 
@@ -1262,7 +1273,7 @@ export default function TracksPage() {
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
+        await saveTrackSelectionDraft(selectedArtists, uniqueTracks, isSingleArtistMode);
       } catch (err) {
         console.error("Error saving draft before tournament:", err);
       }
@@ -1272,8 +1283,8 @@ export default function TracksPage() {
     localStorage.removeItem("worldcup_progress");
 
     // Trigger GA4 events
-    trackEvent("funnel_song_complete", { selected_songs_count: selectedTracksData.length });
-    trackEvent("tournament_start", { selected_songs_count: selectedTracksData.length });
+    trackEvent("funnel_song_complete", { selected_songs_count: uniqueTracks.length });
+    trackEvent("tournament_start", { selected_songs_count: uniqueTracks.length });
 
     router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
   };
@@ -1458,11 +1469,31 @@ export default function TracksPage() {
                                  onClick={() => {
                                    const nextIds = new Set(selectedTrackIds);
                                    const nextMetadata = { ...selectedTracksMetadata };
-                                   const albumsToSelect = artist.allAlbums || artist.albums;
+                                   // 같은 곡은 한 번만 고른다. 정규 앨범 -> EP -> 싱글 순으로, 오래된 것부터 본다.
+                                   // (아이돌은 같은 곡을 리패키지·라이브·일본어판으로 여러 번 낸다)
+                                   const rank = (ty: string) => (ty === "Album" ? 0 : ty === "EP" ? 1 : 2);
+                                   const albumsToSelect = [...(artist.allAlbums || artist.albums)]
+                                     .filter((a): a is Album => Boolean(a))
+                                     .sort((x, y) => rank(x.type) - rank(y.type) || String(x.year).localeCompare(String(y.year)));
+                                   const takenSongs = new Map<string, string>();   // 곡 키 -> 이미 고른 트랙 ID
+                                   for (const id of nextIds) {
+                                     const m = nextMetadata[id];
+                                     if (m?.title) takenSongs.set(songKey(m.artistName ?? artist.name, m.title), id);
+                                   }
 
                                    albumsToSelect.forEach(album => {
                                      if (!album) return;
                                      album.tracks.forEach(track => {
+                                       const key = songKey(artist.name, track.title);
+                                       const already = takenSongs.get(key);
+                                       if (already) {
+                                         // 이미 같은 곡이 있다. 판 표기가 없는 쪽을 남긴다
+                                         const prev = nextMetadata[already];
+                                         if (!prev || betterTitle(prev.title, track.title) <= 0) return;
+                                         nextIds.delete(already);
+                                         delete nextMetadata[already];
+                                       }
+                                       takenSongs.set(key, track.id);
                                        nextIds.add(track.id);
                                        nextMetadata[track.id] = {
                                          id: track.id,
