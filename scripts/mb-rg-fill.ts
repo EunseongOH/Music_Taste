@@ -57,6 +57,11 @@ async function targetArtists(limit: number) {
 /** 발매그룹 -> 대표 발매판. 아티스트 1명당 MB 호출 1~5회로 그 아티스트의 발매그룹을 전부 덮는다. */
 async function map(limit: number) {
   const todo = await targetArtists(limit);
+  const warm = new Set([
+    ...(await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
+    ...(await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
+  ]);
+  const typeRank = (t?: string | null) => (t === "Album" ? 0 : t === "EP" ? 1 : t === "Single" ? 2 : 3);
   // 이미 대표 발매판이 정해진 발매그룹은 건너뛴다
   const done = new Set((await fetchAll<any>((f, t) => sb.from("mb_rg_release").select("release_group_mbid").order("release_group_mbid").range(f, t))).map((r) => r.release_group_mbid));
   console.log(`대상 아티스트 ${todo.length}명 · 이미 정해진 발매그룹 ${done.size}`);
@@ -65,8 +70,10 @@ async function map(limit: number) {
   for (const [i, a] of todo.entries()) {
     if (i % 20 === 0) console.log(`  ${i}/${todo.length} 대표발매판 ${picked} · 건너뜀 ${skipped} · 호출 ${calls} ${new Date().toLocaleTimeString()}`);
     // 우리가 아는 이 아티스트의 발매그룹
-    const { data: rgRows } = await sb.from("mb_release_group").select("mbid").eq("artist_mbid", a.mbid).limit(1000);
+    const { data: rgRows } = await sb.from("mb_release_group").select("mbid, primary_type").eq("artist_mbid", a.mbid).limit(1000);
     const mine = new Set((rgRows ?? []).map((r: any) => r.mbid));
+    const typeOf = new Map((rgRows ?? []).map((r: any) => [r.mbid, r.primary_type]));
+    const artistRank = (warm.has(a.spotify_id) ? 0 : a.country === "KR" ? 1 : a.country === "JP" ? 2 : 3) * 10;
     const need = new Set([...mine].filter((m) => !done.has(m)));
     if (!need.size) { skipped++; continue; }
 
@@ -93,6 +100,7 @@ async function map(limit: number) {
     if (!best.size) continue;
     const rows = [...best].map(([release_group_mbid, v]) => ({
       release_group_mbid, release_mbid: v.release, track_count: v.tracks, status: v.status,
+      rank: artistRank + typeRank(typeOf.get(release_group_mbid)),
       checked_at: new Date().toISOString(),
     }));
     const { error } = await sb.from("mb_rg_release").upsert(rows, { onConflict: "release_group_mbid", ignoreDuplicates: true });
@@ -106,9 +114,9 @@ async function map(limit: number) {
 /** 대표 발매판의 트랙리스트를 받아 mb_release_track 에 넣는다. */
 async function tracks(limit: number) {
   const { data: todo } = await sb.from("mb_rg_release")
-    .select("release_group_mbid, release_mbid, track_count")
+    .select("release_group_mbid, release_mbid, track_count, rank")
     .is("tracks_filled_at", null).lt("attempts", 3)
-    .order("checked_at").limit(limit);   // map 이 아티스트 우선순위대로 넣었으므로 넣은 순서가 곧 중요도
+    .order("rank", { nullsFirst: false }).order("checked_at").limit(limit);   // rank: (아티스트 중요도 x 10) + 발매 종류
   console.log(`대상 발매판 ${todo?.length ?? 0}`);
 
   let ok = 0, fail = 0, rowsTotal = 0;
