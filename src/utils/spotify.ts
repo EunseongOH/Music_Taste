@@ -655,6 +655,18 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
   return out.sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
 }
 
+/** 아티스트를 연 횟수만 센다 (우리 이용 기록이다. Spotify 콘텐츠를 저장하는 것이 아니다). */
+function recordArtistDemand(artistId: string) {
+  try {
+    createAdminClient().rpc("bump_artist_demand", { p_id: artistId }).then(
+      () => {},
+      () => {},
+    );
+  } catch {
+    /* 기록 실패가 화면을 막지 않는다 */
+  }
+}
+
 /** 이 아티스트에 대해 지금까지 캐시에 쌓인 Spotify 앨범 전부 (페이지 구분 없이 합친다). */
 async function cachedSpotifyAlbums(artistId: string, lang: string): Promise<{ items: any[]; total: number }> {
   try {
@@ -693,6 +705,10 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
+
+  // 1-a. 이 아티스트를 누가 열었다는 것만 기록한다. 자주 열리는 아티스트부터 트랙리스트를
+  //      끝까지 채워 영구 보관하기 위한 신호다. 실패해도 화면에 영향이 없도록 기다리지 않는다.
+  if (offset === 0) recordArtistDemand(artistId);
 
   // 1-b. 자체 DB(MusicBrainz·Discogs·Deezer) 앨범 목록.
   //      Spotify 앨범 목록 엔드포인트는 개발 모드 일일 쿼터가 낮아(실측 80회 수준) 여기서 최대한 아낀다.
