@@ -20,6 +20,12 @@ interface SavedRow {
   ranking: unknown;
 }
 
+interface CatalogArtist {
+  id: string;
+  name: string;
+  image: string;
+}
+
 interface Source {
   key: string;
   label: string;
@@ -45,6 +51,11 @@ export default function TogetherNewPage() {
   const { toast, showToast } = useToast();
 
   const [picked, setPicked] = useState<RankedTrack[] | null>(null);
+  // 아티스트에서 고르기(DB 에 담긴 Spotify 캐시만 읽는다 — /api/together/catalog)
+  const [artistQuery, setArtistQuery] = useState("");
+  const [artists, setArtists] = useState<CatalogArtist[] | null>(null);
+  const [artistBusy, setArtistBusy] = useState(false);
+  const [artistSource, setArtistSource] = useState<Source | null>(null);
   const [cards, setCards] = useState<SavedRow[] | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
@@ -85,8 +96,47 @@ export default function TogetherNewPage() {
     };
   }, [user]);
 
+  // 처음 열 때 인기 아티스트 몇 명을 보여 준다.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const res = await fetch("/api/together/catalog");
+      const json = (await res.json()) as { artists?: CatalogArtist[] };
+      if (alive) setArtists(json.artists ?? []);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const searchArtists = async () => {
+    setArtistBusy(true);
+    const res = await fetch(`/api/together/catalog?q=${encodeURIComponent(artistQuery.trim())}`);
+    const json = (await res.json()) as { artists?: CatalogArtist[] };
+    setArtists(json.artists ?? []);
+    setArtistBusy(false);
+  };
+
+  const pickArtist = async (artist: CatalogArtist) => {
+    setArtistBusy(true);
+    const res = await fetch(`/api/together/catalog?artistId=${encodeURIComponent(artist.id)}`);
+    const json = (await res.json()) as { tracks?: RankedTrack[] };
+    const tracks = json.tracks ?? [];
+    setArtistBusy(false);
+    if (tracks.length < 4) {
+      showToast("이 아티스트는 아직 담긴 곡이 적어요. 다른 아티스트를 찾아 주세요.", "error");
+      return;
+    }
+    const next: Source = { key: `artist:${artist.id}`, label: artist.name, title: artist.name, artistName: artist.name, tracks, resultId: null };
+    setArtistSource(next);
+    setSourceKey(next.key);
+    setOff(new Set());
+    setTitle(artist.name);
+  };
+
   const sources: Source[] = useMemo(() => {
     const list: Source[] = [];
+    if (artistSource) list.push(artistSource);
     if (picked && picked.length >= 4) {
       list.push({
         key: "picked",
@@ -109,7 +159,7 @@ export default function TogetherNewPage() {
       });
     }
     return list;
-  }, [picked, cards]);
+  }, [picked, cards, artistSource]);
 
   const source = sources.find((s) => s.key === sourceKey) ?? null;
   const chosen = useMemo(() => (source ? source.tracks.filter((t) => !off.has(t.id)) : []), [source, off]);
@@ -200,6 +250,45 @@ export default function TogetherNewPage() {
         곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요.
       </p>
 
+      <SectionTitle title="아티스트에서 고르기" className="mt-8 mb-2" />
+      <p className="type-caption text-navy/70 mb-3 break-keep">
+        소트를 하지 않아도 돼요. 아티스트를 고르면 전곡이 들어오고, 빼고 싶은 곡만 끄면 링크가 나와요.
+      </p>
+      <div className="flex gap-2">
+        <input
+          id="together-artist"
+          value={artistQuery}
+          onChange={(e) => setArtistQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") searchArtists();
+          }}
+          placeholder="아티스트 이름"
+          className="flex-1 h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
+        />
+        <button onClick={searchArtists} disabled={artistBusy} className={`${secondaryButton} px-5`}>
+          찾기
+        </button>
+      </div>
+      {artists !== null && (
+        <ul className="flex flex-wrap gap-2 mt-3">
+          {artists.length === 0 && <li className="type-caption text-navy/70">찾는 아티스트가 아직 준비되지 않았어요.</li>}
+          {artists.map((artist) => (
+            <li key={artist.id}>
+              <button
+                onClick={() => pickArtist(artist)}
+                disabled={artistBusy}
+                className={`h-9 pl-1 pr-3 rounded-full flex items-center gap-2 type-caption cursor-pointer ${
+                  artistSource?.key === `artist:${artist.id}` ? "bg-navy text-cream" : "bg-navy/5 text-navy"
+                }`}
+              >
+                <Cover src={artist.image} alt={artist.name} size={28} />
+                {artist.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {sources.length === 0 ? (
         <div className="mt-10">
           <EmptyState
@@ -262,6 +351,19 @@ export default function TogetherNewPage() {
               />
             </label>
           )}
+
+          <div className="flex items-center gap-2 mb-3">
+            <button onClick={() => setOff(new Set())} className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer">
+              전부 켜기
+            </button>
+            <button
+              onClick={() => setOff(new Set(source.tracks.map((t) => t.id)))}
+              className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
+            >
+              전부 끄기
+            </button>
+            {chosen.length > 48 && <span className="type-caption text-point-ink">곡이 많으면 줄 세우는 데 오래 걸려요</span>}
+          </div>
 
           <ul className="flex flex-col divide-y divide-navy/10">
             {source.tracks.map((track) => {
