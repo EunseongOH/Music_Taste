@@ -13,6 +13,8 @@
 import { createAdminClient } from "../src/utils/supabase/admin";
 
 const sb = createAdminClient();
+// Supabase 무료 한도는 500MB. 여유를 두고 멈춘다.
+const DB_LIMIT_MB = Number(process.env.DB_LIMIT_MB ?? 420);
 const GAP_MS = 260;                     // 초당 4회 이하 (Deezer 안내: 5초에 50회)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const norm = (s: string) => (s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
@@ -115,7 +117,18 @@ async function artists(limit: number, genres?: string[]) {
   console.log(`완료 · 확정 ${ok} · 이름만(보류) ${weak} · 없음 ${none} · Deezer 호출 ${calls}`);
 }
 
+async function dbSizeMb(): Promise<number> {
+  const { data } = await sb.rpc("db_size_mb");
+  return Number(data ?? 0);
+}
+
 async function albums(limitArtists: number) {
+  const size0 = await dbSizeMb();
+  if (size0 >= DB_LIMIT_MB) {
+    console.log(`DB ${size0}MB 로 한도(${DB_LIMIT_MB}MB)에 닿았다. 더 받지 않는다.`);
+    return;
+  }
+  console.log(`DB ${size0}MB / ${DB_LIMIT_MB}MB`);
   const artistsRows = await fetchAll<any>((f, t) => sb.from("deezer_artist").select("deezer_artist_id, mbid, name, matched_by").eq("matched_by", "name+album").order("deezer_artist_id").range(f, t));
   const have = new Set((await fetchAll<any>((f, t) => sb.from("deezer_album").select("deezer_artist_id").order("deezer_album_id").range(f, t))).map((r) => Number(r.deezer_artist_id)));
   const todo = artistsRows.filter((a) => !have.has(Number(a.deezer_artist_id))).slice(0, limitArtists);
@@ -123,6 +136,7 @@ async function albums(limitArtists: number) {
   let albumCount = 0, trackCount = 0;
   for (const [i, a] of todo.entries()) {
     if (i % 10 === 0) console.log(`  ${i}/${todo.length} 앨범 ${albumCount} 곡 ${trackCount} · 호출 ${calls} ${new Date().toLocaleTimeString()}`);
+    if (i % 50 === 49 && (await dbSizeMb()) >= DB_LIMIT_MB) { console.log("한도에 닿아 멈춘다."); break; }
     const seen = new Set<string>();
     for (let index = 0; ; index += 100) {
       const list = await dz(`/artist/${a.deezer_artist_id}/albums?limit=100&index=${index}`);

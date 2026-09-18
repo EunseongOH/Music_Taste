@@ -7,6 +7,7 @@
 // 사용:
 //   npx tsx --env-file=.env.local scripts/mb-rg-fill.ts map [아티스트수]   발매그룹마다 대표 발매판 정하기
 //   npx tsx --env-file=.env.local scripts/mb-rg-fill.ts tracks [발매판수]  대표 발매판의 트랙리스트 받기
+//   npx tsx --env-file=.env.local scripts/mb-rg-fill.ts demand [아티스트수] 많이 열린 아티스트를 대기열 맨 앞으로
 //
 // MusicBrainz 는 IP 당 초당 1회다. Spotify 는 부르지 않는다.
 
@@ -14,6 +15,10 @@ import { createAdminClient } from "../src/utils/supabase/admin";
 
 const sb = createAdminClient();
 const UA = "Sortify/1.0 ( https://sortify.kr )";
+// Supabase 무료 한도는 500MB. 여유를 두고 여기서 멈춘다 (환경변수 DB_LIMIT_MB 로 조정).
+const DB_LIMIT_MB = Number(process.env.DB_LIMIT_MB ?? 420);
+// 이용자가 열 아티스트(rank 0~2)까지만 채운다. 그 뒤 롱테일은 --all 을 줘야 받는다.
+const RANK_CEILING = 2;
 const MIN_GAP_MS = 1100;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -55,8 +60,8 @@ async function targetArtists(limit: number) {
 }
 
 /** 발매그룹 -> 대표 발매판. 아티스트 1명당 MB 호출 1~5회로 그 아티스트의 발매그룹을 전부 덮는다. */
-async function map(limit: number) {
-  const todo = await targetArtists(limit);
+async function map(limit: number, given?: any[], forceRank?: number) {
+  const todo = given ?? await targetArtists(limit);
   const warm = new Set([
     ...(await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
     ...(await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
@@ -73,7 +78,7 @@ async function map(limit: number) {
     const { data: rgRows } = await sb.from("mb_release_group").select("mbid, primary_type").eq("artist_mbid", a.mbid).limit(1000);
     const mine = new Set((rgRows ?? []).map((r: any) => r.mbid));
     const typeOf = new Map((rgRows ?? []).map((r: any) => [r.mbid, r.primary_type]));
-    const artistRank = (warm.has(a.spotify_id) ? 0 : a.country === "KR" ? 1 : a.country === "JP" ? 2 : 3) * 10;
+    const artistRank = forceRank ?? (warm.has(a.spotify_id) ? 0 : a.country === "KR" ? 1 : a.country === "JP" ? 2 : 3) * 10;
     const need = new Set([...mine].filter((m) => !done.has(m)));
     if (!need.size) { skipped++; continue; }
 
@@ -112,16 +117,31 @@ async function map(limit: number) {
 }
 
 /** 대표 발매판의 트랙리스트를 받아 mb_release_track 에 넣는다. */
+async function dbSizeMb(): Promise<number> {
+  const { data } = await sb.rpc("db_size_mb");
+  return Number(data ?? 0);
+}
+
 async function tracks(limit: number) {
-  const { data: todo } = await sb.from("mb_rg_release")
+  const all = process.argv.includes("--all");
+  const size = await dbSizeMb();
+  if (size >= DB_LIMIT_MB) {
+    console.log(`DB ${size}MB 로 한도(${DB_LIMIT_MB}MB)에 닿았다. 더 받지 않는다.`);
+    console.log("docs/canonical-db/storage-plan.md 의 정리 방법을 먼저 실행해라.");
+    return;
+  }
+  console.log(`DB ${size}MB / ${DB_LIMIT_MB}MB${all ? " · 롱테일까지" : ` · rank ${RANK_CEILING} 까지`}`);
+  const q = sb.from("mb_rg_release")
     .select("release_group_mbid, release_mbid, track_count, rank")
-    .is("tracks_filled_at", null).lt("attempts", 3)
+    .is("tracks_filled_at", null).lt("attempts", 3);
+  const { data: todo } = await (all ? q : q.lte("rank", RANK_CEILING))
     .order("rank", { nullsFirst: false }).order("checked_at").limit(limit);   // rank: (아티스트 중요도 x 10) + 발매 종류
   console.log(`대상 발매판 ${todo?.length ?? 0}`);
 
   let ok = 0, fail = 0, rowsTotal = 0;
   for (const [i, r] of (todo ?? []).entries()) {
     if (i % 20 === 0) console.log(`  ${i}/${todo!.length} 성공 ${ok} · 실패 ${fail} · 곡 ${rowsTotal} · 호출 ${calls} ${new Date().toLocaleTimeString()}`);
+    if (i % 200 === 199 && (await dbSizeMb()) >= DB_LIMIT_MB) { console.log("한도에 닿아 멈춘다."); break; }
     const d = await mb(`release/${r.release_mbid}?inc=recordings&fmt=json`);
     if (d?.__status === 404) {
       // MB 에서 병합·삭제된 발매판. 다시 시도해도 소용없다
@@ -156,8 +176,39 @@ async function attemptsOf(rg: string) {
   return data?.attempts ?? 0;
 }
 
+/**
+ * 이용자가 실제로 많이 연 아티스트를 대기열 맨 앞으로 끌어온다.
+ * "자주 쓰이는 아티스트는 끝까지 채워 영구 보관한다" 를 실행하는 명령이다.
+ */
+async function demand(limit: number) {
+  const top = await fetchAll<any>((f, t) => sb.from("artist_completeness")
+    .select("spotify_id, mbid, name, country, opens, release_groups, rg_pending, cc0_complete")
+    .in("confidence", ["url_rel", "manual", "wikidata"])
+    .gt("opens", 0).order("opens", { ascending: false }).range(f, t));
+  const todo = top.filter((a) => !a.cc0_complete).slice(0, limit);
+  console.log(`수요 있는 아티스트 ${top.length}명 · 아직 덜 채운 ${todo.length}명`);
+  if (!todo.length) return;
+
+  // 1) 대표 발매판이 없는 발매그룹부터 정한다 (rank -10: 어떤 것보다 먼저)
+  await map(todo.length, todo, -10);
+
+  // 2) 이미 정해진 것도 맨 앞으로 당긴다
+  for (let i = 0; i < todo.length; i += 50) {
+    const mbids = todo.slice(i, i + 50).map((a) => a.mbid);
+    const rgs = await fetchAll<any>((f, t) => sb.from("mb_release_group").select("mbid").in("artist_mbid", mbids).order("mbid").range(f, t));
+    for (let j = 0; j < rgs.length; j += 200) {
+      const { error } = await sb.from("mb_rg_release").update({ rank: -10 })
+        .in("release_group_mbid", rgs.slice(j, j + 200).map((r) => r.mbid)).is("tracks_filled_at", null);
+      if (error) throw new Error(error.message);
+    }
+  }
+  const left = todo.reduce((n, a) => n + (a.rg_pending ?? 0), 0);
+  console.log(`완료 · 수요 상위 ${todo.length}명의 남은 발매그룹 ${left}건을 맨 앞으로 당겼다`);
+}
+
 const cmd = process.argv[2];
 const n = Number(process.argv[3] ?? 200);
 if (cmd === "map") map(n);
 else if (cmd === "tracks") tracks(n);
-else { console.log("map [아티스트수] | tracks [발매판수]"); process.exit(1); }
+else if (cmd === "demand") demand(n);
+else { console.log("map [아티스트수] | tracks [발매판수] | demand [아티스트수]"); process.exit(1); }
