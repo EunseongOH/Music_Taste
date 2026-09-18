@@ -133,12 +133,16 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     // 화면에서 중복 제거되므로 여기서도 빼고 센다 — 목록의 곡 수와 실제 보이는 곡 수를 맞춘다.
     const releaseIds = [...byAlbum.values()].map((v) => v.release).filter(Boolean) as string[];
     const titlesOf = new Map<string, Set<string>>();
+    const recsOf = new Map<string, Set<string>>();     // 발매판 -> 녹음 ID (앨범끼리 같은 곡인지 가리는 기준)
     for (let i = 0; i < releaseIds.length; i += 50) {
-      const { data } = await supabase.from("mb_release_track").select("release_mbid, title").in("release_mbid", releaseIds.slice(i, i + 50)).limit(10000);
+      const { data } = await supabase.from("mb_release_track").select("release_mbid, title, recording_mbid").in("release_mbid", releaseIds.slice(i, i + 50)).limit(10000);
       for (const t of data ?? []) {
         const set = titlesOf.get(t.release_mbid) ?? new Set<string>();
         set.add(normTrack(t.title));
         titlesOf.set(t.release_mbid, set);
+        const rec = recsOf.get(t.release_mbid) ?? new Set<string>();
+        if (t.recording_mbid) rec.add(t.recording_mbid);
+        recsOf.set(t.release_mbid, rec);
       }
     }
     const trackCount = new Map<string, number>([...titlesOf].map(([k, v]) => [k, v.size]));
@@ -152,6 +156,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     }
 
     const out: DbAlbum[] = [];
+    const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 곡 식별자 (녹음 ID, 없으면 정규화한 제목)
     const seen = new Set<string>();          // 제목+연도+곡수
     const seenLoose = new Set<string>();     // 제목+연도 (곡 수가 다른 같은 앨범도 하나만 낸다)
     for (const [albumId, src] of byAlbum) {
@@ -180,6 +185,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         ],
         source: "db",
       });
+      if (src.release) songsOf.set(albumId, recsOf.get(src.release) ?? new Set());
     }
     // 3) MusicBrainz 단독: Spotify 앨범 ID 가 없는 발매그룹도 낸다 (앨범 ID 는 "mb:<발매그룹>")
     //    같은 아티스트의 같은 발매판에서 온 트랙리스트라 출처 대조가 필요 없다. 재킷도 발매그룹 ID 로 정해진다.
@@ -196,12 +202,16 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       }
       const relIds2 = [...new Set(rgRel.values())];
       const titles2 = new Map<string, Set<string>>();
+      const recs2 = new Map<string, Set<string>>();
       for (let i = 0; i < relIds2.length; i += 50) {
-        const { data } = await supabase.from("mb_release_track").select("release_mbid, title").in("release_mbid", relIds2.slice(i, i + 50)).limit(10000);
+        const { data } = await supabase.from("mb_release_track").select("release_mbid, title, recording_mbid").in("release_mbid", relIds2.slice(i, i + 50)).limit(10000);
         for (const t of data ?? []) {
           const set = titles2.get(t.release_mbid) ?? new Set<string>();
           set.add(normTrack(t.title));
           titles2.set(t.release_mbid, set);
+          const rec = recs2.get(t.release_mbid) ?? new Set<string>();
+          if (t.recording_mbid) rec.add(t.recording_mbid);
+          recs2.set(t.release_mbid, rec);
         }
       }
       for (const g of restRg) {
@@ -224,6 +234,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           images: [{ url: caaCover(g.mbid) }],
           source: "db",
         });
+        songsOf.set(`mb:${g.mbid}`, recs2.get(rel) ?? new Set());
       }
     }
 
@@ -252,8 +263,23 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       }
     }
 
-    out.sort((a, b) => String(b.release_date).localeCompare(String(a.release_date)));
-    return out;
+    // 5) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
+    //    같은 곡을 싱글로도 앨범으로도 내는 아티스트(요아소비 등)에서 같은 곡이 두세 번 뜨던 원인이다.
+    //    곡이 같은지는 MusicBrainz 녹음 ID 로 가린다 — 제목이 일본어냐 로마자냐와 무관하게 같은 녹음이면 같다.
+    const SMALL = 5;                               // 이 곡 수 이하만 뺀다 (정규 앨범은 절대 빼지 않는다)
+    const bySize = [...out].sort((a, b) => b.total_tracks - a.total_tracks);
+    const covered = new Set<string>();
+    const drop = new Set<string>();
+    for (const a of bySize) {
+      const songs = songsOf.get(a.id);
+      if (!songs?.size) continue;                  // 곡 식별자를 모르는 앨범은 건드리지 않는다
+      if (a.total_tracks <= SMALL && [...songs].every((x) => covered.has(x))) { drop.add(a.id); continue; }
+      for (const x of songs) covered.add(x);
+    }
+    const kept = drop.size ? out.filter((a) => !drop.has(a.id)) : out;
+
+    kept.sort((a, b) => String(b.release_date).localeCompare(String(a.release_date)));
+    return kept;
   } catch (e) {
     console.warn("[dbCatalog] getDbArtistAlbums failed:", e);
     return [];
