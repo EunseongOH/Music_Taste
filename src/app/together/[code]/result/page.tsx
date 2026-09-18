@@ -47,6 +47,7 @@ export default function TogetherResultPage() {
   useEffect(() => {
     if (!code || isLoading) return;
     let alive = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
     (async () => {
       const found = await fetchChallenge(code);
       if (!alive || !found) {
@@ -80,9 +81,16 @@ export default function TogetherResultPage() {
       if (!alive) return;
       setChallenge(found);
       setEntries(list);
+
+      // 같이 하는 사람이 끝나는 대로 일치율이 채워지도록 몇 초마다 다시 읽는다.
+      timer = setInterval(async () => {
+        const next = await fetchEntries(found.id);
+        if (alive) setEntries(next);
+      }, 8000);
     })();
     return () => {
       alive = false;
+      if (timer) clearInterval(timer);
     };
   }, [code, isLoading, user]);
 
@@ -143,8 +151,8 @@ export default function TogetherResultPage() {
       </h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
         {others.length === 0
-          ? "링크를 보내서 다른 사람도 줄 세우면 일치율이 나와요."
-          : `${others.length}명과 비교했어요.`}
+          ? `코드 ${challenge.code} 를 알려 주세요. 옆 사람이 끝나면 여기에 바로 뜹니다.`
+          : `${others.length}명과 비교했어요 · 몇 초마다 새로 확인해요.`}
       </p>
 
       {/* 내 1위 */}

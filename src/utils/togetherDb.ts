@@ -67,7 +67,8 @@ export async function fetchEntries(challengeId: string): Promise<ChallengeEntry[
 
 /** 코드가 겹치면 몇 번 다시 만든다(짧은 코드라 드물지만 확실히 하려고). */
 export async function createChallenge(input: {
-  creatorId: string;
+  /** 로그인하지 않았으면 null — 링크는 누구나 만들 수 있다. */
+  creatorId: string | null;
   creatorNickname: string | null;
   artistName: string | null;
   title: string;

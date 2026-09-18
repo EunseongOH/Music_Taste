@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
+import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
 import { createChallenge } from "@/utils/togetherDb";
 import * as platform from "@/utils/platform";
@@ -19,34 +20,54 @@ interface SavedRow {
   ranking: unknown;
 }
 
-interface MyCard {
-  id: string;
+interface Source {
+  key: string;
+  label: string;
+  /** 링크 이름 기본값 */
   title: string;
-  artist_name: string | null;
-  is_single_artist: boolean;
-  created_at: string;
+  artistName: string | null;
   tracks: RankedTrack[];
+  /** 저장된 취향표에서 온 경우 그 id */
+  resultId: string | null;
 }
 
 /**
  * 같이 소트하기 — 만들기(실험). 문서: docs/together-sort.md
  *
- * 이미 끝낸 내 취향표에서 곡 세트를 가져오고, 뺄 곡을 끄고 링크를 만든다.
- * Spotify 를 부르지 않는다(저장된 취향표의 곡 정보만 쓴다).
+ * 곡 세트만 정하면 링크가 나온다. 소트를 끝내지 않아도 된다.
+ *  - "지금 고른 곡": 곡 고르기 화면에서 담아 둔 곡(월드컵을 아직 안 했어도 된다)
+ *  - "내 취향표": 이미 끝낸 취향표의 곡
+ * Spotify 를 부르지 않는다(이미 가지고 있는 곡 정보만 쓴다).
  */
 export default function TogetherNewPage() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { toast, showToast } = useToast();
 
-  // 로그인 사용자의 취향표. null = 아직 안 불러옴(로딩 상태를 따로 두지 않는다).
-  const [cards, setCards] = useState<MyCard[] | null>(null);
-  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<RankedTrack[] | null>(null);
+  const [cards, setCards] = useState<SavedRow[] | null>(null);
+  const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
+  const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
   const [madeCode, setMadeCode] = useState<string | null>(null);
 
+  // 곡 고르기 화면에서 담아 둔 곡(월드컵 시작 전 상태)
+  useEffect(() => {
+    // 첫 프레임 뒤에 읽는다(효과 안에서 바로 state 를 바꾸면 렌더가 한 번 더 돈다).
+    const id = requestAnimationFrame(() => {
+      try {
+        const raw = safeSessionStorage.getItem("worldcup_tracks") || safeLocalStorage.getItem("worldcup_tracks");
+        setPicked(raw ? normalizeRanking(JSON.parse(raw)) : []);
+      } catch {
+        setPicked([]);
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // 내가 저장한 취향표
   useEffect(() => {
     if (!user) return;
     let alive = true;
@@ -57,42 +78,58 @@ export default function TogetherNewPage() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(30);
-      if (!alive) return;
-      setCards(
-        ((data ?? []) as SavedRow[]).map((r) => ({
-          id: r.id,
-          title: r.title,
-          artist_name: r.artist_name,
-          is_single_artist: !!r.is_single_artist,
-          created_at: r.created_at,
-          tracks: normalizeRanking(r.ranking),
-        }))
-      );
+      if (alive) setCards((data ?? []) as SavedRow[]);
     })();
     return () => {
       alive = false;
     };
   }, [user]);
 
-  const picked = (cards ?? []).find((c) => c.id === pickedId) ?? null;
-  const chosen = useMemo(() => (picked ? picked.tracks.filter((t) => !off.has(t.id)) : []), [picked, off]);
+  const sources: Source[] = useMemo(() => {
+    const list: Source[] = [];
+    if (picked && picked.length >= 4) {
+      list.push({
+        key: "picked",
+        label: "지금 고른 곡",
+        title: picked[0]?.artistName ?? "같이 소트하기",
+        artistName: picked[0]?.artistName ?? null,
+        tracks: picked,
+        resultId: null,
+      });
+    }
+    for (const row of cards ?? []) {
+      const tracks = normalizeRanking(row.ranking);
+      list.push({
+        key: row.id,
+        label: row.title,
+        title: row.artist_name || tracks[0]?.artistName || row.title,
+        artistName: row.artist_name || tracks[0]?.artistName || null,
+        tracks,
+        resultId: row.id,
+      });
+    }
+    return list;
+  }, [picked, cards]);
 
-  const pick = (card: MyCard) => {
-    setPickedId(card.id);
+  const source = sources.find((s) => s.key === sourceKey) ?? null;
+  const chosen = useMemo(() => (source ? source.tracks.filter((t) => !off.has(t.id)) : []), [source, off]);
+
+  const choose = (next: Source) => {
+    setSourceKey(next.key);
     setOff(new Set());
-    setTitle(card.artist_name || card.tracks[0]?.artistName || card.title);
+    setTitle(next.title);
   };
 
   const make = async () => {
-    if (!user || !picked || chosen.length < 4) return;
+    if (!source || chosen.length < 4) return;
     setBusy(true);
     const made = await createChallenge({
-      creatorId: user.id,
-      creatorNickname: user.user_metadata?.nickname ?? null,
-      artistName: picked.artist_name || picked.tracks[0]?.artistName || null,
-      title: title.trim() || picked.title,
+      creatorId: user?.id ?? null,
+      creatorNickname: user?.user_metadata?.nickname ?? (nickname.trim() || null),
+      artistName: source.artistName,
+      title: title.trim() || source.title,
       tracks: chosen,
-      sourceResultId: picked.id,
+      sourceResultId: source.resultId,
     });
     setBusy(false);
     if (!made) {
@@ -102,9 +139,7 @@ export default function TogetherNewPage() {
     setMadeCode(made.code);
   };
 
-  const link = madeCode ? `${window.location.origin}/together/${madeCode}` : "";
-
-  if (isLoading || (user && cards === null)) {
+  if (isLoading || picked === null || (user && cards === null)) {
     return (
       <main className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center">
         <p className="type-sub text-navy/70">불러오고 있어요</p>
@@ -112,38 +147,45 @@ export default function TogetherNewPage() {
     );
   }
 
-  if (!user) {
-    return (
-      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="type-title-2 text-navy">로그인이 필요해요</p>
-        <p className="type-sub text-navy/70">내 취향표에서 곡을 가져와 링크를 만들어요.</p>
-        <button onClick={() => router.push("/")} className={primaryButton}>
-          홈으로 가기
-        </button>
-      </main>
-    );
-  }
-
   if (madeCode) {
+    const link = `${window.location.origin}/together/${madeCode}`;
     return (
       <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-12">
-        <h1 className="type-title-1 text-navy">링크가 만들어졌어요</h1>
+        <h1 className="type-title-1 text-navy">같이 할 준비가 됐어요</h1>
         <p className="type-body text-navy/70 mt-2 break-keep">
-          이 링크를 받은 사람은 같은 곡으로 소트할 수 있어요.{"\n"}둘 다 끝내면 서로의 일치율이 보여요.
+          옆 사람에게 코드를 알려 주거나 링크를 보내세요.{"\n"}같은 곡으로 줄 세우면 서로의 일치율이 보여요.
         </p>
-        <p className="mt-6 p-4 rounded-2xl bg-navy/5 type-sub text-navy break-all">{link}</p>
-        <div className="mt-4 flex flex-col gap-2">
+
+        <div className="mt-8 flex flex-col items-center gap-2 py-6 rounded-3xl bg-navy/5">
+          <span className="type-caption text-navy/70">코드</span>
+          <span className="font-num text-[40px] leading-none font-extrabold tracking-[0.12em] text-navy">{madeCode}</span>
+          <span className="type-caption text-navy/70">같이 소트하기 첫 화면에서 입력</span>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-2">
+          <button
+            onClick={async () => {
+              const shared = await platform.share({ title: "같이 소트하기", text: `${title} — 같은 곡으로 줄 세워 봐요`, url: link });
+              if (!shared) {
+                const how = await platform.copyText(link);
+                showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+              }
+            }}
+            className={`${primaryButton} w-full`}
+          >
+            링크 보내기
+          </button>
           <button
             onClick={async () => {
               const how = await platform.copyText(link);
               showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
             }}
-            className={`${primaryButton} w-full`}
+            className={`${secondaryButton} w-full`}
           >
             링크 복사하기
           </button>
           <button onClick={() => router.push(`/together/${madeCode}`)} className={`${secondaryButton} w-full`}>
-            링크 화면 열어 보기
+            나도 줄 세우러 가기
           </button>
         </div>
         <Toast toast={toast} />
@@ -152,32 +194,40 @@ export default function TogetherNewPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-28">
+    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
       <h1 className="type-title-1 text-navy">같이 소트하기 만들기</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
-        내 취향표에서 곡을 가져와요. 빼고 싶은 곡은 끄면 돼요.
+        곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요.
       </p>
 
-      {(cards ?? []).length === 0 ? (
+      {sources.length === 0 ? (
         <div className="mt-10">
-          <EmptyState title="저장된 취향표가 없어요" desc="월드컵을 끝내고 취향표를 저장하면 여기에서 고를 수 있어요." />
+          <EmptyState
+            title="가져올 곡이 없어요"
+            desc="곡 고르기에서 4곡 이상 담거나, 취향표를 저장하면 그 곡으로 만들 수 있어요."
+            action={
+              <button onClick={() => router.push("/")} className={primaryButton}>
+                곡 고르러 가기
+              </button>
+            }
+          />
         </div>
       ) : (
         <>
-          <SectionTitle title="취향표 고르기" className="mt-8 mb-2" />
+          <SectionTitle title="어떤 곡으로 할까요" className="mt-8 mb-2" />
           <ul className="flex flex-col divide-y divide-navy/10">
-            {(cards ?? []).map((card) => (
-              <li key={card.id}>
-                <button onClick={() => pick(card)} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
-                  <Cover src={card.tracks[0]?.albumImage} alt={card.title} size={44} />
+            {sources.map((item) => (
+              <li key={item.key}>
+                <button onClick={() => choose(item)} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
+                  <Cover src={item.tracks[0]?.albumImage} alt={item.label} size={44} />
                   <span className="flex-1 min-w-0">
-                    <span className="block type-body-strong text-navy truncate">{card.title}</span>
+                    <span className="block type-body-strong text-navy truncate">{item.label}</span>
                     <span className="block type-caption text-navy/70">
-                      {card.tracks.length}곡 · {card.is_single_artist ? "최애 곡 줄 세우기" : "믹스 매치 월드컵"}
+                      {item.tracks.length}곡{item.resultId ? "" : " · 아직 소트하지 않은 곡"}
                     </span>
                   </span>
-                  <span className={`type-caption ${pickedId === card.id ? "text-point-ink font-semibold" : "text-navy/70"}`}>
-                    {pickedId === card.id ? "고름" : "고르기"}
+                  <span className={`type-caption ${sourceKey === item.key ? "text-point-ink font-semibold" : "text-navy/70"}`}>
+                    {sourceKey === item.key ? "고름" : "고르기"}
                   </span>
                 </button>
               </li>
@@ -186,10 +236,10 @@ export default function TogetherNewPage() {
         </>
       )}
 
-      {picked && (
+      {source && (
         <>
           <SectionTitle title="곡 고르기" count={chosen.length} className="mt-8 mb-3" />
-          <label className="flex flex-col gap-1 mb-4">
+          <label className="flex flex-col gap-1 mb-3">
             <span className="type-caption text-navy/70">링크에 보일 이름</span>
             <input
               id="together-title"
@@ -199,9 +249,22 @@ export default function TogetherNewPage() {
               className="h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
             />
           </label>
+          {!user && (
+            <label className="flex flex-col gap-1 mb-4">
+              <span className="type-caption text-navy/70">만든 사람 (안 써도 돼요)</span>
+              <input
+                id="together-nickname"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={20}
+                placeholder="리스너"
+                className="h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
+              />
+            </label>
+          )}
 
           <ul className="flex flex-col divide-y divide-navy/10">
-            {picked.tracks.map((track) => {
+            {source.tracks.map((track) => {
               const isOff = off.has(track.id);
               return (
                 <li key={track.id} className="flex items-center gap-3 py-2.5">

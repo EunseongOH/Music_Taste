@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import { fetchChallenge, fetchEntries, participantKey, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
-import { Cover, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
+import { Cover, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import * as platform from "@/utils/platform";
 
 /**
  * 같이 소트하기 — 초대 화면(실험). 문서: docs/together-sort.md
@@ -19,20 +20,32 @@ export default function TogetherInvitePage() {
   const { user } = useAuth();
   const code = params.code as string;
 
+  const { toast, showToast } = useToast();
   const [challenge, setChallenge] = useState<SortChallenge | null>(null);
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
 
+  // 한자리에 모여 할 때 옆 사람이 끝나는 게 바로 보이도록 몇 초마다 다시 읽는다.
   useEffect(() => {
     if (!code) return;
     let alive = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
     (async () => {
       const found = await fetchChallenge(code);
       if (!alive) return;
       setChallenge(found);
-      setEntries(found ? await fetchEntries(found.id) : []);
+      if (!found) {
+        setEntries([]);
+        return;
+      }
+      setEntries(await fetchEntries(found.id));
+      timer = setInterval(async () => {
+        const list = await fetchEntries(found.id);
+        if (alive) setEntries(list);
+      }, 8000);
     })();
     return () => {
       alive = false;
+      if (timer) clearInterval(timer);
     };
   }, [code]);
 
@@ -80,9 +93,33 @@ export default function TogetherInvitePage() {
         {creator}님이 고른 {challenge.tracks.length}곡이에요.{"\n"}같은 곡으로 줄 세우면 서로 얼마나 비슷한지 볼 수 있어요.
       </p>
 
-      <p className="type-caption text-navy/70 mt-6">
-        지금까지 {entries.length}명이 줄 세웠어요
-      </p>
+      <div className="mt-6 flex flex-col gap-2">
+        <p className="type-caption text-navy/70">
+          지금까지 {entries.length}명이 줄 세웠어요{entries.length > 0 ? " · 몇 초마다 새로 확인해요" : ""}
+        </p>
+        {entries.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5">
+            {entries.map((e) => (
+              <li key={e.id} className="h-7 px-3 rounded-full bg-navy/5 type-caption text-navy flex items-center">
+                {e.nickname || "익명 리스너"}
+              </li>
+            ))}
+          </ul>
+        )}
+        <button
+          onClick={async () => {
+            const link = `${window.location.origin}/together/${challenge.code}`;
+            const shared = await platform.share({ title: "같이 소트하기", text: `${challenge.title} — 같은 곡으로 줄 세워 봐요`, url: link });
+            if (!shared) {
+              const how = await platform.copyText(link);
+              showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+            }
+          }}
+          className="self-start type-caption text-point-ink font-semibold cursor-pointer"
+        >
+          코드 {challenge.code} · 링크 보내기
+        </button>
+      </div>
 
       <ul className="mt-4 flex flex-col divide-y divide-navy/10">
         {challenge.tracks.map((track) => (
@@ -108,6 +145,7 @@ export default function TogetherInvitePage() {
           )}
         </div>
       </div>
+      <Toast toast={toast} />
     </main>
   );
 }
