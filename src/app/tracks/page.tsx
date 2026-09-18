@@ -34,6 +34,7 @@ const translations = {
     selectAll: "전체 선택",
     clearAll: "전체 해제",
     loadingTracks: "트랙을 불러오는 중...",
+    noTracks: "이 앨범의 수록곡은 아직 준비 중이에요. 다른 앨범을 골라주세요.",
     close: "닫기",
     prev: "이전",
     next: "다음",
@@ -87,6 +88,7 @@ const translations = {
     selectAll: "Select All",
     clearAll: "Deselect All",
     loadingTracks: "Loading tracks...",
+    noTracks: "We don't have this album's tracks yet. Try another album.",
     close: "Close",
     prev: "Prev",
     next: "Next",
@@ -1689,6 +1691,11 @@ export default function TracksPage() {
                                               <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
                                                 <Disc className="animate-spin text-point/70" size={20} />
                                                 <span>{t.loadingTracks}</span>
+                                              </div>
+                                            ) : album.tracks.length === 0 ? (
+                                              // 트랙리스트가 아직 없는 앨범. 빈 칸만 보이면 고장으로 읽힌다
+                                              <div className="py-6 px-4 text-center text-navy/50 font-sans text-sm">
+                                                {t.noTracks}
                                               </div>
                                             ) : (
                                               album.tracks.map((track, idx) => {
