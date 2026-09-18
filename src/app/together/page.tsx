@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fetchChallenge } from "@/utils/togetherDb";
 import { Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
@@ -58,9 +59,10 @@ export default function TogetherHomePage() {
         <button onClick={enter} disabled={busy || code.trim().length < 4} className={`${primaryButton} w-full`}>
           {busy ? "찾는 중" : "들어가기"}
         </button>
-        <button onClick={() => router.push("/together/new")} className={`${secondaryButton} w-full`}>
+        {/* 링크로 둔다 — 화면이 다 그려져도 자바스크립트가 붙기 전에는 onClick 이 안 먹는다(느린 폰에서 "눌러도 반응 없음"). */}
+        <Link href="/together/new" className={`${secondaryButton} w-full`}>
           새로 만들기
-        </button>
+        </Link>
       </div>
       <Toast toast={toast} />
     </main>
