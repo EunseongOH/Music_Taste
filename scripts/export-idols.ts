@@ -11,7 +11,7 @@
 //
 // 사용: npx tsx --env-file=.env.local scripts/export-idols.ts [출력 폴더]
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createAdminClient } from "../src/utils/supabase/admin";
 
 const sb = createAdminClient();
@@ -146,7 +146,9 @@ async function main() {
   const g3 = list.filter((r) => r.상태.startsWith("3"));
   writeFileSync(`${OUT}/1_트랙리스트_확보_아이돌.csv`, csv(g1), "utf8");
   writeFileSync(`${OUT}/2_앨범목록만_아이돌.csv`, csv(g2), "utf8");
+  // 미확보가 없으면 이전 실행 때 남은 파일을 지운다 (오래된 명단이 남아 헷갈리지 않게)
   if (g3.length) writeFileSync(`${OUT}/3_미확보_아이돌.csv`, csv(g3), "utf8");
+  else rmSync(`${OUT}/3_미확보_아이돌.csv`, { force: true });
 
   const line = (r: any) => `  ${r.아티스트.padEnd(20)} 앨범 ${String(r["낼 수 있는 앨범"]).padStart(3)} · 곡 ${String(r["낼 수 있는 곡"]).padStart(4)}`;
   const lines = [
