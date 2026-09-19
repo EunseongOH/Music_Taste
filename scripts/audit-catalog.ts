@@ -51,7 +51,8 @@ async function main() {
     let albums, tracks;
     try {
       albums = await getDbArtistAlbums(a.spotify_id);
-      tracks = await getDbTracksByAlbum(albums.map((x) => x.id));
+      // 곡 조회는 앞쪽 40장만 본다 (전수 조회는 아티스트당 수십 초가 걸린다)
+      tracks = await getDbTracksByAlbum(albums.slice(0, 40).map((x) => x.id));
     } catch (e) {
       problems.push({ 아티스트: name, 종류: "조회 실패", 내용: String(e).slice(0, 120), spotify_id: a.spotify_id });
       continue;
@@ -68,6 +69,7 @@ async function main() {
       keyFull.set(k2, [...(keyFull.get(k2) ?? []), al.id]);
 
       const list = tracks[al.id] ?? [];
+      if (!(al.id in tracks) && albums.indexOf(al) >= 40) continue;   // 검사 대상 밖
       if (!list.length) emptyAlbums++;
       else if (list.length !== al.total_tracks) countMismatch++;
       if (!/^(19|20)\d{2}/.test(yr)) badDate++;

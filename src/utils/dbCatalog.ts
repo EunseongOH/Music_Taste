@@ -45,6 +45,14 @@ const normAlbum = (s: string) =>
     .replace(/\s*[\(\[][^\)\]]*(deluxe|edition|remaster|remastered|version|ver\.|repackage|anniversary|expanded|bonus)[^\)\]]*[\]\)]/gi, "")
     .replace(/[^\p{L}\p{N}]/gu, "");
 
+/**
+ * 앨범 중복 판정은 두 가지 키를 같이 본다.
+ *   normAlbum  "X X X (English version)" -> "xxx"            (괄호 안 판 표기를 뗀다)
+ *   normTrack  "X X X - English Version" -> "xxxenglishversion"
+ * 출처마다 같은 판을 괄호로도 대시로도 적는다. 한쪽만 떼면 서로 다른 앨범으로 보여 둘 다 나간다.
+ * 실제로 L'Arc~en~Ciel "X X X" 와 GARNiDELiA "Desir" 가 그렇게 두 번 나왔다.
+ */
+
 /** 곡 제목용: 문장부호·공백만 정리한다 (버전 표기는 남긴다) */
 const normTrack = (s: string) => (s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
@@ -158,8 +166,16 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
 
     const out: DbAlbum[] = [];
     const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 곡 식별자 (녹음 ID, 없으면 정규화한 제목)
-    const seen = new Set<string>();          // 제목+연도+곡수
-    const seenLoose = new Set<string>();     // 제목+연도 (곡 수가 다른 같은 앨범도 하나만 낸다)
+    const seen = new Set<string>();          // 제목(판 표기 제거)+연도+곡수
+    const seenLoose = new Set<string>();     // 제목(판 표기 제거)+연도
+    const seenRaw = new Set<string>();       // 제목(그대로)+연도 — 괄호/대시 표기 차이를 잡는다
+    const dupe = (name: string, year: string, total: number) =>
+      seen.has(`${normAlbum(name)}|${year}|${total}`) || seenLoose.has(`${normAlbum(name)}|${year}`) || seenRaw.has(`${normTrack(name)}|${year}`);
+    const remember = (name: string, year: string, total: number) => {
+      seen.add(`${normAlbum(name)}|${year}|${total}`);
+      seenLoose.add(`${normAlbum(name)}|${year}`);
+      seenRaw.add(`${normTrack(name)}|${year}`);
+    };
     for (const [albumId, src] of byAlbum) {
       if (skip.has(albumId)) continue;
       const rg = rgOf.get(albumId) ? rgInfo.get(rgOf.get(albumId)!) : null;
@@ -169,10 +185,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       const release_date = String(rg?.first_release_date ?? d?.released ?? "").slice(0, 10) || "";
       const total = src.release ? (trackCount.get(src.release) ?? 0) : (d?.track_count ?? 0);
       if (!total) continue;
-      const key = `${normAlbum(name)}|${release_date.slice(0, 4)}|${total}`;
-      const looseKey = `${normAlbum(name)}|${release_date.slice(0, 4)}`;
-      if (seen.has(key) || seenLoose.has(looseKey)) continue;   // 같은 앨범의 다른 판 중복 제거
-      seen.add(key); seenLoose.add(looseKey);
+      if (dupe(name, release_date.slice(0, 4), total)) continue;   // 같은 앨범의 다른 판 중복 제거
+      remember(name, release_date.slice(0, 4), total);
       const type = (rg?.primary_type ?? "").toLowerCase();
       out.push({
         id: albumId,
@@ -226,10 +240,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         const total = titles2.get(rel)?.size ?? 0;
         if (!total) continue;
         const release_date = String(g.first_release_date ?? "").slice(0, 10) || "";
-        const key = `${normAlbum(g.title)}|${release_date.slice(0, 4)}|${total}`;
-        const looseKey = `${normAlbum(g.title)}|${release_date.slice(0, 4)}`;
-        if (seen.has(key) || seenLoose.has(looseKey)) continue;
-        seen.add(key); seenLoose.add(looseKey);
+        if (dupe(g.title, release_date.slice(0, 4), total)) continue;
+        remember(g.title, release_date.slice(0, 4), total);
         const type = String(g.primary_type ?? "").toLowerCase();
         out.push({
           id: `mb:${g.mbid}`,
@@ -250,19 +262,40 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       const { data: dzAlbums } = await supabase.from("deezer_album")
         .select("deezer_album_id, title, release_date, record_type, nb_tracks")
         .eq("deezer_artist_id", a.deezer_artist_id).limit(500);
+
+      // 이 아티스트 Deezer 앨범의 실제 곡 수 (같은 제목 곡을 뺀 뒤)
+      const dzTrackCount = new Map<number, number>();
+      const dzIds = (dzAlbums ?? []).map((x) => x.deezer_album_id);
+      for (let i = 0; i < dzIds.length; i += 40) {
+        const titles = new Map<number, Set<string>>();
+        for (let from = 0; ; from += 1000) {
+          const { data } = await supabase.from("deezer_track").select("deezer_album_id, title")
+            .in("deezer_album_id", dzIds.slice(i, i + 40)).range(from, from + 999);
+          for (const t of data ?? []) {
+            const set = titles.get(t.deezer_album_id) ?? new Set<string>();
+            set.add(normTrack(t.title));
+            titles.set(t.deezer_album_id, set);
+          }
+          if (!data || data.length < 1000) break;
+        }
+        for (const [k, v] of titles) dzTrackCount.set(k, v.size);
+      }
+
       for (const alb of dzAlbums ?? []) {
         if (!alb.nb_tracks) continue;
-        const key = `${normAlbum(alb.title)}|${String(alb.release_date ?? "").slice(0, 4)}|${alb.nb_tracks}`;
-        const looseKey = `${normAlbum(alb.title)}|${String(alb.release_date ?? "").slice(0, 4)}`;
-        if (seen.has(key) || seenLoose.has(looseKey)) continue;   // 위에서 이미 낸 앨범이면 건너뛴다
-        seen.add(key); seenLoose.add(looseKey);
+        const yr = String(alb.release_date ?? "").slice(0, 4);
+        // 화면에서 같은 제목 곡을 걸러내므로 곡 수도 걸러낸 뒤 기준으로 센다
+        const total = dzTrackCount.get(alb.deezer_album_id) ?? alb.nb_tracks;
+        if (!total) continue;
+        if (dupe(alb.title, yr, total)) continue;   // 위에서 이미 낸 앨범이면 건너뛴다
+        remember(alb.title, yr, total);
         const type = String(alb.record_type ?? "").toLowerCase();
         out.push({
           id: `deezer:${alb.deezer_album_id}`,
           name: alb.title,
           album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
           release_date: String(alb.release_date ?? "").slice(0, 10),
-          total_tracks: alb.nb_tracks,
+          total_tracks: total,
           images: [{ url: deezerCover(alb.deezer_album_id) }],
           source: "db",
         });
