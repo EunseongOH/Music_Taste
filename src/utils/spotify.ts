@@ -637,22 +637,46 @@ const albumKey = (a: any) => {
 const albumTitleKey = (a: any) => albumKey(a).split("|")[0];
 const albumYear = (a: any) => Number(String(a?.release_date ?? "").slice(0, 4)) || 0;
 
+const albumTracks = (a: any) => Number(a?.total_tracks ?? 0) || 0;
+
+/**
+ * Spotify 목록과 자체 DB 목록을 합쳐 중복을 없앤다.
+ *
+ * 같은 앨범인지 보는 기준은 "정규화한 제목이 같고 발매연도가 1년 안쪽" 이다.
+ * 출처마다 발매일 표기가 하루~한 해씩 다르기 때문이다.
+ *
+ * 겹칠 때 무엇을 남기는가: 곡이 더 많은 쪽. 같은 제목의 싱글과 정규 앨범이 붙어 있는 경우
+ * (Ariana Grande 의 "thank u, next" 싱글 2018 / 앨범 2019) 먼저 나온 싱글을 남기면
+ * 정규 앨범 수록곡을 통째로 잃는다. 곡 수가 같으면 Spotify 쪽을 남긴다 (커버가 있다).
+ */
 function mergeAlbums(spotifyItems: any[], db: any[]) {
-  const out: any[] = [];
-  const ids = new Set<string>();
-  const years = new Map<string, number[]>();   // 정규화한 제목 -> 이미 낸 발매연도
-  for (const a of [...spotifyItems, ...db]) {   // Spotify 표기를 우선한다 (커버가 있다)
-    if (!a?.id || ids.has(a.id)) continue;
+  const best = new Map<string, any>();        // 제목 -> 남길 앨범
+  const order: string[] = [];
+  const seenId = new Set<string>();
+
+  const keyFor = (title: string, year: number) => {
+    // 이미 같은 제목이 1년 안쪽에 있으면 그 묶음에 넣는다
+    for (const k of best.keys()) {
+      if (!k.startsWith(`${title}|`)) continue;
+      const y = Number(k.split("|")[1]) || 0;
+      if (!y || !year || Math.abs(y - year) <= 1) return k;
+    }
+    return `${title}|${year}`;
+  };
+
+  for (const a of [...spotifyItems, ...db]) {
+    if (!a?.id || seenId.has(a.id)) continue;
+    seenId.add(a.id);
     const title = albumTitleKey(a);
-    const year = albumYear(a);
-    // 같은 제목이 1년 안쪽으로 이미 있으면 같은 앨범이다. 출처마다 발매일 표기가 하루~한 해씩 다르다.
-    const kept = years.get(title);
-    if (title && kept?.some((y) => !y || !year || Math.abs(y - year) <= 1)) continue;
-    ids.add(a.id);
-    if (title) years.set(title, [...(kept ?? []), year]);
-    out.push(a);
+    if (!title) { order.push(a.id); best.set(a.id, a); continue; }
+    const k = keyFor(title, albumYear(a));
+    const prev = best.get(k);
+    if (!prev) { order.push(k); best.set(k, a); continue; }
+    // 곡이 더 많은 쪽을 남긴다. 같으면 먼저 온 쪽(= Spotify) 을 둔다
+    if (albumTracks(a) > albumTracks(prev)) best.set(k, a);
   }
-  return out.sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
+  return order.map((k) => best.get(k)).filter(Boolean)
+    .sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
 }
 
 /** 아티스트를 연 횟수만 센다 (우리 이용 기록이다. Spotify 콘텐츠를 저장하는 것이 아니다). */
