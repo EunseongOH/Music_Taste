@@ -195,11 +195,16 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       .select("mbid, title, primary_type, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
     const restRg = (allRg ?? []).filter((g) => !servedRg.has(g.mbid));
     if (restRg.length) {
+      // 부트레그·회수·취소된 판은 내보내지 않는다. 그 아티스트가 낸 앨범이 아니거나 유통되지 않은 판이다.
+      const BAD_STATUS = new Set(["Bootleg", "Withdrawn", "Cancelled", "Pseudo-Release", "Expunged"]);
       const rgRel = new Map<string, string>();
       for (let i = 0; i < restRg.length; i += 200) {
-        const { data } = await supabase.from("mb_rg_release").select("release_group_mbid, release_mbid")
+        const { data } = await supabase.from("mb_rg_release").select("release_group_mbid, release_mbid, status")
           .in("release_group_mbid", restRg.slice(i, i + 200).map((g) => g.mbid)).not("tracks_filled_at", "is", null);
-        for (const r of data ?? []) rgRel.set(r.release_group_mbid, r.release_mbid);
+        for (const r of data ?? []) {
+          if (r.status && BAD_STATUS.has(r.status)) continue;
+          rgRel.set(r.release_group_mbid, r.release_mbid);
+        }
       }
       const relIds2 = [...new Set(rgRel.values())];
       const titles2 = new Map<string, Set<string>>();
