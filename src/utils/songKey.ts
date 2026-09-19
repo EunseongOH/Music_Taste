@@ -11,17 +11,37 @@ const VERSION_WORDS =
   "inst\\.?|instrumental|feat\\.?|featuring|with|ver\\.?|version|remaster(?:ed)?|live|acoustic|" +
   "edit|remix|mix|radio|extended|demo|bonus|reprise|orchestra|orchestral|piano|" +
   "korean|japanese|english|chinese|mandarin|spanish|kr|jp|en|" +
-  "sped\\s*up|slowed|club|dance|original|single|album|short|tv|movie|drama|ost";
+  "sped\\s*up|slowed|club|dance|original|single|album|short|tv|movie|drama|ost|" +
+  // K-Pop 에서 흔한 표기: "(Prod.진영)" "(Recorded in 2016)" "(From PRODUCE 101)" "(Official Audio)"
+  "prod\\.?|recorded|from\\s|official|audio|clean|explicit|theme";
 
 const BRACKET = new RegExp(`\\s*[（(\\[【][^）)\\]】]*(?:${VERSION_WORDS})[^）)\\]】]*[）)\\]】]`, "gi");
 const DASH = new RegExp(`\\s*[-–—]\\s*[^-–—]*(?:${VERSION_WORDS})[^-–—]*$`, "i");
 
-/** 곡 제목에서 판 표기를 뗀다. */
+const HANGUL_CJK = /[가-힣぀-ヿ一-鿿]/;
+const TRAILING_BRACKET = /^(.+?)\s*[（(\[【]([^）)\]】]+)[）)\]】]\s*$/;
+
+/**
+ * 한글 제목 뒤에 영어 제목이 괄호로 붙는 표기를 뗀다 — "봄날 (Spring Day)", "소나기 (Downpour)".
+ * 두 글자가 서로 다른 문자 체계일 때만 뗀다. "Love (Part 2)" 처럼 같은 체계면 진짜 다른 곡일 수 있어 남긴다.
+ */
+function stripTranslation(s: string): string {
+  const m = s.match(TRAILING_BRACKET);
+  if (!m) return s;
+  const [, base, inner] = m;
+  const baseCjk = HANGUL_CJK.test(base);
+  const innerCjk = HANGUL_CJK.test(inner);
+  if (baseCjk === innerCjk) return s;                       // 같은 문자 체계면 건드리지 않는다
+  if (!/[\p{L}]/u.test(base) || !/[\p{L}]/u.test(inner)) return s;
+  return base.trim();
+}
+
+/** 곡 제목에서 판 표기와 번역 제목을 뗀다. */
 export function songTitleBase(title: string): string {
   let s = (title || "").normalize("NFKC");
   for (let i = 0; i < 3; i++) {
     const before = s;
-    s = s.replace(BRACKET, "").replace(DASH, "");
+    s = stripTranslation(s.replace(BRACKET, "").replace(DASH, "").trim());
     if (s === before) break;
   }
   return s.trim();

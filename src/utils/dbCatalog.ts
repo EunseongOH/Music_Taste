@@ -65,6 +65,41 @@ const normTrack = (s: string) => (s || "").normalize("NFKC").toLowerCase().repla
 const caaCover = (releaseGroupMbid: string) => `https://coverartarchive.org/release-group/${releaseGroupMbid}/front-500`;
 const deezerCover = (deezerAlbumId: number | string) => `https://api.deezer.com/album/${deezerAlbumId}/image?size=big`;
 
+/** 두 글자 묶음 기준 유사도 (0~1). 오타나 표기 차이를 견딘다. "iremember" vs "iremeber" ≈ 0.94 */
+function similarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const grams = (x: string) => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < x.length - 1; i++) { const g = x.slice(i, i + 2); m.set(g, (m.get(g) ?? 0) + 1); }
+    return m;
+  };
+  const ga = grams(a), gb = grams(b);
+  if (!ga.size || !gb.size) return 0;
+  let hit = 0;
+  for (const [g, n] of ga) hit += Math.min(n, gb.get(g) ?? 0);
+  return (2 * hit) / (a.length - 1 + b.length - 1);
+}
+
+/**
+ * 두 앨범이 같은 앨범인가. 출처마다 제목을 다르게 적기 때문에 제목만으로는 못 가린다.
+ *   "I.O.I : LOOP" / "I.O.I 3rd MINI ALBUM [I.O.I : LOOP]"
+ *   "소나기" / "DOWNPOUR"   (한글 제목과 영어 제목)
+ *   "Whatta Man" / "Whatta Man (Good Man)"
+ * 그래서 수록곡으로 가린다. 적은 쪽 곡의 6할 이상이 상대 앨범에도 있으면 같은 앨범으로 본다.
+ */
+function sameAlbum(aTracks: Set<string>, bTracks: Set<string>): boolean {
+  const small = aTracks.size <= bTracks.size ? aTracks : bTracks;
+  const big = aTracks.size <= bTracks.size ? bTracks : aTracks;
+  if (!small.size) return false;
+  let hit = 0;
+  for (const t of small) {
+    if (big.has(t)) { hit++; continue; }
+    for (const u of big) if (similarity(t, u) >= 0.85) { hit++; break; }
+  }
+  return hit / small.size >= 0.6;
+}
+
 /** 검증되지 않은 제목 대조 연결은 제외한다. */
 async function unverifiedAlbumIds(supabase: ReturnType<typeof createAdminClient>, ids: string[]) {
   const out = new Set<string>();
@@ -167,7 +202,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     }
 
     const out: DbAlbum[] = [];
-    const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 곡 식별자 (녹음 ID, 없으면 정규화한 제목)
+    const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 녹음 ID (같은 곡 판정용)
+    const titlesOfAlbum = new Map<string, Set<string>>();   // 앨범 ID -> 정규화한 곡 제목 (같은 앨범 판정용)
     const seen = new Set<string>();          // 제목(판 표기 제거)+연도+곡수
     const seenLoose = new Set<string>();     // 제목(판 표기 제거)+연도
     const seenRaw = new Set<string>();       // 제목(그대로)+연도 — 괄호/대시 표기 차이를 잡는다
@@ -202,7 +238,10 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         ],
         source: "db",
       });
-      if (src.release) songsOf.set(albumId, recsOf.get(src.release) ?? new Set());
+      if (src.release) {
+        songsOf.set(albumId, recsOf.get(src.release) ?? new Set());
+        titlesOfAlbum.set(albumId, titlesOf.get(src.release) ?? new Set());
+      }
     }
     // 3) MusicBrainz 단독: Spotify 앨범 ID 가 없는 발매그룹도 낸다 (앨범 ID 는 "mb:<발매그룹>")
     //    같은 아티스트의 같은 발매판에서 온 트랙리스트라 출처 대조가 필요 없다. 재킷도 발매그룹 ID 로 정해진다.
@@ -257,6 +296,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           source: "db",
         });
         songsOf.set(`mb:${g.mbid}`, recs2.get(rel) ?? new Set());
+        titlesOfAlbum.set(`mb:${g.mbid}`, titles2.get(rel) ?? new Set());
       }
     }
 
@@ -267,8 +307,9 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         .select("deezer_album_id, title, release_date, record_type, nb_tracks")
         .eq("deezer_artist_id", a.deezer_artist_id).limit(500);
 
-      // 이 아티스트 Deezer 앨범의 실제 곡 수 (같은 제목 곡을 뺀 뒤)
+      // 이 아티스트 Deezer 앨범의 실제 곡 수·곡 제목 (같은 제목 곡을 뺀 뒤)
       const dzTrackCount = new Map<number, number>();
+      const dzTitles = new Map<number, Set<string>>();
       const dzIds = (dzAlbums ?? []).map((x) => x.deezer_album_id);
       for (let i = 0; i < dzIds.length; i += 40) {
         const titles = new Map<number, Set<string>>();
@@ -284,7 +325,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           }
           if (!data || data.length < 1000) break;
         }
-        for (const [k, v] of titles) dzTrackCount.set(k, v.size);
+        for (const [k, v] of titles) { dzTrackCount.set(k, v.size); dzTitles.set(k, v); }
       }
 
       for (const alb of dzAlbums ?? []) {
@@ -305,10 +346,39 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           images: [{ url: deezerCover(alb.deezer_album_id) }],
           source: "db",
         });
+        titlesOfAlbum.set(`deezer:${alb.deezer_album_id}`, dzTitles.get(alb.deezer_album_id) ?? new Set());
       }
     }
 
-    // 5) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
+    // 5) 같은 앨범을 출처마다 다른 제목으로 적은 경우를 합친다.
+    //    발매일이 같은 앨범끼리만 비교하므로 비교 횟수가 적다.
+    const byDate = new Map<string, DbAlbum[]>();
+    for (const a of out) {
+      const d = a.release_date.slice(0, 10);
+      if (!d) continue;
+      byDate.set(d, [...(byDate.get(d) ?? []), a]);
+    }
+    const merged = new Set<string>();     // 합쳐져서 빠지는 앨범 ID
+    for (const list of byDate.values()) {
+      if (list.length < 2) continue;
+      // 곡이 많은 쪽을 남긴다. 곡 수가 같으면 Spotify·MusicBrainz 쪽을 남긴다 (커버가 있고 출처가 안정적이다)
+      const rank = (a: DbAlbum) => (a.id.startsWith("deezer:") ? 1 : 0);
+      const sorted = [...list].sort((x, y) => y.total_tracks - x.total_tracks || rank(x) - rank(y));
+      for (let i = 0; i < sorted.length; i++) {
+        if (merged.has(sorted[i].id)) continue;
+        for (let j = i + 1; j < sorted.length; j++) {
+          if (merged.has(sorted[j].id)) continue;
+          const ta = titlesOfAlbum.get(sorted[i].id);
+          const tb = titlesOfAlbum.get(sorted[j].id);
+          if (ta && tb && sameAlbum(ta, tb)) merged.add(sorted[j].id);
+        }
+      }
+    }
+    const deduped = merged.size ? out.filter((a) => !merged.has(a.id)) : out;
+    out.length = 0;
+    out.push(...deduped);
+
+    // 6) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
     //    같은 곡을 싱글로도 앨범으로도 내는 아티스트(요아소비 등)에서 같은 곡이 두세 번 뜨던 원인이다.
     //    곡이 같은지는 MusicBrainz 녹음 ID 로 가린다 — 제목이 일본어냐 로마자냐와 무관하게 같은 녹음이면 같다.
     const SMALL = 5;                               // 이 곡 수 이하만 뺀다 (정규 앨범은 절대 빼지 않는다)
