@@ -2,13 +2,15 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Loader2, Search, X } from "lucide-react";
+import { SafeImage } from "@/components/SafeImage";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
 import { createChallenge } from "@/utils/togetherDb";
 import * as platform from "@/utils/platform";
-import { Cover, EmptyState, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
 interface SavedRow {
@@ -24,6 +26,22 @@ interface CatalogArtist {
   id: string;
   name: string;
   image: string;
+  /** 전곡을 낼 수 있는 아티스트인지(앨범 대부분에 곡까지 받아 둔 경우) */
+  full: boolean;
+}
+
+/** 곡 수는 중복(리패키지)을 빼기 전이라 숫자를 약속하지 않는다. */
+const artistSub = (artist: CatalogArtist) => (artist.full ? "전곡 있어요" : "일부만 있어요");
+
+function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size: number; on: boolean }) {
+  return (
+    <span
+      className={`relative shrink-0 block rounded-full overflow-hidden border-2 ${on ? "border-point" : "border-navy/15"}`}
+      style={{ width: size, height: size }}
+    >
+      <SafeImage src={src} alt={name} fill sizes={`${size}px`} fallbackType="artist" className="object-cover" />
+    </span>
+  );
 }
 
 interface Source {
@@ -55,6 +73,8 @@ export default function TogetherNewPage() {
   const [artistQuery, setArtistQuery] = useState("");
   const [artists, setArtists] = useState<CatalogArtist[] | null>(null);
   const [artistBusy, setArtistBusy] = useState(false);
+  /** 어떤 검색어로 받아 온 목록인지. 지금 입력과 다르면 아직 찾는 중이다. */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [artistSource, setArtistSource] = useState<Source | null>(null);
   const [cards, setCards] = useState<SavedRow[] | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
@@ -96,26 +116,22 @@ export default function TogetherNewPage() {
     };
   }, [user]);
 
-  // 처음 열 때 인기 아티스트 몇 명을 보여 준다.
+  // 검색어가 없으면 전곡이 확실한 아티스트부터 보여 준다. 입력하면 잠시 기다렸다 찾는다.
   useEffect(() => {
+    const q = artistQuery.trim();
     let alive = true;
-    (async () => {
-      const res = await fetch("/api/together/catalog");
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/together/catalog${q ? `?q=${encodeURIComponent(q)}` : ""}`);
       const json = (await res.json()) as { artists?: CatalogArtist[] };
-      if (alive) setArtists(json.artists ?? []);
-    })();
+      if (!alive) return;
+      setArtists(json.artists ?? []);
+      setLoadedFor(q);
+    }, q ? 400 : 0);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, []);
-
-  const searchArtists = async () => {
-    setArtistBusy(true);
-    const res = await fetch(`/api/together/catalog?q=${encodeURIComponent(artistQuery.trim())}`);
-    const json = (await res.json()) as { artists?: CatalogArtist[] };
-    setArtists(json.artists ?? []);
-    setArtistBusy(false);
-  };
+  }, [artistQuery]);
 
   const pickArtist = async (artist: CatalogArtist) => {
     setArtistBusy(true);
@@ -134,9 +150,9 @@ export default function TogetherNewPage() {
     setTitle(artist.name);
   };
 
-  const sources: Source[] = useMemo(() => {
+  /** 이미 해 둔 소트에서 곡을 가져오는 길 — 아티스트 목록 아래에 따로 둔다. */
+  const prevSources: Source[] = useMemo(() => {
     const list: Source[] = [];
-    if (artistSource) list.push(artistSource);
     if (picked && picked.length >= 4) {
       list.push({
         key: "picked",
@@ -159,9 +175,10 @@ export default function TogetherNewPage() {
       });
     }
     return list;
-  }, [picked, cards, artistSource]);
+  }, [picked, cards]);
 
-  const source = sources.find((s) => s.key === sourceKey) ?? null;
+  const searching = loadedFor !== artistQuery.trim();
+  const source = (artistSource?.key === sourceKey ? artistSource : prevSources.find((s) => s.key === sourceKey)) ?? null;
   const chosen = useMemo(() => (source ? source.tracks.filter((t) => !off.has(t.id)) : []), [source, off]);
 
   const choose = (next: Source) => {
@@ -250,62 +267,89 @@ export default function TogetherNewPage() {
         곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요.
       </p>
 
-      <SectionTitle title="아티스트에서 고르기" className="mt-8 mb-2" />
-      <p className="type-caption text-navy/70 mb-3 break-keep">
-        소트를 하지 않아도 돼요. 아티스트를 고르면 전곡이 들어오고, 빼고 싶은 곡만 끄면 링크가 나와요.
-      </p>
-      <div className="flex gap-2">
+      {/* 1. 아티스트 고르기 — "한 아티스트 전곡" 모드와 같은 모양(검색창 + 동그란 목록). */}
+      <div className="relative w-full mt-7">
+        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+          {searching ? <Loader2 className="text-navy/50 animate-spin" size={18} /> : <Search className="text-navy/50" size={18} />}
+        </div>
         <input
           id="together-artist"
+          type="text"
           value={artistQuery}
           onChange={(e) => setArtistQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") searchArtists();
-          }}
-          placeholder="아티스트 이름"
-          className="flex-1 h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
+          placeholder="아티스트 검색 (예: 이승윤)..."
+          className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point type-body text-navy placeholder:text-navy/40 transition-colors"
         />
-        <button onClick={searchArtists} disabled={artistBusy} className={`${secondaryButton} px-5`}>
-          찾기
-        </button>
+        {artistQuery.length > 0 && (
+          <button
+            onClick={() => setArtistQuery("")}
+            aria-label="검색어 지우기"
+            className="absolute inset-y-0 right-4 flex items-center text-navy/40 hover:text-point transition-colors cursor-pointer"
+          >
+            <X size={16} strokeWidth={2.5} />
+          </button>
+        )}
       </div>
-      {artists !== null && (
-        <ul className="flex flex-wrap gap-2 mt-3">
-          {artists.length === 0 && <li className="type-caption text-navy/70">찾는 아티스트가 아직 준비되지 않았어요.</li>}
-          {artists.map((artist) => (
-            <li key={artist.id}>
-              <button
-                onClick={() => pickArtist(artist)}
-                disabled={artistBusy}
-                className={`h-9 pl-1 pr-3 rounded-full flex items-center gap-2 type-caption cursor-pointer ${
-                  artistSource?.key === `artist:${artist.id}` ? "bg-navy text-cream" : "bg-navy/5 text-navy"
-                }`}
-              >
-                <Cover src={artist.image} alt={artist.name} size={28} />
-                {artist.name}
-              </button>
+
+      {artistQuery.trim().length > 0 ? (
+        <ul className="flex flex-col gap-2.5 mt-5">
+          {artists?.length === 0 && !searching && (
+            <li className="py-10 text-center type-caption text-navy/60 border border-dashed border-navy/10 rounded-3xl">
+              아직 준비된 아티스트가 아니에요. 다른 이름으로 찾아볼까요?
             </li>
-          ))}
+          )}
+          {(artists ?? []).map((artist) => {
+            const isOn = artistSource?.key === `artist:${artist.id}`;
+            return (
+              <li key={artist.id}>
+                <button
+                  onClick={() => pickArtist(artist)}
+                  disabled={artistBusy}
+                  className={`w-full flex items-center gap-4 p-3 rounded-2xl text-left cursor-pointer transition-colors ${
+                    isOn ? "bg-point/10 border-2 border-point" : "bg-white/50 border-2 border-navy/5 hover:border-navy/15"
+                  }`}
+                >
+                  <ArtistAvatar src={artist.image} name={artist.name} size={56} on={isOn} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block type-body-strong text-navy truncate">{artist.name}</span>
+                    <span className="block type-caption text-navy/70">{artistSub(artist)}</span>
+                  </span>
+                  {isOn && <Check size={18} className="text-point mr-1" strokeWidth={3} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <ul className="grid grid-cols-3 gap-x-3 gap-y-6 mt-6">
+          {(artists ?? []).map((artist) => {
+            const isOn = artistSource?.key === `artist:${artist.id}`;
+            return (
+              <li key={artist.id}>
+                <button
+                  onClick={() => pickArtist(artist)}
+                  disabled={artistBusy}
+                  className="w-full flex flex-col items-center gap-2 cursor-pointer"
+                >
+                  <ArtistAvatar src={artist.image} name={artist.name} size={96} on={isOn} />
+                  <span className={`type-caption text-center line-clamp-1 w-full ${isOn ? "text-navy font-bold" : "text-navy/90"}`}>
+                    {artist.name}
+                  </span>
+                  <span className="type-caption text-navy/50 -mt-1.5">{artistSub(artist)}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      {sources.length === 0 ? (
-        <div className="mt-10">
-          <EmptyState
-            title="가져올 곡이 없어요"
-            desc="곡 고르기에서 4곡 이상 담거나, 취향표를 저장하면 그 곡으로 만들 수 있어요."
-            action={
-              <button onClick={() => router.push("/")} className={primaryButton}>
-                곡 고르러 가기
-              </button>
-            }
-          />
-        </div>
-      ) : (
+      {/* 2. 이미 해 둔 소트에서 가져오기 */}
+      {prevSources.length > 0 && (
         <>
-          <SectionTitle title="어떤 곡으로 할까요" className="mt-8 mb-2" />
+          <SectionTitle title="이미 한 소트에서 가져오기" className="mt-10 mb-1" />
+          <p className="type-caption text-navy/60 mb-2">그때 줄 세웠던 곡 그대로 같이 해 볼 수 있어요.</p>
           <ul className="flex flex-col divide-y divide-navy/10">
-            {sources.map((item) => (
+            {prevSources.map((item) => (
               <li key={item.key}>
                 <button onClick={() => choose(item)} className="w-full flex items-center gap-3 py-3 text-left cursor-pointer">
                   <Cover src={item.tracks[0]?.albumImage} alt={item.label} size={44} />

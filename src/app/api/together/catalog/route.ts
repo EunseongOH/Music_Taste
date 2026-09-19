@@ -31,6 +31,19 @@ interface CachedTrack {
   duration_ms?: number;
 }
 
+interface CatalogRow {
+  id: string;
+  name: string;
+  images: SpotifyImage[] | null;
+  track_count: number;
+  coverage: string | number | null;
+}
+
+/** 이보다 적으면 줄 세울 거리가 안 된다(중복 제거 전 기준). */
+const MIN_TRACKS = 8;
+/** 앨범 대부분에 곡이 있으면 "전곡"으로 본다. 스포티파이 총계가 지역마다 조금씩 달라 1.0 을 요구하지 않는다. */
+const FULL_COVERAGE = 0.9;
+
 /** 같은 곡이 앨범마다 다시 담기므로(정규판·리패키지) 제목으로 한 번만 남긴다. */
 const titleKey = (title: string) =>
   title
@@ -93,27 +106,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ tracks });
   }
 
-  // 아티스트 찾기: 앨범 캐시가 있는 아티스트 중에서 이름으로 고른다.
-  const { data: cachedArtistIds } = await supabase.from("spotify_cache_artist_albums").select("artist_id");
-  const ids = [...new Set((cachedArtistIds ?? []).map((r) => (r as { artist_id: string }).artist_id))];
-  if (ids.length === 0) return NextResponse.json({ artists: [] });
-
-  let query = supabase.from("spotify_cache_artists").select("id,name,images,popularity").in("id", ids).limit(40);
+  // 아티스트 찾기 — 전곡을 확실히 낼 수 있는 아티스트가 먼저 온다.
+  // coverage = 곡까지 받아 둔 앨범 / 스포티파이가 말한 앨범 수 (뷰: together_artist_catalog)
+  let query = supabase
+    .from("together_artist_catalog")
+    .select("id,name,images,track_count,coverage")
+    .gte("track_count", MIN_TRACKS)
+    .order("coverage", { ascending: false })
+    .order("track_count", { ascending: false })
+    .limit(q ? 20 : 18);
   if (q) query = query.ilike("name", `%${q}%`);
-  else query = query.order("popularity", { ascending: false });
 
   const { data: artists } = await query;
-  const seen = new Set<string>();
-  const list = ((artists ?? []) as { id: string; name: string; images: SpotifyImage[] | null; popularity: number | null }[])
-    .filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)))
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
-      popularity: a.popularity ?? 0,
-    }))
-    .sort((a, b) => b.popularity - a.popularity)
-    .slice(0, 20);
+  const list = ((artists ?? []) as CatalogRow[]).map((a) => ({
+    id: a.id,
+    name: a.name,
+    image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
+    trackCount: a.track_count,
+    /** 전곡을 낼 수 있는 아티스트. 화면에서 "전곡 n곡" / "일부만 있어요" 를 가른다. */
+    full: Number(a.coverage ?? 0) >= FULL_COVERAGE,
+  }));
 
   return NextResponse.json({ artists: list });
 }
