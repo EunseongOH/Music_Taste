@@ -18,6 +18,7 @@
 //   - 트랙: 한 앨범 안에서 정규화한 제목 기준 중복 제거
 
 import { createAdminClient } from "./supabase/admin";
+import { songTitleBase } from "./songKey";
 
 export interface DbAlbum {
   id: string;                 // Spotify 앨범 ID
@@ -57,6 +58,12 @@ const normAlbum = (s: string) =>
 const normTrack = (s: string) => (s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 /**
+ * 앨범끼리 비교할 때 쓰는 곡 키. 판 표기를 뗀다.
+ * 라이브반과 원반, 한국어판과 중국어판이 같은 앨범인지 가리려면 "Tempo" 와 "Tempo (Live)" 를 같게 봐야 한다.
+ */
+const cmpTrack = (s: string) => normTrack(songTitleBase(s)) || normTrack(s);
+
+/**
  * 앨범 재킷 URL. 저장하지 않고 ID 에서 계산한다.
  *   1순위 Cover Art Archive (CC0). 없는 앨범이 3분의 1쯤 되고, 그때는 404 가 온다.
  *   2순위 Deezer 커버 (앨범 ID 만 있으면 URL 이 정해진다. 이미지를 우리 쪽에 저장하지 않는다)
@@ -88,16 +95,27 @@ function similarity(a: string, b: string): number {
  *   "Whatta Man" / "Whatta Man (Good Man)"
  * 그래서 수록곡으로 가린다. 적은 쪽 곡의 6할 이상이 상대 앨범에도 있으면 같은 앨범으로 본다.
  */
-function sameAlbum(aTracks: Set<string>, bTracks: Set<string>): boolean {
-  const small = aTracks.size <= bTracks.size ? aTracks : bTracks;
-  const big = aTracks.size <= bTracks.size ? bTracks : aTracks;
-  if (!small.size) return false;
+type AlbumTracks = Map<string, string>;   // 곡 제목(그대로) -> 판 표기를 뗀 제목
+
+/** 두 앨범이 얼마나 겹치나 (적은 쪽 기준 0~1). 표기가 달라도 같은 곡으로 본다. */
+function overlap(a: AlbumTracks, b: AlbumTracks, fuzzy: boolean): number {
+  const small = a.size <= b.size ? a : b;
+  const big = a.size <= b.size ? b : a;
+  if (!small.size) return 0;
+  const bigRaw = new Set(big.keys());
+  const bigBase = new Set(big.values());
   let hit = 0;
-  for (const t of small) {
-    if (big.has(t)) { hit++; continue; }
-    for (const u of big) if (similarity(t, u) >= 0.85) { hit++; break; }
+  for (const [raw, base] of small) {
+    // 출처마다 "지킬 (Jekyll)" 로도 "지킬 Jekyll" 로도 적는다. 두 형태를 다 본다
+    if (bigRaw.has(raw) || bigBase.has(base) || bigRaw.has(base) || bigBase.has(raw)) { hit++; continue; }
+    if (!fuzzy) continue;
+    for (const u of bigRaw) if (similarity(raw, u) >= 0.85) { hit++; break; }
   }
-  return hit / small.size >= 0.6;
+  return hit / small.size;
+}
+
+function sameAlbum(a: AlbumTracks, b: AlbumTracks): boolean {
+  return overlap(a, b, true) >= 0.6;
 }
 
 /** 검증되지 않은 제목 대조 연결은 제외한다. */
@@ -177,7 +195,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     // 화면에서 중복 제거되므로 여기서도 빼고 센다 — 목록의 곡 수와 실제 보이는 곡 수를 맞춘다.
     const releaseIds = [...byAlbum.values()].map((v) => v.release).filter(Boolean) as string[];
     const titlesOf = new Map<string, Set<string>>();
-    const recsOf = new Map<string, Set<string>>();     // 발매판 -> 녹음 ID (앨범끼리 같은 곡인지 가리는 기준)
+    const cmpOf = new Map<string, AlbumTracks>();      // 발매판 -> 곡 제목 (앨범 비교용)
+    const recsOf = new Map<string, Set<string>>();     // 발매판 -> 녹음 ID
     for (let i = 0; i < releaseIds.length; i += 50) {
       const { data } = await supabase.from("mb_release_track").select("release_mbid, title, recording_mbid").in("release_mbid", releaseIds.slice(i, i + 50)).limit(10000);
       for (const t of data ?? []) {
@@ -186,6 +205,9 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         const set = titlesOf.get(t.release_mbid) ?? new Set<string>();
         set.add(key);
         titlesOf.set(t.release_mbid, set);
+        const cset = cmpOf.get(t.release_mbid) ?? new Map<string, string>();
+        cset.set(key, cmpTrack(t.title));
+        cmpOf.set(t.release_mbid, cset);
         const rec = recsOf.get(t.release_mbid) ?? new Set<string>();
         if (t.recording_mbid) rec.add(t.recording_mbid);
         recsOf.set(t.release_mbid, rec);
@@ -203,7 +225,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
 
     const out: DbAlbum[] = [];
     const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 녹음 ID (같은 곡 판정용)
-    const titlesOfAlbum = new Map<string, Set<string>>();   // 앨범 ID -> 정규화한 곡 제목 (같은 앨범 판정용)
+    const titlesOfAlbum = new Map<string, AlbumTracks>();   // 앨범 ID -> 곡 제목 (같은 앨범 판정용)
     const seen = new Set<string>();          // 제목(판 표기 제거)+연도+곡수
     const seenLoose = new Set<string>();     // 제목(판 표기 제거)+연도
     const seenRaw = new Set<string>();       // 제목(그대로)+연도 — 괄호/대시 표기 차이를 잡는다
@@ -240,7 +262,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       });
       if (src.release) {
         songsOf.set(albumId, recsOf.get(src.release) ?? new Set());
-        titlesOfAlbum.set(albumId, titlesOf.get(src.release) ?? new Set());
+        titlesOfAlbum.set(albumId, cmpOf.get(src.release) ?? new Map());
       }
     }
     // 3) MusicBrainz 단독: Spotify 앨범 ID 가 없는 발매그룹도 낸다 (앨범 ID 는 "mb:<발매그룹>")
@@ -263,6 +285,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       }
       const relIds2 = [...new Set(rgRel.values())];
       const titles2 = new Map<string, Set<string>>();
+      const cmp2 = new Map<string, AlbumTracks>();
       const recs2 = new Map<string, Set<string>>();
       for (let i = 0; i < relIds2.length; i += 50) {
         const { data } = await supabase.from("mb_release_track").select("release_mbid, title, recording_mbid").in("release_mbid", relIds2.slice(i, i + 50)).limit(10000);
@@ -272,6 +295,9 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           const set = titles2.get(t.release_mbid) ?? new Set<string>();
           set.add(key);
           titles2.set(t.release_mbid, set);
+          const cset = cmp2.get(t.release_mbid) ?? new Map<string, string>();
+          cset.set(key, cmpTrack(t.title));
+          cmp2.set(t.release_mbid, cset);
           const rec = recs2.get(t.release_mbid) ?? new Set<string>();
           if (t.recording_mbid) rec.add(t.recording_mbid);
           recs2.set(t.release_mbid, rec);
@@ -296,7 +322,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           source: "db",
         });
         songsOf.set(`mb:${g.mbid}`, recs2.get(rel) ?? new Set());
-        titlesOfAlbum.set(`mb:${g.mbid}`, titles2.get(rel) ?? new Set());
+        titlesOfAlbum.set(`mb:${g.mbid}`, cmp2.get(rel) ?? new Map());
       }
     }
 
@@ -310,6 +336,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       // 이 아티스트 Deezer 앨범의 실제 곡 수·곡 제목 (같은 제목 곡을 뺀 뒤)
       const dzTrackCount = new Map<number, number>();
       const dzTitles = new Map<number, Set<string>>();
+      const dzCmp = new Map<number, AlbumTracks>();
       const dzIds = (dzAlbums ?? []).map((x) => x.deezer_album_id);
       for (let i = 0; i < dzIds.length; i += 40) {
         const titles = new Map<number, Set<string>>();
@@ -322,6 +349,9 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
             const set = titles.get(t.deezer_album_id) ?? new Set<string>();
             set.add(key);
             titles.set(t.deezer_album_id, set);
+            const cset = dzCmp.get(t.deezer_album_id) ?? new Map<string, string>();
+            cset.set(key, cmpTrack(t.title));
+            dzCmp.set(t.deezer_album_id, cset);
           }
           if (!data || data.length < 1000) break;
         }
@@ -346,7 +376,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           images: [{ url: deezerCover(alb.deezer_album_id) }],
           source: "db",
         });
-        titlesOfAlbum.set(`deezer:${alb.deezer_album_id}`, dzTitles.get(alb.deezer_album_id) ?? new Set());
+        titlesOfAlbum.set(`deezer:${alb.deezer_album_id}`, dzCmp.get(alb.deezer_album_id) ?? new Map());
       }
     }
 
@@ -374,6 +404,44 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         }
       }
     }
+    // 5-b) 발매일이 달라도 수록곡이 거의 같으면 같은 앨범이다.
+    //      디럭스·기념반·리패키지·재발매가 여기 걸린다 ("Pressure Machine" / "Pressure Machine (Deluxe)",
+    //      엑소 "EXODUS" / "The 2nd Album Repackage ‘LOVE ME RIGHT’").
+    //      곡이 적은 앨범은 우연히 겹칠 수 있어 4곡 이상만 본다.
+    const BIG = 4;
+    const cand = out.filter((a) => !merged.has(a.id) && (titlesOfAlbum.get(a.id)?.size ?? 0) >= BIG);
+    if (cand.length > 1) {
+      const byTitle = new Map<string, string[]>();          // 곡 제목 -> 그 곡이 든 앨범 ID
+      for (const a of cand) for (const [raw, base] of titlesOfAlbum.get(a.id)!) {
+        for (const k of new Set([raw, base])) byTitle.set(k, [...(byTitle.get(k) ?? []), a.id]);
+      }
+      // 남길 순서: 라이브·모음집이 아닌 것 -> 곡 많은 것 -> Spotify·MusicBrainz 쪽
+      const LIVE = /(live|box|collection|anthology|greatest|best of|complete|singles)/i;
+      const rank2 = (a: DbAlbum) => (LIVE.test(a.name) ? 1 : 0);
+      const order = [...cand].sort((x, y) =>
+        rank2(x) - rank2(y) || y.total_tracks - x.total_tracks ||
+        (x.id.startsWith("deezer:") ? 1 : 0) - (y.id.startsWith("deezer:") ? 1 : 0));
+      const keep = new Set<string>();
+      for (const a of order) {
+        if (merged.has(a.id)) continue;
+        keep.add(a.id);
+        const mine = titlesOfAlbum.get(a.id)!;
+        const hits = new Map<string, Set<string>>();
+        for (const [raw, base] of mine) {
+          for (const k of new Set([raw, base])) for (const other of byTitle.get(k) ?? []) {
+            if (other === a.id || merged.has(other) || keep.has(other)) continue;
+            const set = hits.get(other) ?? new Set<string>();
+            set.add(raw);                       // 같은 곡이 두 형태로 잡혀도 한 번만 센다
+            hits.set(other, set);
+          }
+        }
+        for (const [other, matched] of hits) {
+          const size = titlesOfAlbum.get(other)?.size ?? 0;
+          if (size >= BIG && matched.size / size >= 0.8) merged.add(other);   // 상대 앨범이 내 안에 거의 다 들어 있다
+        }
+      }
+    }
+
     const deduped = merged.size ? out.filter((a) => !merged.has(a.id)) : out;
     out.length = 0;
     out.push(...deduped);
