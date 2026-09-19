@@ -146,8 +146,10 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     for (let i = 0; i < releaseIds.length; i += 50) {
       const { data } = await supabase.from("mb_release_track").select("release_mbid, title, recording_mbid").in("release_mbid", releaseIds.slice(i, i + 50)).limit(10000);
       for (const t of data ?? []) {
+        const key = normTrack(t.title);
+        if (!key) continue;                      // 제목이 기호뿐인 곡은 화면에서도 빠진다. 개수에도 넣지 않는다
         const set = titlesOf.get(t.release_mbid) ?? new Set<string>();
-        set.add(normTrack(t.title));
+        set.add(key);
         titlesOf.set(t.release_mbid, set);
         const rec = recsOf.get(t.release_mbid) ?? new Set<string>();
         if (t.recording_mbid) rec.add(t.recording_mbid);
@@ -226,8 +228,10 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       for (let i = 0; i < relIds2.length; i += 50) {
         const { data } = await supabase.from("mb_release_track").select("release_mbid, title, recording_mbid").in("release_mbid", relIds2.slice(i, i + 50)).limit(10000);
         for (const t of data ?? []) {
+          const key = normTrack(t.title);
+          if (!key) continue;
           const set = titles2.get(t.release_mbid) ?? new Set<string>();
-          set.add(normTrack(t.title));
+          set.add(key);
           titles2.set(t.release_mbid, set);
           const rec = recs2.get(t.release_mbid) ?? new Set<string>();
           if (t.recording_mbid) rec.add(t.recording_mbid);
@@ -272,8 +276,10 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           const { data } = await supabase.from("deezer_track").select("deezer_album_id, title")
             .in("deezer_album_id", dzIds.slice(i, i + 40)).range(from, from + 999);
           for (const t of data ?? []) {
+            const key = normTrack(t.title);
+            if (!key) continue;
             const set = titles.get(t.deezer_album_id) ?? new Set<string>();
-            set.add(normTrack(t.title));
+            set.add(key);
             titles.set(t.deezer_album_id, set);
           }
           if (!data || data.length < 1000) break;
