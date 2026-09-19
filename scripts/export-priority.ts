@@ -42,7 +42,10 @@ async function main() {
   const pre = await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id, name, tier").order("spotify_id").range(f, t));
   const picks = await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id, name, genre, rank").order("spotify_id").range(f, t));
   const maps = await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid, confidence").eq("entity", "artist").order("spotify_id").range(f, t));
-  const cov = await fetchAll<any>((f, t) => sb.from("artist_deezer_target").select("spotify_id, name, country, albums_with_tracks, release_groups, tracks").order("spotify_id").range(f, t));
+  // 지금 실제로 낼 수 있는 것 기준 (Spotify 연결 앨범 + "mb:" 발매그룹 + Deezer)
+  const cov = await fetchAll<any>((f, t) => sb.from("artist_serve_coverage")
+    .select("spotify_id, name, country, albums_servable, tracks_servable, release_groups, sp_albums, mb_albums, dz_albums")
+    .order("spotify_id").range(f, t));
 
   const mapOf = new Map(maps.map((m) => [m.spotify_id, m]));
   const covOf = new Map(cov.map((c) => [c.spotify_id, c]));
@@ -67,14 +70,11 @@ async function main() {
   const nameOf = new Map(cached.map((r) => [r.id, r.name as string]));
   for (const [id, w] of want) if (!w.name) w.name = nameOf.get(id) ?? "";
 
-  const rgCount = new Map<string, number>();
-  for (const c of cov) if (c.release_groups) rgCount.set(c.spotify_id, c.release_groups);
-
   const rows = [...want].map(([spotify_id, w]) => {
     const m = mapOf.get(spotify_id);
     const c = covOf.get(spotify_id);
     const rgs = c?.release_groups ?? 0;
-    const withTracks = c?.albums_with_tracks ?? 0;
+    const withTracks = c?.albums_servable ?? 0;
     const grade = !m ? "A 연결없음"
       : !TRUSTED.includes(m.confidence) ? (rgs > 0 ? "B 이름만연결(앨범있음)" : "C 이름만연결(앨범없음)")
       : withTracks === 0 ? "D 트랙0"
@@ -86,9 +86,12 @@ async function main() {
       아티스트: c?.name || w.name || "(이름 미상 · 차트 유입)",
       우선순위근거: w.why.join(" / "),
       국가: c?.country ?? "",
-      "DB 앨범수": rgs,
-      "트랙리스트 있는 앨범": withTracks,
-      "DB 곡수": c?.tracks ?? 0,
+      "아는 앨범(발매그룹)": rgs,
+      "낼 수 있는 앨범": withTracks,
+      "낼 수 있는 곡": c?.tracks_servable ?? 0,
+      "Spotify 연결": c?.sp_albums ?? 0,
+      "MusicBrainz 단독": c?.mb_albums ?? 0,
+      Deezer: c?.dz_albums ?? 0,
       연결근거: m?.confidence ?? "없음",
       spotify_id,
       "해야 할 일": !m ? "MusicBrainz 아티스트 찾기 (mb_resolve)"
@@ -97,7 +100,7 @@ async function main() {
         : withTracks < 5 ? "빠진 앨범 트랙리스트 받기 (mb-rg-fill)"
         : "",
     };
-  }).sort((a, b) => a.등급.localeCompare(b.등급) || b["DB 앨범수"] - a["DB 앨범수"] || a.아티스트.localeCompare(b.아티스트));
+  }).sort((a, b) => a.등급.localeCompare(b.등급) || b["아는 앨범(발매그룹)"] - a["아는 앨범(발매그룹)"] || a.아티스트.localeCompare(b.아티스트));
 
   const urgent = rows.filter((r) => !r.등급.startsWith("F"));
   const cols = Object.keys(rows[0]);
@@ -117,8 +120,8 @@ async function main() {
     "  A 연결없음              MusicBrainz 아티스트를 못 찾았다. 앨범도 트랙도 하나도 못 낸다.",
     "  B 이름만연결(앨범있음)  앨범은 이미 DB 에 있는데 연결을 못 믿어서 못 낸다. 확인만 하면 바로 열린다.",
     "  C 이름만연결(앨범없음)  연결도 못 믿고 앨범도 없다.",
-    "  D 트랙0                 앨범 목록은 있고 트랙리스트가 없다.",
-    "  E 빈약                  트랙리스트가 있는 앨범이 1~4장뿐이다.",
+    "  D 트랙0                 앨범 목록은 있고 낼 수 있는 곡이 없다.",
+    "  E 빈약                  낼 수 있는 앨범이 1~4장뿐이다.",
     "  F 정상                  5장 이상. 지금도 Spotify 없이 서비스된다.",
   ];
   writeFileSync(`${OUT}/0_요약.txt`, "\ufeff" + lines.join("\r\n"), "utf8");
