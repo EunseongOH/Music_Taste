@@ -43,7 +43,7 @@ async function main() {
   const picks = await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id, name, genre, rank").order("spotify_id").range(f, t));
   const maps = await fetchAll<any>((f, t) => sb.from("mb_spotify_map").select("spotify_id, mbid, confidence").eq("entity", "artist").order("spotify_id").range(f, t));
   // 지금 실제로 낼 수 있는 것 기준 (Spotify 연결 앨범 + "mb:" 발매그룹 + Deezer)
-  const cov = await fetchAll<any>((f, t) => sb.from("artist_serve_coverage")
+  const cov = await fetchAll<any>((f, t) => sb.from("artist_serve_snapshot")
     .select("spotify_id, name, country, albums_servable, tracks_servable, release_groups, sp_albums, mb_albums, dz_albums")
     .order("spotify_id").range(f, t));
 

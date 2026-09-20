@@ -206,9 +206,31 @@ async function demand(limit: number) {
   console.log(`완료 · 수요 상위 ${todo.length}명의 남은 발매그룹 ${left}건을 맨 앞으로 당겼다`);
 }
 
+/** 새로 들인 아티스트(discover-artists 로 추가)를 바로 처리한다. */
+async function fresh(limit: number) {
+  const { data: rows } = await sb.from("artist_candidate")
+    .select("mbid, name, spotify_id, nb_fan").eq("status", "added")
+    .order("nb_fan", { ascending: false }).limit(limit);
+  const todo = (rows ?? []).map((r) => ({ ...r, country: "KR" }));
+  console.log(`새로 들인 아티스트 ${todo.length}명`);
+  if (!todo.length) return;
+  await map(todo.length, todo, -5);            // 대표 발매판 정하기 (수요 아티스트 다음 순서)
+  for (let i = 0; i < todo.length; i += 50) {
+    const mbids = todo.slice(i, i + 50).map((a) => a.mbid);
+    const rgs = await fetchAll<any>((f, t) => sb.from("mb_release_group").select("mbid").in("artist_mbid", mbids).order("mbid").range(f, t));
+    for (let j = 0; j < rgs.length; j += 200) {
+      const { error } = await sb.from("mb_rg_release").update({ rank: -5 })
+        .in("release_group_mbid", rgs.slice(j, j + 200).map((r) => r.mbid)).is("tracks_filled_at", null);
+      if (error) throw new Error(error.message);
+    }
+  }
+  console.log("완료 · 새 아티스트의 발매그룹을 앞으로 당겼다");
+}
+
 const cmd = process.argv[2];
 const n = Number(process.argv[3] ?? 200);
 if (cmd === "map") map(n);
 else if (cmd === "tracks") tracks(n);
 else if (cmd === "demand") demand(n);
-else { console.log("map [아티스트수] | tracks [발매판수] | demand [아티스트수]"); process.exit(1); }
+else if (cmd === "new") fresh(n);
+else { console.log("map [아티스트수] | tracks [발매판수] | demand [아티스트수] | new [아티스트수]"); process.exit(1); }

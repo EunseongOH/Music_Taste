@@ -67,7 +67,7 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
   const want = new Set(IDOLS.map(norm));
 
-  const cov = await fetchAll<any>((f, t) => sb.from("artist_serve_coverage")
+  const cov = await fetchAll<any>((f, t) => sb.from("artist_serve_snapshot")
     .select("spotify_id, name, name_ko, confidence, sp_albums, mb_albums, dz_albums, albums_servable, tracks_servable, release_groups")
     .order("spotify_id").range(f, t));
   const pre = await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id, name, tier").order("spotify_id").range(f, t));
