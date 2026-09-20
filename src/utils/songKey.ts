@@ -25,7 +25,12 @@ const TRAILING_BRACKET = /^(.+?)\s*[（(\[【]([^）)\]】]+)[）)\]】]\s*$/;
  * 한글 제목 뒤에 영어 제목이 괄호로 붙는 표기를 뗀다 — "봄날 (Spring Day)", "소나기 (Downpour)".
  * 두 글자가 서로 다른 문자 체계일 때만 뗀다. "Love (Part 2)" 처럼 같은 체계면 진짜 다른 곡일 수 있어 남긴다.
  */
+/** 괄호 없이 "빨간 맛 Red Flavor" 처럼 한글 제목 뒤에 영어 제목을 붙여 적는 표기도 뗀다. */
+const TRAILING_LATIN = /^(.*[가-힣぀-ヿ一-鿿][^A-Za-z]*)\s+([A-Za-z][A-Za-z0-9'’.,!?&\- ]{1,40})$/;
+
 function stripTranslation(s: string): string {
+  const bare = s.match(TRAILING_LATIN);
+  if (bare && /[\p{L}]/u.test(bare[1])) return bare[1].trim();
   const m = s.match(TRAILING_BRACKET);
   if (!m) return s;
   const [, base, inner] = m;
