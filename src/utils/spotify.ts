@@ -651,6 +651,15 @@ const albumTracks = (a: any) => Number(a?.total_tracks ?? 0) || 0;
  */
 function mergeAlbums(spotifyItems: any[], db: any[]) {
   const dbIds = new Set(db.map((a) => a?.id).filter(Boolean));
+  // 자체 DB 가 아는 앨범 종류. 제목으로도, 연도+곡수로도 찾을 수 있게 둔다
+  const dbType = new Map<string, string>();
+  for (const a of db) {
+    if (!a?.album_type) continue;
+    const t = albumTitleKey(a);
+    if (t && !dbType.has(t)) dbType.set(t, a.album_type);
+    const k = `${albumYear(a)}|${albumTracks(a)}`;
+    if (albumYear(a) && albumTracks(a) && !dbType.has(k)) dbType.set(k, a.album_type);
+  }
   const best = new Map<string, any>();        // 제목 -> 남길 앨범
   const order: string[] = [];
   const seenId = new Set<string>();
@@ -740,8 +749,13 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
 
   return kept.filter((a) => !drop.has(a.id))
     .map((a) => {
-      // Spotify 는 다섯 곡짜리도 single 로 준다. 우리 DB 앨범은 이미 곡 수로 정해져 있으므로 건드리지 않는다
+      // Spotify 는 네다섯 곡짜리도 single 로 준다. 우리 DB 가 같은 앨범을 갖고 있으면 그쪽 종류를 쓴다
+      // (DB 쪽은 판 표기를 뺀 실제 곡 수로 정해 둔 값이라 더 정확하다).
       if (dbIds.has(a.id) || a?.album_type !== "single") return a;
+      const byTitle = dbType.get(albumTitleKey(a));
+      const byShape = dbType.get(`${albumYear(a)}|${albumTracks(a)}`);
+      const known = byTitle ?? byShape;
+      if (known) return known === "single" ? a : { ...a, album_type: known };
       const n = albumTracks(a);
       if (n >= 8) return { ...a, album_type: "album" };
       if (n >= 5) return { ...a, album_type: "ep" };
