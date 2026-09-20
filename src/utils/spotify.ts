@@ -705,6 +705,40 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
     if (drop2.size) kept = kept.filter((a) => !drop2.has(a.id));
   }
 
+  // 글자만 살짝 다른 같은 제목 — 잔나비 "소곡집 ll" / "소곡집 II" (소문자 L 과 로마 숫자 I).
+  // 같은 해에 제목이 9할 이상 닮았으면 같은 앨범으로 본다.
+  {
+    const bigrams = (x: string) => {
+      const m = new Map<string, number>();
+      for (let i = 0; i < x.length - 1; i++) { const g = x.slice(i, i + 2); m.set(g, (m.get(g) ?? 0) + 1); }
+      return m;
+    };
+    const sim = (a: string, b: string) => {
+      if (!a || !b || a.length < 4 || b.length < 4) return a === b ? 1 : 0;
+      const ga = bigrams(a), gb = bigrams(b);
+      let hit = 0;
+      for (const [g, n] of ga) hit += Math.min(n, gb.get(g) ?? 0);
+      return (2 * hit) / (a.length - 1 + b.length - 1);
+    };
+    const drop4 = new Set<string>();
+    for (let i = 0; i < kept.length; i++) {
+      for (let j = i + 1; j < kept.length; j++) {
+        const a = kept[i], b = kept[j];
+        if (drop4.has(a.id) || drop4.has(b.id)) continue;
+        if (albumYear(a) !== albumYear(b) || !albumYear(a)) continue;
+        const ta = albumTitleKey(a), tb = albumTitleKey(b);
+        if (!ta || !tb || ta === tb) continue;
+        if (sim(ta, tb) < 0.9) continue;
+        // 곡이 많은 쪽을 남기고, 같으면 자체 DB 쪽을 남긴다
+        const loser = albumTracks(a) !== albumTracks(b)
+          ? (albumTracks(a) > albumTracks(b) ? b : a)
+          : (dbIds.has(a.id) && !dbIds.has(b.id) ? b : a);
+        drop4.add(loser.id);
+      }
+    }
+    if (drop4.size) kept = kept.filter((a) => !drop4.has(a.id));
+  }
+
   // 한쪽 제목이 다른 쪽을 품고 있고 연도·곡 수가 같으면 같은 앨범이다.
   // 아이오아이 "Whatta Man" / "Whatta Man (Good Man)" 이 그랬다.
   {
