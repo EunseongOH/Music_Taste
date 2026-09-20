@@ -475,7 +475,9 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       }
     }
 
-    const deduped = merged.size ? out.filter((a) => !merged.has(a.id)) : out;
+    // out 을 비우고 다시 채운다. merged 가 비면 filter 를 건너뛰는데, 그때 같은 배열을 가리키면
+    // 비우는 순간 내용까지 사라진다. 반드시 복사본을 만든다.
+    const deduped = merged.size ? out.filter((a) => !merged.has(a.id)) : [...out];
     out.length = 0;
     out.push(...deduped);
 

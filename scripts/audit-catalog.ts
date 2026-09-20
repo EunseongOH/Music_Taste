@@ -37,7 +37,7 @@ async function main() {
     ...(await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
     ...(await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
   ]);
-  const all = await fetchAll<any>((f, t) => sb.from("artist_serve_coverage")
+  const all = await fetchAll<any>((f, t) => sb.from("artist_serve_snapshot")
     .select("spotify_id, name, name_ko, tracks_servable, albums_servable")
     .in("confidence", ["url_rel", "manual", "wikidata"]).gt("tracks_servable", 0).order("spotify_id").range(f, t));
   const todo = all
