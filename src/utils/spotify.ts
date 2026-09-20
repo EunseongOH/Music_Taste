@@ -676,7 +676,43 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
     // 곡이 더 많은 쪽을 남긴다. 같으면 먼저 온 쪽(= Spotify) 을 둔다
     if (albumTracks(a) > albumTracks(prev)) best.set(k, a);
   }
-  const kept = order.map((k) => best.get(k)).filter(Boolean);
+  let kept = order.map((k) => best.get(k)).filter(Boolean);
+
+  // 제목이 같고 곡 수도 같으면 발매연도가 몇 해 떨어져 있어도 같은 앨범이다 (재발매·재등록).
+  // 아이오아이 "손에 손잡고" 2016 / 2018 이 그랬다.
+  {
+    const byTitleTracks = new Map<string, any>();
+    const drop2 = new Set<string>();
+    for (const a of kept) {
+      const k = `${albumTitleKey(a)}|${albumTracks(a)}`;
+      if (!albumTitleKey(a) || !albumTracks(a)) continue;
+      const prev = byTitleTracks.get(k);
+      if (!prev) { byTitleTracks.set(k, a); continue; }
+      // 자체 DB 쪽을 남긴다 (트랙리스트가 있다). 둘 다 같은 쪽이면 먼저 온 것을 남긴다
+      const keepA = dbIds.has(a.id) && !dbIds.has(prev.id);
+      drop2.add(keepA ? prev.id : a.id);
+      if (keepA) byTitleTracks.set(k, a);
+    }
+    if (drop2.size) kept = kept.filter((a) => !drop2.has(a.id));
+  }
+
+  // 한쪽 제목이 다른 쪽을 품고 있고 연도·곡 수가 같으면 같은 앨범이다.
+  // 아이오아이 "Whatta Man" / "Whatta Man (Good Man)" 이 그랬다.
+  {
+    const drop3 = new Set<string>();
+    for (let i = 0; i < kept.length; i++) {
+      for (let j = i + 1; j < kept.length; j++) {
+        const a = kept[i], b = kept[j];
+        if (drop3.has(a.id) || drop3.has(b.id)) continue;
+        if (albumYear(a) !== albumYear(b) || albumTracks(a) !== albumTracks(b) || !albumTracks(a)) continue;
+        const ta = albumTitleKey(a), tb = albumTitleKey(b);
+        if (!ta || !tb || ta === tb) continue;
+        if (!ta.includes(tb) && !tb.includes(ta)) continue;
+        drop3.add(dbIds.has(a.id) && !dbIds.has(b.id) ? b.id : a.id);
+      }
+    }
+    if (drop3.size) kept = kept.filter((a) => !drop3.has(a.id));
+  }
 
   // 제목이 서로 다른 언어면 위 비교로는 못 잡는다.
   // 데카당: Spotify "링구 / 애추"(2019-01-30, 4곡) / 자체 DB "Lingu / Talus"(2019, 4곡).
@@ -703,6 +739,14 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
   }
 
   return kept.filter((a) => !drop.has(a.id))
+    .map((a) => {
+      // Spotify 는 다섯 곡짜리도 single 로 준다. 우리 DB 앨범은 이미 곡 수로 정해져 있으므로 건드리지 않는다
+      if (dbIds.has(a.id) || a?.album_type !== "single") return a;
+      const n = albumTracks(a);
+      if (n >= 8) return { ...a, album_type: "album" };
+      if (n >= 5) return { ...a, album_type: "ep" };
+      return a;
+    })
     .sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
 }
 
