@@ -650,6 +650,7 @@ const albumTracks = (a: any) => Number(a?.total_tracks ?? 0) || 0;
  * 정규 앨범 수록곡을 통째로 잃는다. 곡 수가 같으면 Spotify 쪽을 남긴다 (커버가 있다).
  */
 function mergeAlbums(spotifyItems: any[], db: any[]) {
+  const dbIds = new Set(db.map((a) => a?.id).filter(Boolean));
   const best = new Map<string, any>();        // 제목 -> 남길 앨범
   const order: string[] = [];
   const seenId = new Set<string>();
@@ -675,7 +676,33 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
     // 곡이 더 많은 쪽을 남긴다. 같으면 먼저 온 쪽(= Spotify) 을 둔다
     if (albumTracks(a) > albumTracks(prev)) best.set(k, a);
   }
-  return order.map((k) => best.get(k)).filter(Boolean)
+  const kept = order.map((k) => best.get(k)).filter(Boolean);
+
+  // 제목이 서로 다른 언어면 위 비교로는 못 잡는다.
+  // 데카당: Spotify "링구 / 애추"(2019-01-30, 4곡) / 자체 DB "Lingu / Talus"(2019, 4곡).
+  // 같은 해에 곡 수가 같은 앨범이 양쪽에 하나씩만 있고 글자 체계가 다르면 같은 앨범으로 본다.
+  // 자체 DB 쪽을 남긴다 — 트랙리스트를 갖고 있어서 눌러도 Spotify 를 부르지 않는다.
+  const cjk = (s: string) => /[가-힣぀-ヿ一-鿿]/.test(s || "");
+  const groups = new Map<string, any[]>();
+  for (const a of kept) {
+    const y = albumYear(a), n = albumTracks(a);
+    if (!y || !n) continue;
+    const k = `${y}|${n}`;
+    groups.set(k, [...(groups.get(k) ?? []), a]);
+  }
+  const drop = new Set<string>();
+  for (const list of groups.values()) {
+    if (list.length !== 2) continue;                       // 셋 이상이면 어느 쪽이 짝인지 알 수 없다
+    const [a, b] = list;
+    if (albumTitleKey(a) === albumTitleKey(b)) continue;    // 제목이 같으면 위에서 이미 처리됐다
+    if (cjk(a.name) === cjk(b.name)) continue;             // 글자 체계가 같으면 진짜 다른 앨범일 수 있다
+    const fromDb = dbIds.has(a.id) ? a : dbIds.has(b.id) ? b : null;
+    const fromSpotify = dbIds.has(a.id) ? b : dbIds.has(b.id) ? a : null;
+    if (!fromDb || !fromSpotify || fromDb === fromSpotify) continue;
+    drop.add(fromSpotify.id);
+  }
+
+  return kept.filter((a) => !drop.has(a.id))
     .sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
 }
 
