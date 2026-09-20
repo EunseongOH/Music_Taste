@@ -7,6 +7,9 @@
 //   4) 곡이 하나도 안 나오는 앨범이 있는가 (눌렀을 때 빈 화면이 된다)
 //   5) 발매일이 비었거나 말이 안 되는 앨범
 //   6) 같은 앨범이 발매일만 다르게 두 번 나가는가 (수록곡의 8할 이상이 같으면 같은 앨범)
+//   7) Spotify 목록과 합친 뒤에도 중복이 없는가.
+//      새로 불러온 아티스트는 Spotify 가 한글 제목("링구 / 애추"), 우리 DB 가 로마자 제목
+//      ("Lingu / Talus") 을 갖는 일이 있다. 화면에는 둘을 합쳐서 내므로 합친 결과로 봐야 한다.
 //
 // 사용: npx tsx --env-file=.env.local scripts/audit-catalog.ts [아티스트수] [출력폴더]
 
@@ -19,6 +22,10 @@ const LIMIT = Number(process.argv[2] ?? 400);
 const OUT = process.argv[3] ?? `C:/Users/User/sortify-exports/데이터검증-${new Date().toISOString().slice(0, 10)}`;
 const ALBUM_CAP = Number(process.env.ALBUM_CAP ?? 60);
 const norm = (s: string) => (s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+/** 화면(mergeAlbums)과 같은 기준: 판 표기를 떼고 비교한다 */
+const EDITION = /\s*[([][^)\]]*(deluxe|edition|remaster|remastered|version|ver\.|repackage|anniversary|expanded|bonus)[^)\]]*[)\]]/gi;
+const albumKey = (s: string) => norm(String(s ?? "").normalize("NFKC").replace(EDITION, ""));
+const CJK = /[가-힣぀-ヿ一-鿿]/;
 const cell = (v: unknown) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
 async function fetchAll<T>(page: (f: number, t: number) => PromiseLike<{ data: T[] | null; error: any }>) {
@@ -37,6 +44,14 @@ async function main() {
     ...(await fetchAll<any>((f, t) => sb.from("prelaunch_targets").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
     ...(await fetchAll<any>((f, t) => sb.from("explore_genre_picks").select("spotify_id").order("spotify_id").range(f, t))).map((r) => r.spotify_id),
   ]);
+  // 받아 둔 Spotify 앨범 목록 캐시 (새로 부르지 않는다)
+  const spCache = new Map<string, any[]>();
+  for (const r of await fetchAll<any>((f, t) => sb.from("spotify_cache_artist_albums").select("artist_id, items").order("artist_id").range(f, t))) {
+    const cur = spCache.get(r.artist_id) ?? [];
+    for (const it of (r.items ?? []) as any[]) if (it?.id) cur.push(it);
+    spCache.set(r.artist_id, cur);
+  }
+
   const all = await fetchAll<any>((f, t) => sb.from("artist_serve_snapshot")
     .select("spotify_id, name, name_ko, tracks_servable, albums_servable")
     .in("confidence", ["url_rel", "manual", "wikidata"]).gt("tracks_servable", 0).order("spotify_id").range(f, t));
@@ -95,6 +110,25 @@ async function main() {
       }
     }
 
+    // 7) Spotify 목록과 합친 뒤의 중복 (제목이 서로 다른 언어라 안 겹치는 경우를 잡는다)
+    const spItems = spCache.get(a.spotify_id) ?? [];
+    const mergedDup: string[] = [];
+    if (spItems.length) {
+      type Cand = { n: string; y: string; t: number; sp: boolean };
+      const all: Cand[] = [...spItems.map((x: any) => ({ n: x.name, y: String(x.release_date ?? "").slice(0, 4), t: Number(x.total_tracks ?? 0), sp: true })),
+                   ...albums.map((x) => ({ n: x.name, y: x.release_date.slice(0, 4), t: x.total_tracks, sp: false }))];
+      const byKey = new Map<string, Cand[]>();
+      for (const x of all) { if (!x.y || !x.t) continue; const k = `${x.y}|${x.t}`; byKey.set(k, [...(byKey.get(k) ?? []), x]); }
+      for (const [, v] of byKey) {
+        if (v.length !== 2) continue;
+        const [x, y] = v;
+        if (x.sp === y.sp) continue;                                   // 같은 쪽 두 개면 판단 못 한다
+        if (albumKey(x.n) === albumKey(y.n)) continue;                 // 판 표기만 다르면 이미 합쳐진다
+        if (CJK.test(x.n) !== CJK.test(y.n)) continue;                 // 글자 체계가 다르면 화면에서 합친다
+        mergedDup.push(`${x.n} = ${y.n}`);
+      }
+    }
+
     const dupYear = [...keyYear].filter(([, v]) => v.length > 1);
     const dupFull = [...keyFull].filter(([, v]) => v.length > 1);
 
@@ -108,6 +142,7 @@ async function main() {
       "앨범 안 곡 중복": dupInAlbum,
       "발매일 이상": badDate,
       "발매일만 다른 같은 앨범": sameAlbumPairs.length,
+      "Spotify 합친 뒤 중복 의심": mergedDup.length,
       홍보대상: want.has(a.spotify_id) ? "O" : "",
       spotify_id: a.spotify_id,
     });
@@ -115,6 +150,7 @@ async function main() {
     if (emptyAlbums) problems.push({ 아티스트: name, 종류: "곡 없는 앨범", 내용: `${emptyAlbums}장`, spotify_id: a.spotify_id });
     if (dupInAlbum) problems.push({ 아티스트: name, 종류: "앨범 안 곡 중복", 내용: `${dupInAlbum}건`, spotify_id: a.spotify_id });
     for (const c of sameAlbumPairs.slice(0, 4)) problems.push({ 아티스트: name, 종류: "발매일만 다른 같은 앨범", 내용: c, spotify_id: a.spotify_id });
+    for (const c of mergedDup.slice(0, 4)) problems.push({ 아티스트: name, 종류: "Spotify 합친 뒤 중복 의심", 내용: c, spotify_id: a.spotify_id });
   }
 
   const w = (file: string, list: any[]) => {
@@ -136,6 +172,7 @@ async function main() {
     `한 앨범 안 같은 곡           ${sum("앨범 안 곡 중복")}건`,
     `발매일이 이상함              ${sum("발매일 이상")}장`,
     `발매일만 다른 같은 앨범      ${sum("발매일만 다른 같은 앨범")}건 · ${rows.filter((r) => r["발매일만 다른 같은 앨범"]).length}팀`,
+    `Spotify 합친 뒤 중복 의심    ${sum("Spotify 합친 뒤 중복 의심")}건 · ${rows.filter((r) => r["Spotify 합친 뒤 중복 의심"]).length}팀`,
   ];
   writeFileSync(`${OUT}/0_요약.txt`, "\ufeff" + lines.join("\r\n"), "utf8");
   console.log("\n" + lines.join("\n") + `\n\n${OUT} 에 저장했다.`);
