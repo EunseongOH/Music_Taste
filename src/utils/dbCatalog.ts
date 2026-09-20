@@ -134,6 +134,22 @@ function sameAlbum(a: AlbumTracks, b: AlbumTracks): boolean {
   return overlap(a, b, true) >= 0.6;
 }
 
+/**
+ * 앨범 종류. MusicBrainz·Deezer 가 준 종류를 기본으로 하되, 실제 수록곡 수와 어긋나면 고친다.
+ *
+ * 한국 디지털 발매는 서너 곡이 들어 있어도 MusicBrainz 에 Single 로 올라와 있는 일이 흔하다.
+ * 화면에 Single 이라고 적히면 이용자가 틀렸다고 느낀다. 곡 수를 세서 다시 정한다.
+ * 이때 "곡"은 판 표기를 뗀 기준이라 같은 곡의 Inst. 판은 따로 세지 않는다
+ * (타이틀곡 + 그 Inst. 두 트랙이면 여전히 싱글이다).
+ */
+function albumType(given: string, distinctSongs: number): string {
+  const t = (given || "").toLowerCase();
+  if (t === "album" || distinctSongs >= 7) return "album";
+  if (distinctSongs >= 3) return "ep";
+  if (t === "ep") return "ep";
+  return "single";
+}
+
 /** 검증되지 않은 제목 대조 연결은 제외한다. */
 async function unverifiedAlbumIds(supabase: ReturnType<typeof createAdminClient>, ids: string[]) {
   const out = new Set<string>();
@@ -272,7 +288,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       out.push({
         id: albumId,
         name,
-        album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
+        album_type: albumType(type, new Set((cmpOf.get(src.release ?? "") ?? new Map()).values()).size || total),
         release_date,
         total_tracks: total,
         images: [
@@ -338,7 +354,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         out.push({
           id: `mb:${g.mbid}`,
           name: g.title,
-          album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
+          album_type: albumType(type, new Set((cmp2.get(rel) ?? new Map()).values()).size || total),
           release_date,
           total_tracks: total,
           images: [{ url: caaCover(g.mbid) }],
@@ -396,7 +412,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         out.push({
           id: `deezer:${alb.deezer_album_id}`,
           name: alb.title,
-          album_type: type === "single" ? "single" : type === "ep" ? "ep" : "album",
+          album_type: albumType(type, new Set((dzCmp.get(alb.deezer_album_id) ?? new Map()).values()).size || total),
           release_date: String(alb.release_date ?? "").slice(0, 10),
           total_tracks: total,
           images: [{ url: deezerCover(alb.deezer_album_id) }],

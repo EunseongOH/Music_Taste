@@ -22,6 +22,10 @@ const LIMIT = Number(process.argv[2] ?? 400);
 const OUT = process.argv[3] ?? `C:/Users/User/sortify-exports/데이터검증-${new Date().toISOString().slice(0, 10)}`;
 const ALBUM_CAP = Number(process.env.ALBUM_CAP ?? 60);
 const norm = (s: string) => (s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+/** 화면(mergeAlbums)과 같은 기준: 판 표기를 떼고 비교한다 */
+const EDITION = /\s*[([][^)\]]*(deluxe|edition|remaster|remastered|version|ver\.|repackage|anniversary|expanded|bonus)[^)\]]*[)\]]/gi;
+const albumKey = (s: string) => norm(String(s ?? "").normalize("NFKC").replace(EDITION, ""));
+const CJK = /[가-힣぀-ヿ一-鿿]/;
 const cell = (v: unknown) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
 async function fetchAll<T>(page: (f: number, t: number) => PromiseLike<{ data: T[] | null; error: any }>) {
@@ -119,7 +123,8 @@ async function main() {
         if (v.length !== 2) continue;
         const [x, y] = v;
         if (x.sp === y.sp) continue;                                   // 같은 쪽 두 개면 판단 못 한다
-        if (norm(x.n) === norm(y.n)) continue;                         // 제목이 같으면 이미 합쳐진다
+        if (albumKey(x.n) === albumKey(y.n)) continue;                 // 판 표기만 다르면 이미 합쳐진다
+        if (CJK.test(x.n) !== CJK.test(y.n)) continue;                 // 글자 체계가 다르면 화면에서 합친다
         mergedDup.push(`${x.n} = ${y.n}`);
       }
     }
