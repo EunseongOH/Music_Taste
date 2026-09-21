@@ -233,7 +233,7 @@ try {
    * 공유받은 사람의 참여 동선.
    *
    * 남의 취향표를 보고 "나도 만들기"를 누르면, 그 취향표를 만든 모드로 홈이
-   * 열려야 한다. '최애 곡 줄 세우기' 결과를 보고 들어왔는데 '믹스 매치
+   * 열려야 한다. '최애 곡 소트하기' 결과를 보고 들어왔는데 '믹스 매치
    * 월드컵'이 먼저 뜨면 흐름이 끊긴다.
    *
    * 홈의 시작 버튼 href 로 확인한다 — 카드마다 목적지가 다르므로 어떤 카드가
@@ -263,7 +263,7 @@ try {
     check((await startHref(multi)) === '/genres', `${label} — ?mode=multi → 믹스 매치 월드컵`, (await startHref(multi)) ?? '없음');
 
     // 3) 공유 화면의 CTA 가 원본 모드를 붙여 홈으로 보낸다.
-    //    SHARED_ID 는 '최애 곡 줄 세우기'(is_single_artist) 결과다.
+    //    SHARED_ID 는 '최애 곡 소트하기'(is_single_artist) 결과다.
     const shared = await ctx.newPage();
     await shared.goto(`${base}${sharedRoute}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await shared.waitForTimeout(4000);
@@ -275,7 +275,7 @@ try {
       await shared.waitForTimeout(2500);
       const q = new URL(shared.url()).search;
       check(q.includes('mode=single'), `${label} — CTA 가 원본 모드를 이어받음`, shared.url());
-      check((await startHref(shared)) === '/explore?mode=single', `${label} — 이동한 홈이 최애 곡 줄 세우기`, (await startHref(shared)) ?? '없음');
+      check((await startHref(shared)) === '/explore?mode=single', `${label} — 이동한 홈이 최애 곡 소트하기`, (await startHref(shared)) ?? '없음');
     }
 
     await ctx.close();

@@ -70,7 +70,7 @@
 {/* 목록 행 */}
 <p className="type-body-strong text-navy">내 마음의 레드벨벳</p>
 <p className="type-sub text-navy/70">1위 Feel My Rhythm · Red Velvet</p>
-<p className="type-caption text-navy/70">2026.09.11 · 최애 곡 줄 세우기</p>
+<p className="type-caption text-navy/70">2026.09.11 · 최애 곡 소트하기</p>
 
 {/* 순위 숫자 — 숫자만 있어서 원티드산스, 세로 정렬이라 tabular-nums */}
 <span className="type-title-2 font-num tabular-nums text-point-ink">1</span>

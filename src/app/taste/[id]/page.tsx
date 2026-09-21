@@ -28,7 +28,7 @@ const translations = {
     loading: "취향표를 불러오고 있어요",
     missingTitle: "취향표를 열 수 없어요",
     missingDesc: "삭제됐거나 비공개로 바뀐 취향표예요.",
-    single: "최애 곡 줄 세우기",
+    single: "최애 곡 소트하기",
     multi: "믹스 매치 월드컵",
     winner: "1위",
     allRanks: "전체 순위",
@@ -222,7 +222,7 @@ export default function TasteSharedPage() {
           <button
             /*
              * 이 취향표를 만든 모드 그대로 시작하게 한다.
-             * '최애 곡 줄 세우기' 결과를 보고 들어온 사람에게 '믹스 매치 월드컵'이 먼저 보이면 흐름이 끊긴다.
+             * '최애 곡 소트하기' 결과를 보고 들어온 사람에게 '믹스 매치 월드컵'이 먼저 보이면 흐름이 끊긴다.
              */
             onClick={() => router.push(result.is_single_artist ? "/?mode=single" : "/?mode=multi")}
             className={`${primaryButton} w-full`}

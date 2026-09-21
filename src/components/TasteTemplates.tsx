@@ -46,7 +46,7 @@ export interface CardMeta {
 
 const text = {
   ko: {
-    single: "최애 곡 줄 세우기",
+    single: "최애 곡 소트하기",
     multi: "믹스 매치 월드컵",
     count: (n: number) => `${n}곡`,
     side: (k: number, from: number, to: number) => `${"ABCDEFGH"[k]}면 · ${from}–${to}위`,
@@ -54,7 +54,7 @@ const text = {
     winner: "1위",
     more: (n: number) => `외 ${n}곡`,
     lineup: "취향 라인업",
-    // 페스티벌의 "헤드라이너" 자리. 서비스에서 이미 쓰는 말(최애 곡 줄 세우기)로 부른다.
+    // 페스티벌의 "헤드라이너" 자리. 서비스에서 이미 쓰는 말(최애 곡 소트하기)로 부른다.
     headliner: "최애 곡",
     fine: (label: string, total: number, shown: number) =>
       `${label} · 전체 ${total}곡${shown < total ? ` 중 TOP ${shown}` : ""}`,

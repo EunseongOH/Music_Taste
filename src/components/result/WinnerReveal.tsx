@@ -29,7 +29,7 @@ interface WinnerRevealProps {
 
 const copy = {
   ko: {
-    single: "최애 곡 줄 세우기",
+    single: "최애 곡 소트하기",
     multi: "믹스 매치 월드컵",
     trackCount: (n: number) => `${n}곡`,
     winner: "1위",
