@@ -294,7 +294,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
 
   const t = {
     ko: {
-      tagline: mode === "login" ? "가장 선명한 취향을 찾아서" : 
+      tagline: mode === "login" ? "더 마음이 가는 곡을 찾는 곳" : 
                mode === "signup" ? "Sortify에 오신 것을 환영해요" :
                "게스트로 진행 안내",
       email: "이메일 (아이디)",
@@ -322,7 +322,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
       goLogin: "로그인하러 가기",
     },
     en: {
-      tagline: mode === "login" ? "Sort your clearest taste" : 
+      tagline: mode === "login" ? "Find the songs you love a little more" : 
                mode === "signup" ? "Welcome to Sortify!" :
                "Guest Mode Guide",
       email: "Email (ID)",

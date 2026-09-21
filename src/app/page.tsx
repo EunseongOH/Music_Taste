@@ -30,33 +30,33 @@ export default function Home() {
   const modes = [
     {
       id: "single",
-      badge: locale === "ko" ? "한 아티스트 전곡" : "Single Artist",
+      badge: locale === "ko" ? "아티스트 한 명" : "One artist",
       title: locale === "ko" ? "최애 곡 소트하기" : "Favorite Songs Sort",
-      desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "Select a single artist and line up all of their tracks in the order of your choice.",
+      desc: locale === "ko" ? "한 아티스트의 전곡을 비교하며, 내가 더 좋아하는 곡을 찾아보세요." : "Compare every song by one artist and find the ones you love more.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/explore?mode=single"
     },
     {
       id: "multi",
-      badge: locale === "ko" ? "여러 아티스트" : "Multiple Artists",
+      badge: locale === "ko" ? "여러 아티스트" : "Several artists",
       title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
-      desc: locale === "ko" ? "좋아하는 아티스트들의 명곡을 한데 모아 토너먼트로 즐기고, 내가 가장 사랑하는 단 한 곡을 찾아보세요." : "Select multiple favorite artists, mix their top songs, and find your absolute #1 track.",
+      desc: locale === "ko" ? "좋아하는 아티스트들의 곡을 한데 모아, 토너먼트로 최애곡을 찾아보세요." : "Bring together songs by the artists you love and find your favorite in a tournament.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/genres"
     },
     {
       id: "archive",
-      badge: locale === "ko" ? "내 보관함" : "My Space",
+      badge: locale === "ko" ? "내 기록" : "My records",
       title: locale === "ko" ? "내 취향 스페이스" : "My Taste Space",
-      desc: locale === "ko" ? "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요." : "Explore your saved music tastes and browse the feeds of friends who share similar tastes.",
+      desc: locale === "ko" ? "내 기록들을 모아두고, 취향이 닮은 리스너도 만나보세요." : "Keep your records in one place and meet listeners with similar taste.",
       btnText: locale === "ko" ? "확인하기" : "Check",
       target: "/explore-taste"
     },
     {
       id: "public-archive",
-      badge: locale === "ko" ? "취향 피드" : "Public Feed",
+      badge: locale === "ko" ? "모두의 취향표" : "Everyone's taste cards",
       title: locale === "ko" ? "우리의 취향 아카이브" : "Public Taste Archive",
-      desc: locale === "ko" ? "다른 음악 팬들이 완성한 다양하고 개성 넘치는 음악 취향 리스트를 구경해 보세요." : "Explore the diverse and unique music taste records shared by other music fans.",
+      desc: locale === "ko" ? "다른 리스너는 어떤 곡을 더 좋아했을까요? 다양한 취향표를 구경해보세요." : "Which songs did other listeners love more? Browse all kinds of taste cards.",
       btnText: locale === "ko" ? "구경하기" : "Explore",
       target: "/archive"
     }
@@ -76,8 +76,8 @@ export default function Home() {
 
   const t = {
     ko: {
-      tagline1: "내 손안에서 깔끔하게 정리되는 음악 취향, Sortify",
-      tagline2: "좋아하는 음악을 나열하고, 나의 색깔을 증폭시켜 보세요.",
+      tagline1: "좋아하는 곡 중에서도,",
+      tagline2: "더 마음이 가는 곡을 찾는 곳, Sortify",
       start: "시작하기",
       continue: "이어서 진행하기",
       startNewTitle: "새로 시작할까요?",
@@ -86,8 +86,8 @@ export default function Home() {
       startNewBtn: "새로 시작",
     },
     en: {
-      tagline1: "Record your clearest taste.",
-      tagline2: "List your music preferences and amplify them with your own colors.",
+      tagline1: "Of all the songs you love,",
+      tagline2: "find the ones you love a little more. Sortify",
       start: "Start",
       continue: "Continue Progress",
       startNewTitle: "Start New?",
@@ -318,28 +318,28 @@ export default function Home() {
                 "@type": "SiteNavigationElement",
                 "position": 1,
                 "name": "믹스 매치 월드컵 (Mix & Match World Cup)",
-                "description": "여러 아티스트를 선택해 명곡들을 토너먼트로 즐기고 나만의 취향표를 만듭니다.",
+                "description": "좋아하는 아티스트를 여럿 고르고 곡을 섞어, 둘씩 골라 가며 1위 곡과 취향표를 만들어요.",
                 "url": "https://sortify.kr/genres"
               },
               {
                 "@type": "SiteNavigationElement",
                 "position": 2,
                 "name": "최애 곡 소트하기 (Favorite Songs Sort)",
-                "description": "한 명의 아티스트를 선택해 전곡을 내 마음에 드는 순서대로 정렬합니다.",
+                "description": "아티스트 한 명을 골라 발표한 곡을 모두 소트해요.",
                 "url": "https://sortify.kr/genres?mode=single"
               },
               {
                 "@type": "SiteNavigationElement",
                 "position": 3,
-                "name": "공개 취향 아카이브 (Public Taste Archive)",
-                "description": "다른 유저들이 완성해 공개한 다양하고 개성 넘치는 음악 취향 리스트를 구경합니다.",
+                "name": "우리의 취향 아카이브 (Our Taste Archive)",
+                "description": "다른 리스너가 공개한 취향표를 둘러봐요.",
                 "url": "https://sortify.kr/archive"
               },
               {
                 "@type": "SiteNavigationElement",
                 "position": 4,
-                "name": "유저 취향 매칭 피드 (Explore Music Tastes)",
-                "description": "나와 음악 취향이 유사한 다른 유저들의 프로필과 취향표를 매칭해 봅니다.",
+                "name": "내 취향 스페이스 (My Taste Space)",
+                "description": "저장한 취향표를 모아 보고, 취향이 겹치는 리스너를 만나요.",
                 "url": "https://sortify.kr/explore-taste"
               }
             ]
@@ -583,7 +583,7 @@ export default function Home() {
         <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-sans font-bold text-navy/40">
           <li>
             <Link href="/genres" className="hover:text-point transition-colors">
-              믹스매치 월드컵
+              믹스 매치 월드컵
             </Link>
           </li>
           <li>
@@ -607,7 +607,7 @@ export default function Home() {
           </li>
           <li>
             <Link href="/archive" className="hover:text-point transition-colors">
-              공개 취향 아카이브
+              우리의 취향 아카이브
             </Link>
           </li>
         </ul>

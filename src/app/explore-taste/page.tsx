@@ -49,7 +49,7 @@ const translations = {
   ko: {
     title: "내 취향 스페이스",
     bannerTitle: "취향표 저장소",
-    bannerSub: "내가 정성껏 모은 음악들과, 나와 취향이 꼭 닮은 친구들의 피드를 구경해 보세요.",
+    bannerSub: "내 기록들을 모아두고, 취향이 닮은 리스너도 만나보세요.",
     tabArchive: "내 보관함",
     tabSocial: "친구들의 피드",
     syncing: "데이터를 안전하게 동기화 중...",
