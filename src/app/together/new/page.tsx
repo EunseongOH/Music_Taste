@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Search, X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { SafeImage } from "@/components/SafeImage";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
@@ -48,6 +49,12 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
     </span>
   );
 }
+
+/*
+ * 앨범 카드 모션. 값은 전곡 모드(src/app/tracks/page.tsx 의 앨범 그리드)에서 그대로 옮겼다 —
+ * 두 화면의 펼침이 다르게 느껴지면 안 된다.
+ */
+const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
 
 /** 카탈로그가 주는 곡. RankedTrack 에 앨범 정보가 더 붙어 있다. */
 type CatalogTrack = RankedTrack & { albumName?: string; releaseDate?: string };
@@ -135,6 +142,11 @@ export default function TogetherNewPage() {
   const [pendingArtist, setPendingArtist] = useState<CatalogArtist | null>(null);
   /** 펼쳐 둔 앨범. 처음에는 전부 접혀 있다. */
   const [openAlbums, setOpenAlbums] = useState<Set<string>>(new Set());
+  /*
+   * 전곡 모드는 동작 줄이기 설정을 따로 보지 않는다. 여기서는 LP 가 날아드는 연출만
+   * 건너뛴다 — 펼침 자체는 레이아웃 변화라 그대로 둔다.
+   */
+  const reduceMotion = useReducedMotion();
   /*
    * 링크 이름. 고치는 칸을 두지 않는다 — 닉네임 입력으로 오해된다.
    * 아티스트로 만든 방은 아티스트명, 그 밖에는 출처의 제목을 그대로 쓴다.
@@ -597,10 +609,11 @@ export default function TogetherNewPage() {
 
           {source.artistId ? (
             /*
-             * 앨범 그리드 — 전곡 모드(/tracks)와 같은 모양이다: 2열, 정사각 재킷,
-             * 고른 곡 수는 재킷 위 배지, 앨범을 누르면 그 자리에서 트랙리스트가 펼쳐진다.
-             * ponytail: 같은 모양이 두 벌이다. canonical 통합이 끝나면 /tracks 의 것과
-             * 한 컴포넌트로 합칠 후보다(지금 그 파일은 수정 금지라 여기 둔다).
+             * 앨범 그리드 — 전곡 모드(/tracks)의 앨범 카드와 **같은 모양·같은 모션**이다.
+             * 모션 값 출처: src/app/tracks/page.tsx 의 앨범 그리드(smoothTransition,
+             * LP 슬라이드, 트랙리스트 높이 전환). 새로 짓지 않고 그대로 옮겼다.
+             * ponytail: 같은 것이 두 벌이다. canonical 통합이 끝나면 한 컴포넌트로
+             * 합칠 후보다(지금 그 파일은 수정 금지라 여기 둔다).
              */
             <ul className="grid grid-cols-2 gap-4">
               {groupByAlbum(source.tracks).map((album) => {
@@ -615,70 +628,128 @@ export default function TogetherNewPage() {
                     return next;
                   });
                 return (
-                  <li key={album.name} className={open ? "col-span-2" : ""}>
-                    <div className={open ? "flex items-center gap-3" : ""}>
-                      <button
+                  <motion.li
+                    layout
+                    transition={smoothTransition}
+                    key={album.name}
+                    className={`flex flex-col relative ${
+                      open
+                        ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10"
+                        : "col-span-1"
+                    }`}
+                  >
+                    <motion.div
+                      layout
+                      transition={smoothTransition}
+                      className={`flex ${open ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}
+                    >
+                      <div className={`relative flex justify-center items-center w-full ${open ? "mb-3 mt-4" : ""}`}>
+                        {/* 펼치면 재킷 뒤에서 LP 가 빠져나온다 (전곡 모드와 같은 연출) */}
+                        <AnimatePresence>
+                          {open && !reduceMotion && (
+                            <motion.div
+                              initial={{ x: 0, opacity: 0, rotate: -45 }}
+                              animate={{ x: "40%", opacity: 1, rotate: 0 }}
+                              exit={{ x: 0, opacity: 0, rotate: -45 }}
+                              transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                              className="absolute top-0 bottom-0 my-auto w-20 h-20 sm:w-28 sm:h-28 rounded-full z-0 flex items-center justify-center pointer-events-none"
+                              style={{
+                                background: "radial-gradient(circle, #222 0%, #0a0a0a 100%)",
+                                boxShadow: "inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)",
+                              }}
+                            >
+                              <div className="absolute inset-[3px] sm:inset-[5px] border border-white/5 rounded-full" />
+                              <div className="absolute inset-[7px] sm:inset-[11px] border border-white/5 rounded-full" />
+                              <div className="absolute inset-[12px] sm:inset-[19px] border border-white/5 rounded-full" />
+                              <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full relative overflow-hidden border-2 border-[#111]">
+                                <SafeImage src={album.cover} alt={album.name} fill fallbackType="track" className="object-cover" />
+                              </div>
+                              <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        <motion.button
+                          layout
+                          transition={smoothTransition}
+                          onClick={toggleOpen}
+                          style={{ borderRadius: open ? "0.2rem" : "2rem" }}
+                          className={`relative aspect-square shrink-0 overflow-hidden z-10 cursor-pointer ${
+                            open ? "w-20 sm:w-28 shadow-xl" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+                          }`}
+                        >
+                          <SafeImage src={album.cover} alt={album.name} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover" />
+                          {picked > 0 && !open && (
+                            <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-point text-white font-num text-xs font-bold flex items-center justify-center shadow-md">
+                              {picked}
+                            </span>
+                          )}
+                        </motion.button>
+                      </div>
+
+                      <motion.button
+                        layout
+                        transition={smoothTransition}
                         onClick={toggleOpen}
-                        className={`relative aspect-square overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer shrink-0 ${
-                          open ? "w-24 rounded-lg" : "w-full rounded-[2rem]"
-                        }`}
+                        className={`flex flex-col justify-center cursor-pointer ${open ? "w-full text-center" : "px-2 text-left"}`}
                       >
-                        <SafeImage src={album.cover} alt={album.name} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover" />
-                        {picked > 0 && (
-                          <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-point text-white font-num text-xs font-bold flex items-center justify-center shadow-md">
-                            {picked}
-                          </span>
-                        )}
-                      </button>
-                      <button onClick={toggleOpen} className={`text-left cursor-pointer ${open ? "flex-1 min-w-0" : "block w-full px-2 mt-1"}`}>
-                        <span className="block type-body-strong text-navy line-clamp-1">{album.name}</span>
-                        <span className="block type-caption text-navy/70">
+                        <span className="type-body-strong text-navy line-clamp-1">{album.name}</span>
+                        <span className="type-caption text-navy/70">
                           {album.year ? `${album.year} · ` : ""}
                           {album.tracks.length}곡
                         </span>
-                      </button>
-                    </div>
+                      </motion.button>
+                    </motion.div>
 
-                    {open && (
-                      <div className="mt-3 rounded-2xl bg-white/50 border border-navy/10 overflow-hidden">
-                        {/* 앨범 단위 선택은 트랙리스트 머리에 둔다 — 펼쳐 본 다음에 쓰는 기능이다. */}
-                        <div className="flex items-center justify-between px-3 py-2.5 border-b border-navy/10">
-                          <span className="type-caption text-navy/70">
-                            {picked > 0 ? `${picked}곡 선택` : "곡을 골라 주세요"}
-                          </span>
-                          <button
-                            onClick={() => pickTracks(ids, picked !== ids.length)}
-                            className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
-                              picked === ids.length ? "bg-navy text-cream" : "bg-navy/5 text-navy"
-                            }`}
-                          >
-                            {picked === ids.length ? "이 앨범 전체 해제" : "이 앨범 전체 선택"}
-                          </button>
-                        </div>
-                        <ul className="flex flex-col divide-y divide-navy/10">
-                          {album.tracks.map((track) => {
-                            const on = !off.has(track.id);
-                            return (
-                              <li key={track.id} className="flex items-center gap-3 px-3 py-2.5">
-                                <span className={`flex-1 min-w-0 ${on ? "" : "opacity-50"}`}>
-                                  <span className="block type-body-strong text-navy truncate">{track.title}</span>
-                                  <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
-                                </span>
-                                <button
-                                  onClick={() => pickTracks([track.id], !on)}
-                                  className={`h-8 px-3 rounded-full type-caption cursor-pointer shrink-0 ${
-                                    on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
-                                  }`}
-                                >
-                                  {on ? "선택" : "선택 안 함"}
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
-                  </li>
+                    <AnimatePresence>
+                      {open && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0, y: -15 }}
+                          animate={{ opacity: 1, height: "auto", y: 0 }}
+                          exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                          transition={smoothTransition}
+                          className="flex flex-col overflow-hidden"
+                        >
+                          {/* 앨범 단위 선택은 트랙리스트 바로 위에 — 펼쳐 본 다음에 쓰는 기능이다. */}
+                          <div className="flex items-center justify-between pb-2 border-b border-navy/10">
+                            <span className="type-caption text-navy/70">
+                              {picked > 0 ? `${picked}곡 선택` : "곡을 골라 주세요"}
+                            </span>
+                            <button
+                              onClick={() => pickTracks(ids, picked !== ids.length)}
+                              className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
+                                picked === ids.length ? "bg-navy text-cream" : "bg-navy/5 text-navy"
+                              }`}
+                            >
+                              {picked === ids.length ? "이 앨범 전체 해제" : "이 앨범 전체 선택"}
+                            </button>
+                          </div>
+                          <ul className="flex flex-col divide-y divide-navy/10">
+                            {album.tracks.map((track) => {
+                              const on = !off.has(track.id);
+                              return (
+                                <li key={track.id} className="flex items-center gap-3 py-2.5">
+                                  <span className={`flex-1 min-w-0 ${on ? "" : "opacity-50"}`}>
+                                    <span className="block type-body-strong text-navy truncate">{track.title}</span>
+                                    <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
+                                  </span>
+                                  <button
+                                    onClick={() => pickTracks([track.id], !on)}
+                                    className={`h-8 px-3 rounded-full type-caption cursor-pointer shrink-0 ${
+                                      on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
+                                    }`}
+                                  >
+                                    {on ? "선택" : "선택 안 함"}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.li>
                 );
               })}
             </ul>
