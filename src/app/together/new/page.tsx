@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Search, X } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { SafeImage } from "@/components/SafeImage";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,8 +14,8 @@ import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
-import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
-import { rememberNickname, rememberedNickname } from "@/utils/togetherDb";
+import { rememberedNickname } from "@/utils/togetherDb";
+import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
 interface SavedRow {
@@ -49,6 +49,12 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
     </span>
   );
 }
+
+/*
+ * 앨범 카드 모션. 값은 전곡 모드(src/app/tracks/page.tsx 의 앨범 그리드)에서 그대로 옮겼다 —
+ * 두 화면의 펼침이 다르게 느껴지면 안 된다.
+ */
+const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
 
 /** 카탈로그가 주는 곡. RankedTrack 에 앨범 정보가 더 붙어 있다. */
 type CatalogTrack = RankedTrack & { albumName?: string; releaseDate?: string };
@@ -135,18 +141,49 @@ export default function TogetherNewPage() {
   /** 1단계에서 눌러 둔 아티스트. 곡은 2단계로 넘어갈 때 받는다. */
   const [pendingArtist, setPendingArtist] = useState<CatalogArtist | null>(null);
   /** 펼쳐 둔 앨범. 처음에는 전부 접혀 있다. */
-  const [openAlbums, setOpenAlbums] = useState<Set<string>>(new Set());
+  /*
+   * 펼친 앨범은 하나다(전곡 모드와 같다). 다른 앨범을 열면 먼저 것이 닫힌다.
+   * 닫힌 앨범에서 고른 곡은 그대로 남고 재킷 위 배지로 보인다.
+   */
+  const [openAlbum, setOpenAlbum] = useState<string | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLLIElement>());
+  /*
+   * 전곡 모드는 동작 줄이기 설정을 따로 보지 않는다. 여기서는 LP 가 날아드는 연출만
+   * 건너뛰고, 자동 스크롤도 순간이동으로 바꾼다 — 펼침 자체는 레이아웃 변화라 그대로 둔다.
+   */
+  const reduceMotion = useReducedMotion();
+
+  /**
+   * 앨범을 펼치거나 접는다. 펼칠 때는 그 카드가 화면 위쪽에 오도록 옮겨 준다 —
+   * 아래쪽 앨범을 누르면 펼쳐진 곡 목록이 화면 밖에 있어 보이지 않는다.
+   *
+   * 옮기는 시점을 레이아웃 전환(0.45s)이 끝난 뒤로 미루는 이유: 먼저 열려 있던
+   * 앨범이 닫히면서 이 카드의 자리가 위로 올라온다. 전환 중에 재면 엉뚱한 곳으로 간다.
+   */
+  const toggleAlbum = (name: string) => {
+    const willOpen = openAlbum !== name;
+    setOpenAlbum(willOpen ? name : null);
+    if (!willOpen) return;
+    window.setTimeout(() => {
+      const el = cardRefs.current.get(name);
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      // 이미 화면 위쪽에 잘 보이면 움직이지 않는다(쓸데없이 튀지 않게).
+      if (top >= 8 && top <= window.innerHeight * 0.3) return;
+      el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    }, 470);
+  };
+  /*
+   * 링크 이름. 고치는 칸을 두지 않는다 — 닉네임 입력으로 오해된다.
+   * 아티스트로 만든 방은 아티스트명, 그 밖에는 출처의 제목을 그대로 쓴다.
+   */
   const [title, setTitle] = useState("");
-  /** 초대 문구에 "{방장}님과 얼마나 비슷한지"가 들어간다 — 이름이 없으면 안내가 헐거워진다. */
-  const [nickname, setNickname] = useState("");
-  const [nicknameError, setNicknameError] = useState("");
   /*
    * 이름을 묻는 창은 **만들기를 누른 뒤**에 뜬다. 이름이 이미 있는 사람에게는 뜨지 않는다.
    * "이름이 없다" = 비로그인이거나, 로그인했지만 닉네임을 아직 확인하지 않은 경우
    * (자동 배정된 기본값을 쓰는 상태 — 결과 화면의 공유 이름 확인과 같은 판정이다).
    */
   const [askName, setAskName] = useState(false);
-  const needsNameConfirm = !!user && user.user_metadata?.nickname_confirmed !== true;
   const [busy, setBusy] = useState(false);
   const [madeCode, setMadeCode] = useState<string | null>(null);
 
@@ -155,12 +192,6 @@ export default function TogetherNewPage() {
     const onPop = () => setStep(1);
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
-  // 지난번에 쓴 이름이 있으면 채워 둔다(비로그인).
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setNickname((prev) => prev || rememberedNickname()));
-    return () => cancelAnimationFrame(id);
   }, []);
 
   // 곡 고르기 화면에서 담아 둔 곡(월드컵 시작 전 상태)
@@ -288,7 +319,7 @@ export default function TogetherNewPage() {
      * 빼는 일부터 해야 했다. `off` 는 "뺀 곡"이라 전부 넣어 두면 아무것도 안 고른 상태다.
      */
     setOff(new Set(tracks.map((track) => track.id)));
-    setOpenAlbums(new Set());
+    setOpenAlbum(null);
     setTitle(artist.name);
     window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?artist=${artist.id}`);
     setStep(2);
@@ -353,40 +384,13 @@ export default function TogetherNewPage() {
     setStep(2);
   };
 
-  /** 이름을 물어야 하는가. 이미 확인된 닉네임이 있으면 묻지 않는다. */
-  const shouldAskName = () => (user ? needsNameConfirm : !rememberedNickname().trim());
-
   const make = async () => {
     if (!source || chosen.length < 4) return;
-    if (shouldAskName()) {
-      setNickname((prev) => prev || (user?.user_metadata?.nickname as string | undefined) || rememberedNickname());
+    if (needsNickname(user)) {
       setAskName(true);
       return;
     }
     await create(user ? ((user.user_metadata?.nickname as string | undefined) ?? null) : rememberedNickname() || null);
-  };
-
-  /** 이름 창에서 "이 이름으로 만들기". 로그인 사용자는 계정 닉네임도 이 이름이 된다. */
-  const createWithName = async () => {
-    const name = nickname.trim();
-    const bad = validateNickname(name);
-    if (bad) {
-      setNicknameError(NICKNAME_ERROR_TEXT.ko[bad]);
-      return;
-    }
-    if (user) {
-      setBusy(true);
-      const saved = await saveNickname(name);
-      setBusy(false);
-      if (saved !== "ok") {
-        setNicknameError(NICKNAME_ERROR_TEXT.ko[saved]);
-        return;
-      }
-    } else {
-      rememberNickname(name);
-    }
-    setAskName(false);
-    await create(name);
   };
 
   const create = async (name: string | null) => {
@@ -613,16 +617,6 @@ export default function TogetherNewPage() {
         <>
           <div id="together-tracks" className="scroll-mt-4" />
           <SectionTitle title="고른 곡" count={chosen.length} className="mt-8 mb-3" />
-          <label className="flex flex-col gap-1 mb-3">
-            <span className="type-caption text-navy/70">링크에 보일 이름</span>
-            <input
-              id="together-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={40}
-              className="h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
-            />
-          </label>
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => pickTracks(source.tracks.map((track) => track.id), true)}
@@ -641,71 +635,149 @@ export default function TogetherNewPage() {
 
           {source.artistId ? (
             /*
-             * 아티스트를 고른 경우에는 앨범별로 펼쳐 고른다(전곡 모드와 같은 방식).
-             * "지금 고른 곡"·"내 취향표"에서 온 곡에는 앨범 정보가 없어 아래의 평평한 목록으로 간다.
+             * 앨범 그리드 — 전곡 모드(/tracks)의 앨범 카드와 **같은 모양·같은 모션**이다.
+             * 모션 값 출처: src/app/tracks/page.tsx 의 앨범 그리드(smoothTransition,
+             * LP 슬라이드, 트랙리스트 높이 전환). 새로 짓지 않고 그대로 옮겼다.
+             * ponytail: 같은 것이 두 벌이다. canonical 통합이 끝나면 한 컴포넌트로
+             * 합칠 후보다(지금 그 파일은 수정 금지라 여기 둔다).
              */
-            <ul className="flex flex-col gap-2">
+            <ul className="grid grid-cols-2 gap-4">
               {groupByAlbum(source.tracks).map((album) => {
                 const ids = album.tracks.map((track) => track.id);
                 const picked = ids.filter((id) => !off.has(id)).length;
-                const open = openAlbums.has(album.name);
+                const open = openAlbum === album.name;
+                const toggleOpen = () => toggleAlbum(album.name);
                 return (
-                  <li key={album.name} className="rounded-2xl bg-white/50 border border-navy/10 overflow-hidden">
-                    <div className="flex items-center gap-3 p-3">
-                      <button
-                        onClick={() =>
-                          setOpenAlbums((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(album.name)) next.delete(album.name);
-                            else next.add(album.name);
-                            return next;
-                          })
-                        }
-                        className="flex-1 min-w-0 flex items-center gap-3 text-left cursor-pointer"
-                      >
-                        <Cover src={album.cover} alt={album.name} size={44} />
-                        <span className="flex-1 min-w-0">
-                          <span className="block type-body-strong text-navy truncate">{album.name}</span>
-                          <span className="block type-caption text-navy/70">
-                            {album.year ? `${album.year} · ` : ""}
-                            {album.tracks.length}곡{picked > 0 ? ` · ${picked}곡 선택` : ""}
-                          </span>
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => pickTracks(ids, picked !== ids.length)}
-                        className={`h-8 px-3 rounded-full type-caption cursor-pointer shrink-0 ${
-                          picked === ids.length ? "bg-brand text-cream" : "bg-navy/5 text-navy"
-                        }`}
-                      >
-                        {picked === ids.length ? "전체 해제" : "전체 선택"}
-                      </button>
-                    </div>
+                  <motion.li
+                    layout
+                    transition={smoothTransition}
+                    key={album.name}
+                    ref={(el) => {
+                      if (el) cardRefs.current.set(album.name, el);
+                      else cardRefs.current.delete(album.name);
+                    }}
+                    /*
+                     * 펼친 앨범의 면은 아주 옅게만 둔다(bg-navy/5, 그림자·테두리 없음).
+                     * 전곡 모드는 #F1EADC 면 + 그림자 + 테두리인데, 여기서는 접힌 카드와
+                     * 나란히 놓이는 화면이라 그 무게가 과하다. 색은 토큰으로 둬야
+                     * 디자인 톤이 바뀔 때 이 자리도 따라온다.
+                     */
+                    className={`flex flex-col relative scroll-mt-4 ${
+                      open ? "col-span-2 bg-navy/5 rounded-[2rem] p-4 z-10" : "col-span-1"
+                    }`}
+                  >
+                    <motion.div
+                      layout
+                      transition={smoothTransition}
+                      className={`flex ${open ? "flex-col items-center mb-5 z-20 relative" : "flex-col gap-2"}`}
+                    >
+                      <div className={`relative flex justify-center items-center w-full ${open ? "mb-3 mt-4" : ""}`}>
+                        {/* 펼치면 재킷 뒤에서 LP 가 빠져나온다 (전곡 모드와 같은 연출) */}
+                        <AnimatePresence>
+                          {open && !reduceMotion && (
+                            <motion.div
+                              initial={{ x: 0, opacity: 0, rotate: -45 }}
+                              animate={{ x: "40%", opacity: 1, rotate: 0 }}
+                              exit={{ x: 0, opacity: 0, rotate: -45 }}
+                              transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                              className="absolute top-0 bottom-0 my-auto w-20 h-20 sm:w-28 sm:h-28 rounded-full z-0 flex items-center justify-center pointer-events-none"
+                              style={{
+                                background: "radial-gradient(circle, #222 0%, #0a0a0a 100%)",
+                                boxShadow: "inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)",
+                              }}
+                            >
+                              <div className="absolute inset-[3px] sm:inset-[5px] border border-white/5 rounded-full" />
+                              <div className="absolute inset-[7px] sm:inset-[11px] border border-white/5 rounded-full" />
+                              <div className="absolute inset-[12px] sm:inset-[19px] border border-white/5 rounded-full" />
+                              <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full relative overflow-hidden border-2 border-[#111]">
+                                <SafeImage src={album.cover} alt={album.name} fill fallbackType="track" className="object-cover" />
+                              </div>
+                              <div className="absolute w-1.5 h-1.5 bg-cream rounded-full z-10" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
 
-                    {open && (
-                      <ul className="flex flex-col divide-y divide-navy/10 border-t border-navy/10">
-                        {album.tracks.map((track) => {
-                          const on = !off.has(track.id);
-                          return (
-                            <li key={track.id} className="flex items-center gap-3 px-3 py-2.5">
-                              <span className={`flex-1 min-w-0 ${on ? "" : "opacity-50"}`}>
-                                <span className="block type-body-strong text-navy truncate">{track.title}</span>
-                                <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
-                              </span>
-                              <button
-                                onClick={() => pickTracks([track.id], !on)}
-                                className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
-                                  on ? "bg-brand text-cream" : "bg-navy/5 text-navy/70"
-                                }`}
-                              >
-                                {on ? "선택" : "선택 안 함"}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </li>
+                        <motion.button
+                          layout
+                          transition={smoothTransition}
+                          onClick={toggleOpen}
+                          style={{ borderRadius: open ? "0.2rem" : "2rem" }}
+                          className={`relative aspect-square shrink-0 overflow-hidden z-10 cursor-pointer ${
+                            open ? "w-20 sm:w-28 shadow-xl" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+                          }`}
+                        >
+                          <SafeImage src={album.cover} alt={album.name} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover" />
+                          {picked > 0 && !open && (
+                            <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-point text-white font-num text-xs font-bold flex items-center justify-center shadow-md">
+                              {picked}
+                            </span>
+                          )}
+                        </motion.button>
+                      </div>
+
+                      <motion.button
+                        layout
+                        transition={smoothTransition}
+                        onClick={toggleOpen}
+                        className={`flex flex-col justify-center cursor-pointer ${open ? "w-full text-center" : "px-2 text-left"}`}
+                      >
+                        <span className="type-body-strong text-navy line-clamp-1">{album.name}</span>
+                        <span className="type-caption text-navy/70">
+                          {album.year ? `${album.year} · ` : ""}
+                          {album.tracks.length}곡
+                        </span>
+                      </motion.button>
+                    </motion.div>
+
+                    <AnimatePresence>
+                      {open && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0, y: -15 }}
+                          animate={{ opacity: 1, height: "auto", y: 0 }}
+                          exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
+                          transition={smoothTransition}
+                          className="flex flex-col overflow-hidden"
+                        >
+                          {/* 앨범 단위 선택은 트랙리스트 바로 위에 — 펼쳐 본 다음에 쓰는 기능이다. */}
+                          <div className="flex items-center justify-between pb-2 border-b border-navy/10">
+                            <span className="type-caption text-navy/70">
+                              {picked > 0 ? `${picked}곡 선택` : "곡을 골라 주세요"}
+                            </span>
+                            <button
+                              onClick={() => pickTracks(ids, picked !== ids.length)}
+                              className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
+                                picked === ids.length ? "bg-navy text-cream" : "bg-navy/5 text-navy"
+                              }`}
+                            >
+                              {picked === ids.length ? "이 앨범 전체 해제" : "이 앨범 전체 선택"}
+                            </button>
+                          </div>
+                          <ul className="flex flex-col divide-y divide-navy/10">
+                            {album.tracks.map((track) => {
+                              const on = !off.has(track.id);
+                              return (
+                                <li key={track.id} className="flex items-center gap-3 py-2.5">
+                                  <span className={`flex-1 min-w-0 ${on ? "" : "opacity-50"}`}>
+                                    <span className="block type-body-strong text-navy truncate">{track.title}</span>
+                                    <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
+                                  </span>
+                                  <button
+                                    onClick={() => pickTracks([track.id], !on)}
+                                    className={`h-8 px-3 rounded-full type-caption cursor-pointer shrink-0 ${
+                                      on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
+                                    }`}
+                                  >
+                                    {on ? "선택" : "선택 안 함"}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.li>
                 );
               })}
             </ul>
@@ -723,7 +795,7 @@ export default function TogetherNewPage() {
                     <button
                       onClick={() => pickTracks([track.id], !on)}
                       className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
-                        on ? "bg-brand text-cream" : "bg-navy/5 text-navy/70"
+                        on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
                       }`}
                     >
                       {on ? "선택" : "선택 안 함"}
@@ -744,56 +816,18 @@ export default function TogetherNewPage() {
           </div>
         </>
       )}
-      {/*
-        입력이 있는 창이라 하단 시트가 아니라 중앙 팝업이다(dialogs.md).
-        키보드가 올라오면 하단 시트는 가려진다. 폼 팝업의 기준은 FeedbackModal 이다.
-      */}
-      {askName && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-navy/40 backdrop-blur-sm"
-            onClick={() => setAskName(false)}
-          />
-          <motion.div
-            initial={{ y: 50, opacity: 0, scale: 0.95 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            className="bg-cream w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 border border-navy/10 flex flex-col p-6 gap-3"
-          >
-            <h3 className="type-title-1 text-navy">어떤 이름으로 할까요?</h3>
-            <p className="type-sub text-navy/70 break-keep">
-              초대 화면과 일치율 화면에 이 이름으로 나와요.
-              {user ? " 처음 한 번만 확인해요. 프로필 닉네임도 이 이름으로 바뀌어요." : ""}
-            </p>
-            <input
-              id="together-nickname"
-              value={nickname}
-              onChange={(e) => {
-                setNickname(e.target.value);
-                setNicknameError("");
-              }}
-              maxLength={12}
-              placeholder="리스너"
-              className="h-12 px-4 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/40"
-            />
-            {nicknameError && <p className="type-caption text-danger">{nicknameError}</p>}
-            <button onClick={createWithName} disabled={busy} className={`${primaryButton} w-full mt-1`}>
-              {busy ? "만드는 중" : "이 이름으로 만들기"}
-            </button>
-            <button
-              onClick={() => {
-                setAskName(false);
-                create(null);
-              }}
-              disabled={busy}
-              className="type-caption text-navy/70 cursor-pointer"
-            >
-              이름 없이 만들기
-            </button>
-          </motion.div>
-        </div>
-      )}
+      {/* 이름을 묻는 창. 참여 화면과 같은 컴포넌트를 쓴다. */}
+      <NicknameDialog
+        open={askName}
+        onClose={() => setAskName(false)}
+        confirmLabel="이 이름으로 만들기"
+        skipLabel="이름 없이 만들기"
+        desc="초대 화면과 일치율 화면에 이 이름으로 나와요."
+        onDone={async (name) => {
+          setAskName(false);
+          await create(name);
+        }}
+      />
 
       <Toast toast={toast} />
     </main>
