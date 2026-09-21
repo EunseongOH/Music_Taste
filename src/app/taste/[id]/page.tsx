@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getSafeLocale } from "@/utils/storage";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
+import { MIX_MATCH } from "@/config/modes";
 import { Avatar, RankList, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 import { DISC_BACKGROUND } from "@/components/TasteTemplates";
 
@@ -224,7 +225,7 @@ export default function TasteSharedPage() {
              * 이 취향표를 만든 모드 그대로 시작하게 한다.
              * '최애 곡 소트하기' 결과를 보고 들어온 사람에게 '믹스 매치 월드컵'이 먼저 보이면 흐름이 끊긴다.
              */
-            onClick={() => router.push(result.is_single_artist ? "/?mode=single" : "/?mode=multi")}
+            onClick={() => router.push(result.is_single_artist || !MIX_MATCH ? "/?mode=single" : "/?mode=multi")}
             className={`${primaryButton} w-full`}
           >
             {t.ctaCreate}

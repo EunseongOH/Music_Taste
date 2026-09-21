@@ -16,6 +16,7 @@ import { onAppExit } from "@/utils/platform";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
+import { MIX_MATCH } from "@/config/modes";
 
 interface Track {
   id: string;
@@ -141,7 +142,8 @@ export default function WorldCupPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      setIsSingleArtistMode(params.get("mode") === "single");
+      // 믹스 매치를 내린 동안에는 ?mode 가 없어도 단일이 기본이다 — docs/mode-pivot.md
+      setIsSingleArtistMode(!MIX_MATCH || params.get("mode") === "single");
       setIsChallenge(params.get("challenge") === "1");
     }
   }, []);

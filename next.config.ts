@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
+import { MIX_MATCH } from "./src/config/modes";
 
 const nextConfig: NextConfig = {
+  /*
+   * 믹스 매치를 내린 동안 /genres 로 들어온 사람을 단일 모드로 보낸다.
+   * 302(임시)인 이유: 언제든 되살릴 전제라 "영구 이동"은 사실이 아니고,
+   * 301 을 쓰면 복원해도 검색 색인이 돌아오는 데 오래 걸린다. docs/mode-pivot.md §12.1
+   */
+  async redirects() {
+    return MIX_MATCH
+      ? []
+      : [{ source: "/genres", destination: "/explore?mode=single", permanent: false }];
+  },
   images: {
     unoptimized: true,
     remotePatterns: [

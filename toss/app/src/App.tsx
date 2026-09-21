@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react';
 import Home from '@/app/page';
-import Genres from '@/app/genres/page';
+// 믹스 매치(여러 아티스트)는 내려 두었다 — 표에 없으면 번들에도 안 들어간다.
+// 되살리려면 이 줄과 아래 '/genres' 줄의 주석을 푼다. docs/mode-pivot.md §10
+// import Genres from '@/app/genres/page';
 import Explore from '@/app/explore/page';
 import Tracks from '@/app/tracks/page';
 import WorldCup from '@/app/worldcup/page';
@@ -21,7 +23,7 @@ import { useLocation } from './router';
 const routes: Record<string, ComponentType> = {
   '/': Home,
   // 월드컵 본선까지의 기본 동선
-  '/genres': Genres,
+  // '/genres': Genres,
   '/explore': Explore,
   '/tracks': Tracks,
   '/worldcup': WorldCup,

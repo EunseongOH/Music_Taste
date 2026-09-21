@@ -17,6 +17,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { curatedArtists } from "@/utils/curatedArtists";
 import { trackEvent } from "@/utils/gtag";
+import { MIX_MATCH } from "@/config/modes";
 
 interface Artist {
   id: string;
@@ -154,7 +155,8 @@ export default function ExplorePage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      setIsSingleArtistMode(params.get("mode") === "single");
+      // 믹스 매치를 내린 동안에는 ?mode 가 없어도 단일이 기본이다 — docs/mode-pivot.md
+      setIsSingleArtistMode(!MIX_MATCH || params.get("mode") === "single");
       setLocale(getSafeLocale());
     }
   }, []);

@@ -12,6 +12,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
 import { trackEvent } from "@/utils/gtag";
+import { MIX_MATCH } from "@/config/modes";
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
@@ -234,7 +235,8 @@ export default function TracksPage() {
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      setIsSingleArtistMode(params.get("mode") === "single");
+      // 믹스 매치를 내린 동안에는 ?mode 가 없어도 단일이 기본이다 — docs/mode-pivot.md
+      setIsSingleArtistMode(!MIX_MATCH || params.get("mode") === "single");
       setLocale(getSafeLocale());
     }
   }, []);

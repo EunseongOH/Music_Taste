@@ -11,6 +11,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
+import { MIX_MATCH } from "@/config/modes";
 import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
 interface ProfileModalProps {
@@ -106,7 +107,11 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
             setCompletedResults(resultsData);
           }
           if (!draftsError && draftsData) {
-            setActiveDrafts(draftsData.filter((d: any) => !isDraftExpired(d)));
+            // 홈과 같은 기준. 믹스 매치를 내린 동안에는 그 초안을 목록에 올리지 않는다
+            // (행은 DB 에 그대로 둔다 — docs/mode-pivot.md 부록 A-5).
+            setActiveDrafts(
+              draftsData.filter((d: any) => !isDraftExpired(d) && (MIX_MATCH || d.is_single_artist))
+            );
           }
         } catch (err) {
           console.error("Error fetching database archives:", err);

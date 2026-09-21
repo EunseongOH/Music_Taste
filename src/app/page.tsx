@@ -12,6 +12,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 import { Sheet, primaryButton, dangerButton } from "@/components/space/SpaceUI";
 
 import { createClient } from "@/utils/supabase/client";
+import { MIX_MATCH } from "@/config/modes";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale, setSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
@@ -38,14 +39,27 @@ export default function Home() {
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/explore?mode=single"
     },
-    {
-      id: "multi",
-      badge: locale === "ko" ? "여러 아티스트" : "Several artists",
-      title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
-      desc: locale === "ko" ? "좋아하는 아티스트들의 곡을 한데 모아, 토너먼트로 최애곡을 찾아보세요." : "Bring together songs by the artists you love and find your favorite in a tournament.",
-      btnText: locale === "ko" ? "시작하기" : "Start",
-      target: "/genres"
-    },
+    /*
+     * 믹스 매치 월드컵(여러 아티스트)은 사용자 진입점에서 내렸다 — docs/mode-pivot.md
+     * 카드 문구는 그대로 두고 자리만 비운다. MIX_MATCH 를 켜면 그대로 돌아온다.
+     */
+    MIX_MATCH
+      ? {
+          id: "multi",
+          badge: locale === "ko" ? "여러 아티스트" : "Several artists",
+          title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
+          desc: locale === "ko" ? "좋아하는 아티스트들의 곡을 한데 모아, 토너먼트로 최애곡을 찾아보세요." : "Bring together songs by the artists you love and find your favorite in a tournament.",
+          btnText: locale === "ko" ? "시작하기" : "Start",
+          target: "/genres"
+        }
+      : {
+          id: "together",
+          badge: locale === "ko" ? "둘 이상" : "Two or more",
+          title: locale === "ko" ? "같이 소트하기" : "Sort Together",
+          desc: locale === "ko" ? "같은 곡을 각자 소트하고, 취향이 얼마나 닮았는지 확인해요." : "Sort the same songs on your own, then see how close your tastes are.",
+          btnText: locale === "ko" ? "시작하기" : "Start",
+          target: "/together"
+        },
     {
       id: "archive",
       badge: locale === "ko" ? "내 기록" : "My records",
@@ -81,7 +95,8 @@ export default function Home() {
      * 만들면 "effect 안 동기 setState" 경고가 하나 더 생긴다.
      */
     const mode = new URLSearchParams(window.location.search).get("mode");
-    if (mode === "multi") setActiveCardIndex(1);
+    // 믹스 매치를 내린 동안에는 그 취향표에서 온 사람도 첫 카드로 보낸다.
+    if (mode === "multi") setActiveCardIndex(MIX_MATCH ? 1 : 0);
     else if (mode === "single") setActiveCardIndex(0);
   }, []);
 
@@ -113,7 +128,14 @@ export default function Home() {
 
   // 1. Sync activeDraft & hasPreviousProgress with activeCardIndex and activeDrafts
   useEffect(() => {
-    const isSingleForCard = activeCardIndex === 0;
+    // 카드 순서가 아니라 카드 id 로 판단한다(자리는 바뀌어도 모드는 안 바뀐다).
+    const cardId = modes[activeCardIndex]?.id;
+    if (cardId !== "single" && cardId !== "multi") {
+      setActiveDraft(null);
+      setHasPreviousProgress(false);
+      return;
+    }
+    const isSingleForCard = cardId === "single";
 
     // Filter active drafts for current mode
     const matchingDraft = activeDrafts.find(draft => draft.is_single_artist === isSingleForCard);
@@ -146,7 +168,10 @@ export default function Home() {
 
           if (!error && data) {
             // 만료된 플레이 초안은 cron 이 지우기 전이라도 보여주지 않는다.
-            setActiveDrafts(data.filter((d: any) => !isDraftExpired(d)));
+            // 믹스 매치를 내린 동안에는 그 초안도 보여주지 않는다(행은 DB 에 그대로 둔다).
+            setActiveDrafts(
+              data.filter((d: any) => !isDraftExpired(d) && (MIX_MATCH || d.is_single_artist))
+            );
           }
         } catch (e) { }
       };
@@ -168,7 +193,8 @@ export default function Home() {
       return;
     }
 
-    if (activeMode.id === "public-archive") {
+    // 월드컵 상태를 건드리지 않고 그냥 이동하는 카드들.
+    if (activeMode.id === "public-archive" || activeMode.id === "together") {
       router.push(activeMode.target);
       return;
     }
@@ -237,7 +263,7 @@ export default function Home() {
       if (storedTracks) sessionStorage.setItem("worldcup_tracks", storedTracks);
       if (storedProgress) sessionStorage.setItem("worldcup_progress", storedProgress);
 
-      const qs = localIsSingle ? "?mode=single" : "";
+      const qs = localIsSingle || !MIX_MATCH ? "?mode=single" : "";
 
       if (storedProgress) {
         router.push(`/worldcup${qs}`);
@@ -318,21 +344,38 @@ export default function Home() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "ItemList",
+            /*
+             * 화면의 카드 순서와 같게 둔다. 믹스 매치를 내린 동안에는 그 항목을 빼고
+             * 같이 소트하기를 넣는다(docs/mode-pivot.md §13.1).
+             * 단일 모드 주소는 오래 /genres?mode=single 로 잘못 적혀 있었다 — 화면은
+             * /explore?mode=single 로 보낸다.
+             */
             "itemListElement": [
+              ...(MIX_MATCH
+                ? [{
+                    "@type": "SiteNavigationElement",
+                    "position": 0,
+                    "name": "믹스 매치 월드컵 (Mix & Match World Cup)",
+                    "description": "좋아하는 아티스트를 여럿 고르고 곡을 섞어, 둘씩 골라 가며 1위 곡과 취향표를 만들어요.",
+                    "url": "https://sortify.kr/genres"
+                  }]
+                : []),
               {
                 "@type": "SiteNavigationElement",
                 "position": 1,
-                "name": "믹스 매치 월드컵 (Mix & Match World Cup)",
-                "description": "좋아하는 아티스트를 여럿 고르고 곡을 섞어, 둘씩 골라 가며 1위 곡과 취향표를 만들어요.",
-                "url": "https://sortify.kr/genres"
-              },
-              {
-                "@type": "SiteNavigationElement",
-                "position": 2,
                 "name": "최애 곡 소트하기 (Favorite Songs Sort)",
                 "description": "아티스트 한 명을 골라 발표한 곡을 모두 소트해요.",
-                "url": "https://sortify.kr/genres?mode=single"
+                "url": "https://sortify.kr/explore?mode=single"
               },
+              ...(MIX_MATCH
+                ? []
+                : [{
+                    "@type": "SiteNavigationElement",
+                    "position": 2,
+                    "name": "같이 소트하기 (Sort Together)",
+                    "description": "같은 곡을 여럿이 각자 소트하고, 서로 취향이 얼마나 닮았는지 봐요.",
+                    "url": "https://sortify.kr/together"
+                  }]),
               {
                 "@type": "SiteNavigationElement",
                 "position": 3,
@@ -479,7 +522,7 @@ export default function Home() {
             {modes[activeCardIndex].btnText}
           </a>
 
-          {hasPreviousProgress && (activeCardIndex === 0 || activeCardIndex === 1) && (
+          {hasPreviousProgress && (modes[activeCardIndex]?.id === "single" || modes[activeCardIndex]?.id === "multi") && (
             <motion.button
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -571,11 +614,20 @@ export default function Home() {
       {/* Semantic Sitemap Links for Search Engine Crawlers */}
       <nav className="w-full max-w-md mx-auto mt-8 border-t border-navy/10 pt-6 px-4 pb-2 text-center select-none z-10">
         <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-sans font-bold text-navy/40">
-          <li>
-            <Link href="/genres" className="hover:text-point transition-colors">
-              믹스 매치 월드컵
-            </Link>
-          </li>
+          {/* 믹스 매치는 내린 동안 링크하지 않는다 — docs/mode-pivot.md */}
+          {MIX_MATCH ? (
+            <li>
+              <Link href="/genres" className="hover:text-point transition-colors">
+                믹스 매치 월드컵
+              </Link>
+            </li>
+          ) : (
+            <li>
+              <Link href="/together" className="hover:text-point transition-colors">
+                같이 소트하기
+              </Link>
+            </li>
+          )}
           <li>
             <span className="text-navy/15">•</span>
           </li>
