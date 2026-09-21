@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -141,12 +141,38 @@ export default function TogetherNewPage() {
   /** 1단계에서 눌러 둔 아티스트. 곡은 2단계로 넘어갈 때 받는다. */
   const [pendingArtist, setPendingArtist] = useState<CatalogArtist | null>(null);
   /** 펼쳐 둔 앨범. 처음에는 전부 접혀 있다. */
-  const [openAlbums, setOpenAlbums] = useState<Set<string>>(new Set());
+  /*
+   * 펼친 앨범은 하나다(전곡 모드와 같다). 다른 앨범을 열면 먼저 것이 닫힌다.
+   * 닫힌 앨범에서 고른 곡은 그대로 남고 재킷 위 배지로 보인다.
+   */
+  const [openAlbum, setOpenAlbum] = useState<string | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLLIElement>());
   /*
    * 전곡 모드는 동작 줄이기 설정을 따로 보지 않는다. 여기서는 LP 가 날아드는 연출만
-   * 건너뛴다 — 펼침 자체는 레이아웃 변화라 그대로 둔다.
+   * 건너뛰고, 자동 스크롤도 순간이동으로 바꾼다 — 펼침 자체는 레이아웃 변화라 그대로 둔다.
    */
   const reduceMotion = useReducedMotion();
+
+  /**
+   * 앨범을 펼치거나 접는다. 펼칠 때는 그 카드가 화면 위쪽에 오도록 옮겨 준다 —
+   * 아래쪽 앨범을 누르면 펼쳐진 곡 목록이 화면 밖에 있어 보이지 않는다.
+   *
+   * 옮기는 시점을 레이아웃 전환(0.45s)이 끝난 뒤로 미루는 이유: 먼저 열려 있던
+   * 앨범이 닫히면서 이 카드의 자리가 위로 올라온다. 전환 중에 재면 엉뚱한 곳으로 간다.
+   */
+  const toggleAlbum = (name: string) => {
+    const willOpen = openAlbum !== name;
+    setOpenAlbum(willOpen ? name : null);
+    if (!willOpen) return;
+    window.setTimeout(() => {
+      const el = cardRefs.current.get(name);
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      // 이미 화면 위쪽에 잘 보이면 움직이지 않는다(쓸데없이 튀지 않게).
+      if (top >= 8 && top <= window.innerHeight * 0.3) return;
+      el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    }, 470);
+  };
   /*
    * 링크 이름. 고치는 칸을 두지 않는다 — 닉네임 입력으로 오해된다.
    * 아티스트로 만든 방은 아티스트명, 그 밖에는 출처의 제목을 그대로 쓴다.
@@ -293,7 +319,7 @@ export default function TogetherNewPage() {
      * 빼는 일부터 해야 했다. `off` 는 "뺀 곡"이라 전부 넣어 두면 아무것도 안 고른 상태다.
      */
     setOff(new Set(tracks.map((track) => track.id)));
-    setOpenAlbums(new Set());
+    setOpenAlbum(null);
     setTitle(artist.name);
     window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?artist=${artist.id}`);
     setStep(2);
@@ -619,29 +645,31 @@ export default function TogetherNewPage() {
               {groupByAlbum(source.tracks).map((album) => {
                 const ids = album.tracks.map((track) => track.id);
                 const picked = ids.filter((id) => !off.has(id)).length;
-                const open = openAlbums.has(album.name);
-                const toggleOpen = () =>
-                  setOpenAlbums((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(album.name)) next.delete(album.name);
-                    else next.add(album.name);
-                    return next;
-                  });
+                const open = openAlbum === album.name;
+                const toggleOpen = () => toggleAlbum(album.name);
                 return (
                   <motion.li
                     layout
                     transition={smoothTransition}
                     key={album.name}
-                    className={`flex flex-col relative ${
-                      open
-                        ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10"
-                        : "col-span-1"
+                    ref={(el) => {
+                      if (el) cardRefs.current.set(album.name, el);
+                      else cardRefs.current.delete(album.name);
+                    }}
+                    /*
+                     * 펼친 앨범의 면은 아주 옅게만 둔다(bg-navy/5, 그림자·테두리 없음).
+                     * 전곡 모드는 #F1EADC 면 + 그림자 + 테두리인데, 여기서는 접힌 카드와
+                     * 나란히 놓이는 화면이라 그 무게가 과하다. 색은 토큰으로 둬야
+                     * 디자인 톤이 바뀔 때 이 자리도 따라온다.
+                     */
+                    className={`flex flex-col relative scroll-mt-4 ${
+                      open ? "col-span-2 bg-navy/5 rounded-[2rem] p-4 z-10" : "col-span-1"
                     }`}
                   >
                     <motion.div
                       layout
                       transition={smoothTransition}
-                      className={`flex ${open ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}
+                      className={`flex ${open ? "flex-col items-center mb-5 z-20 relative" : "flex-col gap-2"}`}
                     >
                       <div className={`relative flex justify-center items-center w-full ${open ? "mb-3 mt-4" : ""}`}>
                         {/* 펼치면 재킷 뒤에서 LP 가 빠져나온다 (전곡 모드와 같은 연출) */}
@@ -665,7 +693,7 @@ export default function TogetherNewPage() {
                               <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full relative overflow-hidden border-2 border-[#111]">
                                 <SafeImage src={album.cover} alt={album.name} fill fallbackType="track" className="object-cover" />
                               </div>
-                              <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
+                              <div className="absolute w-1.5 h-1.5 bg-cream rounded-full z-10" />
                             </motion.div>
                           )}
                         </AnimatePresence>
