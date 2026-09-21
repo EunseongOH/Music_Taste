@@ -78,6 +78,8 @@ export default function TogetherNewPage() {
   /** 어떤 검색어로 받아 온 목록인지. 지금 입력과 다르면 아직 찾는 중이다. */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [artistSource, setArtistSource] = useState<Source | null>(null);
+  /** 공개 취향표에서 "이 곡들로 같이 소트하기"로 넘어온 경우(?from=<취향표 id>) */
+  const [sharedSource, setSharedSource] = useState<Source | null>(null);
   const [cards, setCards] = useState<SavedRow[] | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
@@ -118,6 +120,46 @@ export default function TogetherNewPage() {
       alive = false;
     };
   }, [user]);
+
+  /*
+   * 남의 공개 취향표에서 넘어온 경우 그 곡들을 그대로 집어 온다.
+   * 같은 아티스트를 좋아하는 사람끼리 주고받는 길이라, 링크를 열자마자 곡이 차 있어야 한다.
+   */
+  useEffect(() => {
+    const fromId = new URLSearchParams(window.location.search).get("from");
+    if (!fromId) return;
+    let alive = true;
+    (async () => {
+      const { data } = await createClient()
+        .from("tournament_results")
+        .select("id,title,artist_name,is_public,ranking")
+        .eq("id", fromId)
+        .single();
+      if (!alive || !data?.is_public) return;
+      const tracks = normalizeRanking((data as { ranking: unknown }).ranking);
+      if (tracks.length < 4) return;
+      const row = data as { id: string; title: string; artist_name: string | null };
+      const next: Source = {
+        key: `shared:${row.id}`,
+        label: row.title,
+        title: row.artist_name || tracks[0]?.artistName || row.title,
+        artistName: row.artist_name || tracks[0]?.artistName || null,
+        tracks,
+        resultId: row.id,
+      };
+      setSharedSource(next);
+      setSourceKey(next.key);
+      setOff(new Set());
+      setTitle(next.title);
+      // 누르고 온 곡이 화면 한참 아래에 있으면 안 보인다. 그 자리로 데려간다.
+      requestAnimationFrame(() => {
+        document.getElementById("together-tracks")?.scrollIntoView({ block: "start" });
+      });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // 검색어가 없으면 전곡이 확실한 아티스트부터 보여 준다. 입력하면 잠시 기다렸다 찾는다.
   useEffect(() => {
@@ -181,7 +223,10 @@ export default function TogetherNewPage() {
   }, [picked, cards]);
 
   const searching = loadedFor !== artistQuery.trim();
-  const source = (artistSource?.key === sourceKey ? artistSource : prevSources.find((s) => s.key === sourceKey)) ?? null;
+  const source =
+    [artistSource, sharedSource].find((c) => c?.key === sourceKey) ??
+    prevSources.find((s) => s.key === sourceKey) ??
+    null;
   const chosen = useMemo(() => (source ? source.tracks.filter((t) => !off.has(t.id)) : []), [source, off]);
 
   const choose = (next: Source) => {
@@ -380,6 +425,7 @@ export default function TogetherNewPage() {
 
       {source && (
         <>
+          <div id="together-tracks" className="scroll-mt-4" />
           <SectionTitle title="곡 고르기" count={chosen.length} className="mt-8 mb-3" />
           <label className="flex flex-col gap-1 mb-3">
             <span className="type-caption text-navy/70">링크에 보일 이름</span>

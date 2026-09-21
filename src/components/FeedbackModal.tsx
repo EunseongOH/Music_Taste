@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, AlertCircle, Send } from "lucide-react";
+import { X } from "lucide-react";
+import { primaryButton } from "@/components/space/SpaceUI";
 import {
   submitFeedback,
   FeedbackCooldownError,
@@ -36,12 +37,12 @@ const translations = {
     emailOptional: "선택",
     emailPlaceholder: "answer@example.com",
     emailNotice:
-      "선택 입력이에요. 적어주시면 의견이 반영됐을 때 알려드리는 용도로만 쓰고, 처리 후 지워요. 안 적으셔도 의견은 그대로 접수돼요.",
+      "의견이 반영되면 알려 드리는 데만 쓰고, 처리 후 지워요. 비워 두셔도 돼요.",
     submit: "보내기",
-    submitting: "보내는 중...",
+    submitting: "보내는 중…",
     tooShort: `${MESSAGE_MIN}자 이상 적어주세요.`,
-    success: "의견 고마워요! 잘 읽어보고 반영할게요.",
-    error: "전송에 실패했어요. 잠시 후 다시 시도해 주세요.",
+    success: "의견을 보냈어요. 잘 읽어 볼게요.",
+    error: "의견을 보내지 못했어요. 잠시 후 다시 시도해 주세요.",
     cooldown: "조금 전에 보내주셨어요. {sec}초 뒤에 다시 보낼 수 있어요.",
     contextArtist: "이 의견에는 아래 정보가 함께 전달돼요",
   },
@@ -62,9 +63,9 @@ const translations = {
     emailNotice:
       "Optional. We'll use it only to let you know when your feedback is reflected, and delete it afterward. You can leave it blank.",
     submit: "Send",
-    submitting: "Sending...",
+    submitting: "Sending…",
     tooShort: `Please write at least ${MESSAGE_MIN} characters.`,
-    success: "Thanks for the feedback! We'll read it carefully.",
+    success: "Feedback sent. We'll read it carefully.",
     error: "Failed to send. Please try again in a moment.",
     cooldown: "You just sent one. You can send again in {sec}s.",
     contextArtist: "The following is sent along with your message",
@@ -150,7 +151,7 @@ function FeedbackForm({
             initial={{ y: 50, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 20, opacity: 0, scale: 0.95 }}
-            className="bg-[#F5F2ED] w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden border border-navy/10 flex flex-col"
+            className="bg-cream w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden border border-navy/10 flex flex-col"
           >
             <div className="p-6 pb-4 border-b border-navy/5 flex items-center justify-between">
               <h3 className="type-title-1 text-navy">
@@ -159,6 +160,7 @@ function FeedbackForm({
               <button
                 type="button"
                 onClick={onClose}
+                aria-label={locale === "en" ? "Close" : "닫기"}
                 className="p-2 -mr-2 text-navy/50 hover:text-navy hover:bg-navy/5 rounded-full transition-colors"
               >
                 <X size={20} />
@@ -169,7 +171,7 @@ function FeedbackForm({
               {!fixedKind && (
                 <div className="flex flex-col gap-1.5">
                   <label className="type-sub text-navy/70 ml-1">
-                    {t.kindLabel} <span className="text-point">*</span>
+                    {t.kindLabel} <span className="text-point-ink">*</span>
                   </label>
                   <div className="flex flex-col gap-2">
                     {kindOptions.map((opt) => (
@@ -177,10 +179,10 @@ function FeedbackForm({
                         key={opt.id}
                         type="button"
                         onClick={() => setKind(opt.id)}
-                        className={`w-full px-4 py-2.5 rounded-xl border type-body text-left transition-all active:scale-[0.99] ${
+                        className={`w-full px-4 py-2.5 rounded-xl border text-left transition-all active:scale-[0.99] ${
                           kind === opt.id
-                            ? "bg-navy text-cream border-navy font-semibold shadow-sm"
-                            : "bg-white/60 text-navy/70 border-navy/10 hover:border-navy/30"
+                            ? "type-body-strong bg-navy text-cream border-navy shadow-sm"
+                            : "type-body bg-white/60 text-navy/70 border-navy/10 hover:border-navy/30"
                         }`}
                       >
                         {opt.label}
@@ -200,11 +202,11 @@ function FeedbackForm({
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between ml-1 mr-1">
                   <label className="type-sub text-navy/70">
-                    {t.messageLabel} <span className="text-point">*</span>
+                    {t.messageLabel} <span className="text-point-ink">*</span>
                   </label>
                   <span
                     className={`type-caption tabular-nums ${
-                      trimmed.length > MESSAGE_MAX ? "text-danger" : "text-navy/40"
+                      trimmed.length > MESSAGE_MAX ? "text-danger" : "text-navy/70"
                     }`}
                   >
                     {trimmed.length}/{MESSAGE_MAX}
@@ -241,8 +243,7 @@ function FeedbackForm({
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 bg-danger/10 p-3 rounded-xl">
-                  <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" />
+                <div className="bg-danger/10 p-3 rounded-xl">
                   <p className="type-caption text-danger break-keep">{error}</p>
                 </div>
               )}
@@ -250,16 +251,9 @@ function FeedbackForm({
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="mt-1 w-full py-3.5 bg-navy text-cream type-body-strong rounded-xl shadow-md hover:bg-navy/90 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2"
+                className={`${primaryButton} mt-1 w-full shrink-0`}
               >
-                {isSending ? (
-                  t.submitting
-                ) : (
-                  <>
-                    <Send size={15} />
-                    {t.submit}
-                  </>
-                )}
+                {isSending ? t.submitting : t.submit}
               </button>
             </form>
           </motion.div>

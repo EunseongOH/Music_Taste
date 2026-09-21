@@ -58,6 +58,8 @@ const translations = {
     cancel: "취소",
     shareMainBtn: "공유하기",
     shareMenuTitle: "결과 공유하기",
+    togetherOption: "이 곡들로 같이 소트하기",
+    togetherHint: "친구도 같은 곡을 소트하면 취향 일치율이 나와요",
     shareXOption: "X (트위터)로 공유",
     shareKakaoOption: "카카오톡으로 공유",
     shareInstagramOption: "인스타그램 스토리에 공유",
@@ -110,6 +112,8 @@ const translations = {
     cancel: "Cancel",
     shareMainBtn: "Share Results",
     shareMenuTitle: "Share Results",
+    togetherOption: "Sort these songs together",
+    togetherHint: "When a friend sorts the same songs, you'll see how close your tastes are",
     shareXOption: "Share on X (Twitter)",
     shareKakaoOption: "Share on KakaoTalk",
     shareInstagramOption: "Share on Instagram Story",
@@ -1095,6 +1099,16 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   <span>{t.shareXOption}</span>
                 </button>
                 )}
+
+                {/* 0. 같이 소트하기 — 공유 중에서 가장 되돌아오는 길이라 맨 위에 둔다.
+                     곡 세트는 이미 저장소에 있어서 만들기 화면이 그대로 집어 든다. */}
+                <button
+                  onClick={() => router.push("/together/new")}
+                  className="w-full px-5 py-3 bg-point text-white rounded-xl transition-all active:scale-[0.98] cursor-pointer flex flex-col items-center justify-center shadow-sm"
+                >
+                  <span className="font-sans font-bold text-sm">{t.togetherOption}</span>
+                  <span className="font-sans text-[11px] opacity-90 mt-0.5">{t.togetherHint}</span>
+                </button>
 
                 {/* 2. KakaoTalk */}
                 {platform.shareTargets.includes("kakao") && (
