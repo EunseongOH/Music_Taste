@@ -45,11 +45,12 @@ async function digTracks(page) {
    */
   const open = page.locator('section[id^="artist-section-"] h2').first();
   if (await open.count()) {
-    if ((await page.locator('section[id^="artist-section-"] img').count()) === 0) {
+    if ((await page.locator('section[id^="artist-section-"] img:not([alt="Spotify"])').count()) === 0) {
       await open.click();
       await page.waitForTimeout(3500); // getArtistAlbums
     }
-    const album = page.locator('section[id^="artist-section-"] img').first();
+    // Spotify 링크 아이콘(약관상 화면마다 하나)이 같은 영역에 있다. 앨범 커버만 고른다.
+    const album = page.locator('section[id^="artist-section-"] img:not([alt="Spotify"])').first();
     if (await album.count()) {
       // 앨범 커버 위에 hover 오버레이 div 가 덮여 있다. 클릭은 그 div 에
       // 떨어지지만 같은 컨테이너 안이라 핸들러까지 버블링된다.

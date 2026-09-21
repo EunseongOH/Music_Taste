@@ -28,7 +28,13 @@ const arg = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 
-const BASE = arg('--base', 'http://localhost:3000');
+/*
+ * 어느 서버를 찍는지가 이 검사의 전부다. 기본값 :3000 을 다른 브랜치의 dev 서버가
+ * 쓰고 있으면 엉뚱한 화면을 기준선으로 삼게 된다(실제로 세 세션이 여기 걸렸다).
+ * 다른 검사들과 같은 NEXT_BASE 를 읽고, 무엇을 보고 있는지 첫 줄에 찍는다.
+ */
+const BASE = arg('--base', process.env.NEXT_BASE ?? 'http://localhost:3000');
+console.log(`기준 서버: ${BASE}`);
 const OUT = join(HERE, arg('--out', 'refs'));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 
@@ -115,7 +121,7 @@ const log = (...a) => console.log(...a);
 log(`→ ${BASE}/taste  (${RANKING.length}곡, 시계 고정 ${FIXED_TIME.toISOString()})`);
 await page.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 
-// 시네마틱 리빌이 끝나면 템플릿 탭(showButton)이 나타난다.
+// 시네마틱 리빌이 끝나면 템플릿 탭(showButton)이 나타난다. 20곡이면 30초쯤 걸린다.
 log('  리빌 애니메이션 대기…');
 await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
 log('  템플릿 탭 노출됨');

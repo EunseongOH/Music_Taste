@@ -191,7 +191,16 @@ export async function share(params: {
   }
 }
 
-/** 외부 주소를 기기 기본 브라우저로 연다. */
+/**
+ * 외부 주소를 기기 기본 브라우저로 연다.
+ *
+ * 토스 앱 밖(개발 서버·QR 미리보기·검사)에서는 SDK 가 "웹뷰 환경이 아니에요"로 던진다.
+ * 그대로 두면 처리되지 않은 오류가 되므로, 그럴 때는 평범한 새 창으로 떨어진다.
+ */
 export async function openExternal(url: string): Promise<void> {
-  await Device.openURL(url);
+  try {
+    await Device.openURL(url);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }
