@@ -4,8 +4,20 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
-import { fetchChallenge, fetchEntries, isMine, participantKey, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
+import {
+  fetchChallenge,
+  fetchEntries,
+  isMine,
+  participantKey,
+  rememberNickname,
+  rememberedNickname,
+  type ChallengeEntry,
+  type SortChallenge,
+} from "@/utils/togetherDb";
+import { NICKNAME_ERROR_TEXT, validateNickname } from "@/utils/nickname";
 import { Cover, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import BackButton from "@/components/BackButton";
+import { SafeImage } from "@/components/SafeImage";
 import * as platform from "@/utils/platform";
 
 /**
@@ -30,6 +42,9 @@ export default function TogetherInvitePage() {
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
   // 렌더 중에 판정하지 않는다 — isMine 이 localStorage 를 읽어서 서버 렌더와 어긋난다.
   const [iAmCreator, setIAmCreator] = useState(false);
+  /** 소트를 시작하기 전에 받는다 — 일치율 화면에서 누가 누구인지 알아야 한다. */
+  const [nickname, setNickname] = useState("");
+  const [nicknameError, setNicknameError] = useState("");
 
   // 한자리에 모여 할 때 옆 사람이 끝나는 게 바로 보이도록 몇 초마다 다시 읽는다.
   useEffect(() => {
@@ -45,6 +60,8 @@ export default function TogetherInvitePage() {
         return;
       }
       setIAmCreator(isMine(found, user?.id));
+      // 로그인했으면 프로필 이름, 아니면 지난번에 쓴 이름. 여기서 프로필을 바꾸지는 않는다.
+      setNickname((prev) => prev || user?.user_metadata?.nickname || rememberedNickname());
       setEntries(await fetchEntries(found.id));
       timer = setInterval(async () => {
         const list = await fetchEntries(found.id);
@@ -79,6 +96,13 @@ export default function TogetherInvitePage() {
 
   const start = () => {
     if (!challenge) return;
+    const name = nickname.trim();
+    const bad = validateNickname(name);
+    if (bad) {
+      setNicknameError(NICKNAME_ERROR_TEXT.ko[bad]);
+      return;
+    }
+    rememberNickname(name);
     const tracks = JSON.stringify(challenge.tracks);
     // 월드컵 화면이 읽는 자리에 이 챌린지의 곡 세트를 심는다. 진행 중이던 기록은 비운다.
     safeSessionStorage.setItem("worldcup_tracks", tracks);
@@ -110,18 +134,49 @@ export default function TogetherInvitePage() {
   }
 
   const creator = challenge.creator_nickname || "리스너";
+  /*
+   * 초대 화면 배경. 방을 만들 때 적어 둔 아티스트 사진을 쓰고, 없으면 첫 곡의 앨범 재킷.
+   * 둘 다 없으면 배경 없이 간다 — 무관한 사진을 끌어오지 않는다.
+   */
+  const hero = challenge.artist_image || challenge.tracks[0]?.albumImage || "";
+  const artist = challenge.artist_name;
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
-      <p className="type-caption text-navy/70">{iAmCreator ? "내가 만든 링크" : "같이 소트하기"}</p>
-      <h1 className="type-title-1 text-navy mt-1 break-keep">{challenge.title}</h1>
-      <p className="type-body text-navy/70 mt-2 break-keep">
-        {iAmCreator ? (
-          <>고른 {challenge.tracks.length}곡이에요.{"\n"}링크를 보내면 상대가 같은 곡으로 소트하고, 서로 얼마나 비슷한지 볼 수 있어요.</>
-        ) : (
-          <>{creator}님이 고른 {challenge.tracks.length}곡이에요.{"\n"}같은 곡으로 소트하면 서로 얼마나 비슷한지 볼 수 있어요.</>
-        )}
-      </p>
+    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pb-32">
+      {/* 링크를 받은 사람에게만 보이는 인사. 방장 화면은 예전 그대로다. */}
+      {!iAmCreator && hero && (
+        <div className="relative h-[260px] -mb-8">
+          <SafeImage src={hero} alt={artist ?? challenge.title} fill sizes="430px" fallbackType="artist" className="object-cover" />
+          {/* 아래로 갈수록 바탕색으로 덮는다. 글자는 딤이 짙어진 아래쪽에만 올린다(color.md 4.5:1). */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/10 via-[var(--app-bg)]/75 to-[var(--app-bg)]" />
+        </div>
+      )}
+
+      <div className="px-6 pt-10">
+        <BackButton onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
+      </div>
+
+      <div className="px-6 pt-2">
+      {iAmCreator ? (
+        <>
+          <p className="type-caption text-navy/70">내가 만든 링크</p>
+          <h1 className="type-title-1 text-navy mt-1 break-keep">{challenge.title}</h1>
+          <p className="type-body text-navy/70 mt-2 break-keep">
+            고른 {challenge.tracks.length}곡이에요.{"\n"}링크를 보내면 상대가 같은 곡으로 소트하고, 서로 얼마나 비슷한지 볼 수 있어요.
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 className="type-title-1 text-navy break-keep">
+            {artist ? `${artist} 소트에 초대받았어요!` : `'${challenge.title}' 소트에 초대받았어요!`}
+          </h1>
+          <p className="type-body text-navy/70 mt-2 break-keep">
+            {artist
+              ? `${artist} 곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`
+              : `곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`}
+          </p>
+        </>
+      )}
 
       <div className="mt-6 flex flex-col gap-2">
         <p className="type-caption text-navy/70">
@@ -143,6 +198,26 @@ export default function TogetherInvitePage() {
         </button>
       </div>
 
+      {!mine && (
+        <label className="flex flex-col gap-1 mt-6">
+          <span className="type-caption text-navy/70">소트에 쓸 이름</span>
+          <input
+            id="together-nickname"
+            value={nickname}
+            onChange={(e) => {
+              setNickname(e.target.value);
+              setNicknameError("");
+            }}
+            maxLength={12}
+            placeholder="리스너"
+            className="h-12 px-4 rounded-2xl bg-white border border-navy/15 type-body text-navy"
+          />
+          <span className={`type-caption ${nicknameError ? "text-danger" : "text-navy/70"}`}>
+            {nicknameError || "일치율 화면에서 서로를 이 이름으로 봐요."}
+          </span>
+        </label>
+      )}
+
       <ul className="mt-4 flex flex-col divide-y divide-navy/10">
         {challenge.tracks.map((track) => (
           <li key={track.id} className="flex items-center gap-3 py-2.5">
@@ -154,6 +229,7 @@ export default function TogetherInvitePage() {
           </li>
         ))}
       </ul>
+      </div>
 
       <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">

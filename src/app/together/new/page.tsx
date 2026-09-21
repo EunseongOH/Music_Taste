@@ -12,6 +12,9 @@ import { createChallenge } from "@/utils/togetherDb";
 import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import BackButton from "@/components/BackButton";
+import { NICKNAME_ERROR_TEXT, validateNickname } from "@/utils/nickname";
+import { rememberNickname, rememberedNickname } from "@/utils/togetherDb";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
 interface SavedRow {
@@ -49,6 +52,9 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
 interface Source {
   key: string;
   label: string;
+  /** 아티스트를 골라 만든 경우에만 — 초대 화면 배경에 쓴다 */
+  artistId?: string | null;
+  artistImage?: string | null;
   /** 링크 이름 기본값 */
   title: string;
   artistName: string | null;
@@ -84,9 +90,17 @@ export default function TogetherNewPage() {
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
+  /** 초대 문구에 "{방장}님과 얼마나 비슷한지"가 들어간다 — 이름이 없으면 안내가 헐거워진다. */
   const [nickname, setNickname] = useState("");
+  const [nicknameError, setNicknameError] = useState("");
   const [busy, setBusy] = useState(false);
   const [madeCode, setMadeCode] = useState<string | null>(null);
+
+  // 지난번에 쓴 이름이 있으면 채워 둔다(비로그인).
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setNickname((prev) => prev || rememberedNickname()));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   // 곡 고르기 화면에서 담아 둔 곡(월드컵 시작 전 상태)
   useEffect(() => {
@@ -188,7 +202,16 @@ export default function TogetherNewPage() {
       showToast("이 아티스트는 아직 담긴 곡이 적어요. 다른 아티스트를 찾아 주세요.", "error");
       return;
     }
-    const next: Source = { key: `artist:${artist.id}`, label: artist.name, title: artist.name, artistName: artist.name, tracks, resultId: null };
+    const next: Source = {
+      key: `artist:${artist.id}`,
+      label: artist.name,
+      title: artist.name,
+      artistName: artist.name,
+      artistId: artist.id,
+      artistImage: artist.image || null,
+      tracks,
+      resultId: null,
+    };
     setArtistSource(next);
     setSourceKey(next.key);
     setOff(new Set());
@@ -237,11 +260,24 @@ export default function TogetherNewPage() {
 
   const make = async () => {
     if (!source || chosen.length < 4) return;
+    const profileName = user?.user_metadata?.nickname as string | undefined;
+    const name = (profileName || nickname).trim();
+    if (!profileName) {
+      const bad = validateNickname(name);
+      if (bad) {
+        setNicknameError(NICKNAME_ERROR_TEXT.ko[bad]);
+        return;
+      }
+      rememberNickname(name);
+    }
     setBusy(true);
     const made = await createChallenge({
       creatorId: user?.id ?? null,
-      creatorNickname: user?.user_metadata?.nickname ?? (nickname.trim() || null),
+      creatorNickname: name,
       artistName: source.artistName,
+      // 아티스트를 골라 만든 방이면 초대 화면 배경에 쓸 사진을 함께 남긴다.
+      artistId: source.artistId ?? null,
+      artistImage: source.artistImage ?? null,
       title: title.trim() || source.title,
       tracks: chosen,
       sourceResultId: source.resultId,
@@ -310,7 +346,8 @@ export default function TogetherNewPage() {
 
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
-      <h1 className="type-title-1 text-navy">같이 소트하기 만들기</h1>
+      <BackButton onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
+      <h1 className="type-title-1 text-navy mt-2">같이 소트하기 만들기</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
         곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요.
       </p>
@@ -439,15 +476,21 @@ export default function TogetherNewPage() {
           </label>
           {!user && (
             <label className="flex flex-col gap-1 mb-4">
-              <span className="type-caption text-navy/70">만든 사람 (안 써도 돼요)</span>
+              <span className="type-caption text-navy/70">내 이름</span>
               <input
                 id="together-nickname"
                 value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                maxLength={20}
+                onChange={(e) => {
+                  setNickname(e.target.value);
+                  setNicknameError("");
+                }}
+                maxLength={12}
                 placeholder="리스너"
                 className="h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
               />
+              <span className={`type-caption ${nicknameError ? "text-danger" : "text-navy/70"}`}>
+                {nicknameError || "초대 화면과 일치율 화면에 이 이름으로 나와요."}
+              </span>
             </label>
           )}
 

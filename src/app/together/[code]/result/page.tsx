@@ -6,7 +6,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
 import { averageRate, matchRate } from "@/utils/togetherMatch";
-import { fetchChallenge, fetchEntries, participantKey, saveEntry, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
+import {
+  rememberedNickname, fetchChallenge, fetchEntries, participantKey, saveEntry, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
 import { Cover, RankList, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 
 interface StoredTrack {
@@ -69,7 +70,9 @@ export default function TogetherResultPage() {
           await saveEntry({
             challengeId: found.id,
             participantKey: key,
-            nickname: user?.user_metadata?.nickname ?? null,
+            // 소트 시작 전에 받아 둔 이름. 로그인하지 않은 사람도 이름이 남는다
+            // (예전에는 프로필 닉네임만 봐서 전부 "익명 리스너"로 나왔다).
+            nickname: user?.user_metadata?.nickname ?? rememberedNickname() ?? null,
             ranking: ids,
             skippedCount: fresh.skipped,
           });
