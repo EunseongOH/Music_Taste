@@ -196,17 +196,23 @@ function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<strin
   return new Set(best.values());
 }
 
-function countDistinctTracks(artist: ArtistGroup): number {
+function countDistinctTracks(artist: ArtistGroup, singleMode: boolean): number {
   const keys = new Set<string>();
-  let unloaded = 0;
+  let pending = 0, loaded = 0;
   for (const album of artist.allAlbums || artist.albums) {
     if (!album) continue;
-    if (!album.tracks.length) { unloaded += album.totalTracks || 0; continue; }
+    if (!album.tracks.length) { pending += album.totalTracks || 0; continue; }
+    loaded++;
     for (const t of album.tracks) keys.add(songKey(artist.name, t.title));
   }
   // 미발매곡은 "전체 선택"이 중복을 가리지 않고 통째로 넣는다. 세는 쪽도 똑같이 한다
   const unreleased = (artist.unreleasedAlbums ?? []).reduce((n, a) => n + a.tracks.length, 0);
-  return keys.size + unloaded + unreleased;
+
+  // 전곡 모드에서 배경 수집이 끝났는데도 수록곡이 없는 앨범은, 앞으로도 안 들어온다
+  // (우리 DB 에 없고 Spotify 하루 예산도 다 쓴 경우다). 그걸 세면 "70곡" 이라 적어 놓고
+  // 52곡만 고를 수 있게 된다. 못 받은 건 빼고, 실제로 고를 수 있는 수만 적는다.
+  const settled = singleMode && artist.albumsLoaded && !artist.backgroundLoading && loaded > 0;
+  return keys.size + unreleased + (settled ? 0 : pending);
 }
 
 export default function TracksPage() {
@@ -1480,7 +1486,7 @@ export default function TracksPage() {
                            {loadingAlbums.has(`artist_${artist.id}`)
                              ? t.albumLoading
                              : artist.albumsLoaded
-                               ? `${countDistinctTracks(artist)} Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
+                               ? `${countDistinctTracks(artist, isSingleArtistMode)} Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
                                : t.openAlbums}
                          </p>
                       </div>
