@@ -63,7 +63,7 @@
 {/* 목록 행 */}
 <p className="type-body-strong text-navy">내 마음의 레드벨벳</p>
 <p className="type-sub text-navy/70">1위 Feel My Rhythm · Red Velvet</p>
-<p className="type-caption text-navy/70">2026.09.11 · 최애 곡 줄 세우기</p>
+<p className="type-caption text-navy/70">2026.09.11 · 최애 곡 소트하기</p>
 
 {/* 순위 숫자 — 숫자라서 Playfair */}
 <span className="type-title-2 font-serif text-point-ink">1</span>

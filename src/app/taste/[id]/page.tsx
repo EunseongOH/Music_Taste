@@ -50,7 +50,7 @@ const translations = {
     loading: "공개된 취향표를 불러오는 중...",
     errorNotFound: "취향표를 찾을 수 없거나 비공개 상태입니다.",
     nicknameDefault: "음악팬",
-    singleDiscography: "최애 곡 줄 세우기",
+    singleDiscography: "최애 곡 소트하기",
     backBtn: "뒤로",
   },
   en: {
@@ -64,7 +64,7 @@ const translations = {
     loading: "Loading shared music taste card...",
     errorNotFound: "Taste card not found or it is set to private.",
     nicknameDefault: "Music Fan",
-    singleDiscography: "Favorite Songs Lineup",
+    singleDiscography: "Favorite Songs Sort",
     backBtn: "Back",
   }
 };
@@ -373,7 +373,7 @@ export default function TasteSharedPage() {
         <button
           /*
            * 이 취향표를 만든 모드 그대로 시작하게 한다.
-           * '최애 곡 줄 세우기'(단일 아티스트) 결과를 보고 들어온 사람에게
+           * '최애 곡 소트하기'(단일 아티스트) 결과를 보고 들어온 사람에게
            * '믹스 매치 월드컵'이 먼저 보이면 흐름이 끊긴다.
            */
           onClick={() => router.push(result.is_single_artist ? "/?mode=single" : "/?mode=multi")}
