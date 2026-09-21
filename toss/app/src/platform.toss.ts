@@ -1,4 +1,4 @@
-import { Clipboard, Device, File, Share } from '@apps-in-toss/web-framework';
+import { Clipboard, Device, File, Share, graniteEvent } from '@apps-in-toss/web-framework';
 import * as htmlToImage from 'html-to-image';
 
 /**
@@ -32,6 +32,19 @@ export class PlatformError extends Error {}
  * 개별 버튼이 필요 없고, 나가는 링크도 토스 공유 링크 하나로 고정된다.
  */
 export const shareTargets: ShareTarget[] = ['native', 'link', 'image'];
+
+/**
+ * 네비게이션 바 홈 버튼은 확인창 없이 미니앱을 닫는다. 월드컵 페이지가 이때
+ * 진행 상태를 임시저장(확정)해 둔다. 토스 밖(dev 브라우저)에서는 브리지가 없어
+ * 던지므로 조용히 무시한다.
+ */
+export function onAppExit(cb: () => void): () => void {
+  try {
+    return graniteEvent.addEventListener('homeEvent', { onEvent: cb });
+  } catch {
+    return () => {};
+  }
+}
 
 /**
  * 공유·복사에 쓸 링크.

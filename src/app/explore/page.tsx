@@ -49,6 +49,8 @@ export default function ExplorePage() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [defaultArtists, setDefaultArtists] = useState<Artist[]>([]);
   const [selectedArtists, setSelectedArtists] = useState<Artist[]>([]);
+  /** 배경 자동저장이 마지막으로 저장한(또는 복원한) 선택 집합. 같으면 저장하지 않는다. */
+  const lastSavedSelRef = useRef<string>("");
   const selectedIds = React.useMemo(() => new Set(selectedArtists.map(a => a.id)), [selectedArtists]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
@@ -374,8 +376,9 @@ export default function ExplorePage() {
             parentId: a.parentId
           }));
 
+          lastSavedSelRef.current = sanitizedRestored.map(a => a.id).sort().join(",");
           setSelectedArtists(sanitizedRestored);
-          
+
           // Hydrate local storages to keep them fully synced
           sessionStorage.setItem('selectedArtists', JSON.stringify(sanitizedRestored));
           localStorage.setItem('selectedArtists', JSON.stringify(sanitizedRestored));
@@ -404,9 +407,15 @@ export default function ExplorePage() {
   }, [user]);
 
   // Save artist selection to Supabase in background
+  //
+  // 선택이 실제로 바뀌었을 때만 저장한다. 복원된 선택으로도 저장하면 월드컵 진행 중인
+  // 초안을 artist_selection 으로 강등시킨다 (docs/worldcup-draft-plan.md 1-2).
   useEffect(() => {
     if (!user) return;
+    const selKey = selectedArtists.map(a => a.id).sort().join(",");
+    if (selKey === lastSavedSelRef.current) return;
     const saveDraft = async () => {
+      lastSavedSelRef.current = selKey;
       // Save draft (updates even if empty, so deselecting all updates correctly)
       await saveArtistSelectionDraft(selectedArtists, isSingleArtistMode);
     };

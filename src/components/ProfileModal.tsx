@@ -10,6 +10,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
+import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
 import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
 interface ProfileModalProps {
@@ -61,35 +62,23 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       localStorage.setItem("worldcup_tracks", JSON.stringify(draft.selected_tracks));
     }
 
-    // 3. Set worldcup_progress (matches, phase, currentRoundName, etc.)
-    if (draft.phase && draft.phase !== 'loading') {
-      const progressObj = {
-        phase: draft.phase,
-        currentRoundName: draft.current_round_name,
-        matches: draft.matches,
-        currentMatchIndex: draft.current_match_index,
-        winners: draft.winners,
-        eliminatedTracks: draft.eliminated_tracks,
-        skippedTracks: draft.skipped_tracks ?? [],
-        byeCount: draft.bye_count,
-        selectedByes: draft.selected_byes
-      };
-      sessionStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
-      localStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
-    } else {
-      // Clear progress if they were in tracks/explore selection step
-      sessionStorage.removeItem("worldcup_progress");
-      localStorage.removeItem("worldcup_progress");
-    }
+    // 3. 진행 상태는 월드컵 페이지가 DB 초안(progress 컬럼)에서 직접 복원한다.
+    //    로컬의 오래된 진행이 DB 를 가리지 않게 지운다.
+    sessionStorage.removeItem("worldcup_progress");
+    localStorage.removeItem("worldcup_progress");
+    const isSingle = !!draft.is_single_artist;
+    sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+    localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
 
-    // 4. Redirect user based on status
+    // 4. Redirect user based on status (모드를 붙여야 같은 모드의 초안을 읽는다)
+    const qs = isSingle ? "?mode=single" : "";
     onClose();
     if (draft.status === 'artist_selection') {
-      router.push('/explore');
+      router.push(`/explore${qs}`);
     } else if (draft.status === 'track_selection') {
-      router.push('/tracks');
+      router.push(`/tracks${qs}`);
     } else {
-      router.push('/worldcup');
+      router.push(`/worldcup${qs}`);
     }
   };
 
@@ -117,7 +106,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
             setCompletedResults(resultsData);
           }
           if (!draftsError && draftsData) {
-            setActiveDrafts(draftsData);
+            setActiveDrafts(draftsData.filter((d: any) => !isDraftExpired(d)));
           }
         } catch (err) {
           console.error("Error fetching database archives:", err);
@@ -510,6 +499,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                                   <p className="type-body-strong text-navy truncate">{draft.title}</p>
                                   <p className="type-caption text-navy/70 truncate">
                                     {stepText} · {formatDate(draft.updated_at, locale)}
+                                    {draftExpiresAt(draft) !== null && ` · ${draft.current_round_name} · ${formatDraftExpiry(draft, locale)}`}
                                   </p>
                                 </div>
                                 <span className="type-sub font-semibold text-point-ink shrink-0">{t.resume}</span>

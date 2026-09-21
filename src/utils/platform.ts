@@ -43,6 +43,15 @@ export class PlatformError extends Error {}
 export const shareTargets: ShareTarget[] = ["link", "image", "x", "instagram", "kakao"];
 
 /**
+ * 플랫폼이 페이지를 물어보지 않고 닫을 때(앱인토스 네비게이션 바 홈 버튼) 알린다.
+ * 웹은 그런 경로가 없다 — 탭 닫기는 로컬 저장이 복구한다. 해제 함수를 돌려준다.
+ */
+export function onAppExit(_cb: () => void): () => void {
+  void _cb;
+  return () => {};
+}
+
+/**
  * 공유·복사에 쓸 링크. 저장된 취향표가 있으면 그 주소, 없으면 현재 주소.
  *
  * `ogImageUrl` 은 토스 구현에서만 쓴다(공유 링크의 미리보기 이미지).

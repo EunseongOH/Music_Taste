@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ProfileHeader from "@/components/ProfileHeader";
 
 import { createClient } from "@/utils/supabase/client";
+import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale, setSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
 
@@ -147,7 +148,8 @@ export default function Home() {
             .eq('user_id', user.id);
 
           if (!error && data) {
-            setActiveDrafts(data);
+            // 만료된 플레이 초안은 cron 이 지우기 전이라도 보여주지 않는다.
+            setActiveDrafts(data.filter((d: any) => !isDraftExpired(d)));
           }
         } catch (e) { }
       };
@@ -214,21 +216,10 @@ export default function Home() {
         sessionStorage.setItem("worldcup_tracks", JSON.stringify(activeDraft.selected_tracks));
         localStorage.setItem("worldcup_tracks", JSON.stringify(activeDraft.selected_tracks));
       }
-      if (activeDraft.phase && activeDraft.phase !== 'loading') {
-        const progressObj = {
-          phase: activeDraft.phase,
-          currentRoundName: activeDraft.current_round_name,
-          matches: activeDraft.matches,
-          currentMatchIndex: activeDraft.current_match_index,
-          winners: activeDraft.winners,
-          eliminatedTracks: activeDraft.eliminated_tracks,
-          skippedTracks: activeDraft.skipped_tracks ?? [],
-          byeCount: activeDraft.bye_count,
-          selectedByes: activeDraft.selected_byes
-        };
-        sessionStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
-        localStorage.setItem("worldcup_progress", JSON.stringify(progressObj));
-      }
+      // 진행 상태는 월드컵 페이지가 DB 초안(progress 컬럼)에서 직접 복원한다.
+      // 여기서 로컬에 옮겨 쓰면 오래된 로컬 진행이 DB 를 가릴 수 있어 지운다.
+      sessionStorage.removeItem("worldcup_progress");
+      localStorage.removeItem("worldcup_progress");
 
       // 2. Redirect based on stage status
       if (activeDraft.status === 'artist_selection') {
@@ -500,6 +491,11 @@ export default function Home() {
             >
               {t.continue}
             </motion.button>
+          )}
+          {activeDraft && draftExpiresAt(activeDraft) !== null && (
+            <p className="font-sans text-[11px] text-navy/50 mt-1">
+              {activeDraft.current_round_name} · {formatDraftExpiry(activeDraft, locale)}
+            </p>
           )}
         </div>
       </div>

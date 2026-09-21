@@ -585,15 +585,20 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         }
       }
 
+      // 매치별 선택 기록(곡 ID). 월드컵 페이지가 끝날 때 남긴다. 없으면 빈 배열.
+      let picks: any[] = [];
+      try { picks = JSON.parse(sessionStorage.getItem("worldcup_picks") || "[]"); } catch {}
+
       let saveRes;
       if (overwrite && existingResult) {
-        saveRes = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic });
+        saveRes = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic, isSingleArtist: isSingleArtistMode, picks });
       } else {
         saveRes = await saveCompletedResult(winners, winners.slice(1), title, {
           isPublic,
           isSingleArtist: isSingleArtistMode,
           artistId,
-          artistName
+          artistName,
+          picks
         });
       }
 
@@ -664,6 +669,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
   const executeExit = async () => {
     sessionStorage.removeItem("worldcup_ranking");
+    sessionStorage.removeItem("worldcup_picks");
     sessionStorage.removeItem("worldcup_skipped_count");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");

@@ -3,13 +3,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { Disc } from "lucide-react";
 import WinnerReveal from "@/components/result/WinnerReveal";
 import BackButton from "@/components/BackButton";
+import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
-import { saveTournamentProgress, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
+import { saveWorldcupDraft, loadActiveDraft, deleteActiveDraft, hydrateDraft, type DraftPick, type WorldcupState } from "@/utils/worldcupDb";
+import { onAppExit } from "@/utils/platform";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
@@ -31,6 +34,26 @@ function shuffleArray<T>(array: T[]): T[] {
   }
   return newArr;
 }
+
+// 전체 라운드 크기 (128곡 → 128강)
+const getInitialRoundSize = (count: number) => {
+  if (count <= 4) return 4;
+  if (count <= 8) return 8;
+  if (count <= 16) return 16;
+  if (count <= 32) return 32;
+  if (count <= 64) return 64;
+  return Math.pow(2, Math.ceil(Math.log2(count)));
+};
+
+// 현재 라운드 크기. 이름으로 판단한다.
+const getCurrentRoundNumber = (roundName: string, matchesCount: number) => {
+  if (!roundName) return matchesCount * 2;
+  if (roundName.includes("결승") || roundName.includes("Final")) return 2;
+  if (roundName.includes("준결승") || roundName.includes("4강") || roundName.includes("Semifinal")) return 4;
+  const match = roundName.match(/(\d+)강/);
+  if (match) return parseInt(match[1]);
+  return matchesCount * 2;
+};
 
 export default function WorldCupPage() {
   const { user } = useAuth();
@@ -54,9 +77,21 @@ export default function WorldCupPage() {
    * 빼는 순간 상대 곡이 자동 진출하므로 대진표 크기는 변하지 않는다.
    */
   const [skippedTracks, setSkippedTracks] = useState<Track[]>([]);
+  /** 매치별 선택 기록 [라운드 크기, 이긴 곡, 진 곡]. 빼기로 넘어간 매치는 넣지 않는다. */
+  const [picks, setPicks] = useState<DraftPick[]>([]);
   /** 되돌리기 대기 중인 빼기. 확정 전까지 후보를 가리고 되돌리기 카드를 보여준다. */
   const [pendingRemoval, setPendingRemoval] = useState<Track | null>(null);
   const removalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 나가기 확인 (docs/worldcup-draft-plan.md 3장)
+  const [exitModal, setExitModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  /** 우리가 나가는 중이면 popstate 가드를 끈다. */
+  const leavingRef = useRef(false);
+  /** 곡 객체(selected_tracks)는 판당 한 번만 DB 에 쓴다. */
+  const tracksWrittenRef = useRef(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // LP Player state
   const [droppedTrack, setDroppedTrack] = useState<Track | null>(null);
@@ -124,25 +159,24 @@ export default function WorldCupPage() {
           const params = new URLSearchParams(window.location.search);
           const isSingle = params.get("mode") === "single";
           const draft = await loadActiveDraft(isSingle);
-          // If the draft contains active tournament play state
-          if (draft && (draft.status === 'playing' || draft.status === 'pre_tournament') && draft.phase) {
-            if (draft.tracks && draft.tracks.length > 0) {
-              stored = JSON.stringify(draft.tracks);
-              sessionStorage.setItem("worldcup_tracks", stored);
-              localStorage.setItem("worldcup_tracks", stored);
-            }
-            
-            const parsedTracks = draft.tracks || [];
-            setTracks(parsedTracks);
-            // Pre-tournament phase is deprecated, map it straight to playing
-            const mappedPhase: Phase = draft.phase === "pre-tournament" ? "playing" : (draft.phase as Phase);
-            setPhase(mappedPhase);
-            setCurrentRoundName(draft.current_round_name || "");
-            setMatches(draft.matches || []);
-            setCurrentMatchIndex(draft.current_match_index || 0);
-            setWinners(draft.winners || []);
-            setEliminatedTracks(draft.eliminated_tracks || []);
-            setSkippedTracks(draft.skipped_tracks || []);
+          // 플레이 중 초안이면 progress(곡 ID) 를 selected_tracks 로 되살린다.
+          // 옛 형식(progress 없음)은 null 이라 아래 로컬 폴백으로 간다.
+          const h = draft && (draft.status === 'playing' || draft.status === 'pre_tournament') ? hydrateDraft(draft) : null;
+          if (h) {
+            stored = JSON.stringify(h.tracks);
+            sessionStorage.setItem("worldcup_tracks", stored);
+            localStorage.setItem("worldcup_tracks", stored);
+
+            setTracks(h.tracks as Track[]);
+            setPhase("playing");
+            setCurrentRoundName(h.currentRoundName);
+            setMatches(h.matches as Track[][]);
+            setCurrentMatchIndex(h.currentMatchIndex);
+            setWinners(h.winners as Track[]);
+            setEliminatedTracks(h.eliminatedTracks as Track[]);
+            setSkippedTracks(h.skippedTracks as Track[]);
+            setPicks(h.picks);
+            tracksWrittenRef.current = true;
             return;
           }
         } catch (err) {
@@ -174,6 +208,7 @@ export default function WorldCupPage() {
           // 저장하는 쪽은 모두 eliminatedTracks 키를 쓴다. 예전 키도 읽어 둔다.
           setEliminatedTracks(st.eliminatedTracks || st.eliminated_tracks || []);
           setSkippedTracks(st.skippedTracks || []);
+          setPicks(st.picks || []);
         } else {
           setTracks(parsedTracks);
           if (parsedTracks.length < 4) {
@@ -181,6 +216,9 @@ export default function WorldCupPage() {
                router.replace("/tracks");
                return;
           }
+          // 새 판. 곡 객체를 DB 에 다시 써야 한다.
+          tracksWrittenRef.current = false;
+          setPicks([]);
           // Directly start matching without the deprecated manual pre-round selection modal
           startRound(parsedTracks);
         }
@@ -205,6 +243,7 @@ export default function WorldCupPage() {
       winners,
       eliminatedTracks,
       skippedTracks,
+      picks,
       byeCount: 0,
       selectedByes: []
     };
@@ -213,19 +252,75 @@ export default function WorldCupPage() {
     sessionStorage.setItem("worldcup_progress", progressData);
     localStorage.setItem("worldcup_progress", progressData);
 
-    // 같이 소트하기 판은 사용자의 이어하기를 덮지 않는다.
-    if (user && !isChallenge) {
-      const saveToDb = async () => {
-        const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
-        const storedTracks = JSON.parse(sessionStorage.getItem("worldcup_tracks") || "[]");
-        await saveTournamentProgress(progressObj, storedArtists, storedTracks, "내 음악 월드컵", isSingleArtistMode);
-      };
-      const timer = setTimeout(() => {
-        saveToDb();
+    // DB 자동저장(버퍼). 곡 ID 만 보낸다. 같이 소트하기 판은 사용자의 이어하기를 덮지 않는다.
+    if (user && !isChallenge && phase === "playing") {
+      autosaveTimer.current = setTimeout(() => {
+        autosaveTimer.current = null;
+        saveDraft(false);
       }, 1500);
-      return () => clearTimeout(timer);
+      return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
     }
-  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, user, isChallenge]);
+  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, picks, user, isChallenge]);
+
+  const currentState = (): WorldcupState => ({
+    tracks, phase, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks,
+  });
+
+  /** DB 저장. confirm=true 면 임시저장(확정, 24시간 보관). 자동저장은 1시간 버퍼. */
+  const saveDraft = async (confirm: boolean) => {
+    const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
+    const ok = await saveWorldcupDraft(currentState(), { confirm, withTracks: !tracksWrittenRef.current }, storedArtists, isSingleArtistMode);
+    if (ok) tracksWrittenRef.current = true;
+    return ok;
+  };
+
+  // 브라우저·네비게이션 바 뒤로가기를 가로채 나가기 모달을 띄운다 (docs/worldcup-draft-plan.md 3-3).
+  useEffect(() => {
+    if (phase !== "playing") return;
+    history.pushState(null, "", location.href);
+    const onPop = () => {
+      if (leavingRef.current) return;
+      history.pushState(null, "", location.href);
+      setExitModal(true);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [phase]);
+
+  // 앱인토스 홈 버튼: 물어볼 틈이 없으니 바로 임시저장(확정)해 둔다.
+  useEffect(() => {
+    if (phase !== "playing" || !user || isChallenge) return;
+    return onAppExit(() => { saveDraft(true); });
+  }, [phase, user, isChallenge, tracks, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks]);
+
+  const leave = () => {
+    leavingRef.current = true;
+    setExitModal(false);
+    router.push("/");
+  };
+
+  const handleSaveAndExit = async () => {
+    if (!user) { setIsLoginModalOpen(true); return; }
+    if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); autosaveTimer.current = null; }
+    setIsSaving(true);
+    const ok = await saveDraft(true);
+    setIsSaving(false);
+    trackEvent("tournament_exit", { action: ok ? "save" : "save_failed" });
+    if (!ok) {
+      alert(locale === "en" ? "Couldn't save. Please try again." : "저장하지 못했어요. 다시 시도해 주세요.");
+      return;
+    }
+    leave();
+  };
+
+  const handleDiscardAndExit = async () => {
+    if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); autosaveTimer.current = null; }
+    sessionStorage.removeItem("worldcup_progress");
+    localStorage.removeItem("worldcup_progress");
+    if (user && !isChallenge) await deleteActiveDraft(isSingleArtistMode);
+    trackEvent("tournament_exit", { action: "discard" });
+    leave();
+  };
 
   // Clear active tournament drafts in Supabase when finished
   useEffect(() => {
@@ -304,29 +399,15 @@ export default function WorldCupPage() {
        const newSkipped = loser && removed ? [...skippedTracks, loser] : skippedTracks;
        if (removed) setSkippedTracks(newSkipped);
 
-       // Helper to calculate total rounds starting size
-       const getInitialRoundSize = (count: number) => {
-         if (count <= 4) return 4;
-         if (count <= 8) return 8;
-         if (count <= 16) return 16;
-         if (count <= 32) return 32;
-         if (count <= 64) return 64;
-         return Math.pow(2, Math.ceil(Math.log2(count)));
-       };
-
-       // Helper to parse current round number
-       const getCurrentRoundNumber = (roundName: string, matchesCount: number) => {
-         if (!roundName) return matchesCount * 2;
-         if (roundName.includes("결승") || roundName.includes("Final")) return 2;
-         if (roundName.includes("준결승") || roundName.includes("4강") || roundName.includes("Semifinal")) return 4;
-         const match = roundName.match(/(\d+)강/);
-         if (match) return parseInt(match[1]);
-         return matchesCount * 2;
-       };
-
        // Trigger GA4 match progress event
        const initialSize = getInitialRoundSize(tracks.length);
        const roundNum = getCurrentRoundNumber(currentRoundName, matches.length);
+
+       // 선택 기록. 예선전은 라운드 크기를 음수로 구분한다.
+       if (loser && !removed) {
+         const isPlayin = currentRoundName.includes("예선전") || currentRoundName.includes("Play-in");
+         setPicks(p => [...p, [isPlayin ? -roundNum : roundNum, winner.id, loser.id]]);
+       }
        trackEvent("tournament_progress", {
          total_rounds: initialSize,
          current_round: roundNum,
@@ -345,6 +426,10 @@ export default function WorldCupPage() {
            sessionStorage.setItem("worldcup_ranking", JSON.stringify(finalRanking));
            // 결과 화면의 자동 저장 기준(16곡)은 뺀 곡까지 센 원래 곡 수로 판단한다.
            sessionStorage.setItem("worldcup_skipped_count", String(newSkipped.length));
+           // 매치별 선택 기록. 결과 저장(ResultScreen)이 tournament_results.picks 로 옮긴다.
+           const lastPick: DraftPick | null = loser && !removed
+             ? [currentRoundName.includes("예선전") ? -roundNum : roundNum, winner.id, loser.id] : null;
+           sessionStorage.setItem("worldcup_picks", JSON.stringify(lastPick ? [...picks, lastPick] : picks));
            setWinners(newWinners);
            setPhase("finished");
          } else {
@@ -461,7 +546,7 @@ export default function WorldCupPage() {
       {/* Header */}
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" />
+          <BackButton className="border-none bg-transparent hover:bg-navy/5 w-8 h-8 shadow-none m-0 p-0" onClick={() => setExitModal(true)} />
           <h1 className="type-title-1 text-navy">
             {locale === "en" ? "Taste World Cup" : "취향 월드컵"}
           </h1>
@@ -609,15 +694,119 @@ export default function WorldCupPage() {
             )}
 
             <div className="w-full relative z-10 pb-4 mt-4">
-              <LPPlayer 
-                isPlaying={isPlaying} 
-                currentTrack={droppedTrack} 
-                className={droppedTrack ? 'border-point shadow-[0_4px_25px_rgba(230,126,34,0.3)]' : ''} 
+              <LPPlayer
+                isPlaying={isPlaying}
+                currentTrack={droppedTrack}
+                className={droppedTrack ? 'border-point shadow-[0_4px_25px_rgba(230,126,34,0.3)]' : ''}
               />
             </div>
           </div>
         )}
       </div>
+
+      {/* 나가기 확인 모달 (tracks 페이지 나가기 마법사와 같은 카드) */}
+      <AnimatePresence>
+        {exitModal && (() => {
+          const total = getInitialRoundSize(tracks.length);
+          const round = getLocalizedRoundName(currentRoundName, locale);
+          const canSave = !isChallenge;
+          const t = locale === "en" ? {
+            title: "Leave the World Cup?",
+            desc: canSave
+              ? `You're at ${round} of ${total}.\nSave to keep it for 24 hours and resume from Home or My Taste Space.`
+              : `You're at ${round} of ${total}.\nLeaving now discards your picks.`,
+            save: user ? "Save and leave" : "Log in to save",
+            saveSub: "Kept for 24 hours",
+            discard: "Leave without saving",
+            discardSub: user ? "Saved progress is deleted too" : "",
+            keep: "Keep playing",
+            saving: "Saving…",
+          } : {
+            title: "월드컵을 그만둘까요?",
+            desc: canSave
+              ? `${total}강 중 ${round}까지 진행했어요.\n임시저장하면 24시간 동안 보관되고, 홈이나 내 취향 스페이스에서 이어할 수 있어요.`
+              : `${total}강 중 ${round}까지 진행했어요.\n나가면 지금까지 고른 곡이 사라져요.`,
+            save: user ? "임시저장하고 나가기" : "로그인하고 임시저장하기",
+            saveSub: "24시간 동안 보관돼요",
+            discard: "저장하지 않고 나가기",
+            discardSub: user ? "임시저장한 내역도 함께 삭제돼요" : "",
+            keep: "계속하기",
+            saving: "저장 중…",
+          };
+          return (
+            <>
+              <motion.div
+                className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => !isSaving && setExitModal(false)}
+              />
+              <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
+                <motion.div
+                  className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                >
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
+                    className="w-16 h-16 bg-navy rounded-full flex items-center justify-center mb-5 shadow-lg border-2 border-point relative shrink-0"
+                  >
+                    <Disc className="text-cream" size={32} />
+                    <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
+                  </motion.div>
+                  <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.title}</h2>
+                  <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
+                    {t.desc}
+                  </p>
+                  <div className="flex flex-col gap-2.5 w-full">
+                    {canSave && (
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isSaving}
+                        onClick={handleSaveAndExit}
+                        className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer disabled:opacity-60"
+                      >
+                        {isSaving ? t.saving : t.save}
+                        {!isSaving && <span className="block text-[11px] font-medium text-cream/70 mt-0.5">{t.saveSub}</span>}
+                      </motion.button>
+                    )}
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={isSaving}
+                      onClick={handleDiscardAndExit}
+                      className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer disabled:opacity-60"
+                    >
+                      {t.discard}
+                      {canSave && t.discardSub && <span className="block text-[11px] font-medium text-red-400 mt-0.5">{t.discardSub}</span>}
+                    </motion.button>
+                    <button
+                      disabled={isSaving}
+                      onClick={() => setExitModal(false)}
+                      className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
+                    >
+                      {t.keep}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            </>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* 게스트가 임시저장을 누르면 로그인부터. 로그인되면 user 가 바뀌어 다시 누를 수 있다. */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        locale={locale}
+        onSuccess={() => setIsLoginModalOpen(false)}
+      />
     </main>
   );
 }

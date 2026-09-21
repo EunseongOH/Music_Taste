@@ -187,6 +187,8 @@ export default function TracksPage() {
   const [notification, setNotification] = useState<string | null>(null);
 
   const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
+  /** 배경 자동저장이 마지막으로 저장한(또는 복원한) 선택 집합. 같으면 저장하지 않는다. */
+  const lastSavedSelRef = React.useRef<string>("");
   const [customAlert, setCustomAlert] = useState<string | null>(null);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
@@ -367,6 +369,7 @@ export default function TracksPage() {
 
                 // Set selected track IDs
                 const loadedTrackIds = tracksToLoad.map((t: any) => typeof t === 'string' ? t : t.id);
+                lastSavedSelRef.current = [...loadedTrackIds].sort().join(",");
                 setSelectedTrackIds(new Set(loadedTrackIds));
 
                 // Load metadata cache
@@ -495,9 +498,16 @@ export default function TracksPage() {
   }, [isLoaded, isSingleArtistMode, artistData]);
 
   // Save selected tracks to Supabase in the background
+  //
+  // 선택이 실제로 바뀌었을 때만 저장한다. 마운트 직후 복원된 선택으로도 저장하면
+  // 월드컵 진행 중(status=playing)인 초안을 track_selection 으로 강등시켜,
+  // 홈의 이어하기가 트랙 디깅 단계로 가 버린다 (docs/worldcup-draft-plan.md 1-2).
   React.useEffect(() => {
     if (!user || artistData.length === 0) return;
+    const selKey = [...selectedTrackIds].sort().join(",");
+    if (selKey === lastSavedSelRef.current) return;
     const saveTrackDraft = async () => {
+      lastSavedSelRef.current = selKey;
       const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
       
       const selectedTracksData: any[] = [];

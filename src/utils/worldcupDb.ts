@@ -6,6 +6,9 @@ const getSessionExpiredMessage = () => {
   return isEn ? "Login session expired. Please log in again." : "로그인 세션이 만료되었어요. 다시 로그인해 주세요.";
 };
 
+// 초안은 사용자·모드(싱글/멀티)당 하나. (user_id, is_single_artist) 유니크 인덱스가 기준이다.
+const DRAFT_KEY = "user_id,is_single_artist";
+
 // Stage 1: Save artist selection
 export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleArtist?: boolean) => {
   const supabase = createClient();
@@ -13,7 +16,7 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleA
   if (!user) return;
 
   const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
-  const title = selectedArtists.length > 0 
+  const title = selectedArtists.length > 0
     ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
 
@@ -25,8 +28,10 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleA
       status: 'artist_selection',
       selected_artists: selectedArtists,
       title,
+      progress: null,
+      saved_at: null,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    }, { onConflict: DRAFT_KEY });
 
   if (error) {
     console.error("[Supabase DB] Error saving artist selection draft:", error.message);
@@ -49,8 +54,10 @@ export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTr
       status: 'track_selection',
       selected_artists: selectedArtists,
       selected_tracks: selectedTracks,
+      progress: null,
+      saved_at: null,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    }, { onConflict: DRAFT_KEY });
 
   if (error) {
     console.error("[Supabase DB] Error saving track selection draft:", error.message);
@@ -64,7 +71,7 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[], is
   if (!user) return;
 
   const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
-  const title = selectedArtists.length > 0 
+  const title = selectedArtists.length > 0
     ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
 
@@ -79,99 +86,196 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[], is
       phase: null,
       current_round_name: null,
       current_match_index: null,
-      tracks: null,
-      matches: null,
-      winners: null,
-      eliminated_tracks: null,
+      progress: null,
+      saved_at: null,
       // NOT NULL 컬럼이라 비울 때는 [] 로. 빼먹으면 이전 월드컵의 뺀 곡이 다음 판으로 넘어간다.
       skipped_tracks: [],
-      selected_byes: null,
       title,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    }, { onConflict: DRAFT_KEY });
 
   if (error) {
     console.error("[Supabase DB] Error downgrading draft status:", error.message);
   }
 };
 
+/* ------------------------------------------------------------------ */
+/* Stage 3: 월드컵 진행 (docs/worldcup-draft-plan.md)                    */
+/* ------------------------------------------------------------------ */
 
-// Stage 3 & 4: Save active tournament playing state
-export const saveTournamentProgress = async (progressState: any, selectedArtists: any[], selectedTracks: any[], title: string, isSingleArtist?: boolean) => {
+type TrackLike = { id: string; [k: string]: any };
+
+/** 매치 하나의 선택: [라운드 크기, 이긴 곡, 진 곡]. 예선전은 라운드 크기를 음수로 둔다. */
+export type DraftPick = [number, string, string];
+
+/** DB `progress` 컬럼. 곡 객체는 `selected_tracks` 에만 두고 여기는 곡 ID 만 담는다. */
+export type DraftProgress = {
+  v: 1;
+  matches: [string, string][];
+  winners: string[];
+  eliminated: string[];
+  skipped: string[];
+  picks: DraftPick[];
+};
+
+export type WorldcupState = {
+  tracks: TrackLike[];
+  phase: string;
+  currentRoundName: string;
+  currentMatchIndex: number;
+  matches: TrackLike[][];
+  winners: TrackLike[];
+  eliminatedTracks: TrackLike[];
+  skippedTracks: TrackLike[];
+  picks: DraftPick[];
+};
+
+export const DRAFT_SAVED_TTL_MS = 24 * 3600_000;   // 임시저장(확정) 보관
+export const DRAFT_BUFFER_TTL_MS = 3600_000;       // 자동저장(미확정) 보관
+
+export const toCompact = (s: WorldcupState): DraftProgress => ({
+  v: 1,
+  matches: s.matches.map((m) => [m[0].id, m[1].id] as [string, string]),
+  winners: s.winners.map((t) => t.id),
+  eliminated: s.eliminatedTracks.map((t) => t.id),
+  skipped: s.skippedTracks.map((t) => t.id),
+  picks: s.picks,
+});
+
+/**
+ * DB 초안 행 → 화면 상태. `selected_tracks` 로 ID 를 곡 객체로 되돌린다.
+ * 곡이 하나라도 없으면(손상·옛 형식) null — 불러오지 않는다.
+ */
+export const hydrateDraft = (draft: any): Omit<WorldcupState, "phase"> | null => {
+  const p = draft?.progress as DraftProgress | null | undefined;
+  const tracks: TrackLike[] = Array.isArray(draft?.selected_tracks) ? draft.selected_tracks : [];
+  if (!p || p.v !== 1 || tracks.length === 0) return null;
+
+  const byId = new Map(tracks.map((t) => [t.id, t]));
+  let missing = false;
+  const pick = (id: string): TrackLike => {
+    const t = byId.get(id);
+    if (!t) missing = true;
+    return t as TrackLike;
+  };
+
+  const out = {
+    tracks,
+    currentRoundName: draft.current_round_name || "",
+    currentMatchIndex: draft.current_match_index || 0,
+    matches: p.matches.map(([a, b]) => [pick(a), pick(b)]),
+    winners: p.winners.map(pick),
+    eliminatedTracks: p.eliminated.map(pick),
+    skippedTracks: (p.skipped ?? []).map(pick),
+    picks: p.picks ?? [],
+  };
+  return missing ? null : out;
+};
+
+/** 만료 시각(ms). 플레이 단계가 아니면 null (만료 없음). */
+export const draftExpiresAt = (d: { status?: string; saved_at?: string | null; updated_at?: string }): number | null => {
+  if (d.status !== "playing" && d.status !== "pre_tournament") return null;
+  if (d.saved_at) return new Date(d.saved_at).getTime() + DRAFT_SAVED_TTL_MS;
+  return new Date(d.updated_at ?? 0).getTime() + DRAFT_BUFFER_TTL_MS;
+};
+
+export const isDraftExpired = (d: Parameters<typeof draftExpiresAt>[0]) => {
+  const at = draftExpiresAt(d);
+  return at !== null && at <= Date.now();
+};
+
+/** 홈·취향 스페이스 카드에 붙일 남은 시간 문구. 플레이 단계가 아니면 "". */
+export const formatDraftExpiry = (d: Parameters<typeof draftExpiresAt>[0] & { saved_at?: string | null }, locale: "ko" | "en") => {
+  const at = draftExpiresAt(d);
+  if (at === null) return "";
+  const left = Math.max(0, at - Date.now());
+  const h = Math.floor(left / 3600_000);
+  const m = Math.ceil((left % 3600_000) / 60_000);
+  const span = h >= 1 ? (locale === "en" ? `${h}h` : `${h}시간`) : (locale === "en" ? `${m}m` : `${m}분`);
+  if (d.saved_at) return locale === "en" ? `saved · ${span} left` : `임시저장 · ${span} 남음`;
+  return locale === "en" ? `auto-saved · gone in ${span}` : `자동저장 · ${span} 후 삭제`;
+};
+
+/**
+ * 진행 상태 저장. `confirm` 이면 임시저장(확정)으로 `saved_at` 을 찍는다.
+ * 자동저장은 `saved_at` 을 페이로드에서 빼서 upsert 가 건드리지 않게 한다.
+ * `withTracks` 는 곡 객체(`selected_tracks`)까지 다시 쓴다 — 판 시작 시 한 번, 확정 시 한 번이면 된다.
+ */
+export const saveWorldcupDraft = async (
+  state: WorldcupState,
+  opts: { confirm?: boolean; withTracks?: boolean },
+  selectedArtists: any[],
+  isSingleArtist: boolean,
+  title = "내 음악 월드컵"
+): Promise<boolean> => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return false;
 
-  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
-
-  const draftData = {
+  const now = new Date().toISOString();
+  const row: Record<string, unknown> = {
     user_id: user.id,
-    is_single_artist: isSingle,
+    is_single_artist: isSingleArtist,
     title,
-    status: progressState.phase === 'pre-tournament' ? 'pre_tournament' : 'playing',
+    status: 'playing',
     selected_artists: selectedArtists,
-    selected_tracks: selectedTracks,
-    phase: progressState.phase,
-    current_round_name: progressState.currentRoundName,
-    current_match_index: progressState.currentMatchIndex,
-    bye_count: progressState.byeCount,
-    tracks: progressState.tracks,
-    matches: progressState.matches,
-    winners: progressState.winners,
-    eliminated_tracks: progressState.eliminatedTracks,
-    skipped_tracks: progressState.skippedTracks ?? [],
-    selected_byes: Array.from(progressState.selectedByes || []),
-    updated_at: new Date().toISOString()
+    phase: state.phase,
+    current_round_name: state.currentRoundName,
+    current_match_index: state.currentMatchIndex,
+    progress: toCompact(state),
+    updated_at: now,
   };
+  if (opts.withTracks || opts.confirm) row.selected_tracks = state.tracks;
+  if (opts.confirm) row.saved_at = now;
 
   const { error } = await supabase
     .from('tournament_drafts')
-    .upsert(draftData, { onConflict: 'user_id' });
+    .upsert(row, { onConflict: DRAFT_KEY });
 
   if (error) {
     console.error("[Supabase DB] Error saving tournament progress:", error.message);
+    return false;
   }
+  return true;
 };
 
-// Load active draft journey
-export const loadActiveDraft = async (isSingleArtist?: boolean) => {
+// Load active draft for one mode. 만료된 플레이 초안은 지우고 null.
+export const loadActiveDraft = async (isSingleArtist: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const query = supabase
+  const { data, error } = await supabase
     .from('tournament_drafts')
     .select('*')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('is_single_artist', isSingleArtist)
+    .limit(1);
 
-  if (isSingleArtist !== undefined) {
-    query.eq('is_single_artist', isSingleArtist);
-  }
-
-  const { data, error } = await query;
   if (error || !data || data.length === 0) {
     return null;
   }
 
-  return data[0];
+  const draft = data[0];
+  if (isDraftExpired(draft)) {
+    await deleteActiveDraft(isSingleArtist);
+    return null;
+  }
+  return draft;
 };
 
-// Delete active draft
-export const deleteActiveDraft = async (isSingleArtist?: boolean) => {
+// Delete active draft for one mode
+export const deleteActiveDraft = async (isSingleArtist: boolean) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const query = supabase
+  const { error } = await supabase
     .from('tournament_drafts')
     .delete()
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('is_single_artist', isSingleArtist);
 
-  if (isSingleArtist !== undefined) {
-    query.eq('is_single_artist', isSingleArtist);
-  }
-
-  const { error } = await query;
   if (error) {
     console.error("[Supabase DB] Error deleting active draft:", error.message);
   }
@@ -179,14 +283,15 @@ export const deleteActiveDraft = async (isSingleArtist?: boolean) => {
 
 // Save completed tournament results
 export const saveCompletedResult = async (
-  finalWinners: any[], 
-  eliminatedTracks: any[], 
+  finalWinners: any[],
+  eliminatedTracks: any[],
   title: string,
   options?: {
     isPublic?: boolean;
     isSingleArtist?: boolean;
     artistId?: string | null;
     artistName?: string | null;
+    picks?: DraftPick[];
   }
 ) => {
   const supabase = createClient();
@@ -219,6 +324,7 @@ export const saveCompletedResult = async (
     winner_track_image: winner.albumImage || "",
     total_candidates: fullRanking.length,
     ranking: fullRanking,
+    picks: options?.picks ?? [],
     is_public: options?.isPublic ?? true,
     is_single_artist: options?.isSingleArtist ?? false,
     artist_id: options?.artistId ?? null,
@@ -238,8 +344,8 @@ export const saveCompletedResult = async (
     return { success: false, error: insertError };
   }
 
-  // Once saved successfully, clear the draft
-  await deleteActiveDraft();
+  // Once saved successfully, clear the draft (of this mode only)
+  await deleteActiveDraft(options?.isSingleArtist ?? false);
   return { success: true, id: data?.id };
 };
 
@@ -270,7 +376,7 @@ export const overwriteCompletedResult = async (
   finalWinners: any[],
   eliminatedTracks: any[],
   title: string,
-  options?: { isPublic?: boolean }
+  options?: { isPublic?: boolean; isSingleArtist?: boolean; picks?: DraftPick[] }
 ) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -301,6 +407,7 @@ export const overwriteCompletedResult = async (
     winner_track_image: winner.albumImage || "",
     total_candidates: fullRanking.length,
     ranking: fullRanking,
+    picks: options?.picks ?? [],
     is_public: options?.isPublic ?? true,
     user_nickname: userNickname,
     user_profile_image: userProfileImage,
@@ -317,7 +424,7 @@ export const overwriteCompletedResult = async (
     return { success: false, error };
   }
 
-  // Once saved successfully, clear the draft
-  await deleteActiveDraft();
+  // Once saved successfully, clear the draft (of this mode only)
+  await deleteActiveDraft(options?.isSingleArtist ?? true);
   return { success: true, id: resultId };
 };
