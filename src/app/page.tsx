@@ -566,8 +566,10 @@ export default function Home() {
           >
             <span className="h-1.5 w-1.5 rounded-full bg-point animate-pulse" />
             어드민 페이지로 이동
+            {/* 글자 크기는 토큰만 쓴다(typography.md 최소 12px). 면은 point-ink —
+                point(#E67E22) 위 흰 글자는 2.4:1 라 작은 글자 기준 4.5:1 에 못 미친다(color.md). */}
             {newFeedbackCount > 0 && (
-              <span className="ml-0.5 px-2 py-0.5 rounded-full bg-point text-white text-[10px] font-bold leading-none">
+              <span className="ml-0.5 px-2 py-0.5 rounded-full bg-point-ink text-white type-caption font-semibold">
                 새 의견 {newFeedbackCount}
               </span>
             )}
