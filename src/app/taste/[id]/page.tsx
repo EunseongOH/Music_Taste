@@ -35,6 +35,7 @@ const translations = {
     allRanks: "전체 순위",
     count: (n: number) => `${n}곡`,
     ctaCreate: "나도 취향표 만들기",
+    ctaTogether: "이 곡들로 같이 소트하기",
     ctaArchive: "우리의 취향 아카이브 보기",
     nicknameDefault: "리스너",
     back: "뒤로 가기",
@@ -50,6 +51,7 @@ const translations = {
     allRanks: "Full ranking",
     count: (n: number) => `${n} songs`,
     ctaCreate: "Make my own taste card",
+    ctaTogether: "Sort these songs together",
     ctaArchive: "Browse the taste archive",
     nicknameDefault: "Listener",
     back: "Go back",
@@ -229,6 +231,16 @@ export default function TasteSharedPage() {
             className={`${primaryButton} w-full`}
           >
             {t.ctaCreate}
+          </button>
+          {/*
+            * 같은 아티스트를 좋아하는 사람에게 건네진 링크다 — 여기서 "나도 같은 곡으로"가
+            * 가장 자연스럽다. 곡 세트는 만들기 화면이 ?from= 으로 읽어 온다.
+            */}
+          <button
+            onClick={() => router.push(`/together/new?from=${result.id}`)}
+            className={`${secondaryButton} w-full`}
+          >
+            {t.ctaTogether}
           </button>
           <button onClick={() => router.push("/archive")} className={`${secondaryButton} w-full`}>
             {t.ctaArchive}
