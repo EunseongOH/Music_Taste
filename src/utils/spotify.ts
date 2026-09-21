@@ -454,20 +454,10 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
       }
     }
 
-    // 2. Search in temp_artists.json
-    try {
-      const tempArtists = require("../../temp_artists.json");
-      for (const artist of tempArtists) {
-        if (artist.name.toLowerCase().includes(lowercaseQuery)) {
-          matchedArtists.set(artist.id, {
-            id: artist.id,
-            name: artist.name,
-            images: artist.images,
-            popularity: artist.popularity || 50
-          });
-        }
-      }
-    } catch (e) {}
+    // temp_artists.json 을 읽던 자리다. 그 파일은 .gitignore 대상이라 운영에도 develop 에도 없고
+    // 개발자 한 명의 폴더에만 있었다. 즉 아무 데서도 동작하지 않으면서 dev 서버에
+    // module-not-found 경고만 냈다. 들어 있던 60명은 전부 이미 우리 DB 에 있고(2026-09-22 확인),
+    // 바로 앞의 searchDbArtists 가 2,800팀을 뒤지므로 남길 이유가 없다.
 
     const results = Array.from(matchedArtists.values());
     return results.slice(offset, offset + limit);
