@@ -102,6 +102,22 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const cors = corsHeaders(request.headers.get("origin"));
   const { searchParams } = new URL(request.url);
+
+  /*
+   * `?servable=1` — 지금 곡까지 낼 수 있는 아티스트의 id 목록.
+   *
+   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 이 목록에 있는 아티스트를 누르면
+   * DB 에 곡이 있어 Spotify 를 부르지 않고 바로 뜬다. 지금 67명이라 통째로 보내도 가볍다.
+   */
+  if (searchParams.get("servable") === "1") {
+    const { data } = await createAdminClient()
+      .from("together_artist_catalog")
+      .select("id")
+      .gte("track_count", MIN_TRACKS)
+      .limit(500);
+    return NextResponse.json({ ids: (data ?? []).map((r) => (r as { id: string }).id) }, { headers: cors });
+  }
+
   const q = searchParams.get("q")?.trim() ?? "";
   const artistId = searchParams.get("artistId")?.trim() ?? "";
   const supabase = createAdminClient();
