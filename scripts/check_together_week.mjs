@@ -22,7 +22,7 @@ const pick = (pool, week) => {
   const start = (week * PICK_SIZE) % pool.length;
   return [...pool.slice(start), ...pool.slice(0, start)].slice(0, PICK_SIZE);
 };
-const pool = Array.from({ length: 23 }, (_, i) => `a${i}`); // 실측 풀 크기(2026-09-21)
+const pool = Array.from({ length: 22 }, (_, i) => `a${i}`); // 실측 풀 크기(2026-09-21)
 const seen = new Set();
 for (let w = 0; w < 40; w++) {
   const got = pick(pool, w);
@@ -35,4 +35,21 @@ assert.equal(seen.size, pool.length, '몇 주 지나면 풀 전체가 한 번씩
 // 3) 풀이 묶음보다 작으면 라우트는 이 경로로 오지 않는다(기존 목록으로 떨어진다).
 assert.ok(pool.length >= PICK_SIZE, '이 검사는 풀이 12명 이상일 때를 본다');
 
-console.log('OK: 주차 계산 · 순환 노출 모두 통과');
+// 3) 한글 검색어를 영문 이름으로 옮기는 규칙 (catalog/route.ts 의 altNames 와 같은 식).
+//    데이터가 아니라 규칙을 본다 — 실제 맵은 TS 쪽에 있다.
+const MAP = { '까치산': 'Kachisan', '김승주': 'kimseungjoo', '라쿠나': 'Lacuna' };
+const altNames = (q) => {
+  const key = q.trim().toLowerCase();
+  const direct = MAP[key] ?? MAP[q.trim()];
+  if (direct) return [direct];
+  if (key.length < 2) return [];
+  const hit = Object.keys(MAP).find((k) => k.includes(key) || key.includes(k));
+  return hit ? [MAP[hit]] : [];
+};
+assert.deepEqual(altNames('까치산'), ['Kachisan'], '그대로 맞으면 영문 이름이 나온다');
+assert.deepEqual(altNames('  까치산 '), ['Kachisan'], '앞뒤 공백은 무시한다');
+assert.deepEqual(altNames('까치'), ['Kachisan'], '일부만 쳐도 잡힌다');
+assert.deepEqual(altNames('없는아티스트'), [], '맵에 없으면 빈 배열 — 원래 검색어로만 찾는다');
+assert.deepEqual(altNames('아'), [], '한 글자는 아무 이름에나 걸리므로 보지 않는다');
+
+console.log('OK: 주차 계산 · 순환 노출 · 한글 이름 매핑 모두 통과');

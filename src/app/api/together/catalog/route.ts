@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { ARTIST_TRANSLATION_MAP } from "@/utils/artistNames";
 import { corsHeaders, preflight } from "../../toss/cors";
 
 /**
@@ -42,10 +43,29 @@ interface CatalogRow {
 const MIN_TRACKS = 8;
 
 /**
+ * 한글로 쳐도 영문으로 등록된 아티스트가 잡히게 한다.
+ *
+ * 이 뷰의 `name` 은 Spotify 가 준 이름 하나뿐이라, 한국 아티스트도 영문으로만 들어 있는
+ * 경우가 많다(까치산 → `KACHISAN`, 김승주 → `kimseungjoo`, 라쿠나 → `Lacuna`).
+ * 본 검색(`utils/spotify.ts`)은 같은 맵을 거치는데 여기만 빠져 있어서, 한글로 치면
+ * 아무것도 안 나왔다. 부분 일치까지 본 검색과 같은 규칙을 쓴다.
+ *
+ * 더 넓히려면 `canonical_artist.name_ko` 를 같이 보면 된다 — 이 맵은 356 쌍뿐이다.
+ */
+function altNames(q: string): string[] {
+  const key = q.trim().toLowerCase();
+  const direct = ARTIST_TRANSLATION_MAP[key] ?? ARTIST_TRANSLATION_MAP[q.trim()];
+  if (direct) return [direct];
+  if (key.length < 2) return [];
+  const hit = Object.keys(ARTIST_TRANSLATION_MAP).find((k) => k.includes(key) || key.includes(k));
+  return hit ? [ARTIST_TRANSLATION_MAP[hit]] : [];
+}
+
+/**
  * 검색 전 첫 화면에 올리는 "이번주 소트 추천 아티스트".
  *
  * 전곡이 다 있는 아티스트만 올린다 — 추천해 놓고 들어갔더니 곡이 비면 안 된다.
- * 그 풀이 지금 23명뿐이라(2026-09-21 실측) 한 번에 18명을 보여주면 매주 바꿔도
+ * 그 풀이 지금 22명뿐이라(2026-09-21 실측) 한 번에 18명을 보여주면 매주 바꿔도
  * 얼굴이 거의 안 바뀐다. 그래서 12명씩 끊어 주마다 다음 묶음으로 넘긴다.
  *
  * 풀이 넉넉해지면 PICK_SIZE 를 올리면 되고, 소트 횟수 지표가 쌓이면 아래 정렬을
@@ -171,7 +191,12 @@ export async function GET(request: Request) {
     .order("coverage", { ascending: false })
     .order("track_count", { ascending: false })
     .limit(q ? 20 : 18);
-  if (q) query = query.ilike("name", `%${q}%`);
+  if (q) {
+    // 쉼표는 or() 의 구분자라 값에 들어가면 안 된다. 괄호·점도 같이 턴다.
+    const safe = (v: string) => v.replace(/[,().]/g, " ").trim();
+    const terms = [q, ...altNames(q)].map(safe).filter(Boolean);
+    query = query.or(terms.map((t) => `name.ilike.%${t}%`).join(","));
+  }
 
   // coverage 는 순서로만 쓴다 — 화면에 확보율을 적지 않는다(없는 쪽을 먼저 알리는 꼴이 된다).
   const { data: artists } = await query;
