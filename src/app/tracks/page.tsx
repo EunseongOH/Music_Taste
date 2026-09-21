@@ -168,6 +168,27 @@ const getYouTubeVideoId = (url: string) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+/**
+ * 머리말에 적는 "N Tracks". 월드컵에 실제로 올라가는 곡 수와 같아야 한다.
+ *
+ * 앨범이 말하는 곡 수(total_tracks)를 그냥 더하면 안 된다. 같은 곡을 리패키지·라이브·
+ * 일본어판으로 여러 번 낸 아이돌은 그 수가 실제로 고를 수 있는 곡 수보다 훨씬 크다.
+ * "전체 선택"과 같은 규칙(songKey)으로 세야 머리말과 시작 버튼의 숫자가 맞는다.
+ * 아직 수록곡을 안 받은 앨범은 셀 방법이 없으니 앨범이 말하는 수를 그대로 더한다.
+ */
+function countDistinctTracks(artist: ArtistGroup): number {
+  const keys = new Set<string>();
+  let unloaded = 0;
+  for (const album of artist.allAlbums || artist.albums) {
+    if (!album) continue;
+    if (!album.tracks.length) { unloaded += album.totalTracks || 0; continue; }
+    for (const t of album.tracks) keys.add(songKey(artist.name, t.title));
+  }
+  // 미발매곡은 "전체 선택"이 중복을 가리지 않고 통째로 넣는다. 세는 쪽도 똑같이 한다
+  const unreleased = (artist.unreleasedAlbums ?? []).reduce((n, a) => n + a.tracks.length, 0);
+  return keys.size + unloaded + unreleased;
+}
+
 export default function TracksPage() {
   const { user } = useAuth();
   const supabase = createClient();
@@ -1436,11 +1457,7 @@ export default function TracksPage() {
                            {loadingAlbums.has(`artist_${artist.id}`)
                              ? t.albumLoading
                              : artist.albumsLoaded
-                               ? `${
-                                    artist.allAlbums 
-                                      ? artist.allAlbums.reduce((acc, a) => acc + (a ? (a.totalTracks || a.tracks.length) : 0), 0)
-                                      : artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)
-                                  } Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
+                               ? `${countDistinctTracks(artist)} Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
                                : t.openAlbums}
                          </p>
                       </div>
