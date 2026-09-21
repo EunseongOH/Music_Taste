@@ -353,6 +353,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
 | `/genres` 색인 손실 | 302 리다이렉트로 사람은 `/explore?mode=single` 로 보내고 주소는 살려 둔다(404 아님, §12.1) |
 | **단일 모드 퍼널 지표 공백** — `funnel_artist_complete` 는 지금 믹스 매치 도크에서만 발화한다(`explore:1101`). 믹스를 내리면 이 이벤트가 0이 된다 | P1 에서 단일 모드 확정 시점(`pendingSingleArtist` 확인)에 같은 이벤트를 추가 |
 | 되돌릴 일이 생김 | §10, 5분 작업 |
+| **미적용 마이그레이션이 main 에 걸려 있다** — `20260921100200_worldcup_draft_mode_ttl.sql`(초안 유니크 키를 `user_id` 단독 → `user_id,is_single_artist` 로 바꾸고 만료 cron 추가)이 운영 DB 에 **아직 안 들어갔다**. main 의 옛 코드가 `onConflict 'user_id'` 를 쓰기 때문에 순서가 틀리면 초안 저장이 깨진다 | P9(main 반영) 때 **코드와 같이** 적용한다. 이 계획의 DB 무변경 원칙과 별개인 선행 부채다 |
 
 ---
 
@@ -470,6 +471,23 @@ setIsSingleArtistMode(!MIX_MATCH || params.get("mode") === "single");
 **건드리지 않는 것**: `genres/page.tsx`, `genres/layout.tsx`, `curatedArtists.ts`, `worldcupDb.ts`, 아카이브·탐색의 "믹스 매치" 뱃지, DB.
 
 **같은 커밋에 SEO 도 함께**: §13.1 (sitemap·JSON-LD·worldcup 메타). `/together` 색인 열기(§13.2)는 진입점을 붙이는 P4 에서 한다 — 진입점이 없는 채로 색인만 열면 빈 화면이 검색에 뜬다.
+
+### A-4. `page.tsx` 를 건드릴 때 깨면 안 되는 것 (다른 세션 확인 2026-09-21)
+
+이 파일은 최근 두 세션이 크게 고쳤다. 카드 배열을 다시 짜면서 아래를 되돌리지 않는다.
+
+1. **모드 카드의 배지·제목·설명·태그라인은 사용자가 직접 확정한 문구**(`30f331a`). 카드를 재배치해도 **문장은 그대로** 옮긴다. 새로 쓰지 않는다.
+2. "새로 시작할까요?" 는 카드 팝업이 아니라 **`SpaceUI.Sheet`**(이어서 하기 · 새로 시작)로 바뀌어 있다.
+3. `checkDrafts` 가 `isDraftExpired` 로 만료 초안을 걸러내고, "이어서 진행하기" 아래에 `formatDraftExpiry` 한 줄이 붙는다.
+4. **`handleRestore` 는 `worldcup_progress` 를 로컬에 쓰지 않고 지운다.** 월드컵 화면이 DB `progress` 열에서 직접 복원한다. 옛 블록을 되살리면 **빈 대진이 복원된다.**
+5. JSON-LD·푸터 링크 이름은 용어 사전(`ux-writing.md`)에 맞춰져 있다. 모드 이름은 **"최애 곡 소트하기" / Favorite Songs Sort**.
+6. `feat/canonical-db` 의 `f78c464` 가 같은 파일에 16줄을 더한다(어드민 버튼의 미처리 의견 배지: `countNewFeedback` import · `isAdmin` 상수 + `newFeedbackCount` state + effect · 버튼 조건 치환 · 배지 span). 충돌하면 **이 계획의 개편본을 기준으로 잡고 그 4개만 얹는다.**
+
+### A-5. 초안(draft) 격리 범위 — 확정
+
+`ProfileModal` 의 "진행 중인 월드컵" 목록은 **믹스 매치 초안을 그대로 보여 주고 `/worldcup` 으로 잇는다**(다른 세션 확인). 홈에서만 내리면 여기로 새어 들어간다.
+
+→ **격리 범위에 포함한다.** 홈과 같은 필터(`MIX_MATCH` 꺼짐이면 `is_single_artist === true` 만)를 `ProfileModal` 에도 적용한다. 초안 행은 DB 에 그대로 둔다(6건, 전부 8월 이전).
 
 ## 부록 B. P3 검사 편집 상세
 
