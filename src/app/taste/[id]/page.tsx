@@ -50,7 +50,7 @@ const translations = {
     loading: "공개된 취향표를 불러오는 중...",
     errorNotFound: "취향표를 찾을 수 없거나 비공개 상태입니다.",
     nicknameDefault: "음악팬",
-    singleDiscography: "최애 곡 줄 세우기",
+    singleDiscography: "최애 곡 소트하기",
     backBtn: "뒤로",
   },
   en: {
@@ -64,7 +64,7 @@ const translations = {
     loading: "Loading shared music taste card...",
     errorNotFound: "Taste card not found or it is set to private.",
     nicknameDefault: "Music Fan",
-    singleDiscography: "Favorite Songs Lineup",
+    singleDiscography: "Favorite Songs Sort",
     backBtn: "Back",
   }
 };

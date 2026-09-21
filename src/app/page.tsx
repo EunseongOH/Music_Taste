@@ -31,7 +31,7 @@ export default function Home() {
     {
       id: "single",
       badge: locale === "ko" ? "한 아티스트 전곡" : "Single Artist",
-      title: locale === "ko" ? "최애 곡 줄 세우기" : "Favorite Songs Lineup",
+      title: locale === "ko" ? "최애 곡 소트하기" : "Favorite Songs Sort",
       desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "Select a single artist and line up all of their tracks in the order of your choice.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/explore?mode=single"
@@ -324,7 +324,7 @@ export default function Home() {
               {
                 "@type": "SiteNavigationElement",
                 "position": 2,
-                "name": "최애 곡 줄 세우기 (Favorite Songs Lineup)",
+                "name": "최애 곡 소트하기 (Favorite Songs Sort)",
                 "description": "한 명의 아티스트를 선택해 전곡을 내 마음에 드는 순서대로 정렬합니다.",
                 "url": "https://sortify.kr/genres?mode=single"
               },
@@ -591,7 +591,7 @@ export default function Home() {
           </li>
           <li>
             <Link href="/explore?mode=single" className="hover:text-point transition-colors">
-              최애 곡 줄 세우기
+              최애 곡 소트하기
             </Link>
           </li>
           <li>

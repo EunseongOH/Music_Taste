@@ -99,7 +99,7 @@ const translations = {
     viewDetail: "전체 취향 순위 보기",
     allArtists: "모든 아티스트",
     nicknameDefault: "음악팬",
-    singleDiscography: "최애 곡 줄 세우기",
+    singleDiscography: "최애 곡 소트하기",
     loading: "정보를 불러오는 중...",
     
     // Tabs & Unreleased Song features
@@ -175,7 +175,7 @@ const translations = {
     viewDetail: "View Complete Tastes",
     allArtists: "All Artists",
     nicknameDefault: "Music Fan",
-    singleDiscography: "Favorite Songs Lineup",
+    singleDiscography: "Favorite Songs Sort",
     loading: "Loading archive info...",
     
     // Tabs & Unreleased Song features
