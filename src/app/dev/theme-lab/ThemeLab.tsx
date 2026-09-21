@@ -23,7 +23,8 @@ import {
   useToast,
 } from "@/components/space/SpaceUI";
 import FeedbackModal from "@/components/FeedbackModal";
-import Studies, { type TurntableLook } from "./Studies";
+import Studies, { type LabelStyle } from "./Studies";
+import type { GlowLevel } from "@/components/home/ModeCard";
 import HomePreview from "./HomePreview";
 
 const THEMES = [
@@ -146,7 +147,8 @@ export default function ThemeLab() {
   const [sheet, setSheet] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [feedback, setFeedback] = useState(false);
-  const [look, setLook] = useState<TurntableLook>("light");
+  const [glow, setGlow] = useState<GlowLevel>("faint");
+  const [label, setLabel] = useState<LabelStyle>("neutral");
   const { toast, showToast } = useToast();
 
   const readVars = useCallback(() => {
@@ -387,14 +389,25 @@ export default function ThemeLab() {
         <p className="type-sub text-navy/70 break-keep">
           실제로 갈아 끼울 카드 컴포넌트(ModeCard) 네 장이에요. 옆으로 넘겨 보세요. 지금 톤에서는 운영 홈과 같은 카드로 보여요.
         </p>
-        <div className="flex gap-2">
-          {([["light", "턴테이블 1안 · 밝은 판"], ["dark", "턴테이블 2안 · 어두운 판"]] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setLook(id)} className={`${look === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2">
+          <p className="type-caption text-navy/70">카드 빛의 세기</p>
+          <div className="flex gap-2">
+            {([["full", "100%"], ["half", "50%"], ["faint", "30%"]] as const).map(([id, text]) => (
+              <button key={id} onClick={() => setGlow(id)} className={`${glow === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
+                {text}
+              </button>
+            ))}
+          </div>
+          <p className="type-caption text-navy/70 mt-1">턴테이블 라벨 (재킷이 없을 때)</p>
+          <div className="flex gap-2">
+            {([["neutral", "A · 중립 면 + 주황 점"], ["small", "B · 작은 주황 라벨"]] as const).map(([id, text]) => (
+              <button key={id} onClick={() => setLabel(id)} className={`${label === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
+                {text}
+              </button>
+            ))}
+          </div>
         </div>
-        <HomePreview look={look} />
+        <HomePreview glow={glow} label={label} />
       </section>
 
       {/* 카드·턴테이블 시안 */}

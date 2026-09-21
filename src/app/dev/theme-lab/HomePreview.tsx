@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState } from "react";
-import ModeCard from "@/components/home/ModeCard";
-import { TurntableStudy, type TurntableLook } from "./Studies";
+import ModeCard, { type GlowLevel } from "@/components/home/ModeCard";
+import { Turntable1, type LabelStyle } from "./Studies";
 
 const MODES = [
   { badge: "아티스트 한 명", title: "최애 곡 소트하기", desc: "한 아티스트의 전곡을 비교하며, 내가 더 좋아하는 곡을 찾아보세요.", btn: "시작하기" },
@@ -18,7 +18,7 @@ const MODES = [
   { badge: "모두의 취향표", title: "우리의 취향 아카이브", desc: "다른 리스너는 어떤 곡을 더 좋아했을까요? 다양한 취향표를 구경해보세요.", btn: "구경하기" },
 ];
 
-export default function HomePreview({ look }: { look: TurntableLook }) {
+export default function HomePreview({ glow, label }: { glow: GlowLevel; label: LabelStyle }) {
   const [active, setActive] = useState(0);
   const track = useRef<HTMLDivElement>(null);
 
@@ -47,7 +47,7 @@ export default function HomePreview({ look }: { look: TurntableLook }) {
         >
           {MODES.map((m, i) => (
             <div key={m.title} className="w-full px-4 shrink-0 snap-center flex justify-center">
-              <ModeCard badge={m.badge} title={m.title} desc={m.desc} tone={i} />
+              <ModeCard badge={m.badge} title={m.title} desc={m.desc} tone={i} glow={glow} />
             </div>
           ))}
         </div>
@@ -69,7 +69,8 @@ export default function HomePreview({ look }: { look: TurntableLook }) {
         </button>
 
         <div className="w-full mt-10 px-1">
-          <TurntableStudy look={look} />
+          {/* 홈에서는 장식이다 — quiet */}
+          <Turntable1 emphasis="quiet" label={label} />
         </div>
       </div>
     </div>

@@ -12,13 +12,27 @@
  * page.tsx 는 canonical 통합이 끝난 뒤 카드 <div> 를 이 컴포넌트로 갈아 끼운다(그 파일은 지금 수정 금지).
  */
 
-/** 카드마다 빛의 색과 자리를 조금씩 달리한다. 전부 로고 안의 색이다. 과하지 않게 — 색상만 옮기고 세기는 같다. */
+/** 카드마다 빛의 색과 자리를 조금씩 달리한다. 전부 로고 안의 색이다. top·right 는 px. */
 const GLOWS = [
-  { bg: "linear-gradient(135deg, #A0F0FC 0%, #4C9EFE 45%, #4063FB 100%)", pos: "-top-16 -right-14" },
-  { bg: "linear-gradient(135deg, #81F0F8 0%, #4C9EFE 60%, #6577FD 100%)", pos: "-top-20 -right-8" },
-  { bg: "linear-gradient(135deg, #A0F0FC 0%, #6577FD 55%, #4063FB 100%)", pos: "-top-14 -right-20" },
-  { bg: "linear-gradient(135deg, #4C9EFE 0%, #81F0F8 50%, #A0F0FC 100%)", pos: "-top-16 -right-12" },
+  { bg: "linear-gradient(135deg, #A0F0FC 0%, #4C9EFE 45%, #4063FB 100%)", top: -64, right: -56 },
+  { bg: "linear-gradient(135deg, #81F0F8 0%, #4C9EFE 60%, #6577FD 100%)", top: -80, right: -32 },
+  { bg: "linear-gradient(135deg, #A0F0FC 0%, #6577FD 55%, #4063FB 100%)", top: -56, right: -80 },
+  { bg: "linear-gradient(135deg, #4C9EFE 0%, #81F0F8 50%, #A0F0FC 100%)", top: -64, right: -48 },
 ] as const;
+
+/**
+ * 빛의 세기. 사용자 피드백(2026-09-22): "푸른 로고 색의 빛을 좀 더 연하게, 덜" — 흰 면이 주인이고 빛은 모서리에 비치는 정도.
+ * 농도와 면적을 같이 줄이고, 줄인 만큼 모서리 쪽으로 더 민다.
+ *  - full : 첫 시안. 카드 오른쪽 절반이 파랗게 읽힌다 (비교용)
+ *  - half : 농도 0.70 → 0.40, 지름 208 → 168
+ *  - faint: 농도 0.70 → 0.26, 지름 208 → 140  ← 기본
+ */
+export type GlowLevel = "full" | "half" | "faint";
+const LEVELS: Record<GlowLevel, { size: number; opacity: number; push: number }> = {
+  full: { size: 208, opacity: 0.7, push: 0 },
+  half: { size: 168, opacity: 0.4, push: 12 },
+  faint: { size: 140, opacity: 0.26, push: 20 },
+};
 
 const DOT = "linear-gradient(135deg, #FDA84B 0%, #FE7045 100%)";
 
@@ -27,14 +41,18 @@ export default function ModeCard({
   title,
   desc,
   tone = 0,
+  glow = "faint",
 }: {
   badge: string;
   title: string;
   desc: string;
   /** 몇 번째 카드인지. 빛의 색만 달라진다. */
   tone?: number;
+  /** 새 테마에서 빛의 세기. legacy 에서는 빛 자체가 없다. */
+  glow?: GlowLevel;
 }) {
-  const glow = GLOWS[tone % GLOWS.length];
+  const g = GLOWS[tone % GLOWS.length];
+  const lv = LEVELS[glow];
   return (
     <div
       className={
@@ -46,7 +64,11 @@ export default function ModeCard({
       }
     >
       {/* 빛과 주황 점은 새 테마에서만 */}
-      <span aria-hidden className={`hidden newtone:block absolute ${glow.pos} w-52 h-52 rounded-full opacity-70 blur-2xl`} style={{ background: glow.bg }} />
+      <span
+        aria-hidden
+        className="hidden newtone:block absolute rounded-full blur-2xl"
+        style={{ background: g.bg, width: lv.size, height: lv.size, opacity: lv.opacity, top: g.top - lv.push, right: g.right - lv.push }}
+      />
       <span aria-hidden className="hidden newtone:block absolute top-7 right-8 w-7 h-7 rounded-full blur-[2px] opacity-90" style={{ background: DOT }} />
 
       {/* Mode Card Header Badge */}
