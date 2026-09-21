@@ -220,7 +220,7 @@ export default function TogetherNewPage() {
       <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-12">
         <h1 className="type-title-1 text-navy">같이 할 준비가 됐어요</h1>
         <p className="type-body text-navy/70 mt-2 break-keep">
-          옆 사람에게 코드를 알려 주거나 링크를 보내세요.{"\n"}같은 곡으로 줄 세우면 서로의 일치율이 보여요.
+          옆 사람에게 코드를 알려 주거나 링크를 보내세요.{"\n"}같은 곡으로 소트하면 서로의 일치율이 보여요.
         </p>
 
         <div className="mt-8 flex flex-col items-center gap-2 py-6 rounded-3xl bg-navy/5">
@@ -232,7 +232,7 @@ export default function TogetherNewPage() {
         <div className="mt-6 flex flex-col gap-2">
           <button
             onClick={async () => {
-              const shared = await platform.share({ title: "같이 소트하기", text: `${title} — 같은 곡으로 줄 세워 봐요`, url: link });
+              const shared = await platform.share({ title: "같이 소트하기", text: `${title} — 같은 곡으로 소트해 봐요`, url: link });
               if (!shared) {
                 const how = await platform.copyText(link);
                 showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
@@ -252,7 +252,7 @@ export default function TogetherNewPage() {
             링크 복사하기
           </button>
           <button onClick={() => router.push(`/together/${madeCode}`)} className={`${secondaryButton} w-full`}>
-            나도 줄 세우러 가기
+            나도 소트하러 가기
           </button>
         </div>
         <Toast toast={toast} />
@@ -347,7 +347,7 @@ export default function TogetherNewPage() {
       {prevSources.length > 0 && (
         <>
           <SectionTitle title="이미 한 소트에서 가져오기" className="mt-10 mb-1" />
-          <p className="type-caption text-navy/60 mb-2">그때 줄 세웠던 곡 그대로 같이 해 볼 수 있어요.</p>
+          <p className="type-caption text-navy/60 mb-2">그때 소트했던 곡 그대로 같이 해 볼 수 있어요.</p>
           <ul className="flex flex-col divide-y divide-navy/10">
             {prevSources.map((item) => (
               <li key={item.key}>
@@ -406,7 +406,7 @@ export default function TogetherNewPage() {
             >
               전부 끄기
             </button>
-            {chosen.length > 48 && <span className="type-caption text-point-ink">곡이 많으면 줄 세우는 데 오래 걸려요</span>}
+            {chosen.length > 48 && <span className="type-caption text-point-ink">곡이 많으면 소트하는 데 오래 걸려요</span>}
           </div>
 
           <ul className="flex flex-col divide-y divide-navy/10">

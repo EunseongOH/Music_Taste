@@ -212,7 +212,7 @@ export default function WorldCupPage() {
         } else {
           setTracks(parsedTracks);
           if (parsedTracks.length < 4) {
-               alert(getSafeLocale() === "en" ? 'You need at least 4 tracks to start the World Cup.' : '월드컵을 하려면 최소 4곡을 골라야 해요.');
+               alert(getSafeLocale() === "en" ? 'You need at least 4 tracks to start the World Cup.' : '소트하려면 곡을 4개 이상 골라 주세요.');
                router.replace("/tracks");
                return;
           }
@@ -710,7 +710,7 @@ export default function WorldCupPage() {
         const round = getLocalizedRoundName(currentRoundName, locale);
         const canSave = !isChallenge;
         const t = locale === "en" ? {
-          title: "Leave the World Cup?",
+          title: "Stop sorting?",
           desc: canSave
             ? `You're at ${round} of ${total}.\nSave to keep it for 24 hours, or leave and lose it.`
             : `You're at ${round} of ${total}.\nLeaving now discards your picks.`,
@@ -719,7 +719,7 @@ export default function WorldCupPage() {
           keep: "Keep playing",
           saving: "Saving…",
         } : {
-          title: "월드컵을 그만둘까요?",
+          title: "소트를 그만둘까요?",
           desc: canSave
             ? `${total}강 중 ${round}까지 진행했어요.\n임시저장하면 24시간 동안 보관되고, 저장하지 않으면 진행 내역이 사라져요.`
             : `${total}강 중 ${round}까지 진행했어요.\n나가면 지금까지 고른 곡이 저장되지 않아요.`,

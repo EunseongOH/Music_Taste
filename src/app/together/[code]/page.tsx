@@ -90,12 +90,12 @@ export default function TogetherInvitePage() {
       <p className="type-caption text-navy/70">같이 소트하기</p>
       <h1 className="type-title-1 text-navy mt-1 break-keep">{challenge.title}</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
-        {creator}님이 고른 {challenge.tracks.length}곡이에요.{"\n"}같은 곡으로 줄 세우면 서로 얼마나 비슷한지 볼 수 있어요.
+        {creator}님이 고른 {challenge.tracks.length}곡이에요.{"\n"}같은 곡으로 소트하면 서로 얼마나 비슷한지 볼 수 있어요.
       </p>
 
       <div className="mt-6 flex flex-col gap-2">
         <p className="type-caption text-navy/70">
-          지금까지 {entries.length}명이 줄 세웠어요{entries.length > 0 ? " · 몇 초마다 새로 확인해요" : ""}
+          지금까지 {entries.length}명이 소트했어요{entries.length > 0 ? " · 몇 초마다 새로 확인해요" : ""}
         </p>
         {entries.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
@@ -109,7 +109,7 @@ export default function TogetherInvitePage() {
         <button
           onClick={async () => {
             const link = `${window.location.origin}/together/${challenge.code}`;
-            const shared = await platform.share({ title: "같이 소트하기", text: `${challenge.title} — 같은 곡으로 줄 세워 봐요`, url: link });
+            const shared = await platform.share({ title: "같이 소트하기", text: `${challenge.title} — 같은 곡으로 소트해 봐요`, url: link });
             if (!shared) {
               const how = await platform.copyText(link);
               showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
@@ -136,7 +136,7 @@ export default function TogetherInvitePage() {
       <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
           <button onClick={start} className={`${primaryButton} w-full`}>
-            {mine ? "다시 줄 세우기" : "같은 곡으로 줄 세우기"}
+            {mine ? "다시 소트하기" : "같은 곡으로 소트하기"}
           </button>
           {mine && (
             <button onClick={() => router.push(`/together/${challenge.code}/result`)} className={`${secondaryButton} w-full`}>

@@ -34,7 +34,7 @@ export default function Home() {
       id: "single",
       badge: locale === "ko" ? "한 아티스트 전곡" : "Single Artist",
       title: locale === "ko" ? "최애 곡 줄 세우기" : "Favorite Songs Lineup",
-      desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "Select a single artist and line up all of their tracks in the order of your choice.",
+      desc: locale === "ko" ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 소트해보세요." : "Select a single artist and sort all of their tracks.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/explore?mode=single"
     },
@@ -95,9 +95,9 @@ export default function Home() {
   const t = {
     ko: {
       tagline1: "내 손안에서 깔끔하게 정리되는 음악 취향, Sortify",
-      tagline2: "좋아하는 음악을 나열하고, 나의 색깔을 증폭시켜 보세요.",
+      tagline2: "좋아하는 음악을 소트하고, 나의 색깔을 증폭시켜 보세요.",
       start: "시작하기",
-      continue: "이어서 진행하기",
+      continue: "이어서 소트하기",
       cancel: "취소",
       startNewBtn: "새로 시작",
     },
@@ -105,7 +105,7 @@ export default function Home() {
       tagline1: "Record your clearest taste.",
       tagline2: "List your music preferences and amplify them with your own colors.",
       start: "Start",
-      continue: "Continue Progress",
+      continue: "Continue sorting",
       cancel: "Cancel",
       startNewBtn: "Start New",
     }
@@ -330,7 +330,7 @@ export default function Home() {
                 "@type": "SiteNavigationElement",
                 "position": 2,
                 "name": "최애 곡 줄 세우기 (Favorite Songs Lineup)",
-                "description": "한 명의 아티스트를 선택해 전곡을 내 마음에 드는 순서대로 정렬합니다.",
+                "description": "한 명의 아티스트를 선택해 전곡을 소트합니다.",
                 "url": "https://sortify.kr/genres?mode=single"
               },
               {
@@ -551,7 +551,7 @@ export default function Home() {
         closeLabel={t.cancel}
         header={
           <>
-            <h2 className="type-title-1 text-navy">{locale === "en" ? "You have a World Cup in progress" : "진행 중인 월드컵이 있어요"}</h2>
+            <h2 className="type-title-1 text-navy">{locale === "en" ? "You have a sort in progress" : "진행 중인 소트가 있어요"}</h2>
             <p className="type-sub text-navy/70 mt-1 whitespace-pre-line break-keep">
               {(activeDraft && draftExpiresAt(activeDraft) !== null
                 ? `${activeDraft.current_round_name} · ${formatDraftExpiry(activeDraft, locale)}`
@@ -562,7 +562,7 @@ export default function Home() {
         }
         footer={
           <div className="flex flex-col gap-2">
-            <button onClick={() => { setShowRestoreModal(false); handleRestore(); }} className={`${primaryButton} w-full`}>{locale === "en" ? "Continue" : "이어서 하기"}</button>
+            <button onClick={() => { setShowRestoreModal(false); handleRestore(); }} className={`${primaryButton} w-full`}>{locale === "en" ? "Continue sorting" : "이어서 소트하기"}</button>
             <button onClick={handleStartNew} className={`${dangerButton} w-full`}>{t.startNewBtn}</button>
           </div>
         }

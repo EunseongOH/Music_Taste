@@ -117,7 +117,7 @@ export default function ExplorePage() {
   const t = {
     ko: {
       title: isSingleArtistMode ? "최애 아티스트를 선택해 주세요" : "어떤 아티스트를 좋아하시나요?",
-      desc: isSingleArtistMode ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "최소 3명의 아티스트를 선택해 주세요.",
+      desc: isSingleArtistMode ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 소트해보세요." : "최소 3명의 아티스트를 선택해 주세요.",
       genreLabel: "선택 장르:",
       placeholder: "아티스트 검색 (예: The Beatles)...",
       searchResult: "검색 결과",
@@ -134,7 +134,7 @@ export default function ExplorePage() {
     },
     en: {
       title: isSingleArtistMode ? "Select your favorite artist" : "Who are your favorite artists?",
-      desc: isSingleArtistMode ? "Select a single artist and line up all of their tracks in the order of your choice." : "Please select at least 3 artists.",
+      desc: isSingleArtistMode ? "Select a single artist and sort all of their tracks." : "Please select at least 3 artists.",
       genreLabel: "Selected Genres:",
       placeholder: "Search artists (e.g., The Beatles)...",
       searchResult: "Search Results",
@@ -1167,10 +1167,10 @@ export default function ExplorePage() {
               <SafeImage src={pendingSingleArtist.image} alt={pendingSingleArtist.name} fill sizes="64px" fallbackType="artist" className="object-cover" />
             </div>
             <h2 className="type-title-1 text-navy break-keep">
-              {locale === "en" ? `Line up songs by ${pendingSingleArtist.name}?` : `${pendingSingleArtist.name}의 곡을 줄 세워 볼까요?`}
+              {locale === "en" ? `Sort songs by ${pendingSingleArtist.name}?` : `${pendingSingleArtist.name}의 곡을 소트해볼까요?`}
             </h2>
             <p className="type-sub text-navy/70 mt-1">
-              {locale === "en" ? "Next, pick the songs to put in the World Cup." : "다음 화면에서 월드컵에 올릴 곡을 골라요."}
+              {locale === "en" ? "Next, pick the songs to sort." : "다음 화면에서 소트할 곡을 골라요."}
             </p>
           </>
         )}

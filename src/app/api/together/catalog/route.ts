@@ -39,7 +39,7 @@ interface CatalogRow {
   coverage: string | number | null;
 }
 
-/** 이보다 적으면 줄 세울 거리가 안 된다(중복 제거 전 기준). */
+/** 이보다 적으면 소트할 거리가 안 된다(중복 제거 전 기준). */
 const MIN_TRACKS = 8;
 /** 앨범 대부분에 곡이 있으면 "전곡"으로 본다. 스포티파이 총계가 지역마다 조금씩 달라 1.0 을 요구하지 않는다. */
 const FULL_COVERAGE = 0.9;

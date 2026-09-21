@@ -5,7 +5,7 @@
  */
 
 export interface MatchResult {
-  /** 0–100. 두 사람이 모두 줄 세운 곡으로만 잰다. */
+  /** 0–100. 두 사람이 모두 소트한 곡으로만 잰다. */
   rate: number;
   /** 비교에 쓴 곡 수 */
   common: number;
@@ -23,7 +23,7 @@ const EMPTY: MatchResult = { rate: 0, common: 0, sameTop: false, topFiveOverlap:
  * 두 순위(곡 id 배열, 1위부터)의 일치율.
  *
  * 스피어만 footrule: 순위 차이의 합을 완전히 뒤집혔을 때의 값으로 나눈다.
- * 곡을 "모르는 곡"으로 뺀 사람이 있으면 **둘 다 줄 세운 곡**만 비교한다.
+ * 곡을 "모르는 곡"으로 뺀 사람이 있으면 **둘 다 소트한 곡**만 비교한다.
  */
 export function matchRate(mine: string[], theirs: string[]): MatchResult {
   const theirRank = new Map<string, number>();

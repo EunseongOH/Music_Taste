@@ -39,7 +39,7 @@ const translations = {
     unreleased: "미발매곡",
     addUnreleasedBtn: "미발매곡 추가",
     createWorldCup: "월드컵 대진 만드는 중",
-    startWorldCup: "월드컵 시작하기",
+    startWorldCup: "소트 시작하기",
     fetchingAllTracks: "발매곡 수집 중...",
     selectMore: "최소 {count}곡을 더 선택해 주세요",
     addUnreleasedModalTitle: "미발매곡 추가",
@@ -57,7 +57,7 @@ const translations = {
     unreleasedSavedTemp: "아쉽게도 저장 과정에 문제가 생겼지만, 지금 바로 사용할 수 있어요!",
     unreleasedGuest: "로그인하지 않은 상태예요. 임시로 추가되어 바로 쓸 수 있지만, 브라우저를 닫으면 사라질 수 있어요.",
     confirm: "확인",
-    needAtLeast4: "월드컵을 하려면 최소 4곡을 골라야 해요.",
+    needAtLeast4: "소트하려면 곡을 4개 이상 골라 주세요.",
   },
   en: {
     loadingTitle: "Organizing Tracks...",

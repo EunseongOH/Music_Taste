@@ -34,7 +34,7 @@ export default function TogetherHomePage() {
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-12 pb-12">
       <h1 className="type-title-1 text-navy">같이 소트하기</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
-        같은 곡을 각자 줄 세우고 얼마나 비슷한지 봐요.{"\n"}옆 사람에게 받은 코드를 넣어 주세요.
+        같은 곡을 각자 소트하고 얼마나 비슷한지 봐요.{"\n"}옆 사람에게 받은 코드를 넣어 주세요.
       </p>
 
       <label className="flex flex-col gap-1 mt-8">

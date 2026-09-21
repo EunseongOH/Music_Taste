@@ -32,7 +32,7 @@ function rankingFromSession(): { ids: string[]; skipped: number } | null {
 /**
  * 같이 소트하기 — 결과·일치율(실험). 문서: docs/together-sort.md
  *
- * 소트를 막 끝내고 오면 그 순위를 저장하고, 같은 링크로 줄 세운 사람들과의 일치율을 보여준다.
+ * 소트를 막 끝내고 오면 그 순위를 저장하고, 같은 링크로 소트한 사람들과의 일치율을 보여준다.
  */
 export default function TogetherResultPage() {
   const params = useParams();
@@ -130,8 +130,8 @@ export default function TogetherResultPage() {
   if (!mine) {
     return (
       <main className="min-h-screen bg-[var(--app-bg)] flex flex-col items-center justify-center gap-2 px-6 text-center">
-        <p className="type-title-2 text-navy">아직 줄 세우지 않았어요</p>
-        <p className="type-sub text-navy/70">같은 곡으로 줄 세우면 다른 사람과의 일치율이 보여요.</p>
+        <p className="type-title-2 text-navy">아직 소트하지 않았어요</p>
+        <p className="type-sub text-navy/70">같은 곡으로 소트하면 다른 사람과의 일치율이 보여요.</p>
         <button onClick={() => router.push(`/together/${code}`)} className={`${primaryButton} mt-6`}>
           곡 보러 가기
         </button>
