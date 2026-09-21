@@ -23,7 +23,7 @@ import {
   useToast,
 } from "@/components/space/SpaceUI";
 import FeedbackModal from "@/components/FeedbackModal";
-import Studies, { type TurntableSize } from "./Studies";
+import Studies from "./Studies";
 import type { GlowLevel } from "@/components/home/ModeCard";
 import HomePreview from "./HomePreview";
 
@@ -148,7 +148,6 @@ export default function ThemeLab() {
   const [confirm, setConfirm] = useState(false);
   const [feedback, setFeedback] = useState(false);
   const [glow, setGlow] = useState<GlowLevel>("half");
-  const [ttSize, setTtSize] = useState<TurntableSize>("inside");
   const { toast, showToast } = useToast();
 
   const readVars = useCallback(() => {
@@ -398,16 +397,8 @@ export default function ThemeLab() {
               </button>
             ))}
           </div>
-          <p className="type-caption text-navy/70 mt-1">턴테이블 전체 크기</p>
-          <div className="flex gap-2">
-            {([["inside", "제안 · 받침 안"], ["legacy", "비교 · 운영과 같은 크기"]] as const).map(([id, text]) => (
-              <button key={id} onClick={() => setTtSize(id)} className={`${ttSize === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
-                {text}
-              </button>
-            ))}
-          </div>
         </div>
-        <HomePreview glow={glow} size={ttSize} />
+        <HomePreview glow={glow} />
       </section>
 
       {/* 카드·턴테이블 시안 */}

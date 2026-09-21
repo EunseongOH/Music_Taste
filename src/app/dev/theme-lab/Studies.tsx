@@ -417,6 +417,32 @@ function GlowLevels() {
   );
 }
 
+/** 확정된 모양 — 실제 LPPlayer. 재킷은 월드컵에서처럼 currentTrack 으로 넘긴다. */
+function TurntableFinal() {
+  const [playing, setPlaying] = useState(false);
+  const states = [
+    { cap: "재킷 없음 — 홈, 월드컵에서 고르기 전", track: null },
+    { cap: "밝은 재킷이 올라온 상태", track: { id: "light", albumImage: JACKETS.light, title: "밝은 재킷" } },
+    { cap: "어두운 재킷이 올라온 상태", track: { id: "dark", albumImage: JACKETS.dark, title: "어두운 재킷" } },
+  ];
+  return (
+    <div id="turntable-final" className="flex flex-col gap-6">
+      <button
+        onClick={() => setPlaying((v) => !v)}
+        className="self-start inline-flex items-center h-10 px-5 rounded-full bg-navy/5 text-navy type-sub font-semibold cursor-pointer"
+      >
+        {playing ? "멈추기" : "재생 (판이 돌고 톤암이 내려와요)"}
+      </button>
+      {states.map((st) => (
+        <div key={st.cap}>
+          <p className="type-caption text-navy/70 mb-2">{st.cap}</p>
+          <LPPlayer isPlaying={playing} currentTrack={st.track} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Turntable1Refine() {
   const [spinning, setSpinning] = useState(false);
   const modes = [
@@ -504,7 +530,16 @@ export default function Studies() {
       </div>
 
       <div>
-        <h3 className="type-title-2 text-navy mb-1">턴테이블 1안 다듬기</h3>
+        <h3 className="type-title-2 text-navy mb-1">턴테이블 — 확정 (실제 컴포넌트)</h3>
+        <p className="type-sub text-navy/70 mb-5 break-keep">
+          픽처 디스크 · 받침 안 크기 · 홈과 월드컵 모두 조용하게. 아래는 시안 복제본이 아니라 실제 LPPlayer 예요.
+          지금 톤으로 바꾸면 운영의 남색 선화 그대로 보여요.
+        </p>
+        <TurntableFinal />
+      </div>
+
+      <div>
+        <h3 className="type-title-2 text-navy mb-1">턴테이블 1안 다듬기 — 결정 과정의 시안</h3>
         <p className="type-sub text-navy/70 mb-5 break-keep">
           플래터와 LP 를 두 겹으로 나눴어요. LP 가 플래터의 대부분을 덮고, 재킷은 그 LP 위에 올라와요. 파란 빛은 없고, 홈에서는 조용하게.
         </p>
