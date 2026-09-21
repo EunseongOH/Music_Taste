@@ -324,7 +324,13 @@ export default function TogetherNewPage() {
           })}
         </ul>
       ) : (
-        <ul className="grid grid-cols-3 gap-x-3 gap-y-6 mt-6">
+        <>
+        {/* 검색 전 기본 목록. 무한스크롤이 아니라 고정 묶음이므로 "이번주"라고 이름을 붙인다
+            — 다음에 와서 얼굴이 바뀌어 있는 게 의도된 것임을 알린다. 교체 규칙은
+            /api/together/catalog 의 PICK_COVERAGE·PICK_SIZE·weekIndex 에 있다. */}
+        <SectionTitle title="이번주 소트 추천 아티스트" className="mt-8 mb-1" />
+        <p className="type-caption text-navy/60">전곡이 다 있는 아티스트 중에서 매주 바꿔 올려요.</p>
+        <ul className="grid grid-cols-3 gap-x-3 gap-y-6 mt-5">
           {(artists ?? []).map((artist) => {
             const isOn = artistSource?.key === `artist:${artist.id}`;
             return (
@@ -343,6 +349,7 @@ export default function TogetherNewPage() {
             );
           })}
         </ul>
+        </>
       )}
 
       {/* 2. 이미 해 둔 소트에서 가져오기 */}

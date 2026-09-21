@@ -4,14 +4,19 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
-import { fetchChallenge, fetchEntries, participantKey, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
+import { fetchChallenge, fetchEntries, isMine, participantKey, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
 import { Cover, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import * as platform from "@/utils/platform";
 
 /**
  * 같이 소트하기 — 초대 화면(실험). 문서: docs/together-sort.md
  *
- * 링크를 받은 사람이 곡 세트를 보고 같은 곡으로 소트를 시작한다.
+ * 한 화면을 둘이 쓴다.
+ *  - **링크를 받은 사람**: 곡 세트를 보고 같은 곡으로 소트를 시작한다.
+ *  - **링크를 만든 사람(방장)**: 여기서 할 일은 소트가 아니라 **링크를 보내는 것**이다.
+ *    만든 직후에도, 나중에 자기 링크를 다시 열 때도 이 화면으로 온다.
+ *
+ * 방장에게 "OO님이 고른 12곡이에요"라고 자기 이름을 3인칭으로 보여 주던 것을 고쳤다.
  * 월드컵 화면을 그대로 쓰되 `?challenge=1` 로 열어, 진행 중인 이어하기를 건드리지 않는다.
  */
 export default function TogetherInvitePage() {
@@ -23,6 +28,8 @@ export default function TogetherInvitePage() {
   const { toast, showToast } = useToast();
   const [challenge, setChallenge] = useState<SortChallenge | null>(null);
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
+  // 렌더 중에 판정하지 않는다 — isMine 이 localStorage 를 읽어서 서버 렌더와 어긋난다.
+  const [iAmCreator, setIAmCreator] = useState(false);
 
   // 한자리에 모여 할 때 옆 사람이 끝나는 게 바로 보이도록 몇 초마다 다시 읽는다.
   useEffect(() => {
@@ -37,6 +44,7 @@ export default function TogetherInvitePage() {
         setEntries([]);
         return;
       }
+      setIAmCreator(isMine(found, user?.id));
       setEntries(await fetchEntries(found.id));
       timer = setInterval(async () => {
         const list = await fetchEntries(found.id);
@@ -47,9 +55,27 @@ export default function TogetherInvitePage() {
       alive = false;
       if (timer) clearInterval(timer);
     };
-  }, [code]);
+  }, [code, user?.id]);
 
   const mine = entries?.find((e) => e.participant_key === participantKey(user?.id));
+
+  /** 링크 보내기. 공유 창이 없으면 복사로 떨어진다(한자리에 모여 할 때는 코드를 부르는 쪽이 빠르다). */
+  const sendLink = async () => {
+    if (!challenge) return;
+    const link = `${window.location.origin}/together/${challenge.code}`;
+    try {
+      const shared = await platform.share({
+        title: "같이 소트하기",
+        text: `${challenge.title} — 같은 곡으로 소트해 봐요`,
+        url: link,
+      });
+      if (shared) return;
+    } catch {
+      /* 공유 창을 못 열면 복사로 간다 */
+    }
+    const how = await platform.copyText(link);
+    showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+  };
 
   const start = () => {
     if (!challenge) return;
@@ -87,15 +113,21 @@ export default function TogetherInvitePage() {
 
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
-      <p className="type-caption text-navy/70">같이 소트하기</p>
+      <p className="type-caption text-navy/70">{iAmCreator ? "내가 만든 링크" : "같이 소트하기"}</p>
       <h1 className="type-title-1 text-navy mt-1 break-keep">{challenge.title}</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
-        {creator}님이 고른 {challenge.tracks.length}곡이에요.{"\n"}같은 곡으로 소트하면 서로 얼마나 비슷한지 볼 수 있어요.
+        {iAmCreator ? (
+          <>고른 {challenge.tracks.length}곡이에요.{"\n"}링크를 보내면 상대가 같은 곡으로 소트하고, 서로 얼마나 비슷한지 볼 수 있어요.</>
+        ) : (
+          <>{creator}님이 고른 {challenge.tracks.length}곡이에요.{"\n"}같은 곡으로 소트하면 서로 얼마나 비슷한지 볼 수 있어요.</>
+        )}
       </p>
 
       <div className="mt-6 flex flex-col gap-2">
         <p className="type-caption text-navy/70">
-          지금까지 {entries.length}명이 소트했어요{entries.length > 0 ? " · 몇 초마다 새로 확인해요" : ""}
+          {iAmCreator && entries.length === 0
+            ? "아직 아무도 소트하지 않았어요. 링크를 보내 보세요."
+            : `지금까지 ${entries.length}명이 소트했어요${entries.length > 0 ? " · 몇 초마다 새로 확인해요" : ""}`}
         </p>
         {entries.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
@@ -106,17 +138,7 @@ export default function TogetherInvitePage() {
             ))}
           </ul>
         )}
-        <button
-          onClick={async () => {
-            const link = `${window.location.origin}/together/${challenge.code}`;
-            const shared = await platform.share({ title: "같이 소트하기", text: `${challenge.title} — 같은 곡으로 소트해 봐요`, url: link });
-            if (!shared) {
-              const how = await platform.copyText(link);
-              showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
-            }
-          }}
-          className="self-start type-caption text-point-ink font-semibold cursor-pointer"
-        >
+        <button onClick={sendLink} className="self-start type-caption text-point-ink font-semibold cursor-pointer">
           코드 {challenge.code} · 링크 보내기
         </button>
       </div>
@@ -135,9 +157,20 @@ export default function TogetherInvitePage() {
 
       <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
-          <button onClick={start} className={`${primaryButton} w-full`}>
-            {mine ? "다시 소트하기" : "같은 곡으로 소트하기"}
-          </button>
+          {iAmCreator ? (
+            <>
+              <button onClick={sendLink} className={`${primaryButton} w-full`}>
+                링크 보내기
+              </button>
+              <button onClick={start} className={`${secondaryButton} w-full`}>
+                {mine ? "다시 소트하기" : "나도 소트하기"}
+              </button>
+            </>
+          ) : (
+            <button onClick={start} className={`${primaryButton} w-full`}>
+              {mine ? "다시 소트하기" : "같은 곡으로 소트하기"}
+            </button>
+          )}
           {mine && (
             <button onClick={() => router.push(`/together/${challenge.code}/result`)} className={`${secondaryButton} w-full`}>
               일치율 보기

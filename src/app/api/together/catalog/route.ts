@@ -41,6 +41,30 @@ interface CatalogRow {
 /** 이보다 적으면 소트할 거리가 안 된다(중복 제거 전 기준). */
 const MIN_TRACKS = 8;
 
+/**
+ * 검색 전 첫 화면에 올리는 "이번주 소트 추천 아티스트".
+ *
+ * 전곡이 다 있는 아티스트만 올린다 — 추천해 놓고 들어갔더니 곡이 비면 안 된다.
+ * 그 풀이 지금 23명뿐이라(2026-09-21 실측) 한 번에 18명을 보여주면 매주 바꿔도
+ * 얼굴이 거의 안 바뀐다. 그래서 12명씩 끊어 주마다 다음 묶음으로 넘긴다.
+ *
+ * 풀이 넉넉해지면 PICK_SIZE 를 올리면 되고, 소트 횟수 지표가 쌓이면 아래 정렬을
+ * popularity 대신 그 횟수로 바꾸면 "많이 소트한 아티스트"가 된다. 그때도 이 창은 그대로 쓴다.
+ */
+const PICK_COVERAGE = 1;
+const PICK_SIZE = 12;
+
+/**
+ * 한국 시간 월요일 0시에 넘어가는 주차 번호.
+ *
+ * 1970-01-01 이 목요일이라 3일을 더해야 월요일이 경계가 된다.
+ * 같은 주 안에서는 항상 같은 목록이 나온다(새로고침해도 안 바뀐다).
+ */
+function weekIndex(now: number = Date.now()): number {
+  const DAY = 86_400_000;
+  return Math.floor((now + 9 * 3_600_000 + 3 * DAY) / (7 * DAY));
+}
+
 /** 같은 곡이 앨범마다 다시 담기므로(정규판·리패키지) 제목으로 한 번만 남긴다. */
 const titleKey = (title: string) =>
   title
@@ -109,6 +133,35 @@ export async function GET(request: Request) {
     return NextResponse.json({ tracks }, { headers: cors });
   }
 
+  const toArtist = (a: CatalogRow) => ({
+    id: a.id,
+    name: a.name,
+    image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
+  });
+
+  // 검색어가 없으면 이번주 추천 묶음을 낸다.
+  if (!q) {
+    const { data: full } = await supabase
+      .from("together_artist_catalog")
+      .select("id,name,images")
+      .gte("track_count", MIN_TRACKS)
+      .gte("coverage", PICK_COVERAGE)
+      // 주 안에서의 차례만 정한다. 이 순서가 고정이라 같은 주엔 같은 묶음이 나온다.
+      // popularity 로 정렬하지 않는다 — 이 뷰의 popularity 는 현재 전 행이 0이다(2026-09-21 실측).
+      .order("track_count", { ascending: false })
+      .order("id", { ascending: true })
+      .limit(200);
+
+    const pool = (full ?? []) as CatalogRow[];
+    if (pool.length >= PICK_SIZE) {
+      // 창이 끝을 넘어가면 앞에서 마저 채운다(한 바퀴 돌면 처음으로).
+      const start = (weekIndex() * PICK_SIZE) % pool.length;
+      const picked = [...pool.slice(start), ...pool.slice(0, start)].slice(0, PICK_SIZE);
+      return NextResponse.json({ artists: picked.map(toArtist) }, { headers: cors });
+    }
+    // 전곡 확보가 12명도 안 되면 화면을 비우지 않고 아래 기존 경로로 떨어진다.
+  }
+
   // 아티스트 찾기 — 전곡을 확실히 낼 수 있는 아티스트가 먼저 온다.
   // coverage = 곡까지 받아 둔 앨범 / 스포티파이가 말한 앨범 수 (뷰: together_artist_catalog)
   let query = supabase
@@ -122,11 +175,6 @@ export async function GET(request: Request) {
 
   // coverage 는 순서로만 쓴다 — 화면에 확보율을 적지 않는다(없는 쪽을 먼저 알리는 꼴이 된다).
   const { data: artists } = await query;
-  const list = ((artists ?? []) as CatalogRow[]).map((a) => ({
-    id: a.id,
-    name: a.name,
-    image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
-  }));
 
-  return NextResponse.json({ artists: list }, { headers: cors });
+  return NextResponse.json({ artists: ((artists ?? []) as CatalogRow[]).map(toArtist) }, { headers: cors });
 }

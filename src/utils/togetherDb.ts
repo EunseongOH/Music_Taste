@@ -43,6 +43,36 @@ export function participantKey(userId?: string | null): string {
   return made;
 }
 
+/**
+ * 내가 만든 링크인가.
+ *
+ * `creator_id` 만으로는 모자란다 — 링크는 로그인 없이도 만들 수 있어서(`createChallenge`
+ * 의 `creatorId: user?.id ?? null`) 비로그인으로 만들면 그 칸이 비어 있다. 그래서 만들 때
+ * 코드를 기기에도 남기고, 둘 중 하나만 맞아도 방장으로 본다.
+ */
+const MINE_KEY = "together_mine";
+
+function mineCodes(): string[] {
+  try {
+    const raw = safeLocalStorage.getItem(MINE_KEY);
+    const list = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(list) ? list.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberMine(code: string): void {
+  // 오래된 것부터 버린다. 기기에 무한정 쌓을 이유가 없다.
+  const next = [...mineCodes().filter((c) => c !== code), code].slice(-50);
+  safeLocalStorage.setItem(MINE_KEY, JSON.stringify(next));
+}
+
+export function isMine(challenge: Pick<SortChallenge, "code" | "creator_id">, userId?: string | null): boolean {
+  if (challenge.creator_id && userId && challenge.creator_id === userId) return true;
+  return mineCodes().includes(challenge.code);
+}
+
 export async function fetchChallenge(code: string): Promise<SortChallenge | null> {
   const { data, error } = await createClient().from("sort_challenges").select("*").eq("code", code).maybeSingle();
   if (error) {
@@ -91,7 +121,11 @@ export async function createChallenge(input: {
       })
       .select("*")
       .single();
-    if (!error) return data as SortChallenge;
+    if (!error) {
+      const made = data as SortChallenge;
+      rememberMine(made.code);
+      return made;
+    }
     // 23505 = unique 위반(코드 중복). 그 밖의 오류는 바로 알린다.
     if (error.code !== "23505") {
       console.error("[together] 챌린지를 만들지 못했어요:", error.message);
