@@ -1,7 +1,7 @@
 /**
  * 테마 시안 스크린샷. design/logo-theme 전용.
  *   node scripts/theme-shots.mjs [출력폴더]      (dev 서버가 3300 에 떠 있어야 한다)
- * Spotify 를 부르지 않는 화면만 찍는다(홈 · theme-lab). 로컬은 SPOTIFY_CACHE_ONLY 기본 켜짐.
+ * Spotify 를 부르지 않는 화면만 찍는다(홈 · 아카이브 · 같이 소트하기 · theme-lab). 로컬은 SPOTIFY_CACHE_ONLY 기본 켜짐.
  */
 import { chromium } from "playwright";
 import fs from "node:fs";
@@ -14,6 +14,8 @@ const THEMES = ["legacy", "toss-white", "sky-tint"];
 const PAGES = [
   { name: "lab", path: "/dev/theme-lab", full: true },
   { name: "home", path: "/", full: false },
+  { name: "archive", path: "/archive", full: false },
+  { name: "together", path: "/together", full: false },
 ];
 
 const browser = await chromium.launch();

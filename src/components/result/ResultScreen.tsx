@@ -767,7 +767,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               <p className="type-sub text-navy/70 mt-1.5">{t.savedMissingDesc}</p>
               <button
                 onClick={() => router.push("/explore-taste")}
-                className="mt-6 h-12 px-6 rounded-full bg-navy text-cream type-body-strong"
+                className="mt-6 h-12 px-6 rounded-full bg-brand text-cream type-body-strong"
               >
                 {t.savedMissingAction}
               </button>
@@ -825,7 +825,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   trackEvent("change_shape", { shape: sh });
                 }}
                 className={`h-9 px-4 rounded-full type-sub cursor-pointer transition-colors ${
-                  shape === sh ? "bg-navy text-cream" : "bg-navy/5 text-navy/70 hover:text-navy"
+                  shape === sh ? "bg-brand text-cream" : "bg-navy/5 text-navy/70 hover:text-navy"
                 }`}
               >
                 {t.shapeLabel[sh]}
@@ -868,7 +868,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   setShareNameError("");
                   setShowShareModal(true);
                 }}
-                className="flex-1 h-[48px] bg-navy text-cream font-sans font-bold text-sm rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md hover:bg-[#111A3E]"
+                className="flex-1 h-[48px] bg-brand text-cream font-sans font-bold text-sm rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md hover:bg-[#111A3E]"
               >
                 <Share2 size={18} />
                 <span>{t.shareMainBtn}</span>
@@ -1017,7 +1017,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                 <div className="flex flex-col gap-2.5 w-full">
                   <button
                     onClick={() => executeSaveArchive(true)}
-                    className="w-full h-[48px] bg-navy text-cream font-bold text-sm rounded-2xl hover:bg-navy/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm"
+                    className="w-full h-[48px] bg-brand text-cream font-bold text-sm rounded-2xl hover:bg-brand/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm"
                   >
                     {t.overwriteBtn}
                   </button>
@@ -1141,7 +1141,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                 {platform.shareTargets.includes("native") && (
                 <button
                   onClick={handleShareNative}
-                  className="w-full h-[52px] px-5 bg-navy hover:bg-navy/90 active:bg-navy/80 text-cream font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
+                  className="w-full h-[52px] px-5 bg-brand hover:bg-brand/90 active:bg-brand/80 text-cream font-sans font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2.5 shadow-sm"
                 >
                   <Share2 size={18} />
                   <span>{t.shareNativeOption}</span>

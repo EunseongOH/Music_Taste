@@ -54,13 +54,13 @@ const WORDMARK_FONT: Record<string, string> = {
 const SWATCHES = [
   { v: "--t-cream", name: "cream", role: "화면·시트 바탕" },
   { v: "--background", name: "background", role: "앱 바깥 바탕" },
-  { v: "--t-navy", name: "navy", role: "글자 · 주 버튼 면" },
+  { v: "--t-navy", name: "navy (= ink)", role: "글자 · 선(/10) · 옅은 면(/5)" },
   { v: "--t-charcoal", name: "charcoal", role: "본문 대체(레거시)" },
   { v: "--t-point", name: "point", role: "강조 선·면 (글자 금지)" },
   { v: "--t-point-ink", name: "point-ink", role: "강조 글자" },
   { v: "--t-danger", name: "danger", role: "잃는 행동 · 오류" },
-  { v: "--t-brand", name: "brand (2차 제안)", role: "주 버튼·링크 전용 파랑" },
-  { v: "--t-ink", name: "ink (2차 제안)", role: "본문 전용 글자색" },
+  { v: "--t-brand", name: "brand", role: "주 버튼 면 · 선택 상태 · 링크" },
+  { v: "--t-ink", name: "ink", role: "어두운 면(토스트) · 글자" },
 ];
 
 const LOGO_ONLY = [
@@ -317,9 +317,9 @@ export default function ThemeLab() {
         </div>
 
         <div className="rounded-2xl border border-line p-4 flex flex-col gap-2">
-          <p className="type-caption text-navy/70">2차 제안 — 글자(ink)와 주 버튼(brand)을 나눈 경우. 아직 어떤 화면도 쓰지 않는다.</p>
+          <p className="type-caption text-navy/70">2차 적용 — 글자는 ink(=navy 값), 주 버튼·선택 상태는 brand. legacy 에서는 brand = navy 라 지금 화면과 같다.</p>
           <button className="inline-flex items-center justify-center h-12 px-6 rounded-full bg-brand text-white type-body-strong w-full">
-            소트 시작하기 · bg-brand
+            직접 적은 주 버튼 · bg-brand
           </button>
           <p className="type-body text-ink">본문은 text-ink. 파랑이 아니라 거의 검정에 가까운 회색이에요.</p>
           <p className="type-sub text-brand">링크·강조 글자는 text-brand</p>

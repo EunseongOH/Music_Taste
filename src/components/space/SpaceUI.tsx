@@ -19,7 +19,7 @@ import { X } from "lucide-react";
 
 /** 주 버튼: navy 알약. */
 export const primaryButton =
-  "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full bg-navy text-cream type-body-strong active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full bg-brand text-cream type-body-strong active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50";
 
 /** 보조 버튼: 옅은 면. */
 export const secondaryButton =
@@ -390,7 +390,7 @@ export function Toast({ toast }: { toast: ToastState }) {
         >
           <p
             className={`max-w-[400px] px-4 py-3 rounded-2xl type-sub ${
-              toast.tone === "error" ? "bg-danger text-cream" : "bg-navy text-cream"
+              toast.tone === "error" ? "bg-danger text-cream" : "bg-ink text-cream"
             }`}
           >
             {toast.text}

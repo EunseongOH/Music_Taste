@@ -108,12 +108,13 @@
 /* (A) 토스식 흰 바탕 + 옅은 회색 면 — 기본안 */
 [data-theme="toss-white"] {
   --t-cream: #FFFFFF;
-  --t-navy: #172D80;
+  /* 2차: navy 는 글자(=ink)만 맡는다. 버튼 면은 brand. */
+  --t-navy: #191F28;
   --t-charcoal: #333D4B;
   --t-point: #FD7E3E;
   --t-point-ink: #C2410C;
   --t-danger: #D22030;
-  --t-brand: #2B4FD8;
+  --t-brand: #385BF0;
   --t-ink: #191F28;
   --t-line: #E5E8EB;
   --t-fill: #F2F4F6;
@@ -124,13 +125,14 @@
 /* (B) 로고의 하늘빛을 아주 옅게 깐 바탕 — 비교용 */
 [data-theme="sky-tint"] {
   --t-cream: #F3F8FF;
-  --t-navy: #172D80;
+  /* 2차: navy 는 글자(=ink)만 맡는다. 하늘빛 바탕과 어울리게 파란 기가 도는 잉크. 버튼 면은 brand. */
+  --t-navy: #18213B;
   --t-charcoal: #333D4B;
   --t-point: #FD7E3E;
   --t-point-ink: #C2410C;
   --t-danger: #D22030;
-  --t-brand: #2B4FD8;
-  --t-ink: #191F28;
+  --t-brand: #385BF0;
+  --t-ink: #18213B;
   --t-line: #DCE8F7;
   --t-fill: #E6F1FD;
   --t-grain: 0;

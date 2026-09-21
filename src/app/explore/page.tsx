@@ -1139,7 +1139,7 @@ export default function ExplorePage() {
                       trackEvent("funnel_artist_complete", { selected_artists_count: selectedIds.size });
                       router.push('/tracks');
                     }}
-                    className="w-full py-4 rounded-full bg-navy text-cream font-sans font-medium text-lg shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-navy/90 transition-colors cursor-pointer"
+                    className="w-full py-4 rounded-full bg-brand text-cream font-sans font-medium text-lg shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-brand/90 transition-colors cursor-pointer"
                   >
                     {t.nextBtn}
                     <span className="bg-point text-white text-xs px-2.5 py-0.5 rounded-full font-bold">{selectedIds.size}</span>
@@ -1283,7 +1283,7 @@ export default function ExplorePage() {
                 <div className="flex flex-col gap-2 w-full">
                   <button 
                     onClick={() => setSpotifyError(null)}
-                    className="w-full py-3 bg-navy text-cream font-bold text-xs rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                    className="w-full py-3 bg-brand text-cream font-bold text-xs rounded-xl hover:bg-brand/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
                   >
                     {spotifyError === "429" ? "준비된 목록에서 선택하기" : "확인"}
                   </button>

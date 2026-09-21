@@ -423,7 +423,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <button 
                       type="submit"
                       disabled={!loginId || !loginPw || isLoading}
-                      className="w-full py-3.5 mt-2 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3.5 mt-2 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? t.loggingIn : t.login}
                     </button>
@@ -666,7 +666,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <button 
                       type="submit"
                       disabled={!signupId || !signupPw || !signupName || !signupNickname || !!pwError || isLoading}
-                      className="w-full py-3.5 mt-4 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3.5 mt-4 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? t.signingUp : t.signupBtn}
                     </button>
@@ -696,7 +696,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                   <div className="flex flex-col gap-3 w-full">
                     <button 
                       onClick={confirmGuest}
-                      className="w-full py-3.5 bg-navy text-cream font-bold text-lg rounded-xl hover:bg-navy/90 transition-colors shadow-md"
+                      className="w-full py-3.5 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-md"
                     >
                       {t.guestConfirm}
                     </button>

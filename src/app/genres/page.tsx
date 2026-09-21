@@ -245,7 +245,7 @@ export default function GenresPage() {
                   >
                     <button
                       onClick={handleNext}
-                      className="w-full py-3.5 rounded-full bg-navy text-cream font-sans font-bold text-base shadow-lg border border-navy/20 hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer inline-flex items-center justify-center gap-2 leading-none"
+                      className="w-full py-3.5 rounded-full bg-brand text-cream font-sans font-bold text-base shadow-lg border border-navy/20 hover:bg-brand/90 active:scale-[0.98] transition-all cursor-pointer inline-flex items-center justify-center gap-2 leading-none"
                     >
                       {locale === "ko" ? "아티스트 탐색하기" : "Explore Artists"}
                       <ArrowRight size={16} strokeWidth={2.5} />

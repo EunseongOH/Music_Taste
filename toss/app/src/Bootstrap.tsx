@@ -84,7 +84,7 @@ export default function Bootstrap() {
             <button
               type="button"
               onClick={run}
-              className="px-6 py-3 bg-navy text-cream font-sans font-bold text-sm rounded-full hover:bg-navy/90 transition-colors"
+              className="px-6 py-3 bg-brand text-cream font-sans font-bold text-sm rounded-full hover:bg-brand/90 transition-colors"
             >
               다시 시도
             </button>

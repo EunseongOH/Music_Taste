@@ -625,7 +625,7 @@ export default function WorldCupPage() {
                     </p>
                     <button
                       onClick={undoRemove}
-                      className="px-5 py-2 rounded-full bg-navy text-cream font-sans text-sm font-bold active:scale-[0.97] transition-transform cursor-pointer"
+                      className="px-5 py-2 rounded-full bg-brand text-cream font-sans text-sm font-bold active:scale-[0.97] transition-transform cursor-pointer"
                     >
                       {locale === "en" ? "Undo" : "되돌리기"}
                     </button>
