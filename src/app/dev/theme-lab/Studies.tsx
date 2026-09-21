@@ -108,7 +108,7 @@ function CardC2() {
 /** (b) LPPlayer 와 같은 구조. 2px 남색 선 → 옅은 선, 면을 흰색으로, 그림자를 부드럽게. */
 function TurntableB() {
   return (
-    <div className="relative w-full max-w-lg h-36 sm:h-48 border border-line rounded-2xl px-6 bg-white shadow-[0_10px_30px_-14px_rgba(56,91,240,0.3)] overflow-hidden">
+    <div className="relative w-full max-w-lg h-36 sm:h-48 border border-line rounded-2xl px-6 bg-white shadow-[0_10px_30px_-14px_rgba(56,91,240,0.3)]">
       {["top-4 left-4", "top-4 right-4", "bottom-4 left-4", "bottom-4 right-4"].map((pos) => (
         <span key={pos} className={`absolute ${pos} w-3 h-3 rounded-full bg-fill border border-line`} />
       ))}
@@ -139,16 +139,16 @@ function TurntableB() {
 function TurntableC() {
   return (
     <div
-      className="relative w-full max-w-lg h-36 sm:h-48 rounded-[1.75rem] overflow-hidden shadow-[0_14px_40px_-16px_rgba(56,91,240,0.4)]"
+      className="relative w-full max-w-lg h-48 sm:h-60 rounded-[1.75rem] overflow-hidden shadow-[0_14px_40px_-16px_rgba(56,91,240,0.4)]"
       style={{ background: "linear-gradient(160deg, #FFFFFF 0%, #EEF5FF 100%)" }}
     >
       <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
-        <span aria-hidden className="absolute w-52 h-52 sm:w-64 sm:h-64 rounded-full blur-2xl opacity-60" style={{ background: LOGO_BLUE }} />
+        <span aria-hidden className="absolute w-48 h-48 sm:w-60 sm:h-60 rounded-full blur-2xl opacity-60" style={{ background: LOGO_BLUE }} />
         <div
-          className="w-40 h-40 sm:w-56 sm:h-56 rounded-full relative flex items-center justify-center shadow-[0_10px_24px_-8px_rgba(24,33,59,0.55)]"
+          className="w-40 h-40 sm:w-52 sm:h-52 rounded-full relative flex items-center justify-center shadow-[0_10px_24px_-8px_rgba(24,33,59,0.55)]"
           style={{
             background:
-              "conic-gradient(from 210deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 18%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.16) 62%, rgba(255,255,255,0) 78%), " +
+              "conic-gradient(from 200deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 9%, rgba(255,255,255,0) 20%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.14) 60%, rgba(255,255,255,0) 72%, rgba(255,255,255,0) 100%), " +
               "repeating-radial-gradient(circle, #1B2440 0 1.5px, #232D4D 1.5px 3px)",
           }}
         >

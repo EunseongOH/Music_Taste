@@ -29,6 +29,12 @@ for (const theme of THEMES) {
     const file = `${OUT}/${p.name}-${theme}.png`;
     await page.screenshot({ path: file, fullPage: p.full });
     console.log("shot", file);
+    if (p.name === "lab") {
+      // 카드·턴테이블 시안만 따로. 이 섹션이 결정 4번의 재료다.
+      const studies = `${OUT}/studies-${theme}.png`;
+      await page.locator("#studies").screenshot({ path: studies });
+      console.log("shot", studies);
+    }
   }
   await ctx.close();
 }
