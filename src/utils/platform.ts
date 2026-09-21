@@ -18,6 +18,9 @@ import * as htmlToImage from "html-to-image";
  * 페이지에 그대로 남긴다** — 그래야 두 빌드의 동작이 갈라지지 않는다.
  */
 
+/** 의견 수집이 어느 빌드에서 왔는지 구분하는 값. 토스 빌드는 이 파일째로 치환된다. */
+export const platformName = "web";
+
 /**
  * `native` = 플랫폼이 제공하는 공유 시트(설치된 앱 목록)를 여는 수단.
  * 유니온은 토스 구현(`toss/app/src/platform.toss.ts`)과 같아야 한다 —

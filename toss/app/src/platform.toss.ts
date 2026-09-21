@@ -13,6 +13,9 @@ import * as htmlToImage from 'html-to-image';
  * `Share.sendMessage` · `Device.openURL` · `Clipboard.setText`)을 쓴다.
  */
 
+/** 웹 구현(`src/utils/platform.ts`)의 같은 상수와 짝이다. */
+export const platformName = 'toss';
+
 /**
  * `native` = OS 공유 시트(설치된 앱 목록). 유니온은 웹 구현
  * (`src/utils/platform.ts`)과 같아야 한다.
