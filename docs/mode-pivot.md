@@ -229,7 +229,18 @@ GA: `home_mode_click { mode_id: "together" }` 가 자동으로 잡힌다. 별도
 - 켜져 있으면 Spotify 도, **게이트 RPC 도** 부르지 않는다(호출 수가 늘면 안 된다). 503 을 돌려주고 호출부는 기존 실패 경로대로 캐시/빈 결과로 간다.
 - `lastSpotifyError` 는 건드리지 않는다 — 화면에 연결 오류 배너를 띄울 일이 아니다. 대신 서버 로그에 한 번만 알린다.
 - 확인: 개발 서버를 다시 띄우고 `/explore?mode=single` 에서 검색 → 화면은 DB 캐시(아티스트 2,779명)로 정상 렌더, `spotify_endpoint_quota` 수치는 **하나도 늘지 않음**.
-- 남는 구멍 두 개: `npm run db:warmup` 은 `spotifyFetch` 를 지나지 않는다(일부러 담는 도구라 그대로 둔다). **Vercel 프리뷰는 `NODE_ENV=production` 이라 켜지지 않는다** — 프리뷰에서 쿼터가 새면 그 환경변수에 `1` 을 넣는다.
+- **`spotifyFetch` 를 지나지 않는 경로 실측 (2026-09-21, 다른 세션 확인)**
+
+  | 스크립트 | Spotify 호출 | 가드 |
+  |---|---|---|
+  | `scripts/warmup_artists.ts` (`npm run db:warmup`) | `/v1/search` 루프 | **없었다 → 넣었다** (`0960ae3`) |
+  | `scripts/prelaunch-warm.ts` | 있음 | 이미 더 셈(예산·게이트 RPC·24시간 429 preflight·즉시 중단) |
+  | `scripts/deezer-catalog.ts`, `scripts/audit-catalog.ts` | **없음** | — |
+  | `discover-artists`·`export-coverage`·`mb_resolve` | 없음(표시용 링크 문자열) | — |
+  | `src/**` | `spotifyFetch` 우회 없음(토큰 발급 제외) | — |
+
+  워밍 스크립트들은 **캐시 전용 모드를 따르지 않는다** — 채우는 게 일이라 따르면 하는 일이 없어진다. 대신 화면과 **같은 계수기·같은 차단 테이블**을 쓴다. warmup 에서 제일 컸던 구멍은 쿼터 초과의 몇 시간짜리 `Retry-After` 를 그대로 자고 깨어나 또 부딪히던 것이다(이제 멈춘다).
+- **Vercel 프리뷰는 `NODE_ENV=production` 이라 켜지지 않는다** — 프리뷰에서 쿼터가 새면 그 환경변수에 `1` 을 넣는다.
 
 ### 7.1 피드를 "확보된 아티스트"로 채운다 (핵심 대책)
 
