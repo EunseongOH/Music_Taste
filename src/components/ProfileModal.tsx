@@ -451,14 +451,14 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                   />
                 </div>
 
-                {updateError && <p role="alert" className="type-sub text-red-700">{updateError}</p>}
+                {updateError && <p role="alert" className="type-sub text-danger">{updateError}</p>}
 
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
                     onClick={handleLogout}
                     disabled={isUpdating}
-                    className={`${secondaryButton} flex-1 !text-red-700`}
+                    className={`${secondaryButton} flex-1 !text-danger`}
                   >
                     {t.logoutBtn}
                   </button>

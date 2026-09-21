@@ -7,6 +7,9 @@
   --color-point: #E67E22;
   /* 강조 글자용. point(#E67E22)는 cream 위 글자 대비 2.6:1 이라 선·면에만 쓰고, 글자는 이 색(4.9:1). */
   --color-point-ink: #A65309;
+  /* 파괴적 행동(삭제·저장하지 않고 나가기) 전용. 벽돌빛 — 순수 빨강은 cream·navy·orange 와 겉돈다.
+     cream 위 글자 6.0:1, 이 색 위 cream 글자 6.0:1. 면은 bg-danger/10 으로 옅게. docs/design-system/color.md */
+  --color-danger: #9E3B2F;
   --font-sans: var(--font-pretendard);
   /* 홈의 큰 "Sortify" 워드마크 전용. 한글 글리프가 없어 다른 곳에는 쓰지 않는다. */
   --font-wordmark: var(--font-playfair);

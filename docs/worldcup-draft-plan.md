@@ -88,7 +88,7 @@ explore 페이지도 같은 패턴이다 (`src/app/explore/page.tsx` L411, `arti
 └──────────────────────────────────┘
 ```
 
-마크업은 tracks 페이지 `exitWizardStep` 카드(`src/app/tracks/page.tsx` L2014~)를 그대로 가져온다.
+2026-09-21 개정: 위 카드형 목업 대신 내 취향 스페이스와 같은 **하단 시트(`SpaceUI.Sheet`)** 를 쓴다. 글자는 `type-title-1`/`type-sub`, 버튼은 `primaryButton`/`dangerButton`/`textLink`, 장식 아이콘 없음. 색과 버튼 규칙은 `docs/design-system/color.md`. 설명 문단은 "{total}강 중 {round}까지 진행했어요. 임시저장하면 24시간 동안 보관되고, 저장하지 않으면 진행 내역이 사라져요." 두 줄이고, 버튼 안 부연 문구는 없앴다.
 
 | 버튼 | 동작 |
 |---|---|

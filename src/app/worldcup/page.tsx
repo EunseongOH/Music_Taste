@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Disc } from "lucide-react";
 import WinnerReveal from "@/components/result/WinnerReveal";
+import { Sheet, primaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
@@ -231,6 +231,18 @@ export default function WorldCupPage() {
     loadState();
   }, [user]);
 
+  const currentState = (): WorldcupState => ({
+    tracks, phase, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks,
+  });
+
+  /** DB 저장. confirm=true 면 임시저장(확정, 24시간 보관). 자동저장은 1시간 버퍼. */
+  const saveDraft = async (confirm: boolean) => {
+    const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
+    const ok = await saveWorldcupDraft(currentState(), { confirm, withTracks: !tracksWrittenRef.current }, storedArtists, isSingleArtistMode);
+    if (ok) tracksWrittenRef.current = true;
+    return ok;
+  };
+
   // Save progress on state change (Local storage & Supabase)
   useEffect(() => {
     if (phase === "loading") return;
@@ -261,18 +273,6 @@ export default function WorldCupPage() {
       return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
     }
   }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, picks, user, isChallenge]);
-
-  const currentState = (): WorldcupState => ({
-    tracks, phase, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks,
-  });
-
-  /** DB 저장. confirm=true 면 임시저장(확정, 24시간 보관). 자동저장은 1시간 버퍼. */
-  const saveDraft = async (confirm: boolean) => {
-    const storedArtists = JSON.parse(sessionStorage.getItem("selectedArtists") || "[]");
-    const ok = await saveWorldcupDraft(currentState(), { confirm, withTracks: !tracksWrittenRef.current }, storedArtists, isSingleArtistMode);
-    if (ok) tracksWrittenRef.current = true;
-    return ok;
-  };
 
   // 브라우저·네비게이션 바 뒤로가기를 가로채 나가기 모달을 띄운다 (docs/worldcup-draft-plan.md 3-3).
   useEffect(() => {
@@ -704,101 +704,59 @@ export default function WorldCupPage() {
         )}
       </div>
 
-      {/* 나가기 확인 모달 (tracks 페이지 나가기 마법사와 같은 카드) */}
-      <AnimatePresence>
-        {exitModal && (() => {
-          const total = getInitialRoundSize(tracks.length);
-          const round = getLocalizedRoundName(currentRoundName, locale);
-          const canSave = !isChallenge;
-          const t = locale === "en" ? {
-            title: "Leave the World Cup?",
-            desc: canSave
-              ? `You're at ${round} of ${total}.\nSave to keep it for 24 hours and resume from Home or My Taste Space.`
-              : `You're at ${round} of ${total}.\nLeaving now discards your picks.`,
-            save: user ? "Save and leave" : "Log in to save",
-            saveSub: "Kept for 24 hours",
-            discard: "Leave without saving",
-            discardSub: user ? "Saved progress is deleted too" : "",
-            keep: "Keep playing",
-            saving: "Saving…",
-          } : {
-            title: "월드컵을 그만둘까요?",
-            desc: canSave
-              ? `${total}강 중 ${round}까지 진행했어요.\n임시저장하면 24시간 동안 보관되고, 홈이나 내 취향 스페이스에서 이어할 수 있어요.`
-              : `${total}강 중 ${round}까지 진행했어요.\n나가면 지금까지 고른 곡이 사라져요.`,
-            save: user ? "임시저장하고 나가기" : "로그인하고 임시저장하기",
-            saveSub: "24시간 동안 보관돼요",
-            discard: "저장하지 않고 나가기",
-            discardSub: user ? "임시저장한 내역도 함께 삭제돼요" : "",
-            keep: "계속하기",
-            saving: "저장 중…",
-          };
-          return (
-            <>
-              <motion.div
-                className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => !isSaving && setExitModal(false)}
-              />
-              <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
-                <motion.div
-                  className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
-                  initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                >
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
-                    className="w-16 h-16 bg-navy rounded-full flex items-center justify-center mb-5 shadow-lg border-2 border-point relative shrink-0"
-                  >
-                    <Disc className="text-cream" size={32} />
-                    <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
-                  </motion.div>
-                  <h2 className="font-serif text-2xl font-bold text-navy mb-2 tracking-tight">{t.title}</h2>
-                  <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                    {t.desc}
-                  </p>
-                  <div className="flex flex-col gap-2.5 w-full">
-                    {canSave && (
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        disabled={isSaving}
-                        onClick={handleSaveAndExit}
-                        className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer disabled:opacity-60"
-                      >
-                        {isSaving ? t.saving : t.save}
-                        {!isSaving && <span className="block text-[11px] font-medium text-cream/70 mt-0.5">{t.saveSub}</span>}
-                      </motion.button>
-                    )}
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={isSaving}
-                      onClick={handleDiscardAndExit}
-                      className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer disabled:opacity-60"
-                    >
-                      {t.discard}
-                      {canSave && t.discardSub && <span className="block text-[11px] font-medium text-red-400 mt-0.5">{t.discardSub}</span>}
-                    </motion.button>
-                    <button
-                      disabled={isSaving}
-                      onClick={() => setExitModal(false)}
-                      className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
-                    >
-                      {t.keep}
-                    </button>
-                  </div>
-                </motion.div>
+      {/* 나가기 확인 — 내 취향 스페이스와 같은 하단 시트. 글자는 type-* 토큰, 색은 docs/design-system/color.md */}
+      {(() => {
+        const total = getInitialRoundSize(tracks.length);
+        const round = getLocalizedRoundName(currentRoundName, locale);
+        const canSave = !isChallenge;
+        const t = locale === "en" ? {
+          title: "Leave the World Cup?",
+          desc: canSave
+            ? `You're at ${round} of ${total}.\nSave to keep it for 24 hours, or leave and lose it.`
+            : `You're at ${round} of ${total}.\nLeaving now discards your picks.`,
+          save: user ? "Save and leave" : "Log in to save",
+          discard: "Leave without saving",
+          keep: "Keep playing",
+          saving: "Saving…",
+        } : {
+          title: "월드컵을 그만둘까요?",
+          desc: canSave
+            ? `${total}강 중 ${round}까지 진행했어요.\n임시저장하면 24시간 동안 보관되고, 저장하지 않으면 진행 내역이 사라져요.`
+            : `${total}강 중 ${round}까지 진행했어요.\n나가면 지금까지 고른 곡이 저장되지 않아요.`,
+          save: user ? "임시저장하고 나가기" : "로그인하고 임시저장하기",
+          discard: "저장하지 않고 나가기",
+          keep: "계속하기",
+          saving: "저장하고 있어요…",
+        };
+        return (
+          <Sheet
+            open={exitModal}
+            onClose={() => { if (!isSaving) setExitModal(false); }}
+            closeLabel={t.keep}
+            header={
+              <>
+                <h2 className="type-title-1 text-navy">{t.title}</h2>
+                <p className="type-sub text-navy/70 mt-1 whitespace-pre-line break-keep">{t.desc}</p>
+              </>
+            }
+            footer={
+              <div className="flex flex-col gap-2">
+                {canSave && (
+                  <button disabled={isSaving} onClick={handleSaveAndExit} className={`${primaryButton} w-full`}>
+                    {isSaving ? t.saving : t.save}
+                  </button>
+                )}
+                <button disabled={isSaving} onClick={handleDiscardAndExit} className={`${dangerButton} w-full`}>
+                  {t.discard}
+                </button>
+                <button disabled={isSaving} onClick={() => setExitModal(false)} className={`${textLink} self-center mt-2`}>
+                  {t.keep}
+                </button>
               </div>
-            </>
-          );
-        })()}
-      </AnimatePresence>
+            }
+          />
+        );
+      })()}
 
       {/* 게스트가 임시저장을 누르면 로그인부터. 로그인되면 user 가 바뀌어 다시 누를 수 있다. */}
       <LoginModal

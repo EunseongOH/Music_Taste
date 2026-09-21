@@ -25,6 +25,10 @@ export const primaryButton =
 export const secondaryButton =
   "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full bg-navy/5 text-navy type-body-strong active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50";
 
+/** 파괴적 보조 버튼: 옅은 벽돌빛 면 + 벽돌빛 글자. 되돌릴 수 없는 행동에만(삭제·저장하지 않고 나가기). */
+export const dangerButton =
+  "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full bg-danger/10 text-danger type-body-strong active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50";
+
 /** 글자 링크. */
 export const textLink =
   "inline-flex items-center gap-1 type-sub text-navy border-b border-navy/20 pb-0.5 cursor-pointer hover:border-navy transition-colors";
@@ -336,7 +340,7 @@ export function ConfirmSheet({
           <button
             onClick={onConfirm}
             disabled={busy}
-            className={`${primaryButton} flex-1 ${danger ? "!bg-red-700" : ""}`}
+            className={`${primaryButton} flex-1 ${danger ? "!bg-danger" : ""}`}
           >
             {confirmLabel}
           </button>
@@ -386,7 +390,7 @@ export function Toast({ toast }: { toast: ToastState }) {
         >
           <p
             className={`max-w-[400px] px-4 py-3 rounded-2xl type-sub ${
-              toast.tone === "error" ? "bg-red-900 text-red-50" : "bg-navy text-cream"
+              toast.tone === "error" ? "bg-danger text-cream" : "bg-navy text-cream"
             }`}
           >
             {toast.text}

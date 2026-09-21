@@ -701,7 +701,7 @@ export default function ExploreTastePage() {
                 </label>
                 <button
                   onClick={() => setPendingDeleteId(archiveDetail.id)}
-                  className="type-sub text-red-700 cursor-pointer"
+                  className="type-sub text-danger cursor-pointer"
                 >
                   {t.deleteBtn}
                 </button>
