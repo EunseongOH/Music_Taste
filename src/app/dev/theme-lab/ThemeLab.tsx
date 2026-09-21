@@ -23,6 +23,7 @@ import {
   useToast,
 } from "@/components/space/SpaceUI";
 import FeedbackModal from "@/components/FeedbackModal";
+import Studies from "./Studies";
 
 const THEMES = [
   { id: "legacy", label: "지금 (cream · navy)" },
@@ -376,6 +377,12 @@ export default function ThemeLab() {
             오류 토스트
           </button>
         </div>
+      </section>
+
+      {/* 카드·턴테이블 시안 */}
+      <section id="studies" className="flex flex-col gap-4">
+        <SectionTitle title="카드 · 턴테이블 시안" />
+        <Studies />
       </section>
 
       {/* 실제 화면 */}
