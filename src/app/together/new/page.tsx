@@ -49,6 +49,41 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
   );
 }
 
+/** 카탈로그가 주는 곡. RankedTrack 에 앨범 정보가 더 붙어 있다. */
+type CatalogTrack = RankedTrack & { albumName?: string; releaseDate?: string };
+
+/** 앨범 하나 — 화면에서 접었다 펴는 단위. */
+interface AlbumGroup {
+  name: string;
+  year: string;
+  cover: string;
+  tracks: CatalogTrack[];
+}
+
+/**
+ * 곡을 앨범으로 묶는다. 최신 앨범이 위로 온다.
+ * 카탈로그가 이미 앨범명·발매일을 함께 주므로 새로 받아올 것이 없다(Spotify 호출 0).
+ */
+function groupByAlbum(tracks: CatalogTrack[]): AlbumGroup[] {
+  const map = new Map<string, AlbumGroup>();
+  for (const track of tracks) {
+    const name = track.albumName || "기타";
+    const found = map.get(name);
+    if (found) {
+      found.tracks.push(track);
+      if ((track.releaseDate ?? "") > (found.year ? `${found.year}-00` : "")) found.year = (track.releaseDate ?? "").slice(0, 4);
+      continue;
+    }
+    map.set(name, {
+      name,
+      year: (track.releaseDate ?? "").slice(0, 4),
+      cover: track.albumImage,
+      tracks: [track],
+    });
+  }
+  return [...map.values()].sort((a, b) => b.year.localeCompare(a.year));
+}
+
 interface Source {
   key: string;
   label: string;
@@ -58,7 +93,7 @@ interface Source {
   /** 링크 이름 기본값 */
   title: string;
   artistName: string | null;
-  tracks: RankedTrack[];
+  tracks: CatalogTrack[];
   /** 저장된 취향표에서 온 경우 그 id */
   resultId: string | null;
 }
@@ -89,6 +124,8 @@ export default function TogetherNewPage() {
   const [cards, setCards] = useState<SavedRow[] | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
+  /** 펼쳐 둔 앨범. 처음에는 전부 접혀 있다. */
+  const [openAlbums, setOpenAlbums] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
   /** 초대 문구에 "{방장}님과 얼마나 비슷한지"가 들어간다 — 이름이 없으면 안내가 헐거워진다. */
   const [nickname, setNickname] = useState("");
@@ -195,7 +232,7 @@ export default function TogetherNewPage() {
   const pickArtist = async (artist: CatalogArtist) => {
     setArtistBusy(true);
     const res = await fetch(`/api/together/catalog?artistId=${encodeURIComponent(artist.id)}`);
-    const json = (await res.json()) as { tracks?: RankedTrack[] };
+    const json = (await res.json()) as { tracks?: CatalogTrack[] };
     const tracks = json.tracks ?? [];
     setArtistBusy(false);
     if (tracks.length < 4) {
@@ -214,7 +251,13 @@ export default function TogetherNewPage() {
     };
     setArtistSource(next);
     setSourceKey(next.key);
-    setOff(new Set());
+    /*
+     * 아무것도 선택하지 않은 채로 시작한다 — 전곡 모드(/tracks)와 같다.
+     * 전에는 전곡이 선택된 채로 열려서, 전곡으로 할 생각이 아니던 사람도
+     * 빼는 일부터 해야 했다. `off` 는 "뺀 곡"이라 전부 넣어 두면 아무것도 안 고른 상태다.
+     */
+    setOff(new Set(tracks.map((track) => track.id)));
+    setOpenAlbums(new Set());
     setTitle(artist.name);
   };
 
@@ -251,6 +294,17 @@ export default function TogetherNewPage() {
     prevSources.find((s) => s.key === sourceKey) ??
     null;
   const chosen = useMemo(() => (source ? source.tracks.filter((t) => !off.has(t.id)) : []), [source, off]);
+
+  /** 주어진 곡들을 한꺼번에 넣거나 뺀다(`off` 는 "뺀 곡" 목록이다). */
+  const pickTracks = (ids: string[], on: boolean) =>
+    setOff((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
 
   const choose = (next: Source) => {
     setSourceKey(next.key);
@@ -495,45 +549,115 @@ export default function TogetherNewPage() {
           )}
 
           <div className="flex items-center gap-2 mb-3">
-            <button onClick={() => setOff(new Set())} className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer">
-              전부 켜기
-            </button>
             <button
-              onClick={() => setOff(new Set(source.tracks.map((t) => t.id)))}
+              onClick={() => pickTracks(source.tracks.map((track) => track.id), true)}
               className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
             >
-              전부 끄기
+              전체 선택
+            </button>
+            <button
+              onClick={() => pickTracks(source.tracks.map((track) => track.id), false)}
+              className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
+            >
+              전체 해제
             </button>
             {chosen.length > 48 && <span className="type-caption text-point-ink">곡이 많으면 소트하는 데 오래 걸려요</span>}
           </div>
 
-          <ul className="flex flex-col divide-y divide-navy/10">
-            {source.tracks.map((track) => {
-              const isOff = off.has(track.id);
-              return (
-                <li key={track.id} className="flex items-center gap-3 py-2.5">
-                  <Cover src={track.albumImage} alt={track.title} size={36} />
-                  <span className={`flex-1 min-w-0 ${isOff ? "opacity-40" : ""}`}>
-                    <span className="block type-body-strong text-navy truncate">{track.title}</span>
-                    <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
-                  </span>
-                  <button
-                    onClick={() =>
-                      setOff((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(track.id)) next.delete(track.id);
-                        else next.add(track.id);
-                        return next;
-                      })
-                    }
-                    className={`h-8 px-3 rounded-full type-caption cursor-pointer ${isOff ? "bg-navy/5 text-navy/70" : "bg-navy text-cream"}`}
-                  >
-                    {isOff ? "뺐어요" : "넣음"}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {source.artistId ? (
+            /*
+             * 아티스트를 고른 경우에는 앨범별로 펼쳐 고른다(전곡 모드와 같은 방식).
+             * "지금 고른 곡"·"내 취향표"에서 온 곡에는 앨범 정보가 없어 아래의 평평한 목록으로 간다.
+             */
+            <ul className="flex flex-col gap-2">
+              {groupByAlbum(source.tracks).map((album) => {
+                const ids = album.tracks.map((track) => track.id);
+                const picked = ids.filter((id) => !off.has(id)).length;
+                const open = openAlbums.has(album.name);
+                return (
+                  <li key={album.name} className="rounded-2xl bg-white/50 border border-navy/10 overflow-hidden">
+                    <div className="flex items-center gap-3 p-3">
+                      <button
+                        onClick={() =>
+                          setOpenAlbums((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(album.name)) next.delete(album.name);
+                            else next.add(album.name);
+                            return next;
+                          })
+                        }
+                        className="flex-1 min-w-0 flex items-center gap-3 text-left cursor-pointer"
+                      >
+                        <Cover src={album.cover} alt={album.name} size={44} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block type-body-strong text-navy truncate">{album.name}</span>
+                          <span className="block type-caption text-navy/70">
+                            {album.year ? `${album.year} · ` : ""}
+                            {album.tracks.length}곡{picked > 0 ? ` · ${picked}곡 선택` : ""}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => pickTracks(ids, picked !== ids.length)}
+                        className={`h-8 px-3 rounded-full type-caption cursor-pointer shrink-0 ${
+                          picked === ids.length ? "bg-navy text-cream" : "bg-navy/5 text-navy"
+                        }`}
+                      >
+                        {picked === ids.length ? "전체 해제" : "전체 선택"}
+                      </button>
+                    </div>
+
+                    {open && (
+                      <ul className="flex flex-col divide-y divide-navy/10 border-t border-navy/10">
+                        {album.tracks.map((track) => {
+                          const on = !off.has(track.id);
+                          return (
+                            <li key={track.id} className="flex items-center gap-3 px-3 py-2.5">
+                              <span className={`flex-1 min-w-0 ${on ? "" : "opacity-50"}`}>
+                                <span className="block type-body-strong text-navy truncate">{track.title}</span>
+                                <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
+                              </span>
+                              <button
+                                onClick={() => pickTracks([track.id], !on)}
+                                className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
+                                  on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
+                                }`}
+                              >
+                                {on ? "선택" : "선택 안 함"}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <ul className="flex flex-col divide-y divide-navy/10">
+              {source.tracks.map((track) => {
+                const on = !off.has(track.id);
+                return (
+                  <li key={track.id} className="flex items-center gap-3 py-2.5">
+                    <Cover src={track.albumImage} alt={track.title} size={36} />
+                    <span className={`flex-1 min-w-0 ${on ? "" : "opacity-50"}`}>
+                      <span className="block type-body-strong text-navy truncate">{track.title}</span>
+                      <span className="block type-caption text-navy/70 truncate">{track.artistName}</span>
+                    </span>
+                    <button
+                      onClick={() => pickTracks([track.id], !on)}
+                      className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
+                        on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
+                      }`}
+                    >
+                      {on ? "선택" : "선택 안 함"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
           <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
             <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
