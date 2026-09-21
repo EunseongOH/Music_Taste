@@ -205,9 +205,40 @@ function isMatchingArtist(artistName: string, parsed: ParsedName): boolean {
 // 4. Rate-Limit 회피용 Spotify API Fetcher
 // -------------------------------------------------------------------------
 
+/**
+ * 이 스크립트는 `spotifyFetch` 를 지나지 않아서 엔드포인트 가드 밖에 있었다(2026-09-21).
+ * 캐시를 채우는 게 목적이라 캐시 전용 모드(SPOTIFY_CACHE_ONLY)는 따르지 않는다 —
+ * 그러면 하는 일이 없어진다. 대신 화면과 **같은 계수기·같은 차단**을 쓴다.
+ * 문서: docs/mode-pivot.md §7.0
+ */
+class QuotaBlocked extends Error {}
+
+const ENDPOINT = '/v1/search';
+
+/** 화면 쪽과 같은 RPC. 차단 중이면 false 를 돌려주고, 호출 수를 하루 단위로 센다. */
+async function passGate(): Promise<boolean> {
+  try {
+    const { data, error } = await createAdminClient().rpc('spotify_endpoint_gate', { ep: ENDPOINT });
+    return error ? true : data !== false;   // RPC 실패가 워밍을 죽이지 않는다
+  } catch {
+    return true;
+  }
+}
+
+async function recordBlock(secs: number, reason: string) {
+  try {
+    const block = reason === 'QUOTA_EXCEEDED' ? secs : Math.min(secs, 3600);
+    await createAdminClient().rpc('spotify_record_429', { ep: ENDPOINT, secs: block, why: reason });
+  } catch { /* 기록 실패가 흐름을 바꾸지 않는다 */ }
+}
+
 async function fetchSpotify(url: string, retries = 3): Promise<any> {
+  if (!(await passGate())) {
+    throw new QuotaBlocked(`${ENDPOINT} 가 차단 중입니다. 오늘은 여기까지 채웁니다.`);
+  }
+
   const token = await getSpotifyAccessToken();
-  
+
   // 한국 마켓 및 한국어 타겟 로케일로 우선 Fetch
   let adjustedUrl = url;
   if (url.includes("?")) {
@@ -226,13 +257,23 @@ async function fetchSpotify(url: string, retries = 3): Promise<any> {
   });
 
   // 429 Too Many Requests 처리
-  if (response.status === 429 && retries > 0) {
+  if (response.status === 429) {
     const retryAfterHeader = response.headers.get('Retry-After');
     const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
-    const sleepMs = retryAfterSeconds * 1000 + 500; // 버퍼 500ms 추가
+    const reason: string | undefined = await response.clone().json().then((b) => b?.error?.reason).catch(() => undefined);
+
+    /*
+     * 쿼터 초과면 Retry-After 가 몇 시간~하루다. 예전에는 그만큼 그냥 잤다 —
+     * 스크립트가 하루를 붙잡고 있다가 깨어나 또 부딪힌다. 이제는 기록하고 멈춘다.
+     * 화면 쪽과 같은 테이블에 남기므로, 차단 중에는 서비스도 이 엔드포인트를 안 부른다.
+     */
+    if (retryAfterSeconds > 5 || retries <= 0) {
+      await recordBlock(retryAfterSeconds, reason ?? 'RATE_LIMIT');
+      throw new QuotaBlocked(`429 ${reason ?? 'RATE_LIMIT'} · Retry-After ${retryAfterSeconds}초. 오늘은 여기까지 채웁니다.`);
+    }
 
     console.warn(`[Spotify API] 429 Too Many Requests 감지. Retry-After: ${retryAfterSeconds}초. 대기 후 재시도합니다...`);
-    await sleep(sleepMs);
+    await sleep(retryAfterSeconds * 1000 + 500); // 버퍼 500ms 추가
     return fetchSpotify(url, retries - 1);
   }
 
@@ -414,6 +455,12 @@ async function main() {
         successCount++;
 
       } catch (err: any) {
+        // 쿼터가 막히면 남은 아티스트를 계속 두드리지 않는다. 다음 실행에서 이어서 채운다.
+        if (err instanceof QuotaBlocked) {
+          console.log(`\n🛑 [쿼터] ${err.message}`);
+          isCapReached = true;
+          break;
+        }
         console.error(`  -> [ERROR] 처리 중 예외 발생:`, err.message || err);
         failCount++;
       }
