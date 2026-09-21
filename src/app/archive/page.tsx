@@ -20,6 +20,7 @@ import {
 } from "@/utils/unreleasedDb";
 import { searchSpotifyArtists } from "@/utils/spotify";
 import { displayNickname } from "@/utils/nickname";
+import { VISIBLE_MODES } from "@/config/modes";
 import {
   ConfirmSheet,
   EmptyState,
@@ -304,6 +305,7 @@ export default function ArchivePage() {
           .from("tournament_results")
           .select("*")
           .eq("is_public", true)
+          .in("is_single_artist", VISIBLE_MODES)
           .order("created_at", { ascending: false });
 
         if (error) throw error;

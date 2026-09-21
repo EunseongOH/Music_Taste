@@ -11,7 +11,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
-import { MIX_MATCH } from "@/config/modes";
+import { MIX_MATCH, VISIBLE_MODES } from "@/config/modes";
 import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
 interface ProfileModalProps {
@@ -95,6 +95,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
             .from('tournament_results')
             .select('*')
             .eq('user_id', user.id)
+            .in("is_single_artist", VISIBLE_MODES)
             .order('created_at', { ascending: false });
             
           // 2. Fetch active drafts

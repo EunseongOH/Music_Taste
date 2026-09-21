@@ -15,3 +15,14 @@
  *  3. 최근 30일 결과 9건 중 8건이 한 아티스트 모드였다.
  */
 export const MIX_MATCH = false;
+
+/**
+ * 목록에 보여 줄 모드(`is_single_artist` 값). 믹스 매치가 꺼져 있으면 한 아티스트 모드만.
+ *
+ * 취향표 **목록** 쿼리에 `.in("is_single_artist", VISIBLE_MODES)` 로 붙인다 — 내 취향 스페이스,
+ * 우리의 취향 아카이브, 프로필 창, 같이 소트하기의 "이미 한 소트에서 가져오기".
+ * 행은 DB 에 그대로 있고, MIX_MATCH 를 켜면 27건이 그대로 돌아온다.
+ *
+ * 주소로 직접 여는 공유 취향표(`/taste/[id]`)에는 붙이지 않는다 — 이미 나간 링크는 살려 둔다.
+ */
+export const VISIBLE_MODES: boolean[] = MIX_MATCH ? [true, false] : [true];

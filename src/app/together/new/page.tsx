@@ -10,6 +10,7 @@ import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
 import { createChallenge } from "@/utils/togetherDb";
 import * as platform from "@/utils/platform";
+import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
@@ -108,6 +109,7 @@ export default function TogetherNewPage() {
         .from("tournament_results")
         .select("id,title,artist_name,is_single_artist,created_at,ranking")
         .eq("user_id", user.id)
+        .in("is_single_artist", VISIBLE_MODES)
         .order("created_at", { ascending: false })
         .limit(30);
       if (alive) setCards((data ?? []) as SavedRow[]);

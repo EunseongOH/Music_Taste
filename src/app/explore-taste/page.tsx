@@ -10,6 +10,7 @@ import { getSafeLocale } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
 import { displayNickname } from "@/utils/nickname";
+import { VISIBLE_MODES } from "@/config/modes";
 import {
   Avatar,
   ConfirmSheet,
@@ -212,6 +213,7 @@ export default function ExploreTastePage() {
         .from("tournament_results")
         .select("*")
         .eq("user_id", user.id)
+        .in("is_single_artist", VISIBLE_MODES)
         .order("created_at", { ascending: false });
 
       if (myError) throw myError;
@@ -227,6 +229,7 @@ export default function ExploreTastePage() {
         .select("*")
         .eq("is_public", true)
         .neq("user_id", user.id)
+        .in("is_single_artist", VISIBLE_MODES)
         .order("created_at", { ascending: false });
 
       if (othersError) throw othersError;
