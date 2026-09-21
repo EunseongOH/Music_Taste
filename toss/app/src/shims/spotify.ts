@@ -35,7 +35,7 @@ async function call(fn: string, args: unknown[]): Promise<unknown> {
 const proxy = <K extends keyof Api>(fn: K) =>
   ((...args: unknown[]) => call(fn, args)) as Api[K];
 
-// 서버의 ALLOWED(src/app/api/toss/spotify/route.ts)와 같은 9개여야 한다.
+// 서버의 ALLOWED(src/app/api/toss/spotify/route.ts)와 같은 8개여야 한다.
 export const searchSpotifyArtists = proxy('searchSpotifyArtists');
 export const getInitialArtists = proxy('getInitialArtists');
 export const getRelatedArtists = proxy('getRelatedArtists');
