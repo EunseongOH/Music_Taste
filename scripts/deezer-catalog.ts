@@ -12,6 +12,7 @@
 
 import { createAdminClient } from "../src/utils/supabase/admin";
 import { buildDigest } from "../src/utils/trackDigest";
+import { searchNames } from "../src/utils/romanize";
 
 const sb = createAdminClient();
 // Supabase 무료 한도는 500MB. 여유를 두고 멈춘다.
@@ -91,11 +92,21 @@ async function artists(limit: number, genres?: string[]) {
   let ok = 0, weak = 0, none = 0;
   for (const [i, a] of todo.entries()) {
     if (i % 25 === 0) console.log(`  ${i}/${todo.length} 확정 ${ok} · 보류 ${weak} · 없음 ${none} · 호출 ${calls} ${new Date().toLocaleTimeString()}`);
-    const queries = [...new Set([a.name, a.name_ko].filter(Boolean))] as string[];
+    // 한글 이름으로 못 찾는 국내 아티스트가 있다. Deezer 에 로마자로 올라와 있는 경우다
+    // (산보 -> Sanbo, 산만한시선 -> Sanmanhan). 로마자 표기도 함께 찾는다.
+    const queries = [...new Set([a.name, a.name_ko].filter(Boolean).flatMap((n) => searchNames(n as string)))];
     let picked: any = null, matchedBy = "";
     for (const q of queries) {
       const res = await dz(`/search/artist?q=${encodeURIComponent(q)}&limit=5`);
-      const cands = (res?.data ?? []).filter((d: any) => norm(d.name) === norm(q));
+      const nq = norm(q);
+      const cands = (res?.data ?? []).filter((d: any) => {
+        const nd = norm(d.name);
+        if (nd === nq) return true;
+        // 이름을 줄여 올린 경우 ("산만한시선" 의 로마자 앞부분이 "Sanmanhan")
+        const short = nd.length <= nq.length ? nd : nq;
+        const long = nd.length <= nq.length ? nq : nd;
+        return short.length >= 6 && long.startsWith(short);
+      });
       for (const c of cands) {
         // 이름이 같아도 동명이인이 있다. 앨범 제목이 하나라도 겹쳐야 확정한다.
         const alb = await dz(`/artist/${c.id}/albums?limit=50`);

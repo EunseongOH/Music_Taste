@@ -17,6 +17,7 @@
 //       --go 없이 돌리면 무엇을 올릴지만 보여준다.
 
 import { createAdminClient } from "../src/utils/supabase/admin";
+import { searchNames } from "../src/utils/romanize";
 
 const sb = createAdminClient();
 const GAP_MS = 260;                       // Deezer 초당 4회 이하
@@ -113,7 +114,8 @@ async function main() {
   for (const [i, c] of cands.entries()) {
     if (i % 20 === 0) console.log(`  ${i}/${cands.length} 승격 ${up} · 근거부족 ${no} · Deezer없음 ${notFound} · 호출 ${calls} ${new Date().toLocaleTimeString()}`);
     const ours = new Set(c.albums.map(normAlbum));
-    const queries = [...new Set([c.a.name, c.a.name_ko].filter(Boolean))] as string[];
+    // 한글 이름으로 못 찾으면 로마자 표기로도 찾아본다
+    const queries = [...new Set([c.a.name, c.a.name_ko].filter(Boolean).flatMap((n) => searchNames(n as string)))];
     let best: { id: number; name: string; overlap: number; titles: string[] } | null = null;
     for (const q of queries) {
       const res = await dz(`/search/artist?q=${encodeURIComponent(q)}&limit=5`);
