@@ -181,7 +181,7 @@ function FeedbackForm({
                         onClick={() => setKind(opt.id)}
                         className={`w-full px-4 py-2.5 rounded-xl border text-left transition-all active:scale-[0.99] ${
                           kind === opt.id
-                            ? "type-body-strong bg-navy text-cream border-navy shadow-sm"
+                            ? "type-body-strong bg-brand text-cream border-brand shadow-sm"
                             : "type-body bg-white/60 text-navy/70 border-navy/10 hover:border-navy/30"
                         }`}
                       >

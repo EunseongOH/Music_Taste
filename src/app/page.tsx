@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ProfileHeader from "@/components/ProfileHeader";
+import ModeCard from "@/components/home/ModeCard";
 import { Sheet, primaryButton, dangerButton } from "@/components/space/SpaceUI";
 
 import { createClient } from "@/utils/supabase/client";
@@ -411,7 +412,7 @@ export default function Home() {
       </div>
 
       {/* Premium Floating Language Switcher */}
-      <div className={`absolute top-6 left-6 flex items-center gap-1.5 bg-[#F5F2ED]/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300 ${
+      <div className={`absolute top-6 left-6 flex items-center gap-1.5 bg-cream/85 backdrop-blur-md p-1 rounded-full border border-navy/10 shadow-sm transition-all duration-300 ${
         isModalOpen || showRestoreModal ? "z-30 pointer-events-none opacity-0 select-none" : "z-50"
       }`}>
         <div className="flex items-center justify-center pl-2 pr-1">
@@ -421,7 +422,7 @@ export default function Home() {
           onClick={() => handleLanguageToggle("ko")}
           disabled={isModalOpen || showRestoreModal}
           className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${locale === "ko"
-              ? "bg-navy text-cream shadow-sm scale-105"
+              ? "bg-ink text-cream shadow-sm scale-105"
               : "text-navy/60 hover:text-navy hover:bg-navy/5"
             }`}
         >
@@ -431,7 +432,7 @@ export default function Home() {
           onClick={() => handleLanguageToggle("en")}
           disabled={isModalOpen || showRestoreModal}
           className={`px-2.5 py-1 rounded-full text-[10px] font-sans font-bold transition-all duration-200 cursor-pointer ${locale === "en"
-              ? "bg-navy text-cream shadow-sm scale-105"
+              ? "bg-ink text-cream shadow-sm scale-105"
               : "text-navy/60 hover:text-navy hover:bg-navy/5"
             }`}
         >
@@ -469,21 +470,9 @@ export default function Home() {
             animate={{ x: `-${activeCardIndex * 100}%` }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           >
-            {modes.map((mode) => (
+            {modes.map((mode, idx) => (
               <div key={mode.id} className="w-full px-4 shrink-0 flex justify-center">
-                <div className="w-full bg-[#FAF7F2] border-[3px] border-navy rounded-[2.5rem] p-6 shadow-md hover:shadow-lg transition-shadow duration-300 relative flex flex-col items-center justify-between text-center min-h-[170px] select-none">
-                  {/* Mode Card Header Badge */}
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center justify-center h-6 px-3.5 bg-point text-white text-[11px] font-sans font-bold rounded-full shadow-sm leading-none whitespace-nowrap">
-                    {mode.badge}
-                  </div>
-
-                  <div className="mt-2 w-full flex-1 flex flex-col justify-center">
-                    <h3 className="text-xl sm:text-2xl text-navy font-black tracking-tight">{mode.title}</h3>
-                    <p className="font-sans text-xs text-charcoal/70 leading-relaxed mt-2 break-keep px-2">
-                      {mode.desc}
-                    </p>
-                  </div>
-                </div>
+                <ModeCard badge={mode.badge} title={mode.title} desc={mode.desc} tone={idx} />
               </div>
             ))}
           </motion.div>
@@ -527,7 +516,7 @@ export default function Home() {
               e.preventDefault();
               handleStart();
             }}
-            className="px-12 py-3 bg-navy text-cream rounded-full hover:bg-navy/90 transition-all font-semibold text-base shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer min-w-[180px] inline-flex justify-center items-center"
+            className="px-12 py-3 bg-brand text-cream rounded-full hover:bg-brand/90 transition-all font-semibold text-base shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer min-w-[180px] inline-flex justify-center items-center"
           >
             {modes[activeCardIndex].btnText}
           </a>

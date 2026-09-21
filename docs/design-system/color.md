@@ -101,7 +101,7 @@
 | 직접 적힌 주 버튼 | 12: explore 2 · genres 1 · worldcup 1 · LoginModal 3 · ResultScreen 4 · toss Bootstrap 1 | `bg-brand`, `hover:bg-brand/90` |
 | 직접 적힌 선택 상태 | 4: together/new 3 · ResultScreen 1 | `bg-brand` |
 | 면·배지 (그대로 `bg-navy` = ink) | 5: explore 맨 위로 버튼 1 · ProfileModal 카메라 배지 1 · SnakePathTimeline 순위 배지 3 | 아래 판단 |
-| canonical 통합 뒤 | 7: `page.tsx` 3(언어 전환 2 · 시작하기) · `tracks/page.tsx` 3 · `FeedbackModal.tsx` 1 | 금지 파일. 홈 "시작하기"가 남색으로 남는다 |
+| canonical 통합 뒤 옮긴 곳 (2026-09-22, develop 8ed7568 병합 후) | 10: `page.tsx` 시작하기 1 → `bg-brand` · 언어 전환 2 → **`bg-ink`** · `tracks/page.tsx` 선택 상태 1 · 미발매곡 등록 버튼 1 → `bg-brand`, 알림 면 1 → `bg-ink` · `FeedbackModal` 종류 선택 1 → `bg-brand`(+`border-brand`) · `together/new` 선택 상태 3 → `bg-brand`(develop 이 앨범 목록을 새로 짜서 다시 적용) | 언어 전환은 선택 상태지만 보조 컨트롤이다. brand 로 두면 홈에서 파랑이 네 곳이 되어 원칙 7(세 곳까지)을 넘는다 |
 | 미룸 | 12: 관리자 화면 10 · dev 점검 페이지 2 | — |
 
 면·배지를 brand 로 올리지 않은 이유
@@ -133,7 +133,7 @@
 
 | 곳 | 무엇이 남나 |
 |---|---|
-| 홈 모드 카드 면, 언어 전환 알약 (`page.tsx`) | 크림빛 면(#FAF7F2 · #F1EADC 계열)이 흰 바탕 위에 누렇게 뜬다 |
+| ~~홈 모드 카드 면, 언어 전환 알약~~ | **해결 (2026-09-22).** 카드는 `ModeCard` 로 교체(새 테마에서 (c-1)), 알약은 `bg-[#F5F2ED]/85` → `bg-cream/85`. legacy 는 develop 서버와 전체 페이지 픽셀 차이 0 |
 | `#F5F2ED` 직접 표기 15곳 (`tracks`, `explore`, `LoginModal`, `genres` 등) | 시트·모달 바탕이 크림으로 남는다 → `bg-cream` |
 | `#E67E22` 직접 표기 6곳 | 옛 주황이 새 주황(#FD7E3E)과 섞인다 → `point` |
 | `bg-white` 67곳 | A 안에서 바탕과 같아져 카드 경계가 사라진다. `bg-white/60` 같은 반투명 면도 마찬가지 → 회색 면(`fill`)이나 선으로 다시 설계 |
@@ -143,6 +143,8 @@
 | `red-500` 계열 11곳 | develop 의 옮길 곳 목록과 같다 → `danger` |
 | 카카오 #FEE500, 인스타그램 그라데이션 | 브랜드 색. 예외로 둔다 |
 | `genres/page.tsx` 19곳 | 믹스 매치 격리 중이라 보이지 않는다. 되살릴 때 같이 |
+
+같이 소트하기의 새 화면(develop d708e8b~9406050)은 새 톤에서 어색한 곳을 찾지 못했다. 초대 화면의 사진 위 딤은 `var(--app-bg)` 로 수렴하는 그라데이션이라 sky-tint 에서 하늘빛으로 자연스럽게 이어진다(실제 코드로 확인). 이름 팝업은 `bg-cream` + `primaryButton` 이라 그대로 따라온다. 남는 것: `together/new` 의 검색칸·아티스트 칩 `bg-white/50`(하늘빛 바탕에서는 문제없고 A 안에서만 경계가 약해진다), 펼친 앨범의 LP 그림(#222 → #0a0a0a 방사형, 무채색이라 그대로 둔다).
 
 파일별 직접 표기 수(취향표 템플릿 제외): genres 19 · ResultScreen 16 · tracks 10 · LoginModal 9 · explore 5 · popup-login 5 · 그 밖 15.
 
