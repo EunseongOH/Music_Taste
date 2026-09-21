@@ -34,7 +34,7 @@ export default function TogetherHomePage() {
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-12">
       {/* 링크로 바로 들어온 사람은 돌아갈 데가 없다 — 그럴 땐 홈으로 보낸다. */}
-      <BackButton onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
+      <BackButton className="w-9 h-9" onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
       <h1 className="type-title-1 text-navy mt-2">같이 소트하기</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
         같은 곡을 각자 소트하고 얼마나 비슷한지 봐요.{"\n"}옆 사람에게 받은 코드를 넣어 주세요.

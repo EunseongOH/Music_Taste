@@ -15,7 +15,7 @@ import {
   type SortChallenge,
 } from "@/utils/togetherDb";
 import { NICKNAME_ERROR_TEXT, validateNickname } from "@/utils/nickname";
-import { Cover, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import { SafeImage } from "@/components/SafeImage";
 import * as platform from "@/utils/platform";
@@ -143,20 +143,37 @@ export default function TogetherInvitePage() {
 
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pb-32">
-      {/* 링크를 받은 사람에게만 보이는 인사. 방장 화면은 예전 그대로다. */}
-      {!iAmCreator && hero && (
-        <div className="relative h-[260px] -mb-8">
+      {/*
+        링크를 받은 사람에게만 보이는 인사. 사진이 위에 깔리고 아래로 갈수록 바탕색으로
+        덮인다. 초대 문구는 **딤이 가장 짙어진 아래쪽**에 겹쳐 올린다 — 그 구간은 사실상
+        크림 바탕이라 네이비 글자가 11.8:1 로 읽힌다(color.md). 사진이 밝든 어둡든 같다.
+        방장 화면은 예전 그대로다.
+      */}
+      {!iAmCreator && hero ? (
+        <div className="relative h-[320px]">
           <SafeImage src={hero} alt={artist ?? challenge.title} fill sizes="430px" fallbackType="artist" className="object-cover" />
-          {/* 아래로 갈수록 바탕색으로 덮는다. 글자는 딤이 짙어진 아래쪽에만 올린다(color.md 4.5:1). */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/10 via-[var(--app-bg)]/75 to-[var(--app-bg)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/5 via-[var(--app-bg)]/60 to-[var(--app-bg)]" />
+          <div className="absolute left-4 top-4">
+            <BackButton className="w-9 h-9" onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
+          </div>
+          <div className="absolute inset-x-0 bottom-0 px-6 pb-4">
+            <h1 className="type-title-1 text-navy break-keep">
+              {artist ? `${artist} 소트에 초대받았어요!` : `'${challenge.title}' 소트에 초대받았어요!`}
+            </h1>
+            <p className="type-body text-navy/70 mt-1 break-keep">
+              {artist
+                ? `${artist} 곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`
+                : `곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="px-4 pt-4">
+          <BackButton className="w-9 h-9" onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
         </div>
       )}
 
-      <div className="px-6 pt-10">
-        <BackButton onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
-      </div>
-
-      <div className="px-6 pt-2">
+      <div className="px-6 pt-4">
       {iAmCreator ? (
         <>
           <p className="type-caption text-navy/70">내가 만든 링크</p>
@@ -165,7 +182,7 @@ export default function TogetherInvitePage() {
             고른 {challenge.tracks.length}곡이에요.{"\n"}링크를 보내면 상대가 같은 곡으로 소트하고, 서로 얼마나 비슷한지 볼 수 있어요.
           </p>
         </>
-      ) : (
+      ) : !hero ? (
         <>
           <h1 className="type-title-1 text-navy break-keep">
             {artist ? `${artist} 소트에 초대받았어요!` : `'${challenge.title}' 소트에 초대받았어요!`}
@@ -176,7 +193,7 @@ export default function TogetherInvitePage() {
               : `곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`}
           </p>
         </>
-      )}
+      ) : null}
 
       <div className="mt-6 flex flex-col gap-2">
         <p className="type-caption text-navy/70">
@@ -218,7 +235,12 @@ export default function TogetherInvitePage() {
         </label>
       )}
 
-      <ul className="mt-4 flex flex-col divide-y divide-navy/10">
+      <SectionTitle
+        title={artist ? `소트 대상 ${artist} 곡` : "소트 대상 곡"}
+        count={challenge.tracks.length}
+        className="mt-8 mb-1"
+      />
+      <ul className="flex flex-col divide-y divide-navy/10">
         {challenge.tracks.map((track) => (
           <li key={track.id} className="flex items-center gap-3 py-2.5">
             <Cover src={track.albumImage} alt={track.title} size={40} />
