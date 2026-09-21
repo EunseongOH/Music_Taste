@@ -1,18 +1,27 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-cream: #F5F2ED;
-  --color-navy: #1A2A6C;
-  --color-charcoal: #2D3436;
-  --color-point: #E67E22;
-  /* 강조 글자용. point(#E67E22)는 cream 위 글자 대비 2.6:1 이라 선·면에만 쓰고, 글자는 이 색(4.9:1). */
-  --color-point-ink: #A65309;
-  /* 파괴적 행동(삭제·저장하지 않고 나가기) 전용. 벽돌빛 — 순수 빨강은 cream·navy·orange 와 겉돈다.
-     cream 위 글자 6.0:1, 이 색 위 cream 글자 6.0:1. 면은 bg-danger/10 으로 옅게. docs/design-system/color.md */
-  --color-danger: #9E3B2F;
+  /*
+   * 색 토큰은 값을 직접 갖지 않고 테마 변수(--t-*)를 가리킨다 — docs/design-system/color.md
+   * 실제 값은 아래 :root(=legacy) · [data-theme="toss-white"] · [data-theme="sky-tint"] 에 있다.
+   * `@theme inline` 이라 유틸리티가 var(--t-*) 를 그대로 쓰고, navy/70 같은 불투명도 수식어는
+   * color-mix(in oklab, var(--t-navy) 70%, transparent) 로 풀려 테마를 바꿔도 그대로 먹는다.
+   * 토큰 이름(navy·cream…)은 1차 시안에서는 그대로 둔다. 역할은 color.md 2장.
+   */
+  --color-cream: var(--t-cream);
+  --color-navy: var(--t-navy);
+  --color-charcoal: var(--t-charcoal);
+  --color-point: var(--t-point);
+  --color-point-ink: var(--t-point-ink);
+  --color-danger: var(--t-danger);
+  /* 새 토큰(시안). 아직 어떤 페이지도 쓰지 않는다 — /dev/theme-lab 의 "2차 제안" 견본 전용. */
+  --color-brand: var(--t-brand);
+  --color-ink: var(--t-ink);
+  --color-line: var(--t-line);
+  --color-fill: var(--t-fill);
   --font-sans: var(--font-pretendard);
-  /* 홈의 큰 "Sortify" 워드마크 전용. 한글 글리프가 없어 다른 곳에는 쓰지 않는다. */
-  --font-wordmark: var(--font-playfair);
+  /* 홈의 큰 "Sortify" 워드마크 전용. 후보 서체는 [data-wordmark] 로 바꿔 본다. */
+  --font-wordmark: var(--t-wordmark);
   /* 숫자만 혼자 강조되는 자리(순위·%·큰 숫자). 문장 속 숫자는 Pretendard 그대로. */
   --font-num: var(--font-wanted);
 }
@@ -73,11 +82,68 @@
   letter-spacing: 0.01em;
 }
 
-:root {
+/*
+ * 테마. 기본(:root)은 지금까지의 톤(legacy)이라 속성이 없으면 화면이 하나도 달라지지 않는다.
+ * <html data-theme="…"> 는 layout.tsx 의 작은 스크립트가 ?theme= 또는 localStorage 로 붙인다.
+ */
+:root,
+[data-theme="legacy"] {
+  --t-cream: #F5F2ED;
+  --t-navy: #1A2A6C;
+  --t-charcoal: #2D3436;
+  --t-point: #E67E22;
+  --t-point-ink: #A65309;
+  --t-danger: #9E3B2F;
+  --t-brand: #1A2A6C;
+  --t-ink: #1A2A6C;
+  --t-line: rgb(26 42 108 / 0.1);
+  --t-fill: rgb(26 42 108 / 0.05);
+  --t-wordmark: var(--font-playfair);
+  --t-grain: 0.04;
   --background: #EAE2D6;
-  --app-bg: var(--color-cream);
-  --foreground: var(--color-charcoal);
+  --app-bg: var(--t-cream);
+  --foreground: var(--t-charcoal);
 }
+
+/* (A) 토스식 흰 바탕 + 옅은 회색 면 — 기본안 */
+[data-theme="toss-white"] {
+  --t-cream: #FFFFFF;
+  --t-navy: #172D80;
+  --t-charcoal: #333D4B;
+  --t-point: #FD7E3E;
+  --t-point-ink: #C2410C;
+  --t-danger: #D22030;
+  --t-brand: #2B4FD8;
+  --t-ink: #191F28;
+  --t-line: #E5E8EB;
+  --t-fill: #F2F4F6;
+  --t-grain: 0;
+  --background: #F2F4F6;
+}
+
+/* (B) 로고의 하늘빛을 아주 옅게 깐 바탕 — 비교용 */
+[data-theme="sky-tint"] {
+  --t-cream: #F3F8FF;
+  --t-navy: #172D80;
+  --t-charcoal: #333D4B;
+  --t-point: #FD7E3E;
+  --t-point-ink: #C2410C;
+  --t-danger: #D22030;
+  --t-brand: #2B4FD8;
+  --t-ink: #191F28;
+  --t-line: #DCE8F7;
+  --t-fill: #E6F1FD;
+  --t-grain: 0;
+  --background: #E6F1FD;
+}
+
+/* 워드마크 서체 후보. 새 서체를 더하지 않는 안 둘(pretendard · wanted) 포함. */
+[data-wordmark="pretendard"] { --t-wordmark: var(--font-pretendard); }
+[data-wordmark="wanted"] { --t-wordmark: var(--font-wanted); }
+[data-wordmark="nunito"] { --t-wordmark: var(--font-nunito); }
+[data-wordmark="quicksand"] { --t-wordmark: var(--font-quicksand); }
+[data-wordmark="outfit"] { --t-wordmark: var(--font-outfit); }
+[data-wordmark="jakarta"] { --t-wordmark: var(--font-jakarta); }
 
 body {
   background: var(--background);
@@ -95,7 +161,7 @@ body, h1, h2, h3, h4, h5, h6, p, span, button, a, label {
   inset: 0;
   pointer-events: none;
   z-index: 50;
-  opacity: 0.04;
+  opacity: var(--t-grain, 0.04);
   mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }

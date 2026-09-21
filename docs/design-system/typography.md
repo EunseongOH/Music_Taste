@@ -91,6 +91,33 @@
 | 모든 화면의 `font-serif` 제거(워드마크 → `font-wordmark`, 숫자 → `font-num`) | 적용 |
 | 결과 템플릿(`TasteTemplates`) | 적용. 9:16 카드는 고정 크기 이미지라 px 크기를 쓰되 최소 11px(저장 시 55px), 순위 숫자는 `font-num tabular-nums`. `--font-serif` 토큰 제거 |
 
+## 6. 워드마크 서체 시안 (2026-09-22, 브랜치 design/logo-theme — 채택 전)
+
+지금 워드마크는 Playfair Display(세리프, 굵기 대비가 큰 디돈 계열)다. 크림 바탕·남색 테두리와는 맞았지만, 새 로고는 **둥글고 부드러운 유리 질감 그라데이션**이라 날카로운 세리프와 결이 다르다. 후보를 `/dev/theme-lab` 에서 로고 옆에 나란히 볼 수 있다.
+
+| 후보 | 인상 | 라이선스 | latin 가변 woff2 | 번들 증가 |
+|---|---|---|---|---|
+| Playfair Display (지금) | 세리프, 클래식 | SIL OFL 1.1 | 38.4 KB | 기준 |
+| **Pretendard ExtraBold** | 본문과 같은 서체. 가장 담백 | SIL OFL 1.1 | 이미 번들 | **−38 KB** (Playfair 제거) |
+| **Wanted Sans Std** | 숫자용으로 이미 번들. Pretendard 보다 글자 폭이 넓고 단단 | SIL OFL 1.1 | 이미 번들(82.6 KB) | **−38 KB** |
+| Nunito | 획 끝이 둥글다. 로고의 하트·음표 곡선과 가장 닮음 | SIL OFL 1.1 | 39.1 KB | +0.7 KB |
+| Quicksand | 둥근 기하. 가볍고 어린 인상 | SIL OFL 1.1 | 28.2 KB | −10 KB |
+| Outfit | 기하 산세리프. 중립적이고 현대적 | SIL OFL 1.1 | 32.3 KB | −6 KB |
+| Plus Jakarta Sans | 현대 산세리프. 핀테크 느낌 | SIL OFL 1.1 | 27.3 KB | −11 KB |
+
+용량은 Google Fonts 의 latin 서브셋 가변 woff2 실측값이다(2026-09-22). 굵기 하나만 받으면 12~17 KB 로 준다. 전부 `next/font/google` 로 로드되고 `subsets: ["latin"]` 이다. 시안 브랜치에서는 비교를 위해 넷을 `preload: false` 로 함께 걸어 두었다 — **채택하면 하나만 남긴다.**
+
+권고 순서
+1. **Nunito ExtraBold** — 로고와 형태가 이어진다. 워드마크가 로고 옆에 놓였을 때 한 덩어리로 읽힌다.
+2. **Pretendard ExtraBold** — 서체를 하나 줄인다. 다만 본문과 같아서 워드마크가 "제목 한 줄"처럼 보인다. 로고 심볼을 항상 같이 쓴다면 충분하다.
+3. Outfit — 둥근 끝이 부담스러우면.
+
+원칙은 그대로다: 워드마크 서체는 **홈의 "Sortify" 한 곳**에만 쓴다. 한글 글리프가 없는 서체이므로 다른 곳에 쓰면 기기마다 대체 글꼴로 보인다.
+
+### 본문·크기 토큰
+
+Pretendard 와 22 / 17 / 15 / 13 / 12 는 이미 TDS Typography 3 · 5 · 6 · 7 과 같은 값이라 바꾸지 않는다. 하나만 제안한다: 흰 바탕에서는 `type-title-1`(22 · 700)이 크림 위보다 가볍게 보인다. 채택 후 실제 화면을 보고 제목 굵기를 700 → 800 으로 올릴지 판단한다. 지금은 바꾸지 않았다.
+
 ## 출처
 - 토스 TDS Mobile Typography — https://tossmini-docs.toss.im/tds-mobile/foundation/typography/
 - KRDS 타이포그래피 — https://www.krds.go.kr/html/site/style/style_03.html
