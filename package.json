@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:warmup": "npx tsx --env-file=.env.local scripts/warmup_artists.ts",
+    "db:refresh-artists": "npx tsx scripts/refresh-artist-cache.ts",
     "baseline:capture": "node toss/baseline/capture.mjs",
     "baseline:verify": "node toss/baseline/verify.mjs",
     "dev:toss": "vite --config toss/app/vite.config.mts",
