@@ -104,16 +104,6 @@ const CASES = [
     text: 'skip',
     contains: ['트랙 디깅하기', '앨범 커버를 탭해서'],
   },
-  // 싱글 아티스트 모드는 마운트 시 아코디언을 자동으로 연다. 이때 먼저 캐시에서 전곡을
-  // 시도한다(getArtistDiscography, Phase E-2). 캐시가 비어 있으면 빈 결과가 오고
-  // getArtistAlbums 로 폴백하므로 둘 다 디스패치된다. 앨범 수가 매번 달라질 수 있어
-  // 텍스트 일치는 요구하지 않는다.
-  {
-    route: '/tracks?mode=single',
-    seed: { selectedArtists: JSON.stringify([ARTIST]) },
-    expect: ['getArtistDiscography'],
-    text: 'skip',
-  },
   { route: '/worldcup', seed: {} },
   { route: '/taste', seed: {} },
   { route: '/explore-taste', seed: {} },

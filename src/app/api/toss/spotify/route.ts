@@ -24,7 +24,6 @@ const ALLOWED = {
   getLastSpotifyError: spotify.getLastSpotifyError,
   getArtistAlbums: spotify.getArtistAlbums,
   getAlbumTracks: spotify.getAlbumTracks,
-  getArtistDiscography: spotify.getArtistDiscography,
 } as const;
 
 type AllowedFn = keyof typeof ALLOWED;

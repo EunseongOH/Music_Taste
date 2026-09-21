@@ -44,4 +44,3 @@ export const searchArtistsByGenres = proxy('searchArtistsByGenres');
 export const getLastSpotifyError = proxy('getLastSpotifyError');
 export const getArtistAlbums = proxy('getArtistAlbums');
 export const getAlbumTracks = proxy('getAlbumTracks');
-export const getArtistDiscography = proxy('getArtistDiscography');
