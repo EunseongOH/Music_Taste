@@ -608,22 +608,31 @@ export const getInitialArtists = async () => {
 // DB 로 답할 수 있는 아티스트는 이 예산을 넘긴 뒤로는 Spotify 를 부르지 않는다.
 const ALBUM_ENDPOINT_DAILY_BUDGET = 50;
 
-async function albumBudgetLeft(): Promise<boolean> {
+// 수록곡 엔드포인트는 전곡 모드가 앨범마다 한 번씩 부르기 때문에 가장 많이 쓰인다
+// (2026-09-21 실측: 이용자가 거의 없는 날에도 232회). 한도를 넘기면 24시간 차단이고,
+// 한도는 개발자 계정 전체가 공유하므로 그날 모든 이용자가 같이 막힌다.
+// 정확한 상한은 공개돼 있지 않다. 실측하며 조정할 수 있게 환경변수로 뺀다.
+const TRACK_ENDPOINT_DAILY_BUDGET = Number(process.env.SPOTIFY_TRACK_BUDGET ?? 600);
+
+async function endpointBudgetLeft(endpoint: string, budget: number): Promise<boolean> {
   try {
     const { data } = await createAdminClient()
       .from('spotify_endpoint_quota')
       .select('calls_today, day, blocked_until')
-      .eq('endpoint', '/v1/artists/{id}/albums')
+      .eq('endpoint', endpoint)
       .maybeSingle();
     if (!data) return true;
     if (data.blocked_until && new Date(data.blocked_until) > new Date()) return false;
     const today = new Date().toISOString().slice(0, 10);
     if (data.day !== today) return true;
-    return (data.calls_today ?? 0) < ALBUM_ENDPOINT_DAILY_BUDGET;
+    return (data.calls_today ?? 0) < budget;
   } catch {
     return true;   // 계측 실패가 서비스를 막지 않는다
   }
 }
+
+const albumBudgetLeft = () => endpointBudgetLeft('/v1/artists/{id}/albums', ALBUM_ENDPOINT_DAILY_BUDGET);
+const trackBudgetLeft = () => endpointBudgetLeft('/v1/albums/{id}/tracks', TRACK_ENDPOINT_DAILY_BUDGET);
 
 /** 같은 앨범이 두 번 보이지 않게 합친다: Spotify 앨범 ID 로 1차, 정규화한 제목+발매연도로 2차 */
 const EDITION_SUFFIX = /\s*[([][^)\]]*(deluxe|edition|remaster|remastered|version|ver\.|repackage|anniversary|expanded|bonus)[^)\]]*[)\]]/gi;
@@ -978,6 +987,14 @@ export const getAlbumTracks = async (albumId: string) => {
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB getAlbumTracks failed, calling API:", e);
+  }
+
+  // 하루 예산을 다 쓰면 Spotify 를 부르지 않는다. 여기서 안 멈추면 한도를 넘겨 24시간 차단되고,
+  // 그때부터는 이 앨범뿐 아니라 그날 모든 이용자의 모든 앨범이 빈 채로 나온다.
+  // 빈 배열을 돌려주면 화면은 "수록곡은 아직 준비 중이에요" 를 띄운다 (tracks/page.tsx t.noTracks).
+  if (!(await trackBudgetLeft())) {
+    console.warn(`[Spotify] 수록곡 일일 예산(${TRACK_ENDPOINT_DAILY_BUDGET})을 다 썼다. ${albumId} 는 건너뛴다.`);
+    return [];
   }
 
   // 1. Fetch the first page (limit = 10) to obtain the total count
