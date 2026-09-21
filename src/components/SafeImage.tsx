@@ -6,6 +6,8 @@ import { Music } from "lucide-react";
 
 interface SafeImageProps extends Omit<ImageProps, "src"> {
   src: string | null | undefined;
+  /** src 가 실패하면 여기로 한 번 더 시도한다 (Cover Art Archive 에 재킷이 없을 때 Deezer 커버) */
+  fallbackSrc?: string | null;
   fallbackType?: "artist" | "track";
   alt: string;
 }
@@ -19,9 +21,12 @@ const PALETTES = [
   { bg: "bg-[#E6DEC9]/40", text: "text-[#5C5441]/25", border: "border-navy/10" },
 ];
 
-export function SafeImage({ src, fallbackType = "artist", alt, className = "", ...props }: SafeImageProps) {
-  const [hasError, setHasError] = useState(false);
+export function SafeImage({ src, fallbackSrc, fallbackType = "artist", alt, className = "", ...props }: SafeImageProps) {
+  const [step, setStep] = useState(0);   // 0: src, 1: fallbackSrc, 2 이상: 대체 이미지
   const [palette, setPalette] = useState(PALETTES[0]);
+
+  // 앨범이 바뀌면 다시 1순위부터 시도한다
+  useEffect(() => { setStep(0); }, [src, fallbackSrc]);
 
   useEffect(() => {
     if (alt) {
@@ -34,7 +39,8 @@ export function SafeImage({ src, fallbackType = "artist", alt, className = "", .
     }
   }, [alt]);
 
-  if (!src || hasError) {
+  const current = step === 0 ? src : step === 1 ? fallbackSrc : null;
+  if (!current) {
     const isArtist = fallbackType === "artist";
     return (
       <div 
@@ -52,11 +58,11 @@ export function SafeImage({ src, fallbackType = "artist", alt, className = "", .
 
   return (
     <Image
-      src={src}
+      src={current}
       alt={alt}
       className={className}
       onError={() => {
-        setHasError(true);
+        setStep((n) => (n === 0 && fallbackSrc ? 1 : 2));
       }}
       {...props}
     />

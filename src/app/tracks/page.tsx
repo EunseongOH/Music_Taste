@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Compass, Disc, Search, Plus, X, Info, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,8 @@ import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/u
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
+import { coverPlaceholder } from "@/utils/coverPlaceholder";
+import { songKey, betterTitle } from "@/utils/songKey";
 
 const translations = {
   ko: {
@@ -33,6 +35,7 @@ const translations = {
     selectAll: "전체 선택",
     clearAll: "전체 해제",
     loadingTracks: "트랙을 불러오는 중...",
+    noTracks: "이 앨범의 수록곡은 아직 준비 중이에요. 다른 앨범을 골라주세요.",
     close: "닫기",
     prev: "이전",
     next: "다음",
@@ -74,6 +77,7 @@ const translations = {
     selectAll: "Select All",
     clearAll: "Deselect All",
     loadingTracks: "Loading tracks...",
+    noTracks: "We don't have this album's tracks yet. Try another album.",
     close: "Close",
     prev: "Prev",
     next: "Next",
@@ -115,6 +119,8 @@ interface Album {
   type: "Album" | "Single" | "EP";
   year: string;
   image: string;
+  /** 재킷 2순위 (1순위가 404 일 때) */
+  image2?: string;
   tracks: Track[];
   totalTracks?: number;
 }
@@ -139,6 +145,53 @@ const getYouTubeVideoId = (url: string) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+/**
+ * 머리말에 적는 "N Tracks". 월드컵에 실제로 올라가는 곡 수와 같아야 한다.
+ *
+ * 앨범이 말하는 곡 수(total_tracks)를 그냥 더하면 안 된다. 같은 곡을 리패키지·라이브·
+ * 일본어판으로 여러 번 낸 아이돌은 그 수가 실제로 고를 수 있는 곡 수보다 훨씬 크다.
+ * "전체 선택"과 같은 규칙(songKey)으로 세야 머리말과 시작 버튼의 숫자가 맞는다.
+ * 아직 수록곡을 안 받은 앨범은 셀 방법이 없으니 앨범이 말하는 수를 그대로 더한다.
+ */
+/**
+ * 고른 곡 중 월드컵에 실제로 올라가는 것만 남긴다.
+ *
+ * 같은 곡을 리패키지·라이브·일본어판으로 여러 번 낸 아티스트에서, 앨범을 통째로 고르면
+ * 같은 곡이 여러 번 담긴다. 월드컵으로 넘길 때(handleStartWorldCup)는 이미 songKey 로
+ * 걸러 내고 있었는데 화면에 적는 수는 안 걸러서, 뉴진스는 46곡이라고 적고 28곡만 넘어갔다.
+ * 세는 쪽과 넘기는 쪽이 같은 함수를 써야 한다.
+ */
+function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<string> {
+  const best = new Map<string, string>();      // 곡 키 -> 남길 트랙 ID
+  for (const id of ids) {
+    const m = meta[id];
+    const key = m?.title ? songKey(m.artistName ?? "", m.title) : id;   // 메타가 없으면 따로 센다
+    const prev = best.get(key);
+    // 판 표기가 없는 쪽을 남긴다 (handleStartWorldCup 과 같은 규칙)
+    if (!prev || betterTitle(meta[prev]?.title ?? "", m?.title ?? "") > 0) best.set(key, id);
+  }
+  return new Set(best.values());
+}
+
+function countDistinctTracks(artist: ArtistGroup, singleMode: boolean): number {
+  const keys = new Set<string>();
+  let pending = 0, loaded = 0;
+  for (const album of artist.allAlbums || artist.albums) {
+    if (!album) continue;
+    if (!album.tracks.length) { pending += album.totalTracks || 0; continue; }
+    loaded++;
+    for (const t of album.tracks) keys.add(songKey(artist.name, t.title));
+  }
+  // 미발매곡은 "전체 선택"이 중복을 가리지 않고 통째로 넣는다. 세는 쪽도 똑같이 한다
+  const unreleased = (artist.unreleasedAlbums ?? []).reduce((n, a) => n + a.tracks.length, 0);
+
+  // 전곡 모드에서 배경 수집이 끝났는데도 수록곡이 없는 앨범은, 앞으로도 안 들어온다
+  // (우리 DB 에 없고 Spotify 하루 예산도 다 쓴 경우다). 그걸 세면 "70곡" 이라 적어 놓고
+  // 52곡만 고를 수 있게 된다. 못 받은 건 빼고, 실제로 고를 수 있는 수만 적는다.
+  const settled = singleMode && artist.albumsLoaded && !artist.backgroundLoading && loaded > 0;
+  return keys.size + unreleased + (settled ? 0 : pending);
+}
+
 export default function TracksPage() {
   const { user } = useAuth();
   const supabase = createClient();
@@ -150,6 +203,9 @@ export default function TracksPage() {
   
   // Advanced Selection Metadata Cache & Debounced Search States
   const [selectedTracksMetadata, setSelectedTracksMetadata] = useState<Record<string, any>>({});
+  // 화면에 적는 곡 수. 월드컵에 실제로 올라가는 수와 같아야 한다.
+  const pickedIds = useMemo(() => distinctSongIds(selectedTrackIds, selectedTracksMetadata),
+    [selectedTrackIds, selectedTracksMetadata]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -598,7 +654,8 @@ export default function TracksPage() {
           title: albumRaw.name,
           type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
           year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-          image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+          image: albumRaw.images?.[0]?.url || coverPlaceholder(albumRaw.id),
+          image2: albumRaw.images?.[1]?.url || "",
           tracks: [],
           totalTracks: albumRaw.total_tracks || 0
         }));
@@ -700,7 +757,8 @@ export default function TracksPage() {
             title: albumRaw.name,
             type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
             year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-            image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+            image: albumRaw.images?.[0]?.url || coverPlaceholder(albumRaw.id),
+            image2: albumRaw.images?.[1]?.url || "",
             tracks: [], 
             totalTracks: albumRaw.total_tracks || 0
           }));
@@ -714,7 +772,7 @@ export default function TracksPage() {
                 const youtubeId = getYouTubeVideoId(t.videoUrl || t.video_url || "");
                 const coverImage = youtubeId 
                   ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-                  : `https://picsum.photos/seed/${t.id}/300/300`;
+                  : coverPlaceholder(t.id);
                 
                 const trackYear = t.releaseDate 
                   ? t.releaseDate.substring(0, 4) 
@@ -896,7 +954,8 @@ export default function TracksPage() {
         title: albumRaw.name,
         type: albumRaw.album_type === 'single' ? 'Single' : albumRaw.album_type === 'ep' ? 'EP' : 'Album',
         year: albumRaw.release_date ? albumRaw.release_date.substring(0, 4) : "",
-        image: albumRaw.images?.[0]?.url || "https://picsum.photos/seed/default/300/300",
+        image: albumRaw.images?.[0]?.url || coverPlaceholder(albumRaw.id),
+        image2: albumRaw.images?.[1]?.url || "",
         tracks: [],
         totalTracks: albumRaw.total_tracks || 0
       }));
@@ -1107,7 +1166,7 @@ export default function TracksPage() {
     const youtubeId = getYouTubeVideoId(unreleasedForm.videoUrl);
     const coverImage = youtubeId 
       ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-      : `https://picsum.photos/seed/${newTrackId}/300/300`;
+      : coverPlaceholder(newTrackId);
     
     const trackYear = unreleasedForm.date 
       ? unreleasedForm.date.substring(0, 4) 
@@ -1235,12 +1294,22 @@ export default function TracksPage() {
       } catch (e) {}
     }
 
-    if (selectedTracksData.length < 4) {
+    // 마지막 안전장치: 같은 곡이 두 번 들어가면 월드컵에서 같은 곡끼리 붙는다.
+    // 앨범을 따로따로 골랐을 때도 여기서 걸린다. 판 표기가 없는 쪽을 남긴다.
+    const bySong = new Map<string, any>();
+    for (const t of selectedTracksData) {
+      const k = songKey(t.artistName ?? "", t.title ?? "");
+      const prev = bySong.get(k);
+      if (!prev || betterTitle(prev.title, t.title) > 0) bySong.set(k, t);
+    }
+    const uniqueTracks = [...bySong.values()];
+
+    if (uniqueTracks.length < 4) {
       setCustomAlert(locale === "en" ? translations.en.needAtLeast4 : translations.ko.needAtLeast4);
       return;
     }
 
-    const tracksStr = JSON.stringify(selectedTracksData);
+    const tracksStr = JSON.stringify(uniqueTracks);
     sessionStorage.setItem("worldcup_tracks", tracksStr);
     localStorage.setItem("worldcup_tracks", tracksStr);
 
@@ -1248,7 +1317,7 @@ export default function TracksPage() {
     if (user) {
       try {
         const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
+        await saveTrackSelectionDraft(selectedArtists, uniqueTracks, isSingleArtistMode);
       } catch (err) {
         console.error("Error saving draft before tournament:", err);
       }
@@ -1258,8 +1327,8 @@ export default function TracksPage() {
     localStorage.removeItem("worldcup_progress");
 
     // Trigger GA4 events
-    trackEvent("funnel_song_complete", { selected_songs_count: selectedTracksData.length });
-    trackEvent("tournament_start", { selected_songs_count: selectedTracksData.length });
+    trackEvent("funnel_song_complete", { selected_songs_count: uniqueTracks.length });
+    trackEvent("tournament_start", { selected_songs_count: uniqueTracks.length });
 
     router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
   };
@@ -1409,11 +1478,7 @@ export default function TracksPage() {
                            {loadingAlbums.has(`artist_${artist.id}`)
                              ? t.albumLoading
                              : artist.albumsLoaded
-                               ? `${
-                                    artist.allAlbums 
-                                      ? artist.allAlbums.reduce((acc, a) => acc + (a ? (a.totalTracks || a.tracks.length) : 0), 0)
-                                      : artist.albums.reduce((acc, a) => acc + (a.totalTracks || a.tracks.length), 0)
-                                  } Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
+                               ? `${countDistinctTracks(artist, isSingleArtistMode)} Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
                                : t.openAlbums}
                          </p>
                       </div>
@@ -1444,11 +1509,31 @@ export default function TracksPage() {
                                  onClick={() => {
                                    const nextIds = new Set(selectedTrackIds);
                                    const nextMetadata = { ...selectedTracksMetadata };
-                                   const albumsToSelect = artist.allAlbums || artist.albums;
+                                   // 같은 곡은 한 번만 고른다. 정규 앨범 -> EP -> 싱글 순으로, 오래된 것부터 본다.
+                                   // (아이돌은 같은 곡을 리패키지·라이브·일본어판으로 여러 번 낸다)
+                                   const rank = (ty: string) => (ty === "Album" ? 0 : ty === "EP" ? 1 : 2);
+                                   const albumsToSelect = [...(artist.allAlbums || artist.albums)]
+                                     .filter((a): a is Album => Boolean(a))
+                                     .sort((x, y) => rank(x.type) - rank(y.type) || String(x.year).localeCompare(String(y.year)));
+                                   const takenSongs = new Map<string, string>();   // 곡 키 -> 이미 고른 트랙 ID
+                                   for (const id of nextIds) {
+                                     const m = nextMetadata[id];
+                                     if (m?.title) takenSongs.set(songKey(m.artistName ?? artist.name, m.title), id);
+                                   }
 
                                    albumsToSelect.forEach(album => {
                                      if (!album) return;
                                      album.tracks.forEach(track => {
+                                       const key = songKey(artist.name, track.title);
+                                       const already = takenSongs.get(key);
+                                       if (already) {
+                                         // 이미 같은 곡이 있다. 판 표기가 없는 쪽을 남긴다
+                                         const prev = nextMetadata[already];
+                                         if (!prev || betterTitle(prev.title, track.title) <= 0) return;
+                                         nextIds.delete(already);
+                                         delete nextMetadata[already];
+                                       }
+                                       takenSongs.set(key, track.id);
                                        nextIds.add(track.id);
                                        nextMetadata[track.id] = {
                                          id: track.id,
@@ -1561,7 +1646,7 @@ export default function TracksPage() {
                                                 <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
                                                 {/* LP Label (Inner circle) */}
                                                 <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                  <SafeImage src={album.image} alt={album.title} fill fallbackType="track" className="object-cover" />
+                                                  <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill fallbackType="track" className="object-cover" />
                                                 </div>
                                                 {/* Center hole */}
                                                 <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
@@ -1582,7 +1667,7 @@ export default function TracksPage() {
                                            className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
                                            style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
                                          >
-                                           <Image src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                           <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
                                            {!isExpanded && (
                                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
                                            )}
@@ -1644,6 +1729,11 @@ export default function TracksPage() {
                                               <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
                                                 <Disc className="animate-spin text-point/70" size={20} />
                                                 <span>{t.loadingTracks}</span>
+                                              </div>
+                                            ) : album.tracks.length === 0 ? (
+                                              // 트랙리스트가 아직 없는 앨범. 빈 칸만 보이면 고장으로 읽힌다
+                                              <div className="py-6 px-4 text-center text-navy/50 font-sans text-sm">
+                                                {t.noTracks}
                                               </div>
                                             ) : (
                                               album.tracks.map((track, idx) => {
@@ -1774,7 +1864,7 @@ export default function TracksPage() {
                                                      <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
                                                      {/* LP Label */}
                                                      <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                       <SafeImage src={album.image} alt={album.title} fill fallbackType="track" className="object-cover" />
+                                                       <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill fallbackType="track" className="object-cover" />
                                                      </div>
                                                      {/* Center hole */}
                                                      <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
@@ -1795,7 +1885,7 @@ export default function TracksPage() {
                                                 className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
                                                 style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
                                               >
-                                                <SafeImage src={album.image} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
                                                 {!isExpanded && (
                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
                                                 )}
@@ -1922,7 +2012,7 @@ export default function TracksPage() {
       {/* FAB Bottom - Morphing Unified Dock / Button */}
       {(() => {
         const isCurrentlyLoadingTracks = artistData.some(a => a.backgroundLoading) || loadingAlbums.size > 0;
-        const isReadyToStart = !isCurrentlyLoadingTracks && selectedTrackIds.size >= 4;
+        const isReadyToStart = !isCurrentlyLoadingTracks && pickedIds.size >= 4;
 
         return (
           <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
@@ -2005,7 +2095,7 @@ export default function TracksPage() {
                     <div className="w-full py-3 rounded-[1.4rem] bg-navy/10 text-navy/50 text-center font-semibold text-sm border border-navy/5 flex items-center justify-center gap-2">
                       <span>{t.createWorldCup}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy/60 font-bold">
-                        {selectedTrackIds.size}
+                        {pickedIds.size}
                       </span>
                     </div>
                   </motion.div>
@@ -2013,7 +2103,7 @@ export default function TracksPage() {
               </AnimatePresence>
 
               {/* 2. Loaded & Ready State (Standalone Navy Button) */}
-              {!isCurrentlyLoadingTracks && selectedTrackIds.size >= 4 && (
+              {!isCurrentlyLoadingTracks && pickedIds.size >= 4 && (
                 <motion.div
                   key="ready-content"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -2023,13 +2113,13 @@ export default function TracksPage() {
                 >
                   <span>{t.startWorldCup}</span>
                   <span className="text-xs bg-point text-white px-2.5 py-1 rounded-full font-bold">
-                    {selectedTrackIds.size}
+                    {pickedIds.size}
                   </span>
                 </motion.div>
               )}
 
               {/* 3. Minimal Counter when < 4 tracks */}
-              {!isCurrentlyLoadingTracks && selectedTrackIds.size > 0 && selectedTrackIds.size < 4 && (
+              {!isCurrentlyLoadingTracks && pickedIds.size > 0 && pickedIds.size < 4 && (
                 <motion.div
                   key="minimal-counter"
                   initial={{ opacity: 0 }}
@@ -2037,7 +2127,7 @@ export default function TracksPage() {
                   exit={{ opacity: 0 }}
                   className="text-center font-sans font-bold text-xs text-navy w-full"
                 >
-                  {t.selectMore.replace("{count}", String(4 - selectedTrackIds.size))}
+                  {t.selectMore.replace("{count}", String(4 - pickedIds.size))}
                 </motion.div>
               )}
             </motion.div>

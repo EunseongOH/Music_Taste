@@ -1,6 +1,7 @@
 "use server";
 // src/utils/spotify.ts
 import { createAdminClient } from "./supabase/admin";
+import { getDbArtistAlbums, getDbTracksByAlbum } from "./dbCatalog";
 
 const DB_CACHE_TTL_DAYS = 21;
 
@@ -641,6 +642,245 @@ export const getInitialArtists = async () => {
   return results;
 };
 
+// 앨범 목록 엔드포인트는 개발 모드 일일 쿼터가 낮다 (2026-09-17 실측: 80회 남짓에서 차단).
+// DB 로 답할 수 있는 아티스트는 이 예산을 넘긴 뒤로는 Spotify 를 부르지 않는다.
+const ALBUM_ENDPOINT_DAILY_BUDGET = 50;
+
+// 수록곡 엔드포인트는 전곡 모드가 앨범마다 한 번씩 부르기 때문에 가장 많이 쓰인다
+// (2026-09-21 실측: 이용자가 거의 없는 날에도 232회). 한도를 넘기면 24시간 차단이고,
+// 한도는 개발자 계정 전체가 공유하므로 그날 모든 이용자가 같이 막힌다.
+// 정확한 상한은 공개돼 있지 않다. 실측하며 조정할 수 있게 환경변수로 뺀다.
+const TRACK_ENDPOINT_DAILY_BUDGET = Number(process.env.SPOTIFY_TRACK_BUDGET ?? 600);
+
+async function endpointBudgetLeft(endpoint: string, budget: number): Promise<boolean> {
+  try {
+    const { data } = await createAdminClient()
+      .from('spotify_endpoint_quota')
+      .select('calls_today, day, blocked_until')
+      .eq('endpoint', endpoint)
+      .maybeSingle();
+    if (!data) return true;
+    if (data.blocked_until && new Date(data.blocked_until) > new Date()) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    if (data.day !== today) return true;
+    return (data.calls_today ?? 0) < budget;
+  } catch {
+    return true;   // 계측 실패가 서비스를 막지 않는다
+  }
+}
+
+const albumBudgetLeft = () => endpointBudgetLeft('/v1/artists/{id}/albums', ALBUM_ENDPOINT_DAILY_BUDGET);
+const trackBudgetLeft = () => endpointBudgetLeft('/v1/albums/{id}/tracks', TRACK_ENDPOINT_DAILY_BUDGET);
+
+/** 같은 앨범이 두 번 보이지 않게 합친다: Spotify 앨범 ID 로 1차, 정규화한 제목+발매연도로 2차 */
+const EDITION_SUFFIX = /\s*[([][^)\]]*(deluxe|edition|remaster|remastered|version|ver\.|repackage|anniversary|expanded|bonus)[^)\]]*[)\]]/gi;
+const albumKey = (a: any) => {
+  const name = String(a?.name ?? "").normalize("NFKC").toLowerCase()
+    .replace(EDITION_SUFFIX, "")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  return `${name}|${String(a?.release_date ?? "").slice(0, 4)}`;
+};
+
+const albumTitleKey = (a: any) => albumKey(a).split("|")[0];
+const albumYear = (a: any) => Number(String(a?.release_date ?? "").slice(0, 4)) || 0;
+
+const albumTracks = (a: any) => Number(a?.total_tracks ?? 0) || 0;
+
+/**
+ * Spotify 목록과 자체 DB 목록을 합쳐 중복을 없앤다.
+ *
+ * 같은 앨범인지 보는 기준은 "정규화한 제목이 같고 발매연도가 1년 안쪽" 이다.
+ * 출처마다 발매일 표기가 하루~한 해씩 다르기 때문이다.
+ *
+ * 겹칠 때 무엇을 남기는가: 곡이 더 많은 쪽. 같은 제목의 싱글과 정규 앨범이 붙어 있는 경우
+ * (Ariana Grande 의 "thank u, next" 싱글 2018 / 앨범 2019) 먼저 나온 싱글을 남기면
+ * 정규 앨범 수록곡을 통째로 잃는다. 곡 수가 같으면 Spotify 쪽을 남긴다 (커버가 있다).
+ */
+function mergeAlbums(spotifyItems: any[], db: any[]) {
+  const dbIds = new Set(db.map((a) => a?.id).filter(Boolean));
+  // 자체 DB 가 아는 앨범 종류. 제목으로도, 연도+곡수로도 찾을 수 있게 둔다
+  const dbType = new Map<string, string>();
+  for (const a of db) {
+    if (!a?.album_type) continue;
+    const t = albumTitleKey(a);
+    if (t && !dbType.has(t)) dbType.set(t, a.album_type);
+    const k = `${albumYear(a)}|${albumTracks(a)}`;
+    if (albumYear(a) && albumTracks(a) && !dbType.has(k)) dbType.set(k, a.album_type);
+  }
+  const best = new Map<string, any>();        // 제목 -> 남길 앨범
+  const order: string[] = [];
+  const seenId = new Set<string>();
+
+  const keyFor = (title: string, year: number) => {
+    // 이미 같은 제목이 1년 안쪽에 있으면 그 묶음에 넣는다
+    for (const k of best.keys()) {
+      if (!k.startsWith(`${title}|`)) continue;
+      const y = Number(k.split("|")[1]) || 0;
+      if (!y || !year || Math.abs(y - year) <= 1) return k;
+    }
+    return `${title}|${year}`;
+  };
+
+  for (const a of [...spotifyItems, ...db]) {
+    if (!a?.id || seenId.has(a.id)) continue;
+    seenId.add(a.id);
+    const title = albumTitleKey(a);
+    if (!title) { order.push(a.id); best.set(a.id, a); continue; }
+    const k = keyFor(title, albumYear(a));
+    const prev = best.get(k);
+    if (!prev) { order.push(k); best.set(k, a); continue; }
+    // 곡이 더 많은 쪽을 남긴다. 같으면 먼저 온 쪽(= Spotify) 을 둔다
+    if (albumTracks(a) > albumTracks(prev)) best.set(k, a);
+  }
+  let kept = order.map((k) => best.get(k)).filter(Boolean);
+
+  // 제목이 같고 곡 수도 같으면 발매연도가 몇 해 떨어져 있어도 같은 앨범이다 (재발매·재등록).
+  // 아이오아이 "손에 손잡고" 2016 / 2018 이 그랬다.
+  {
+    const byTitleTracks = new Map<string, any>();
+    const drop2 = new Set<string>();
+    for (const a of kept) {
+      const k = `${albumTitleKey(a)}|${albumTracks(a)}`;
+      if (!albumTitleKey(a) || !albumTracks(a)) continue;
+      const prev = byTitleTracks.get(k);
+      if (!prev) { byTitleTracks.set(k, a); continue; }
+      // 자체 DB 쪽을 남긴다 (트랙리스트가 있다). 둘 다 같은 쪽이면 먼저 온 것을 남긴다
+      const keepA = dbIds.has(a.id) && !dbIds.has(prev.id);
+      drop2.add(keepA ? prev.id : a.id);
+      if (keepA) byTitleTracks.set(k, a);
+    }
+    if (drop2.size) kept = kept.filter((a) => !drop2.has(a.id));
+  }
+
+  // 글자만 살짝 다른 같은 제목 — 잔나비 "소곡집 ll" / "소곡집 II" (소문자 L 과 로마 숫자 I).
+  // 같은 해에 제목이 9할 이상 닮았으면 같은 앨범으로 본다.
+  {
+    const bigrams = (x: string) => {
+      const m = new Map<string, number>();
+      for (let i = 0; i < x.length - 1; i++) { const g = x.slice(i, i + 2); m.set(g, (m.get(g) ?? 0) + 1); }
+      return m;
+    };
+    const sim = (a: string, b: string) => {
+      if (!a || !b || a.length < 4 || b.length < 4) return a === b ? 1 : 0;
+      const ga = bigrams(a), gb = bigrams(b);
+      let hit = 0;
+      for (const [g, n] of ga) hit += Math.min(n, gb.get(g) ?? 0);
+      return (2 * hit) / (a.length - 1 + b.length - 1);
+    };
+    const drop4 = new Set<string>();
+    for (let i = 0; i < kept.length; i++) {
+      for (let j = i + 1; j < kept.length; j++) {
+        const a = kept[i], b = kept[j];
+        if (drop4.has(a.id) || drop4.has(b.id)) continue;
+        if (albumYear(a) !== albumYear(b) || !albumYear(a)) continue;
+        const ta = albumTitleKey(a), tb = albumTitleKey(b);
+        if (!ta || !tb || ta === tb) continue;
+        if (sim(ta, tb) < 0.9) continue;
+        // 곡이 많은 쪽을 남기고, 같으면 자체 DB 쪽을 남긴다
+        const loser = albumTracks(a) !== albumTracks(b)
+          ? (albumTracks(a) > albumTracks(b) ? b : a)
+          : (dbIds.has(a.id) && !dbIds.has(b.id) ? b : a);
+        drop4.add(loser.id);
+      }
+    }
+    if (drop4.size) kept = kept.filter((a) => !drop4.has(a.id));
+  }
+
+  // 한쪽 제목이 다른 쪽을 품고 있고 연도·곡 수가 같으면 같은 앨범이다.
+  // 아이오아이 "Whatta Man" / "Whatta Man (Good Man)" 이 그랬다.
+  {
+    const drop3 = new Set<string>();
+    for (let i = 0; i < kept.length; i++) {
+      for (let j = i + 1; j < kept.length; j++) {
+        const a = kept[i], b = kept[j];
+        if (drop3.has(a.id) || drop3.has(b.id)) continue;
+        if (albumYear(a) !== albumYear(b) || albumTracks(a) !== albumTracks(b) || !albumTracks(a)) continue;
+        const ta = albumTitleKey(a), tb = albumTitleKey(b);
+        if (!ta || !tb || ta === tb) continue;
+        if (!ta.includes(tb) && !tb.includes(ta)) continue;
+        drop3.add(dbIds.has(a.id) && !dbIds.has(b.id) ? b.id : a.id);
+      }
+    }
+    if (drop3.size) kept = kept.filter((a) => !drop3.has(a.id));
+  }
+
+  // 제목이 서로 다른 언어면 위 비교로는 못 잡는다.
+  // 데카당: Spotify "링구 / 애추"(2019-01-30, 4곡) / 자체 DB "Lingu / Talus"(2019, 4곡).
+  // 같은 해에 곡 수가 같은 앨범이 양쪽에 하나씩만 있고 글자 체계가 다르면 같은 앨범으로 본다.
+  // 자체 DB 쪽을 남긴다 — 트랙리스트를 갖고 있어서 눌러도 Spotify 를 부르지 않는다.
+  const cjk = (s: string) => /[가-힣぀-ヿ一-鿿]/.test(s || "");
+  const groups = new Map<string, any[]>();
+  for (const a of kept) {
+    const y = albumYear(a), n = albumTracks(a);
+    if (!y || !n) continue;
+    const k = `${y}|${n}`;
+    groups.set(k, [...(groups.get(k) ?? []), a]);
+  }
+  const drop = new Set<string>();
+  for (const list of groups.values()) {
+    if (list.length !== 2) continue;                       // 셋 이상이면 어느 쪽이 짝인지 알 수 없다
+    const [a, b] = list;
+    if (albumTitleKey(a) === albumTitleKey(b)) continue;    // 제목이 같으면 위에서 이미 처리됐다
+    if (cjk(a.name) === cjk(b.name)) continue;             // 글자 체계가 같으면 진짜 다른 앨범일 수 있다
+    const fromDb = dbIds.has(a.id) ? a : dbIds.has(b.id) ? b : null;
+    const fromSpotify = dbIds.has(a.id) ? b : dbIds.has(b.id) ? a : null;
+    if (!fromDb || !fromSpotify || fromDb === fromSpotify) continue;
+    drop.add(fromSpotify.id);
+  }
+
+  return kept.filter((a) => !drop.has(a.id))
+    .map((a) => {
+      // Spotify 는 네다섯 곡짜리도 single 로 준다. 우리 DB 가 같은 앨범을 갖고 있으면 그쪽 종류를 쓴다
+      // (DB 쪽은 판 표기를 뺀 실제 곡 수로 정해 둔 값이라 더 정확하다).
+      if (dbIds.has(a.id) || a?.album_type !== "single") return a;
+      const byTitle = dbType.get(albumTitleKey(a));
+      const byShape = dbType.get(`${albumYear(a)}|${albumTracks(a)}`);
+      const known = byTitle ?? byShape;
+      if (known) return known === "single" ? a : { ...a, album_type: known };
+      const n = albumTracks(a);
+      if (n >= 8) return { ...a, album_type: "album" };
+      if (n >= 5) return { ...a, album_type: "ep" };
+      return a;
+    })
+    .sort((x, y) => String(y.release_date ?? "").localeCompare(String(x.release_date ?? "")));
+}
+
+/** 아티스트를 연 횟수만 센다 (우리 이용 기록이다. Spotify 콘텐츠를 저장하는 것이 아니다). */
+function recordArtistDemand(artistId: string) {
+  try {
+    createAdminClient().rpc("bump_artist_demand", { p_id: artistId }).then(
+      () => {},
+      () => {},
+    );
+  } catch {
+    /* 기록 실패가 화면을 막지 않는다 */
+  }
+}
+
+/** 이 아티스트에 대해 지금까지 캐시에 쌓인 Spotify 앨범 전부 (페이지 구분 없이 합친다). */
+async function cachedSpotifyAlbums(artistId: string, lang: string): Promise<{ items: any[]; total: number }> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from('spotify_cache_artist_albums')
+      .select('items, total')
+      .eq('artist_id', artistId)
+      .eq('locale', lang)
+      .gt('expires_at', new Date().toISOString());
+    // 페이지 캐시가 겹칠 수 있다. 같은 앨범을 두 번 세면 "남은 수" 계산이 틀어진다
+    const byId = new Map<string, any>();
+    let total = 0;
+    for (const row of data ?? []) {
+      for (const it of (row.items ?? []) as any[]) if (it?.id && !byId.has(it.id)) byId.set(it.id, it);
+      total = Math.max(total, row.total ?? 0);
+    }
+    return { items: [...byId.values()], total };
+  } catch (e) {
+    console.warn("[Spotify Cache DB] cachedSpotifyAlbums failed:", e);
+    return { items: [], total: 0 };
+  }
+}
+
 // Fetch artist's albums (Paged to prevent excessive rate limiting)
 export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) => {
   if (!artistId) {
@@ -657,68 +897,85 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     return cached.data;
   }
 
-  // 2. DB Cache check
-  try {
-    const supabase = createAdminClient();
-    const now = new Date().toISOString();
-    const { data: dbAlbums, error } = await supabase
-      .from('spotify_cache_artist_albums')
-      .select('*')
-      .eq('artist_id', artistId)
-      .eq('locale', lang)
-      .eq('offset', offset)
-      .eq('limit', limit)
-      .gt('expires_at', now)
-      .single();
+  // 1-a. 이 아티스트를 누가 열었다는 것만 기록한다. 자주 열리는 아티스트부터 트랙리스트를
+  //      끝까지 채워 영구 보관하기 위한 신호다. 실패해도 화면에 영향이 없도록 기다리지 않는다.
+  if (offset === 0) recordArtistDemand(artistId);
 
-    // 오염된 빈 캐시 데이터가 아닌 유효한 앨범 데이터가 있을 때만 캐시 복원
-    if (!error && dbAlbums && dbAlbums.total > 0 && dbAlbums.items && dbAlbums.items.length > 0) {
-      const result = { items: dbAlbums.items, total: dbAlbums.total };
-      albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      return result;
-    }
-  } catch (e) {
-    console.warn("[Spotify Cache DB] DB getArtistAlbums failed, calling API:", e);
-  }
+  // 1-b. 자체 DB(MusicBrainz·Discogs·Deezer) 앨범 목록.
+  //      Spotify 앨범 목록 엔드포인트는 개발 모드 일일 쿼터가 낮아(실측 80회 수준) 여기서 최대한 아낀다.
+  const dbAlbums = await getDbArtistAlbums(artistId);
 
-  // Fetch only the requested page to minimize requests
-  const response = await spotifyFetch(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${offset}`
-  );
+  // 2. 지금까지 받아 둔 Spotify 페이지 전부 (페이지별로 따로 합치면 같은 앨범이 페이지마다
+  //    다른 출처로 나와 중복으로 보인다. 그래서 항상 "아티스트 전체 목록"을 한 번에 합쳐서 자른다)
+  const known = await cachedSpotifyAlbums(artistId, lang);
+  let merged = mergeAlbums(known.items, dbAlbums);
+  let spotifyTotal = known.total;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-    return { items: [], total: 0 };
-  }
-
-  const data = await response.json();
-  const result = {
-    items: data.items || [],
-    total: data.total || 0
+  /**
+   * 총 개수는 추측하지 않는다. 받아 본 만큼만 말한다.
+   *
+   * 중복을 걸러 내면 합친 목록이 Spotify 가 말한 수보다 적어진다. 예전에는 Spotify 수를 그대로
+   * 알려 줘서 UI 가 그만큼 쪽을 만들고 뒤쪽이 빈 채로 남았다 (The Libertines 가 3쪽까지 생기고
+   * 2·3쪽이 비어 있었다). 그래서 "지금 낼 수 있는 항목 수" 를 그대로 총 개수로 쓴다.
+   *
+   * 대신 마지막 쪽에 다다르면 Spotify 에서 한두 쪽 더 받아 목록을 늘린 뒤에 답한다.
+   * 그래야 "다음" 단추가 실제로 보여 줄 것이 있을 때만 생긴다.
+   */
+  const done = (items: any[], total: number) => {
+    const result = { items, total };
+    albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   };
+  const slice = () => merged.slice(offset, offset + limit);
 
-  // 3. Save to DB Cache (오류로 인한 빈 배열이 영구 캐싱되지 않도록 유효성 검사 후 저장)
-  if (result.total > 0 && result.items.length > 0) {
-    try {
-      const supabase = createAdminClient();
-      const expiresAt = getCacheExpiresAt();
-      await supabase
-        .from('spotify_cache_artist_albums')
-        .upsert({
-          artist_id: artistId,
-          locale: lang,
-          offset,
-          limit,
-          items: result.items,
-          total: result.total,
-          expires_at: expiresAt
-        }, { onConflict: 'artist_id,locale,offset,limit' });
-    } catch (e) {
-      console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
-    }
+  const budgetLeft = await albumBudgetLeft();
+  const moreOnSpotify = () => spotifyTotal === 0 || known.items.length < spotifyTotal;
+
+  // 이 쪽과 다음 쪽까지 채워져 있으면 더 부르지 않는다
+  if (merged.length > offset + limit || !budgetLeft || !moreOnSpotify()) {
+    if (merged.length || !budgetLeft) return done(slice(), merged.length);
   }
 
+  // 모자라면 Spotify 에서 이어서 받는다. 한 번에 두 쪽까지만 (쿼터를 아낀다).
+  for (let i = 0; i < 2 && budgetLeft && moreOnSpotify(); i++) {
+    if (merged.length > offset + limit) break;               // 다음 쪽까지 확보됐으면 그만
+    const from = known.items.length;                          // Spotify 쪽 위치는 받아 둔 원본 수 기준이다
+    const response = await spotifyFetch(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${from}`
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
+      break;
+    }
+    const data = await response.json();
+    const fresh = (data.items || []).filter((x: any) => x?.id);
+    spotifyTotal = Math.max(spotifyTotal, data.total || 0);
+    if (!fresh.length) break;
+    known.items.push(...fresh);
+    merged = mergeAlbums(known.items, dbAlbums);
+
+    // 받은 쪽은 캐시에 남긴다 (오류로 인한 빈 배열이 영구 캐싱되지 않도록 검사한다)
+    if ((data.total || 0) > 0 && fresh.length) {
+      try {
+        const supabase = createAdminClient();
+        await supabase
+          .from('spotify_cache_artist_albums')
+          .upsert({
+            artist_id: artistId,
+            locale: lang,
+            offset: from,
+            limit,
+            items: data.items || [],
+            total: data.total || 0,
+            expires_at: getCacheExpiresAt(),
+          }, { onConflict: 'artist_id,locale,offset,limit' });
+      } catch (e) {
+        console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
+      }
+    }
+  }
+  const result = { items: slice(), total: merged.length };
   albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 };
@@ -739,6 +996,16 @@ export const getAlbumTracks = async (albumId: string) => {
     return cached.data;
   }
 
+  // 1-b. 자체 DB(MusicBrainz·Discogs) 트랙리스트. 있으면 Spotify 를 부르지 않는다.
+  //      검증되지 않은 연결은 dbCatalog 에서 이미 걸러진다 (부정확한 트랙리스트를 내보내지 않는다).
+  const fromDb = (await getDbTracksByAlbum([albumId]))[albumId];
+  if (fromDb?.length) {
+    tracksCache.set(cacheKey, { data: fromDb, timestamp: Date.now() });
+    return fromDb;
+  }
+  // "mb:" / "deezer:" 앨범은 우리 DB 에만 있다. Spotify 에 물어볼 수 없다 (Spotify ID 에는 ":" 가 없다).
+  if (albumId.includes(":")) return [];
+
   // 2. DB Cache check
   try {
     const supabase = createAdminClient();
@@ -758,6 +1025,14 @@ export const getAlbumTracks = async (albumId: string) => {
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB getAlbumTracks failed, calling API:", e);
+  }
+
+  // 하루 예산을 다 쓰면 Spotify 를 부르지 않는다. 여기서 안 멈추면 한도를 넘겨 24시간 차단되고,
+  // 그때부터는 이 앨범뿐 아니라 그날 모든 이용자의 모든 앨범이 빈 채로 나온다.
+  // 빈 배열을 돌려주면 화면은 "수록곡은 아직 준비 중이에요" 를 띄운다 (tracks/page.tsx t.noTracks).
+  if (!(await trackBudgetLeft())) {
+    console.warn(`[Spotify] 수록곡 일일 예산(${TRACK_ENDPOINT_DAILY_BUDGET})을 다 썼다. ${albumId} 는 건너뛴다.`);
+    return [];
   }
 
   // 1. Fetch the first page (limit = 10) to obtain the total count
