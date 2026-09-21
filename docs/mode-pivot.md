@@ -214,9 +214,13 @@ GA: `home_mode_click { mode_id: "together" }` 가 자동으로 잡힌다. 별도
 
 9/17 차단은 운영자가 아티스트 여러 명을 열어보다 난 것이다. 로컬 개발 서버도, Playwright 검사도 **운영과 똑같은 Spotify 앱·똑같은 쿼터**를 쓴다. 이용자가 없는 날에도 문이 닫힌다.
 
-- `.env.local` 스위치 `SPOTIFY_CACHE_ONLY=1`. 켜져 있으면 `spotifyFetch` 는 **캐시만 보고, 미스면 빈 결과**를 돌려준다(예외를 던지지 않는다 — 화면이 깨지면 안 된다).
-- 로컬 개발·검사 기본값은 켜짐. 새 아티스트를 일부러 담을 때만 끈다.
-- 화면 확인은 이미 확보된 아티스트로 한다.
+**구현 완료 (2026-09-21).** `src/utils/spotify.ts` 의 `spotifyFetch` 맨 앞에서 끊는다.
+
+- `NODE_ENV !== "production"` 이면 **기본으로 켜짐**. 운영만 꺼짐. `SPOTIFY_CACHE_ONLY=0` 으로 끄고 `=1` 로 켠다(운영에서 켜면 쿼터를 다 쓴 날의 비상 브레이크가 된다).
+- 켜져 있으면 Spotify 도, **게이트 RPC 도** 부르지 않는다(호출 수가 늘면 안 된다). 503 을 돌려주고 호출부는 기존 실패 경로대로 캐시/빈 결과로 간다.
+- `lastSpotifyError` 는 건드리지 않는다 — 화면에 연결 오류 배너를 띄울 일이 아니다. 대신 서버 로그에 한 번만 알린다.
+- 확인: 개발 서버를 다시 띄우고 `/explore?mode=single` 에서 검색 → 화면은 DB 캐시(아티스트 2,779명)로 정상 렌더, `spotify_endpoint_quota` 수치는 **하나도 늘지 않음**.
+- 남는 구멍 두 개: `npm run db:warmup` 은 `spotifyFetch` 를 지나지 않는다(일부러 담는 도구라 그대로 둔다). **Vercel 프리뷰는 `NODE_ENV=production` 이라 켜지지 않는다** — 프리뷰에서 쿼터가 새면 그 환경변수에 `1` 을 넣는다.
 
 ### 7.1 피드를 "확보된 아티스트"로 채운다 (핵심 대책)
 
@@ -296,7 +300,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
 
 | 단계 | 내용 | 통과 기준 |
 |---|---|---|
-| **P0** | `SPOTIFY_CACHE_ONLY` 스위치 (§7.0) | 로컬·검사에서 Spotify 콜 0. `spotify_endpoint_quota` 가 안 늘어난다 |
+| ~~P0~~ | `SPOTIFY_CACHE_ONLY` 스위치 (§7.0) | **완료 2026-09-21** — 검색·피드를 열어도 `spotify_endpoint_quota` 가 늘지 않음 |
 | P1 | `src/config/modes.ts` 플래그 + 이 문서 커밋 | — |
 | P2 | 진입점 차단 + 기본 모드 전환 + SEO (§4.2, §4.3, §13) — **한 커밋** | 홈에 믹스 매치 카드 없음, `/genres` → `/explore?mode=single` 302, 토스 번들에 장르 화면 없음, sitemap·JSON-LD 정리 |
 | P3 | 검사 동기화 (§5, 부록 B) — **한 커밋**(되돌리기 단위) | `check:web`, `check:toss`, `remove-check`, `saved-view-check`, `baseline:verify` 전부 통과 |
