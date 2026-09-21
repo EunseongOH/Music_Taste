@@ -2,7 +2,7 @@ import { nav, useLocation } from '../router';
 
 /**
  * `next/navigation` 대체. 실제로 쓰이는 것만 둔다.
- * (`useSearchParams` · `redirect` · `notFound` 는 src/ 전체에서 사용 0건)
+ * (`useSearchParams` · `redirect` 는 src/ 전체에서 사용 0건)
  */
 
 export const useRouter = () => nav;
@@ -31,4 +31,18 @@ export function useParams(): Record<string, string> {
   const code = pathname.match(/^\/together\/([^/]+)(?:\/result)?$/);
   if (code && code[1] !== 'new') params.code = decodeURIComponent(code[1]);
   return params;
+}
+
+/**
+ * `notFound()` 대체.
+ *
+ * 개발 전용 화면(`src/app/dev/**`)이 운영에서 열리지 않게 이 함수를 부른다.
+ * 그 화면들은 토스 라우트 표에 없어서 번들에 들어가지 않지만, 타입 검사는
+ * `src/` 전체를 보므로 이 이름이 없으면 토스 빌드의 tsc 가 깨진다.
+ *
+ * Next 처럼 렌더를 멈추게만 하면 된다 — 토스에는 404 화면이 따로 없다.
+ * 라우트 표에 없는 경로는 App.tsx 가 홈으로 떨어뜨린다.
+ */
+export function notFound(): never {
+  throw new Error('NEXT_NOT_FOUND');
 }
