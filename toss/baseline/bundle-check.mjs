@@ -34,6 +34,15 @@ console.log('\n[1] 관리자 화면 미포함');
 const ADMIN_ONLY = ['공식 발매 완료 목록', '거절 및 삭제', '공식 발매 완료로 변경'];
 for (const s of ADMIN_ONLY) check(!all.includes(s), `"${s}" 없음`);
 
+/*
+ * 믹스 매치(여러 아티스트)는 사용자 화면에서 내렸다 — docs/mode-pivot.md.
+ * 라우트 표에서 빠졌으면 번들에도 없어야 한다. 관리자 화면과 같은 방식으로,
+ * 경로명이 아니라 **그 화면에만 있는 문구**로 판정한다. 되살릴 때 이 블록을 지운다.
+ */
+console.log('\n[1-b] 장르 선택 화면 미포함 (믹스 매치 격리)');
+const GENRE_ONLY = ['선호하는 음악 장르를 골라주세요', 'Select your favorite music genres'];
+for (const g of GENRE_ONLY) check(!all.includes(g), `"${g}" 없음`);
+
 console.log('\n[2] appName 일관성');
 /*
  * appName 은 세 곳에 흩어져 있다 — 설정, CORS 허용 origin, 딥링크.

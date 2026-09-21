@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { corsHeaders, preflight } from "../../toss/cors";
 
 /**
  * 같이 소트하기 — 아티스트·곡 목록(실험). 문서: docs/together-sort.md
@@ -49,7 +50,13 @@ const titleKey = (title: string) =>
     .replace(/[^0-9a-z가-힣]/g, "")
     .trim();
 
+/** 토스 미니앱(별도 origin)에서도 부른다 — 같은 CORS 규칙을 쓴다. */
+export async function OPTIONS(request: Request) {
+  return preflight(request);
+}
+
 export async function GET(request: Request) {
+  const cors = corsHeaders(request.headers.get("origin"));
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q")?.trim() ?? "";
   const artistId = searchParams.get("artistId")?.trim() ?? "";
@@ -67,7 +74,7 @@ export async function GET(request: Request) {
         if (album?.id && !albums.has(album.id)) albums.set(album.id, album);
       }
     }
-    if (albums.size === 0) return NextResponse.json({ tracks: [] });
+    if (albums.size === 0) return NextResponse.json({ tracks: [] }, { headers: cors });
 
     const { data: trackRows } = await supabase
       .from("spotify_cache_album_tracks")
@@ -99,7 +106,7 @@ export async function GET(request: Request) {
     }
     // 최근 발매 순으로 보여 준다(고를 때 익숙한 곡이 위에 온다).
     tracks.sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? ""));
-    return NextResponse.json({ tracks });
+    return NextResponse.json({ tracks }, { headers: cors });
   }
 
   // 아티스트 찾기 — 전곡을 확실히 낼 수 있는 아티스트가 먼저 온다.
@@ -121,5 +128,5 @@ export async function GET(request: Request) {
     image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
   }));
 
-  return NextResponse.json({ artists: list });
+  return NextResponse.json({ artists: list }, { headers: cors });
 }

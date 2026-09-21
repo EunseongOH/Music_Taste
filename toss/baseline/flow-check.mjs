@@ -21,7 +21,12 @@ const VITE = 'http://localhost:5173';
 const NEXT = process.env.NEXT_BASE ?? 'http://localhost:3000';
 
 /** 아이유 — 기준선(fixture.json)에서 쓰는 것과 같은 아티스트다. */
-const ARTIST = { id: '7c1HgFDe8ogy5NOZ1ANCJQ', name: 'IU', image: '' };
+/*
+ * 앨범·곡까지 DB 에 담겨 있는 아티스트를 쓴다(together_artist_catalog 기준 전곡 확보).
+ * 개발·검사는 캐시 전용 모드라 Spotify 를 부르지 않으므로, 캐시에 없는 아티스트를
+ * 쓰면 화면이 비어 검사가 헛돈다. 바꿀 때는 그 뷰에서 coverage 높은 아티스트를 고른다.
+ */
+const ARTIST = { id: '6z4R3mCiiIiLgpicseyNkV', name: '이승윤', image: '' };
 
 /** 실제 공개 취향표 하나. 읽기만 하며 DB 를 바꾸지 않는다. */
 const SHARED_ID = '631ac9fe-0305-4b26-bad8-05908a5ccae4';
@@ -31,12 +36,19 @@ const SHARED_ID = '631ac9fe-0305-4b26-bad8-05908a5ccae4';
  * 검색창은 디바운스 후 `/api/spotify-search` 로 나간다(상대 경로 → apiBase 패치).
  */
 async function digTracks(page) {
-  // 아코디언 토글은 <button> 이 아니라 onClick 이 달린 div 다. 아티스트
-  // 이름(h2)을 누르면 이벤트가 그 div 로 올라간다.
+  /*
+   * 아코디언 토글은 <button> 이 아니라 onClick 이 달린 div 다. 아티스트
+   * 이름(h2)을 누르면 이벤트가 그 div 로 올라간다.
+   *
+   * 한 아티스트 모드는 들어오자마자 아코디언이 펼쳐져 있다. 그 상태에서 또 누르면
+   * 접혀서 앨범 커버가 사라진다 — 닫혀 있을 때만 누른다.
+   */
   const open = page.locator('section[id^="artist-section-"] h2').first();
   if (await open.count()) {
-    await open.click();
-    await page.waitForTimeout(3500); // getArtistAlbums
+    if ((await page.locator('section[id^="artist-section-"] img').count()) === 0) {
+      await open.click();
+      await page.waitForTimeout(3500); // getArtistAlbums
+    }
     const album = page.locator('section[id^="artist-section-"] img').first();
     if (await album.count()) {
       // 앨범 커버 위에 hover 오버레이 div 가 덮여 있다. 클릭은 그 div 에
@@ -47,34 +59,49 @@ async function digTracks(page) {
   }
   const search = page.locator('main input[type="text"], main input:not([type])').first();
   if (await search.count()) {
-    await search.fill('밤편지');
+    await search.fill('이승윤');
     await page.waitForTimeout(3000); // 디바운스 + /api/spotify-search
+    /*
+     * 검색어를 지워 앨범 목록으로 돌려놓는다. 남겨 두면 화면이 "검색 결과" 상태라
+     * 앨범 커버가 하나도 없고(캐시 전용 모드에서는 곡 검색이 비어 온다),
+     * 뒤따르는 "이미지 로드됨" 검사가 그 때문에 실패한다.
+     */
+    await search.fill('');
+    await page.waitForTimeout(2500);
   }
 }
 
 const CASES = [
   { route: '/', seed: {} },
-  { route: '/genres', seed: {} },
-  // 장르를 심으면 장르 기반 아티스트 검색을 탄다.
-  // (getSpotifyGenreQuery 는 explore 에서 import 만 하고 쓰지 않는다 —
-  //  서버의 searchArtistsByGenres 안에서 호출된다)
+  /*
+   * /genres(믹스 매치 진입점)는 사용자 화면에서 내렸다 — docs/mode-pivot.md.
+   * 되살릴 때 이 케이스도 함께 되살린다: { route: '/genres', seed: {} }
+   */
+  // 아티스트 고르기 화면. 이제 ?mode 가 없어도 단일 모드가 기본이다.
+  // 장르 기반 아티스트 검색은 두 모드가 같은 코드를 쓴다(단일도 장르를 전부 주입한다).
   {
-    route: '/explore',
+    route: '/explore?mode=single',
     seed: { selected_genres: JSON.stringify(['k-pop', 'korean indie', 'jazz']) },
     expect: ['searchArtistsByGenres'],
-    // 장르 기반 추천은 매번 다른 아티스트를 준다. 웹만 연속 두 번 열어도
-    // 목록이 달라지는 것을 확인했으므로, 텍스트 완전 일치를 요구할 수 없다.
-    // 대신 고정된 문구가 있는지와 이미지 개수로 본다.
+    // 추천 아티스트는 매번 달라진다. 고정 문구와 이미지 개수로만 본다.
     text: 'skip',
-    contains: ['어떤 아티스트를 좋아하시나요?', '선택 장르'],
+    contains: ['최애 아티스트를 선택해 주세요'],
   },
+  { route: '/together', seed: {} },
   // 아티스트를 심고 펼치면 앨범 → 트랙 → 검색까지 이어진다.
   {
+    /*
+     * 곡 수는 앨범이 하나씩 들어오는 동안 계속 올라간다. 웹과 토스를 각각 열어
+     * 같은 순간에 같은 숫자이길 요구하면 로딩 속도 차이로 흔들린다 —
+     * 두 화면이 같은 코드를 쓰는지 보는 검사이므로 고정 문구로 본다.
+     */
     route: '/tracks',
     seed: { selectedArtists: JSON.stringify([ARTIST]) },
     act: digTracks,
     expect: ['getArtistAlbums', 'getAlbumTracks'],
     expectUrl: ['/api/spotify-search'],
+    text: 'skip',
+    contains: ['트랙 디깅하기', '앨범 커버를 탭해서'],
   },
   { route: '/worldcup', seed: {} },
   { route: '/taste', seed: {} },
@@ -117,6 +144,12 @@ async function visit(ctx, base, route, seed, act) {
   page.on('requestfailed', (r) => {
     // GA 는 헤드리스에서 차단된다. 토스 빌드에는 아예 없다.
     if (r.url().includes('google-analytics')) return;
+    /*
+     * 구글 프로필 사진 주소는 시간이 지나면 죽는다(지금도 400 을 준다).
+     * 화면에는 대체 이미지가 뜨므로 우리 오류가 아니다. 남의 서버 사정으로
+     * 검사가 흔들리지 않게 거른다.
+     */
+    if (r.url().includes('googleusercontent.com')) return;
     errors.push(`요청 실패 ${r.url().slice(0, 70)}`);
   });
   page.on('request', (r) => {
@@ -167,7 +200,12 @@ async function visit(ctx, base, route, seed, act) {
 
 const browser = await chromium.launch();
 /** 케이스마다 새 컨텍스트를 연다 — 심은 저장소가 다음 케이스로 새면 안 된다. */
-const freshCtx = () => browser.newContext({ viewport: { width: 430, height: 900 } });
+/*
+ * 한국어로 연다. 앨범·곡 캐시는 로케일별로 따로 저장되고(`spotify_cache_*.locale`),
+ * 개발·검사는 캐시 전용 모드라 Spotify 를 부르지 않는다 — 로케일이 다르면
+ * 캐시를 못 찾아 앨범 커버가 하나도 뜨지 않는다.
+ */
+const freshCtx = () => browser.newContext({ viewport: { width: 430, height: 900 }, locale: 'ko-KR' });
 
 try {
   for (const { route, tossRoute, seed, act, expect = [], expectUrl = [], text = 'exact', contains = [] } of CASES) {
@@ -238,11 +276,14 @@ try {
    *
    * 홈의 시작 버튼 href 로 확인한다 — 카드마다 목적지가 다르므로 어떤 카드가
    * 열려 있는지가 그대로 드러난다(카드 0 = /explore?mode=single,
-   * 카드 1 = /genres). 캐러셀의 transform 을 읽는 것보다 덜 깨진다.
+   * 카드 1 = /together). 캐러셀의 transform 을 읽는 것보다 덜 깨진다.
+   *
+   * 믹스 매치를 내린 동안에는 ?mode=multi 로 들어와도 카드 0 이다 — 없는 모드로
+   * 보낼 수 없기 때문이다. 되살리면 그 카드(=/genres)로 돌아간다.
    */
   console.log('\n참여 동선 (?mode 이어받기)');
   const startHref = (page) =>
-    page.evaluate(() => document.querySelector('main a[href^="/explore"], main a[href="/genres"]')?.getAttribute('href') ?? null);
+    page.evaluate(() => document.querySelector('main a[href^="/explore"], main a[href="/genres"], main a[href="/together"]')?.getAttribute('href') ?? null);
 
   for (const [base, label, sharedRoute] of [
     [NEXT, '웹  ', `/taste/${SHARED_ID}`],
@@ -256,11 +297,11 @@ try {
     await plain.waitForTimeout(2500);
     check((await startHref(plain)) === '/explore?mode=single', `${label} — 파라미터 없으면 기존과 같이 카드 0`, (await startHref(plain)) ?? '없음');
 
-    // 2) ?mode=multi 로 들어오면 '믹스 매치 월드컵' 카드가 먼저 보인다.
+    // 2) 믹스 매치를 내린 동안에는 ?mode=multi 로 들어와도 첫 카드로 보낸다.
     const multi = await ctx.newPage();
     await multi.goto(`${base}/?mode=multi`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await multi.waitForTimeout(2500);
-    check((await startHref(multi)) === '/genres', `${label} — ?mode=multi → 믹스 매치 월드컵`, (await startHref(multi)) ?? '없음');
+    check((await startHref(multi)) === '/explore?mode=single', `${label} — ?mode=multi 도 최애 곡 소트하기로`, (await startHref(multi)) ?? '없음');
 
     // 3) 공유 화면의 CTA 가 원본 모드를 붙여 홈으로 보낸다.
     //    SHARED_ID 는 '최애 곡 소트하기'(is_single_artist) 결과다.

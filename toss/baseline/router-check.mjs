@@ -67,11 +67,14 @@ try {
   });
 
   console.log('\n[2] next/link 클릭 → pushState');
-  const link = page.locator('a[href="/genres"]').first();
-  check((await link.count()) > 0, 'footer 의 /genres 링크 존재');
+  // 믹스 매치를 내리면서 푸터의 /genres 링크가 빠졌다. 같은 자리의 다른 링크로 본다.
+  // footer 로 좁힌다 — 홈 CTA 도 같은 주소를 쓰는데, 그 버튼은 비로그인일 때
+  // 로그인 창을 열고 이동하지 않는다(그래서 라우팅 검사에 쓸 수 없다).
+  const link = page.locator('nav a[href="/explore?mode=single"]').first();
+  check((await link.count()) > 0, 'footer 의 최애 곡 소트하기 링크 존재');
   await link.click();
   await page.waitForTimeout(400);
-  check(new URL(page.url()).pathname === '/genres', 'URL 이 /genres 로 바뀜', page.url());
+  check(new URL(page.url()).pathname === '/explore', 'URL 이 /explore 로 바뀜', page.url());
   check(await page.evaluate(() => window.__noReload === true), '전체 리로드 없음');
 
   console.log('\n[3] 뒤로가기(popstate)');
@@ -81,7 +84,7 @@ try {
   check(await page.evaluate(() => window.__noReload === true), '전체 리로드 없음');
   check(
     (await page.locator('main').count()) > 0 &&
-      (await page.locator('a[href="/genres"]').count()) > 0,
+      (await page.locator('nav a[href="/explore?mode=single"]').count()) > 0,
     '홈 화면이 다시 그려짐'
   );
 

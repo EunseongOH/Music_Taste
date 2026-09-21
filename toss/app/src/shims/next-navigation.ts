@@ -18,12 +18,17 @@ export const usePathname = () => useLocation().pathname;
  *    `/taste/<uuid>/index.html` 을 미리 만들어 둘 수 없어서, 밖에서 들어오는
  *    링크는 쿼리 형태를 쓴다.
  *
- * 동적 세그먼트를 쓰는 라우트가 이 하나뿐이라 경로 패턴 엔진을 두지 않는다.
+ * 같이 소트하기도 같은 방식이다.
+ *  - `/together/<code>` · `/together/<code>/result` : 참여 링크. 코드를 여기서 뽑는다.
+ *
+ * 동적 세그먼트를 쓰는 라우트가 둘뿐이라 경로 패턴 엔진을 두지 않는다.
  */
 export function useParams(): Record<string, string> {
   const { pathname, search } = useLocation();
   const params: Record<string, string> = Object.fromEntries(new URLSearchParams(search));
   const fromPath = pathname.match(/^\/taste\/(.+)$/);
   if (fromPath) params.id = decodeURIComponent(fromPath[1]);
+  const code = pathname.match(/^\/together\/([^/]+)(?:\/result)?$/);
+  if (code && code[1] !== 'new') params.code = decodeURIComponent(code[1]);
   return params;
 }

@@ -21,7 +21,12 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 const WEB = process.env.NEXT_BASE ?? 'http://localhost:3000';
-const ARTIST = { id: '7c1HgFDe8ogy5NOZ1ANCJQ', name: 'IU', image: '' };
+/*
+ * 앨범·곡까지 DB 에 담긴 아티스트를 쓴다(together_artist_catalog 기준 전곡 확보).
+ * 개발·검사는 캐시 전용 모드라 Spotify 를 부르지 않으므로, 캐시에 없는 아티스트를
+ * 쓰면 앨범이 하나도 안 떠서 검사가 헛돈다.
+ */
+const ARTIST = { id: '6z4R3mCiiIiLgpicseyNkV', name: '이승윤', image: '' };
 
 let failed = 0;
 const check = (ok, label, detail = '') => {
@@ -52,7 +57,9 @@ const open = async (route, seed = {}) => {
 try {
   console.log('\n[1] Server Actions');
   {
-    const { ctx, page } = await open('/explore', {
+    // 믹스 매치를 내린 뒤에는 ?mode 가 없어도 단일 모드다. 장르 기반 아티스트 로드는
+    // 두 모드가 같은 코드를 쓰므로 이 검사는 그대로 의미가 있다.
+    const { ctx, page } = await open('/explore?mode=single', {
       selected_genres: JSON.stringify(['k-pop', 'korean indie', 'jazz']),
     });
     await page.waitForTimeout(6000);
@@ -68,8 +75,11 @@ try {
     const open2 = page.locator('section[id^="artist-section-"] h2').first();
     check((await open2.count()) > 0, '/tracks — 선택한 아티스트 표시');
     if (await open2.count()) {
-      await open2.click();
-      await page.waitForTimeout(4000);
+      // 한 아티스트 모드는 들어오자마자 펼쳐져 있다. 또 누르면 접혀서 커버가 사라진다.
+      if ((await page.locator('section[id^="artist-section-"] img').count()) === 0) {
+        await open2.click();
+        await page.waitForTimeout(4000);
+      }
       const albums = await page.locator('section[id^="artist-section-"] img').count();
       check(albums > 0, '/tracks — 앨범 목록 로드', `커버 ${albums}개`);
     }
