@@ -1,15 +1,33 @@
 "use server";
 // src/utils/spotify.ts
 import { createAdminClient } from "./supabase/admin";
-import { getDbArtistAlbums, getDbTracksByAlbum, searchDbArtists } from "./dbCatalog";
+import { getDbArtistAlbums, getDbTracksByAlbum, searchDbArtists, getDbArtistsByGenre } from "./dbCatalog";
 
+// 앨범·트랙 캐시. 신곡이 나오면 낡으므로 짧게 잡는다.
 const DB_CACHE_TTL_DAYS = 21;
 
-const getCacheExpiresAt = () => {
+// 아티스트 캐시(이름·사진). 신곡과 달리 잘 안 바뀌어서 길게 잡는다.
+//
+// 약관에는 기간 숫자가 없다. 두 조항이 있을 뿐이다.
+//   IV.3.1 "use reasonable efforts to ensure that any data you display to users is the most
+//           up to date data available ... Do not store Spotify Content indefinitely."
+//   IV.3.2 "limited to the temporary caching of: metadata and cover art"
+// 앞 조항은 "낡았는지"를 묻는다. 아티스트 사진은 원본이 안 바뀌면 90일 된 사본도 최신이다.
+// 뒤 조항은 "무기한"만 금한다. 만료·갱신이 실제로 도는 한 temporary 다.
+// 그래서 트랙리스트는 21일로 두고 아티스트만 90일로 뗀다.
+//
+// 효과: 2,716팀을 계속 최신으로 두는 비용이 하루 130콜에서 30콜로 준다.
+// (배치 엔드포인트 /v1/artists?ids= 는 2026-09-21 실측 403 이라 1명당 1콜이다)
+const ARTIST_CACHE_TTL_DAYS = Number(process.env.SPOTIFY_ARTIST_TTL_DAYS ?? 90);
+
+const daysFromNow = (n: number) => {
   const d = new Date();
-  d.setDate(d.getDate() + DB_CACHE_TTL_DAYS);
+  d.setDate(d.getDate() + n);
   return d.toISOString();
 };
+
+const getCacheExpiresAt = () => daysFromNow(DB_CACHE_TTL_DAYS);
+const getArtistCacheExpiresAt = () => daysFromNow(ARTIST_CACHE_TTL_DAYS);
 
 const ARTIST_TRANSLATION_MAP: Record<string, string> = {
   "뉴진스": "NewJeans", "아이브": "IVE", "에스파": "aespa", "르세라핌": "LE SSERAFIM", "아일릿": "ILLIT",
@@ -94,15 +112,18 @@ async function saveArtistsToDbCache(artists: any[]) {
   if (!artists || artists.length === 0) return;
   try {
     const supabase = createAdminClient();
-    const expiresAt = getCacheExpiresAt();
+    const expiresAt = getArtistCacheExpiresAt();
     const lang = await getLocaleCookie();
 
+    // genres 는 일부러 안 쓴다. 이 칸에 든 건 Spotify 가 준 값이 아니라 우리가 고른 16종 라벨이고
+    // (explore_genre_picks 308건), Spotify 원본으로 덮으면 장르 피드 1차 조회가 깨진다.
+    // upsert 는 넘긴 칸만 바꾸므로 빼두면 기존 라벨이 그대로 남는다.
+    // 장르 깊이는 이제 artist_genre_feed(Wikidata P136, CC0)가 맡는다.
     const rows = artists.map(artist => ({
       id: artist.id,
       locale: lang,
       name: artist.name,
       images: artist.images || [],
-      genres: artist.genres || [],
       popularity: artist.popularity || 0,
       expires_at: expiresAt
     }));
@@ -1290,16 +1311,23 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
         .gt('expires_at', now)
         .range(offset, offset + limitPerGenre - 1);
 
+      let got = 0;
       if (!error && dbArtists && dbArtists.length > 0) {
         dbArtists.forEach((item: any) => {
           allResultsMap.set(item.id, item);
         });
-        if (dbArtists.length < limitPerGenre) {
-          genresNeedingApi.push(genreId);
-        }
-      } else {
-        genresNeedingApi.push(genreId);
+        got = dbArtists.length;
       }
+
+      // 캐시의 genres 는 Spotify 가 준 값이라 우리 16종 체계와 잘 안 맞는다. 실제로 장르가 붙어 있는 건
+      // 우리가 손으로 고른 308건뿐이라 장르당 22명에서 막힌다. 그 뒤는 우리 장르 라벨로 채운다
+      // (Wikidata P136, CC0 — 아티스트 1,423명). 여기까지 오면 Spotify 를 안 불러도 된다.
+      if (got < limitPerGenre) {
+        const fromDb = await getDbArtistsByGenre(genreId, limitPerGenre - got, Math.max(0, offset - got));
+        for (const a of fromDb) if (!allResultsMap.has(a.id)) { allResultsMap.set(a.id, a); got++; }
+      }
+
+      if (got < limitPerGenre) genresNeedingApi.push(genreId);
     }
   } catch (e) {
     console.warn("[Spotify Cache DB] DB genre search error, using API fallback:", e);

@@ -768,3 +768,56 @@ export const searchDbArtists = async (
     return [];
   }
 };
+
+/**
+ * 장르 피드를 우리 DB 로 채운다. Spotify 호출 0회.
+ *
+ * 왜: 탐색 화면의 무한스크롤이 장르마다 Spotify 검색을 부른다. 깊게 내릴수록 호출이 늘고,
+ *     사람이 늘면 그만큼 또 는다. 반면 DB 로 내면 사람 수와 무관하게 0회다.
+ *     장르 라벨은 Wikidata P136(CC0)에서 채웠다 (MusicBrainz tags 는 CC-BY-NC-SA 라 못 쓴다).
+ *
+ * 사진은 Spotify 캐시에서 가져오고, 없으면 없이 낸다.
+ */
+export const getDbArtistsByGenre = async (
+  genre: string,
+  limit: number,
+  offset: number,
+): Promise<{ id: string; name: string; images: { url: string }[]; genres: string[]; popularity: number }[]> => {
+  const g = (genre ?? "").trim().toLowerCase();
+  if (!g) return [];
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("artist_genre_feed")
+      .select("spotify_id, name, name_ko, tracks_servable")
+      .eq("genre", g)
+      // 우리가 끝까지 낼 수 있는 아티스트를 앞에 둔다. 눌렀을 때 Spotify 를 안 부르게 된다
+      .order("tracks_servable", { ascending: false })
+      .order("spotify_id")
+      .range(offset, offset + limit - 1);
+    if (error || !data?.length) return [];
+
+    const ids = data.map((r) => r.spotify_id);
+    const img = new Map<string, { url: string }[]>();
+    const pop = new Map<string, number>();
+    const { data: cached } = await supabase
+      .from("spotify_cache_artists")
+      .select("id, images, popularity")
+      .in("id", ids)
+      .gt("expires_at", new Date().toISOString());
+    for (const c of cached ?? []) {
+      if (Array.isArray(c.images) && c.images.length) img.set(c.id, c.images);
+      if (typeof c.popularity === "number") pop.set(c.id, c.popularity);
+    }
+    return data.map((r) => ({
+      id: r.spotify_id,
+      name: r.name || r.name_ko || "",
+      images: img.get(r.spotify_id) ?? [],
+      genres: [g],
+      popularity: pop.get(r.spotify_id) ?? 50,
+    }));
+  } catch (e) {
+    console.warn("[DB] getDbArtistsByGenre 실패:", e);
+    return [];
+  }
+};
