@@ -24,9 +24,25 @@ import {
   UnderlineTabs,
   formatDate,
   primaryButton,
+  secondaryButton,
   textLink,
   useToast,
 } from "@/components/space/SpaceUI";
+
+/*
+ * 목록에 실제로 쓰는 열만 고른다. 예전에는 `select("*")` 에 limit 도 없어서
+ * 화면에 들어올 때마다 공개 취향표 전건이 통째로 내려왔다.
+ *
+ * `ranking` 은 뺄 수 없다 — 취향 일치율이 TOP 10 을 비교해서 나온다(getTop10Ids).
+ * 대신 두 가지로 줄인다: 내 목록은 20건씩 끊어 받고, 비교용 남의 목록은 최근
+ * MATCH_POOL 건으로 막는다. 진짜 해법은 일치율을 서버에서 계산하는 것이고,
+ * 그건 이 작업 범위 밖이다.
+ */
+const LIST_COLUMNS =
+  "id,user_id,title,winner_track_id,winner_track_title,winner_track_artist,winner_track_image,user_nickname,user_profile_image,created_at,is_public,is_single_artist,artist_name,ranking";
+const PAGE_SIZE = 20;
+const MATCH_POOL = 100;
+
 
 interface Track {
   id?: string;
@@ -77,6 +93,7 @@ const translations = {
     tabListen: "들어볼 곡",
     tabSocial: "취향 메이트",
     syncing: "불러오는 중이에요",
+    moreBtn: "더 보기",
     close: "닫기",
     cancel: "취소",
     guestTitle: "로그인하고 내 취향을 모아 보세요",
@@ -126,6 +143,7 @@ const translations = {
     tabListen: "Listen Later",
     tabSocial: "Taste Mates",
     syncing: "Loading",
+    moreBtn: "Show more",
     close: "Close",
     cancel: "Cancel",
     guestTitle: "Log in to collect your taste",
@@ -179,6 +197,9 @@ export default function ExploreTastePage() {
   const [completedResults, setCompletedResults] = useState<TournamentResult[]>([]);
   const [listenTracks, setListenTracks] = useState<ListenLaterTrack[]>([]);
   const [otherUsersResults, setOtherUsersResults] = useState<TournamentResult[]>([]);
+  /** 내 취향표를 더 받을 게 남았는지. 한 번에 20건씩 받는다. */
+  const [hasMoreMine, setHasMoreMine] = useState(false);
+  const [loadingMoreMine, setLoadingMoreMine] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
@@ -201,6 +222,29 @@ export default function ExploreTastePage() {
   const [mateDetailJaccard, setMateDetailJaccard] = useState<number | null>(null);
 
   // Fetch archives and public results
+  /** 내 취향표 "더 보기" — 다음 20건을 뒤에 붙인다. */
+  const loadMoreMine = async () => {
+    if (!user || loadingMoreMine) return;
+    setLoadingMoreMine(true);
+    try {
+      const { data, error } = await supabase
+        .from("tournament_results")
+        .select(LIST_COLUMNS)
+        .eq("user_id", user.id)
+        .in("is_single_artist", VISIBLE_MODES)
+        .order("created_at", { ascending: false })
+        .range(completedResults.length, completedResults.length + PAGE_SIZE - 1);
+      if (error) throw error;
+      const rows = (data || []) as unknown as TournamentResult[];
+      setCompletedResults((prev) => [...prev, ...rows]);
+      setHasMoreMine(rows.length === PAGE_SIZE);
+    } catch (e) {
+      console.error("내 취향표를 더 불러오지 못했어요:", e);
+    } finally {
+      setLoadingMoreMine(false);
+    }
+  };
+
   const fetchData = async () => {
     if (!user) {
       setIsLoadingData(false);
@@ -211,13 +255,16 @@ export default function ExploreTastePage() {
       // 1. Fetch current user completed results
       const { data: myData, error: myError } = await supabase
         .from("tournament_results")
-        .select("*")
+        .select(LIST_COLUMNS)
         .eq("user_id", user.id)
+        // 모드 필터는 .range() 보다 먼저 걸어야 20건이 꽉 찬다
         .in("is_single_artist", VISIBLE_MODES)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, PAGE_SIZE - 1);
 
       if (myError) throw myError;
-      setCompletedResults(myData || []);
+      setCompletedResults((myData || []) as unknown as TournamentResult[]);
+      setHasMoreMine((myData?.length ?? 0) === PAGE_SIZE);
 
       if (myData && myData.length > 0) {
         setSelectedMatchBaseResultId(myData[0].id);
@@ -226,14 +273,15 @@ export default function ExploreTastePage() {
       // 2. Fetch other users public results for social matching feed
       const { data: othersData, error: othersError } = await supabase
         .from("tournament_results")
-        .select("*")
+        .select(LIST_COLUMNS)
         .eq("is_public", true)
         .neq("user_id", user.id)
         .in("is_single_artist", VISIBLE_MODES)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(MATCH_POOL);
 
       if (othersError) throw othersError;
-      setOtherUsersResults(othersData || []);
+      setOtherUsersResults((othersData || []) as unknown as TournamentResult[]);
 
       // 3. 들어볼 곡. 실패해도 위 두 탭은 보여야 하므로 따로 처리한다.
       const { data: listenData, error: listenError } = await supabase
@@ -567,6 +615,13 @@ export default function ExploreTastePage() {
                   </div>
                 </li>
               ))}
+              {hasMoreMine && (
+                <li className="py-4 flex justify-center">
+                  <button onClick={loadMoreMine} disabled={loadingMoreMine} className={secondaryButton}>
+                    {loadingMoreMine ? t.syncing : t.moreBtn}
+                  </button>
+                </li>
+              )}
             </ul>
           )
         )}
