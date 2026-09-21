@@ -34,7 +34,7 @@ export default function Home() {
       id: "single",
       badge: locale === "ko" ? "아티스트 한 명" : "One artist",
       title: locale === "ko" ? "최애 곡 줄 세우기" : "Favorite Songs Lineup",
-      desc: locale === "ko" ? "아티스트 한 명을 고르면 발표한 곡이 모두 나와요. 둘씩 골라 가며 소트해보세요." : "Pick one artist and every song they've released shows up. Choose two at a time to sort them.",
+      desc: locale === "ko" ? "한 아티스트의 전곡을 비교하며, 내가 더 좋아하는 곡을 찾아보세요." : "Compare every song by one artist and find the ones you love more.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/explore?mode=single"
     },
@@ -42,7 +42,7 @@ export default function Home() {
       id: "multi",
       badge: locale === "ko" ? "여러 아티스트" : "Several artists",
       title: locale === "ko" ? "믹스 매치 월드컵" : "Mix & Match World Cup",
-      desc: locale === "ko" ? "좋아하는 아티스트를 여럿 고르고 곡을 섞어요. 둘씩 골라 가다 보면 1위 곡이 남아요." : "Pick several artists and mix their songs. Keep choosing between two until your #1 is left.",
+      desc: locale === "ko" ? "좋아하는 아티스트들의 곡을 한데 모아, 토너먼트로 최애곡을 찾아보세요." : "Bring together songs by the artists you love and find your favorite in a tournament.",
       btnText: locale === "ko" ? "시작하기" : "Start",
       target: "/genres"
     },
@@ -50,7 +50,7 @@ export default function Home() {
       id: "archive",
       badge: locale === "ko" ? "내 기록" : "My records",
       title: locale === "ko" ? "내 취향 스페이스" : "My Taste Space",
-      desc: locale === "ko" ? "저장한 취향표와 들어볼 곡을 모아 봐요. 취향이 겹치는 리스너도 만날 수 있어요." : "See your saved taste cards and songs to check out. Meet listeners whose taste overlaps with yours.",
+      desc: locale === "ko" ? "내 기록들을 모아두고, 취향이 닮은 리스너도 만나보세요." : "Keep your records in one place and meet listeners with similar taste.",
       btnText: locale === "ko" ? "확인하기" : "Check",
       target: "/explore-taste"
     },
@@ -58,7 +58,7 @@ export default function Home() {
       id: "public-archive",
       badge: locale === "ko" ? "모두의 취향표" : "Everyone's taste cards",
       title: locale === "ko" ? "우리의 취향 아카이브" : "Public Taste Archive",
-      desc: locale === "ko" ? "다른 리스너가 공개한 취향표를 둘러봐요. 같은 아티스트를 어떻게 골랐는지 볼 수 있어요." : "Browse taste cards other listeners made public. See how they chose from the same artists.",
+      desc: locale === "ko" ? "다른 리스너는 어떤 곡을 더 좋아했을까요? 다양한 취향표를 구경해보세요." : "Which songs did other listeners love more? Browse all kinds of taste cards.",
       btnText: locale === "ko" ? "구경하기" : "Explore",
       target: "/archive"
     }
