@@ -26,12 +26,13 @@ interface CatalogArtist {
   id: string;
   name: string;
   image: string;
-  /** 전곡을 낼 수 있는 아티스트인지(앨범 대부분에 곡까지 받아 둔 경우) */
-  full: boolean;
 }
 
-/** 곡 수는 중복(리패키지)을 빼기 전이라 숫자를 약속하지 않는다. */
-const artistSub = (artist: CatalogArtist) => (artist.full ? "전곡 있어요" : "일부만 있어요");
+/*
+ * 확보율은 목록 **순서**로만 쓴다(전곡이 있는 아티스트가 위로 온다).
+ * 화면에는 적지 않는다 — 이용자는 당연히 전곡이 있다고 생각하고 들어오는데,
+ * "전곡 있어요/일부만 있어요"를 붙이면 없는 쪽을 먼저 알리는 꼴이 된다.
+ */
 
 function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size: number; on: boolean }) {
   return (
@@ -312,7 +313,7 @@ export default function TogetherNewPage() {
                   <ArtistAvatar src={artist.image} name={artist.name} size={56} on={isOn} />
                   <span className="flex-1 min-w-0">
                     <span className="block type-body-strong text-navy truncate">{artist.name}</span>
-                    <span className="block type-caption text-navy/70">{artistSub(artist)}</span>
+                    <span className="block type-caption text-navy/70">아티스트</span>
                   </span>
                   {isOn && <Check size={18} className="text-point mr-1" strokeWidth={3} />}
                 </button>
@@ -335,7 +336,6 @@ export default function TogetherNewPage() {
                   <span className={`type-caption text-center line-clamp-1 w-full ${isOn ? "text-navy font-bold" : "text-navy/90"}`}>
                     {artist.name}
                   </span>
-                  <span className="type-caption text-navy/50 -mt-1.5">{artistSub(artist)}</span>
                 </button>
               </li>
             );

@@ -35,14 +35,10 @@ interface CatalogRow {
   id: string;
   name: string;
   images: SpotifyImage[] | null;
-  track_count: number;
-  coverage: string | number | null;
 }
 
 /** 이보다 적으면 소트할 거리가 안 된다(중복 제거 전 기준). */
 const MIN_TRACKS = 8;
-/** 앨범 대부분에 곡이 있으면 "전곡"으로 본다. 스포티파이 총계가 지역마다 조금씩 달라 1.0 을 요구하지 않는다. */
-const FULL_COVERAGE = 0.9;
 
 /** 같은 곡이 앨범마다 다시 담기므로(정규판·리패키지) 제목으로 한 번만 남긴다. */
 const titleKey = (title: string) =>
@@ -110,21 +106,19 @@ export async function GET(request: Request) {
   // coverage = 곡까지 받아 둔 앨범 / 스포티파이가 말한 앨범 수 (뷰: together_artist_catalog)
   let query = supabase
     .from("together_artist_catalog")
-    .select("id,name,images,track_count,coverage")
+    .select("id,name,images,coverage")
     .gte("track_count", MIN_TRACKS)
     .order("coverage", { ascending: false })
     .order("track_count", { ascending: false })
     .limit(q ? 20 : 18);
   if (q) query = query.ilike("name", `%${q}%`);
 
+  // coverage 는 순서로만 쓴다 — 화면에 확보율을 적지 않는다(없는 쪽을 먼저 알리는 꼴이 된다).
   const { data: artists } = await query;
   const list = ((artists ?? []) as CatalogRow[]).map((a) => ({
     id: a.id,
     name: a.name,
     image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
-    trackCount: a.track_count,
-    /** 전곡을 낼 수 있는 아티스트. 화면에서 "전곡 n곡" / "일부만 있어요" 를 가른다. */
-    full: Number(a.coverage ?? 0) >= FULL_COVERAGE,
   }));
 
   return NextResponse.json({ artists: list });
