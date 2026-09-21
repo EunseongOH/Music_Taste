@@ -1,7 +1,7 @@
 "use server";
 // src/utils/spotify.ts
 import { createAdminClient } from "./supabase/admin";
-import { getDbArtistAlbums, getDbTracksByAlbum } from "./dbCatalog";
+import { getDbArtistAlbums, getDbTracksByAlbum, searchDbArtists } from "./dbCatalog";
 
 const DB_CACHE_TTL_DAYS = 21;
 
@@ -492,7 +492,10 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
   const allItems: any[] = [];
   let succeeded = false;
 
-  for (let fetched = 0; fetched < limit; fetched += maxLimitPerRequest) {
+  // 사람이 직접 친 검색이라 마지막까지 Spotify 를 쓴다 (예산 전액). 그래도 다 쓰면 DB 로 답한다.
+  const canAsk = await searchBudgetLeft(1);
+
+  for (let fetched = 0; canAsk && fetched < limit; fetched += maxLimitPerRequest) {
     const chunkLimit = Math.min(limit - fetched, maxLimitPerRequest);
     const chunkOffset = offset + fetched;
 
@@ -534,6 +537,14 @@ export const searchSpotifyArtists = async (query: string, limit = 10, offset = 0
     saveArtistsToDbCache(allItems);
     searchCache.set(cacheKey, { data: allItems, timestamp: Date.now() });
     return allItems;
+  }
+
+  // Spotify 가 못 답했다. curatedArtists 136명으로 떨어지기 전에 우리 DB(2,200팀 이상)를 먼저 본다.
+  // 한글 이름으로도 찾는다 — Spotify 검색이 한글에 약해서 오히려 여기가 더 잘 맞는 경우가 있다.
+  const dbItems = await searchDbArtists(trimmedQuery, limit, offset);
+  if (dbItems.length > 0) {
+    searchCache.set(cacheKey, { data: dbItems, timestamp: Date.now() });
+    return dbItems;
   }
 
   // Fallback to local search if API failed or returned empty results
@@ -630,6 +641,12 @@ async function endpointBudgetLeft(endpoint: string, budget: number): Promise<boo
     return true;   // 계측 실패가 서비스를 막지 않는다
   }
 }
+
+// 검색은 쓰는 곳이 셋인데 막혔을 때 손해가 다르다. 한 통의 예산을 쓰되 멈추는 선을 달리 둬서,
+// 사람이 직접 친 검색이 가장 오래 살아남게 한다 (장르 피드는 우리 DB·curated 로 채울 수 있다).
+const SEARCH_BUDGET = Number(process.env.SPOTIFY_SEARCH_BUDGET ?? 200);
+const searchBudgetLeft = (share: number) =>
+  endpointBudgetLeft('/v1/search', Math.round(SEARCH_BUDGET * share));
 
 const albumBudgetLeft = () => endpointBudgetLeft('/v1/artists/{id}/albums', ALBUM_ENDPOINT_DAILY_BUDGET);
 const trackBudgetLeft = () => endpointBudgetLeft('/v1/albums/{id}/tracks', TRACK_ENDPOINT_DAILY_BUDGET);
@@ -1293,6 +1310,13 @@ export const searchArtistsByGenres = async (genres: string[], limit = 20, offset
   let anySucceeded = false;
   let hitRateLimit = false;
 
+  // 장르 피드는 우리 DB 캐시와 curatedArtists 로도 채울 수 있다. 그래서 검색 예산의 60% 선에서 멈춰
+  // 나머지를 사람이 직접 친 검색 몫으로 남긴다. 여기서 안 멈추면 장르 무한스크롤이 예산을 다 태운다.
+  if (genresNeedingApi.length > 0 && !(await searchBudgetLeft(0.6))) {
+    console.warn(`[Spotify] 검색 예산의 60% 를 넘겼다. 장르 ${genresNeedingApi.join(",")} 는 DB·curated 로만 낸다.`);
+    genresNeedingApi.length = 0;
+  }
+
   if (genresNeedingApi.length > 0) {
     for (let i = 0; i < genresNeedingApi.length; i++) {
       const genreId = genresNeedingApi[i];
@@ -1370,6 +1394,13 @@ export const searchTracksByQuery = async (query: string): Promise<any[]> => {
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
     return cached.data;
+  }
+
+  // 곡 검색도 사람이 친 것이라 늦게 막지만, 아티스트 검색 몫은 남겨 둔다.
+  // 막히면 빈 배열이다 — 화면은 "결과 없음" 이 되고, 앨범 목록에서 고르는 길은 그대로 있다.
+  if (!(await searchBudgetLeft(0.9))) {
+    console.warn(`[Spotify] 검색 예산의 90% 를 넘겼다. 곡 검색 "${query}" 는 건너뛴다.`);
+    return [];
   }
 
   const response = await spotifyFetch(

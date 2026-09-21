@@ -714,3 +714,57 @@ export const getDbTracksByAlbum = async (albumIds: string[]): Promise<Record<str
   }
   return out;
 };
+
+/**
+ * 우리 DB 에서 아티스트를 찾는다. Spotify 호출 0회.
+ *
+ * Spotify 검색이 막히면 지금까지는 curatedArtists 136명으로 떨어졌다. 그런데 우리 DB 는
+ * 2,200팀 넘게 알고 있다. 그걸 안 쓰고 136명만 보여 주는 건 손해다.
+ * 한글로 찾아도 잡힌다 — name_ko 를 같이 본다 (Spotify 검색은 한글에 약하다).
+ *
+ * 이름은 CC0 층(MusicBrainz)에서, 사진은 Spotify 캐시에서 가져온다. 사진이 없으면 그냥 없이 낸다
+ * (화면의 SafeImage 가 아티스트용 대체 이미지를 쓴다). 무작위 사진을 끼워 넣지 않는다.
+ */
+export const searchDbArtists = async (
+  query: string,
+  limit = 10,
+  offset = 0,
+): Promise<{ id: string; name: string; images: { url: string }[]; popularity: number }[]> => {
+  const q = (query ?? "").trim();
+  if (q.length < 1) return [];
+  try {
+    const supabase = createAdminClient();
+    const like = `%${q.replace(/[%_]/g, (m) => `\${m}`)}%`;
+    const { data, error } = await supabase
+      .from("artist_serve_snapshot")
+      .select("spotify_id, name, name_ko, tracks_servable")
+      .in("confidence", ["url_rel", "manual", "wikidata"])   // 연결을 믿을 수 있는 것만
+      .or(`name.ilike.${like},name_ko.ilike.${like}`)
+      .order("tracks_servable", { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error || !data?.length) return [];
+
+    // 사진은 Spotify 캐시에서. 만료된 캐시는 쓰지 않는다 (약관상 임시 보관이다)
+    const ids = data.map((r) => r.spotify_id);
+    const img = new Map<string, { url: string }[]>();
+    const pop = new Map<string, number>();
+    const { data: cached } = await supabase
+      .from("spotify_cache_artists")
+      .select("id, images, popularity")
+      .in("id", ids)
+      .gt("expires_at", new Date().toISOString());
+    for (const c of cached ?? []) {
+      if (Array.isArray(c.images) && c.images.length) img.set(c.id, c.images);
+      if (typeof c.popularity === "number") pop.set(c.id, c.popularity);
+    }
+    return data.map((r) => ({
+      id: r.spotify_id,
+      name: r.name || r.name_ko || "",
+      images: img.get(r.spotify_id) ?? [],
+      popularity: pop.get(r.spotify_id) ?? 50,
+    }));
+  } catch (e) {
+    console.warn("[DB] searchDbArtists 실패:", e);
+    return [];
+  }
+};
