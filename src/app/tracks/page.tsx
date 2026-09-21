@@ -2021,7 +2021,7 @@ export default function TracksPage() {
                              albumTitle: openAlbum?.title,
                            });
                          }}
-                         className="w-full mt-2 py-2.5 rounded-2xl text-navy/45 font-sans text-xs font-medium flex items-center justify-center gap-1.5 hover:text-point hover:bg-navy/5 transition-colors"
+                         className="w-full mt-2 py-2.5 rounded-2xl text-navy/70 type-caption flex items-center justify-center gap-1.5 hover:text-navy hover:bg-navy/5 transition-colors"
                        >
                          <AlertCircle size={13} />
                          {t.reportInfoBtn}

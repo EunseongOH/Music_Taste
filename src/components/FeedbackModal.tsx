@@ -30,7 +30,7 @@ const translations = {
     kindIdea: "이런 기능 있으면 좋겠어요",
     kindService: "그 외 서비스 의견",
     messageLabel: "내용",
-    messagePlaceholderDataError: "예: 같은 곡이 앨범마다 중복으로 떠요 / 아티스트 사진이 다른 사람이에요",
+    messagePlaceholderDataError: "예: 같은 앨범이 중복해서 나타나요 / 아티스트 사진이 다른 사람이에요",
     messagePlaceholder: "편하게 적어주세요. 짧아도 괜찮아요.",
     emailLabel: "이메일",
     emailOptional: "선택",
@@ -54,7 +54,7 @@ const translations = {
     kindService: "Other feedback",
     messageLabel: "Message",
     messagePlaceholderDataError:
-      "e.g. The same song appears on several albums / The artist photo is someone else",
+      "e.g. The same album shows up twice / The artist photo is someone else",
     messagePlaceholder: "Anything goes. Short is fine.",
     emailLabel: "Email",
     emailOptional: "optional",
@@ -153,7 +153,7 @@ function FeedbackForm({
             className="bg-[#F5F2ED] w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden border border-navy/10 flex flex-col"
           >
             <div className="p-6 pb-4 border-b border-navy/5 flex items-center justify-between">
-              <h3 className="font-serif text-xl text-navy">
+              <h3 className="type-title-1 text-navy">
                 {fixedKind === "data_error" ? t.titleDataError : t.title}
               </h3>
               <button
@@ -168,7 +168,7 @@ function FeedbackForm({
             <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[65vh]">
               {!fixedKind && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">
+                  <label className="type-sub text-navy/70 ml-1">
                     {t.kindLabel} <span className="text-point">*</span>
                   </label>
                   <div className="flex flex-col gap-2">
@@ -177,9 +177,9 @@ function FeedbackForm({
                         key={opt.id}
                         type="button"
                         onClick={() => setKind(opt.id)}
-                        className={`w-full px-4 py-2.5 rounded-xl border font-sans text-sm text-left transition-all active:scale-[0.99] ${
+                        className={`w-full px-4 py-2.5 rounded-xl border type-body text-left transition-all active:scale-[0.99] ${
                           kind === opt.id
-                            ? "bg-navy text-cream border-navy font-bold shadow-sm"
+                            ? "bg-navy text-cream border-navy font-semibold shadow-sm"
                             : "bg-white/60 text-navy/70 border-navy/10 hover:border-navy/30"
                         }`}
                       >
@@ -192,19 +192,19 @@ function FeedbackForm({
 
               {contextLabel && (
                 <div className="flex flex-col gap-1 bg-navy/5 px-4 py-3 rounded-xl">
-                  <p className="font-sans text-[11px] text-charcoal/60">{t.contextArtist}</p>
-                  <p className="font-sans text-sm font-bold text-navy">{contextLabel}</p>
+                  <p className="type-caption text-navy/70">{t.contextArtist}</p>
+                  <p className="type-body-strong text-navy">{contextLabel}</p>
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between ml-1 mr-1">
-                  <label className="font-sans text-xs font-bold text-navy/70">
+                  <label className="type-sub text-navy/70">
                     {t.messageLabel} <span className="text-point">*</span>
                   </label>
                   <span
-                    className={`font-mono text-[11px] ${
-                      trimmed.length > MESSAGE_MAX ? "text-red-600 font-bold" : "text-navy/40"
+                    className={`type-caption tabular-nums ${
+                      trimmed.length > MESSAGE_MAX ? "text-danger" : "text-navy/40"
                     }`}
                   >
                     {trimmed.length}/{MESSAGE_MAX}
@@ -219,38 +219,38 @@ function FeedbackForm({
                   placeholder={
                     kind === "data_error" ? t.messagePlaceholderDataError : t.messagePlaceholder
                   }
-                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30 resize-none leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/40 resize-none"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="font-sans text-xs font-bold text-navy/70 ml-1">
+                <label className="type-sub text-navy/70 ml-1">
                   {t.emailLabel}{" "}
-                  <span className="text-navy/40 font-medium">({t.emailOptional})</span>
+                  <span className="text-navy/70">({t.emailOptional})</span>
                 </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t.emailPlaceholder}
-                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30"
+                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/40"
                 />
-                <p className="font-sans text-[11px] leading-relaxed text-charcoal/55 ml-1 break-keep">
+                <p className="type-caption text-navy/70 ml-1 break-keep">
                   {t.emailNotice}
                 </p>
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 p-3 rounded-xl">
-                  <AlertCircle size={15} className="text-red-500 shrink-0 mt-0.5" />
-                  <p className="font-sans text-[11px] leading-relaxed text-red-700 break-keep">{error}</p>
+                <div className="flex items-start gap-2 bg-danger/10 p-3 rounded-xl">
+                  <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" />
+                  <p className="type-caption text-danger break-keep">{error}</p>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="mt-1 w-full py-3.5 bg-navy text-cream font-sans font-medium rounded-xl shadow-md hover:bg-navy/90 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2"
+                className="mt-1 w-full py-3.5 bg-navy text-cream type-body-strong rounded-xl shadow-md hover:bg-navy/90 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2"
               >
                 {isSending ? (
                   t.submitting
