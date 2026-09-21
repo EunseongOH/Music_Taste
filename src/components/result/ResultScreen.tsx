@@ -13,7 +13,7 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
 import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/exportLayout";
-import { ConfirmSheet, UnderlineTabs } from "@/components/space/SpaceUI";
+import { ConfirmSheet, Sheet, UnderlineTabs, primaryButton, dangerButton } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
@@ -48,7 +48,6 @@ const translations = {
     saveExcelOption: "Excel 저장",
     autoSavedToast: "취향표가 자동 저장되었어요",
     savedLabel: "저장됨",
-    exitSaveTitle: "Sort 기록을 보관할 수 있어요",
     exitSaveDesc: "로그인하면 취향표를 저장하고 다시 확인할 수 있어요.",
     exitSaveLoginBtn: "로그인하고 저장하기",
     exitSaveLeaveBtn: "저장하지 않고 나가기",
@@ -101,7 +100,6 @@ const translations = {
     saveExcelOption: "Save Excel",
     autoSavedToast: "Saved to My Taste Space",
     savedLabel: "Saved",
-    exitSaveTitle: "Save Your Sort Record",
     exitSaveDesc: "Log in to save your taste card and access it anytime.",
     exitSaveLoginBtn: "Log in and Save",
     exitSaveLeaveBtn: "Leave without Saving",
@@ -951,62 +949,24 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         )}
       </AnimatePresence>
 
-      {/* Exit Prompt Modal for Unauthenticated Users */}
-      <AnimatePresence>
-        {showExitSaveModal && (
+      {/* 로그인 전 나가기 — 하단 시트 (docs/design-system/dialogs.md 3장) */}
+      <Sheet
+        open={showExitSaveModal}
+        onClose={() => setShowExitSaveModal(false)}
+        closeLabel={t.cancel}
+        header={
           <>
-            <motion.div
-              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[999]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowExitSaveModal(false)}
-            />
-            <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4 pointer-events-none">
-              <motion.div
-                className="bg-cream w-full max-w-sm rounded-[2.5rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              >
-                <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 bg-point/10 shadow-sm">
-                  <Archive className="text-point" size={24} />
-                </div>
-
-                <h2 className="text-xl font-bold text-navy mb-2 tracking-tight">
-                  {t.exitSaveTitle}
-                </h2>
-                <p className="font-sans text-charcoal/80 text-xs leading-relaxed mb-6 whitespace-pre-wrap px-1">
-                  {t.exitSaveDesc}
-                </p>
-
-                <div className="flex flex-col gap-2.5 w-full">
-                  <button
-                    onClick={() => {
-                      setShowExitSaveModal(false);
-                      setShowLoginModal(true);
-                    }}
-                    className="w-full h-[48px] bg-navy text-cream font-bold text-sm rounded-2xl hover:bg-navy/90 transition-all active:scale-[0.98] cursor-pointer shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <span>{t.exitSaveLoginBtn}</span>
-                  </button>
-
-                  <button
-                    onClick={async () => {
-                      setShowExitSaveModal(false);
-                      await executeExit();
-                    }}
-                    className="w-full h-[44px] bg-white border border-navy/20 text-navy font-bold text-xs rounded-xl hover:bg-navy/5 transition-all cursor-pointer"
-                  >
-                    {t.exitSaveLeaveBtn}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
+            <h2 className="type-title-1 text-navy">{locale === "en" ? "Save your taste card?" : "취향표를 저장할까요?"}</h2>
+            <p className="type-sub text-navy/70 mt-1 break-keep">{t.exitSaveDesc}</p>
           </>
-        )}
-      </AnimatePresence>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
+            <button onClick={() => { setShowExitSaveModal(false); setShowLoginModal(true); }} className={`${primaryButton} w-full`}>{t.exitSaveLoginBtn}</button>
+            <button onClick={async () => { setShowExitSaveModal(false); await executeExit(); }} className={`${dangerButton} w-full`}>{t.exitSaveLeaveBtn}</button>
+          </div>
+        }
+      />
 
       {/* Overwrite Choice Modal */}
       <AnimatePresence>
@@ -1065,7 +1025,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   </button>
                   <button
                     onClick={() => setShowOverwriteModal(false)}
-                    className="w-full h-[44px] bg-white border border-red-200 text-red-500 font-medium text-xs rounded-xl hover:bg-red-50/50 transition-all cursor-pointer"
+                    className="w-full h-[44px] bg-navy/5 text-navy font-bold text-xs rounded-xl hover:bg-navy/10 transition-all cursor-pointer"
                   >
                     {t.cancel}
                   </button>

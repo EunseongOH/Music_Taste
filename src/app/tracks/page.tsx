@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Compass, Disc, Search, Plus, X, Info, AlertCircle, RefreshCw } from "lucide-react";
+import { Check, Compass, Disc, Search, Plus, X, Info, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { SafeImage } from "@/components/SafeImage";
 import BackButton from "@/components/BackButton";
+import { Sheet, Toast, primaryButton, secondaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
@@ -55,18 +56,6 @@ const translations = {
     unreleasedSavedDb: "미발매곡 등록을 요청했어요. 승인 대기 중이라도 월드컵 대진에 바로 쓸 수 있어요!",
     unreleasedSavedTemp: "아쉽게도 저장 과정에 문제가 생겼지만, 지금 바로 사용할 수 있어요!",
     unreleasedGuest: "로그인하지 않은 상태예요. 임시로 추가되어 바로 쓸 수 있지만, 브라우저를 닫으면 사라질 수 있어요.",
-    exitTitle: "돌아갈까요?",
-    exitDesc: "이전 단계로 가서 아티스트를 다시 고르거나, 지금 취향표 만들기를 종료할 수 있어요.",
-    reselectArtists: "아티스트 다시 고르기",
-    exitTest: "취향표 만들기 종료하고 나가기",
-    continueTest: "계속 곡 고르기",
-    saveTitle: "진행 내역을 저장할까요?",
-    saveDesc: "지금까지 고른 곡들이 있어요. 진행 내역을 보관해 두고 나갈까요?",
-    saveDescSub: "(보관한 내역은 프로필의 '내 취향 스페이스'에서 언제든 이어할 수 있어요.)",
-    saveAndExit: "저장하고 나갈게요",
-    discardAndExit: "저장하지 않고 나갈게요",
-    returnToPrevStep: "돌아가기",
-    alertTitle: "확인해 주세요",
     confirm: "확인",
     needAtLeast4: "월드컵을 하려면 최소 4곡을 골라야 해요.",
   },
@@ -108,18 +97,6 @@ const translations = {
     unreleasedSavedDb: "Track submission requested. You can use it in your song lineup right away!",
     unreleasedSavedTemp: "Failed to save to database, but it has been added temporarily for now!",
     unreleasedGuest: "Using guest mode. The track is added temporarily but may be lost when the browser closes.",
-    exitTitle: "Go back or exit?",
-    exitDesc: "You can go back to choose artists, or exit now.",
-    reselectArtists: "Select Artists Again",
-    exitTest: "Exit Selection",
-    continueTest: "Keep Selecting",
-    saveTitle: "Save progress?",
-    saveDesc: "You have selected tracks. Would you like to save your draft and exit?",
-    saveDescSub: "(You can resume anytime from 'My Taste Space' in your profile.)",
-    saveAndExit: "Save and Exit",
-    discardAndExit: "Discard & Exit",
-    returnToPrevStep: "Go back to previous choice",
-    alertTitle: "Oops, check this!",
     confirm: "Okay",
     needAtLeast4: "You need at least 4 tracks.",
   }
@@ -190,6 +167,11 @@ export default function TracksPage() {
   /** 배경 자동저장이 마지막으로 저장한(또는 복원한) 선택 집합. 같으면 저장하지 않는다. */
   const lastSavedSelRef = React.useRef<string>("");
   const [customAlert, setCustomAlert] = useState<string | null>(null);
+  React.useEffect(() => {
+    if (!customAlert) return;
+    const timer = setTimeout(() => setCustomAlert(null), 3000);
+    return () => clearTimeout(timer);
+  }, [customAlert]);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
@@ -2141,152 +2123,33 @@ export default function TracksPage() {
         )}
       </AnimatePresence>
       
-      {/* 2-Step Exit Wizard Modal */}
-      <AnimatePresence>
-        {exitWizardStep !== null && (
+      {/* 나가기 확인 — 하단 시트 하나 (docs/design-system/dialogs.md 3장) */}
+      <Sheet
+        open={exitWizardStep !== null}
+        onClose={() => setExitWizardStep(null)}
+        closeLabel={locale === "en" ? "Keep choosing" : "계속 고르기"}
+        header={
           <>
-            <motion.div
-              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setExitWizardStep(null)}
-            />
-            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
-              <motion.div
-                className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
-                initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                layout
-              >
-                {/* Decorative LP Record Graphic */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
-                  className="w-16 h-16 bg-navy rounded-full flex items-center justify-center mb-5 shadow-lg border-2 border-point relative shrink-0"
-                >
-                  <Disc className="text-cream" size={32} />
-                  <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
-                </motion.div>
-
-                {exitWizardStep === 'main' ? (
-                  <>
-                    <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.exitTitle}</h2>
-                    <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                      {t.exitDesc}
-                    </p>
-                    
-                    <div className="flex flex-col gap-2.5 w-full">
-                      <motion.button 
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleReturnToArtists}
-                        className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
-                      >
-                        {t.reselectArtists}
-                      </motion.button>
-                      <motion.button 
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setExitWizardStep('exit_confirm')}
-                        className="w-full py-3.5 bg-white border-2 border-navy/15 text-navy font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
-                      >
-                        {t.exitTest}
-                      </motion.button>
-                      
-                      <button 
-                        onClick={() => setExitWizardStep(null)}
-                        className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
-                      >
-                        {t.continueTest}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.saveTitle}</h2>
-                    <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                      {t.saveDesc}<br/>
-                      <span className="text-point font-medium">{t.saveDescSub}</span>
-                    </p>
-                    
-                    <div className="flex flex-col gap-2.5 w-full">
-                      <motion.button 
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleConfirmSaveExit}
-                        className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
-                      >
-                        {t.saveAndExit}
-                      </motion.button>
-                      <motion.button 
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleDiscardExit}
-                        className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
-                      >
-                        {t.discardAndExit}
-                      </motion.button>
-                      
-                      <button 
-                        onClick={() => setExitWizardStep('main')}
-                        className="text-xs text-charcoal/50 hover:text-navy transition-colors font-medium mt-2.5 cursor-pointer hover:underline"
-                      >
-                        {t.returnToPrevStep}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            </div>
+            <h2 className="type-title-1 text-navy">{locale === "en" ? "Stop choosing songs?" : "곡 고르기를 그만둘까요?"}</h2>
+            <p className="type-sub text-navy/70 mt-1 whitespace-pre-line break-keep">
+              {locale === "en"
+                ? "Save to pick up later from Home or My Taste Space.\nChoosing artists again clears the songs you picked."
+                : "저장하면 홈이나 내 취향 스페이스에서 이어서 할 수 있어요.\n아티스트를 다시 고르면 지금 고른 곡은 지워져요."}
+            </p>
           </>
-        )}
-      </AnimatePresence>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
+            <button onClick={handleConfirmSaveExit} className={`${primaryButton} w-full`}>{locale === "en" ? "Save and leave" : "저장하고 나가기"}</button>
+            <button onClick={handleReturnToArtists} className={`${secondaryButton} w-full`}>{locale === "en" ? "Choose artists again" : "아티스트 다시 고르기"}</button>
+            <button onClick={handleDiscardExit} className={`${dangerButton} w-full`}>{locale === "en" ? "Leave without saving" : "저장하지 않고 나가기"}</button>
+            <button onClick={() => setExitWizardStep(null)} className={`${textLink} self-center mt-2`}>{locale === "en" ? "Keep choosing" : "계속 고르기"}</button>
+          </div>
+        }
+      />
 
-      {/* Custom Alert Modal */}
-      <AnimatePresence>
-        {customAlert && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setCustomAlert(null)}
-            />
-            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
-              <motion.div
-                className="bg-cream w-full max-w-[320px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center"
-                initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26 }}
-              >
-                {/* Warning Icon Graphic */}
-                <div className="w-16 h-16 bg-point/10 rounded-full flex items-center justify-center mb-4 border-2 border-point shrink-0">
-                  <AlertCircle className="text-point animate-pulse" size={32} />
-                </div>
-
-                <h3 className="text-xl font-bold text-navy mb-2 tracking-tight">{t.alertTitle}</h3>
-                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  {customAlert}
-                </p>
-                
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setCustomAlert(null)}
-                  className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
-                >
-                  {t.confirm}
-                </motion.button>
-              </motion.div>
-            </div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* 고를 것이 없는 알림은 토스트 */}
+      <Toast toast={customAlert ? { text: customAlert, tone: "info" } : null} />
     </main>
   );
 }

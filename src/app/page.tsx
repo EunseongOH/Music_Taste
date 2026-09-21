@@ -6,9 +6,10 @@ import Link from "next/link";
 import LPPlayer from "@/components/LPPlayer";
 import LoginModal from "@/components/LoginModal";
 import { useAuth } from "@/components/AuthProvider";
-import { Trophy, Globe } from "lucide-react";
+import { Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ProfileHeader from "@/components/ProfileHeader";
+import { Sheet, primaryButton, dangerButton } from "@/components/space/SpaceUI";
 
 import { createClient } from "@/utils/supabase/client";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
@@ -97,8 +98,6 @@ export default function Home() {
       tagline2: "좋아하는 음악을 나열하고, 나의 색깔을 증폭시켜 보세요.",
       start: "시작하기",
       continue: "이어서 진행하기",
-      startNewTitle: "새로 시작할까요?",
-      startNewDesc: "이전의 완료되지 않은 진행 내역(선택한 아티스트 및 곡 정보)이 모두 삭제됩니다. 정말 새로운 월드컵을 시작할까요?",
       cancel: "취소",
       startNewBtn: "새로 시작",
     },
@@ -107,8 +106,6 @@ export default function Home() {
       tagline2: "List your music preferences and amplify them with your own colors.",
       start: "Start",
       continue: "Continue Progress",
-      startNewTitle: "Start New?",
-      startNewDesc: "Your previous unsaved progress (selected artists and songs) will be deleted. Do you want to start a new lineup?",
       cancel: "Cancel",
       startNewBtn: "Start New",
     }
@@ -545,51 +542,31 @@ export default function Home() {
 
       {/* Start New Warning Modal */}
       <AnimatePresence>
-        {showRestoreModal && (
+        </AnimatePresence>
+
+      {/* 진행 중인 월드컵이 있을 때 — 하단 시트 (docs/design-system/dialogs.md 3장) */}
+      <Sheet
+        open={showRestoreModal}
+        onClose={() => setShowRestoreModal(false)}
+        closeLabel={t.cancel}
+        header={
           <>
-            <motion.div
-              className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[100]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowRestoreModal(false)}
-            />
-            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
-              <motion.div
-                className="bg-cream w-full max-w-sm rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              >
-                <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
-                  <Trophy className="text-point animate-bounce" size={24} />
-                </div>
-
-                <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.startNewTitle}</h2>
-                <p className="font-sans text-charcoal/80 text-sm leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  {t.startNewDesc}
-                </p>
-
-                <div className="flex gap-3 w-full">
-                  <button
-                    onClick={() => setShowRestoreModal(false)}
-                    className="flex-1 py-3.5 bg-white border-2 border-navy/20 text-navy font-bold rounded-xl hover:bg-navy/5 transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    {t.cancel}
-                  </button>
-                  <button
-                    onClick={handleStartNew}
-                    className="flex-[1.5] py-3.5 bg-navy text-cream font-bold rounded-xl hover:bg-navy/90 transition-all active:scale-[0.98] shadow-md cursor-pointer"
-                  >
-                    {t.startNewBtn}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
+            <h2 className="type-title-1 text-navy">{locale === "en" ? "You have a World Cup in progress" : "진행 중인 월드컵이 있어요"}</h2>
+            <p className="type-sub text-navy/70 mt-1 whitespace-pre-line break-keep">
+              {(activeDraft && draftExpiresAt(activeDraft) !== null
+                ? `${activeDraft.current_round_name} · ${formatDraftExpiry(activeDraft, locale)}`
+                : locale === "en" ? "Your chosen artists and songs are still here." : "고르던 아티스트와 곡이 남아 있어요.")
+                + (locale === "en" ? "\nStarting new clears them." : "\n새로 시작하면 이전 내역은 지워져요.")}
+            </p>
           </>
-        )}
-      </AnimatePresence>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
+            <button onClick={() => { setShowRestoreModal(false); handleRestore(); }} className={`${primaryButton} w-full`}>{locale === "en" ? "Continue" : "이어서 하기"}</button>
+            <button onClick={handleStartNew} className={`${dangerButton} w-full`}>{t.startNewBtn}</button>
+          </div>
+        }
+      />
 
       {/* Semantic Sitemap Links for Search Engine Crawlers */}
       <nav className="w-full max-w-md mx-auto mt-8 border-t border-navy/10 pt-6 px-4 pb-2 text-center select-none z-10">

@@ -8,6 +8,7 @@ import { SafeImage } from "@/components/SafeImage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
+import { Sheet, primaryButton, secondaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
 import ProfileHeader from "@/components/ProfileHeader";
 import { searchSpotifyArtists, getInitialArtists, getRelatedArtists, getSpotifyGenreQuery, searchArtistsByGenres, getLastSpotifyError } from "@/utils/spotify";
 import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
@@ -126,14 +127,7 @@ export default function ExplorePage() {
       selectedLabel: "선택한 아티스트",
       countLabel: "명",
       nextBtn: "다음으로 넘어가기",
-      saveExitTitle: "진행 내역을 저장할까요?",
-      saveExitDesc: "선택한 아티스트 목록이 있어요. 지금까지 진행한 내역을 보관하고 나갈까요?\n(보관한 내역은 프로필의 '내 취향 스페이스'에서 언제든 이어할 수 있어요.)",
-      saveExitConfirm: "저장하고 나가기",
-      saveExitDiscard: "저장하지 않고 나가기",
       cancel: "취소",
-      singleConfirmTitle: "곡들을 소트해볼까요?",
-      singleConfirmDesc: `'${pendingSingleArtist?.name}'의 모든 발표곡을 내 마음에 드는 순서대로 정렬해보세요.`,
-      proceed: "시작할게요",
       loadingTitle: "아티스트 탐색 중...",
       loadingDesc: "오늘의 추천 아티스트를 찾고 있어요",
       artistLabel: "아티스트",
@@ -150,14 +144,7 @@ export default function ExplorePage() {
       selectedLabel: "Selected Artists",
       countLabel: "",
       nextBtn: "Next Step",
-      saveExitTitle: "Save progress?",
-      saveExitDesc: "You have selected artists. Would you like to save your choice and exit?\n(You can pick up right where you left off from 'My Taste Space'.)",
-      saveExitConfirm: "Save and Exit",
-      saveExitDiscard: "Exit without Saving",
       cancel: "Cancel",
-      singleConfirmTitle: "Line up songs?",
-      singleConfirmDesc: `Would you like to line up all songs by '${pendingSingleArtist?.name}' in your preferred order?`,
-      proceed: "Start",
       loadingTitle: "Searching artists...",
       loadingDesc: "Finding recommended artists for you",
       artistLabel: "Artist",
@@ -1147,111 +1134,49 @@ export default function ExplorePage() {
         )}
       </AnimatePresence>
 
-      {/* Save Exit Confirmation Warning Modal */}
-      <AnimatePresence>
-        {showSaveWarning && (
+      {/* 나가기 확인 — 하단 시트 (docs/design-system/dialogs.md) */}
+      <Sheet
+        open={showSaveWarning}
+        onClose={() => setShowSaveWarning(false)}
+        closeLabel={locale === "en" ? "Keep choosing" : "계속 고르기"}
+        header={
           <>
-            <motion.div
-              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowSaveWarning(false)}
-            />
-            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
-              <motion.div
-                className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
-                initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26 }}
-              >
-                {/* Decorative LP Record Graphic */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
-                  className="w-16 h-16 bg-navy rounded-full flex items-center justify-center mb-5 shadow-lg border-2 border-point relative shrink-0"
-                >
-                  <Disc className="text-cream" size={32} />
-                  <div className="absolute w-4 h-4 bg-cream rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-navy" />
-                </motion.div>
+            <h2 className="type-title-1 text-navy">{locale === "en" ? "Stop choosing artists?" : "아티스트 고르기를 그만둘까요?"}</h2>
+            <p className="type-sub text-navy/70 mt-1 break-keep">
+              {locale === "en" ? "Save to pick up later from Home or My Taste Space." : "저장하면 홈이나 내 취향 스페이스에서 이어서 할 수 있어요."}
+            </p>
+          </>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
+            <button onClick={handleConfirmSaveExit} className={`${primaryButton} w-full`}>{locale === "en" ? "Save and leave" : "저장하고 나가기"}</button>
+            <button onClick={handleDiscardExit} className={`${dangerButton} w-full`}>{locale === "en" ? "Leave without saving" : "저장하지 않고 나가기"}</button>
+            <button onClick={() => setShowSaveWarning(false)} className={`${textLink} self-center mt-2`}>{locale === "en" ? "Keep choosing" : "계속 고르기"}</button>
+          </div>
+        }
+      />
 
-                <h2 className="text-2xl font-bold text-navy mb-3 tracking-tight">{t.saveExitTitle}</h2>
-                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-1">
-                  {t.saveExitDesc}
-                </p>
-                
-                <div className="flex flex-col gap-2.5 w-full">
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleConfirmSaveExit}
-                    className="w-full py-3.5 bg-navy text-cream font-bold rounded-2xl hover:bg-navy/90 transition-all shadow-md text-sm cursor-pointer"
-                  >
-                    {t.saveExitConfirm}
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleDiscardExit}
-                    className="w-full py-3.5 bg-white border-2 border-red-100 text-red-500 hover:bg-red-50/50 font-bold rounded-2xl transition-all text-sm cursor-pointer"
-                  >
-                    {t.saveExitDiscard}
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowSaveWarning(false)}
-                    className="w-full py-3.5 bg-white border-2 border-navy/10 text-charcoal font-bold rounded-2xl hover:bg-navy/5 transition-all text-sm cursor-pointer"
-                  >
-                    {t.cancel}
-                  </motion.button>
-                </div>
-              </motion.div>
+      {/* 한 아티스트로 시작 확인 — 하단 시트. 사진은 누구를 골랐는지 알려 주는 정보라 둔다. */}
+      <Sheet
+        open={!!pendingSingleArtist}
+        onClose={() => setPendingSingleArtist(null)}
+        closeLabel={t.cancel}
+        header={pendingSingleArtist && (
+          <>
+            <div className="relative w-16 h-16 rounded-full overflow-hidden bg-navy/5 mb-3">
+              <SafeImage src={pendingSingleArtist.image} alt={pendingSingleArtist.name} fill sizes="64px" fallbackType="artist" className="object-cover" />
             </div>
+            <h2 className="type-title-1 text-navy break-keep">
+              {locale === "en" ? `Line up songs by ${pendingSingleArtist.name}?` : `${pendingSingleArtist.name}의 곡을 줄 세워 볼까요?`}
+            </h2>
+            <p className="type-sub text-navy/70 mt-1">
+              {locale === "en" ? "Next, pick the songs to put in the World Cup." : "다음 화면에서 월드컵에 올릴 곡을 골라요."}
+            </p>
           </>
         )}
-      </AnimatePresence>
-
-      {/* Single Artist Mode Selection Confirmation Popup Modal */}
-      <AnimatePresence>
-        {pendingSingleArtist && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-navy/60 backdrop-blur-md z-[100]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setPendingSingleArtist(null)}
-            />
-            <div className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none">
-              <motion.div
-                className="bg-cream w-full max-w-[340px] rounded-[2.5rem] border-[4px] border-navy p-7 shadow-[0_20px_50px_rgba(26,42,108,0.3)] relative pointer-events-auto flex flex-col items-center text-center overflow-hidden"
-                initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 30 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26 }}
-              >
-                {/* Artist Avatar with Spinning LP vibe */}
-                <div className="relative w-24 h-24 rounded-full border-4 border-navy overflow-hidden bg-white shadow-md mb-4 mt-2">
-                  <SafeImage 
-                    src={pendingSingleArtist.image} 
-                    alt={pendingSingleArtist.name}
-                    fill
-                    sizes="96px"
-                    fallbackType="artist"
-                    className="object-cover"
-                  />
-                </div>
-                
-                <h2 className="text-2xl font-bold text-navy mb-2 tracking-tight">{t.singleConfirmTitle}</h2>
-                <p className="font-sans text-charcoal/80 text-[13px] leading-relaxed mb-6 whitespace-pre-wrap break-keep px-2">
-                  {t.singleConfirmDesc}
-                </p>
-                
-                <div className="flex flex-col gap-2 w-full">
-                  <button 
-                    onClick={async () => {
+        footer={pendingSingleArtist && (
+          <div className="flex flex-col gap-2">
+            <button onClick={async () => {
                       const selected = [pendingSingleArtist];
                       setSelectedArtists(selected);
                       sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
@@ -1278,23 +1203,14 @@ export default function ExplorePage() {
                       
                       setPendingSingleArtist(null);
                       router.push('/tracks?mode=single');
-                    }}
-                    className="w-full py-3.5 bg-navy text-cream font-bold text-sm rounded-xl hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
-                  >
-                    {t.proceed}
-                  </button>
-                  <button 
-                    onClick={() => setPendingSingleArtist(null)}
-                    className="w-full py-3.5 bg-white border-2 border-navy/20 text-navy font-bold text-sm rounded-xl hover:bg-navy/5 active:scale-[0.98] transition-all cursor-pointer"
-                  >
-                    {t.cancel}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </>
+                    }} className={`${primaryButton} w-full`}>{locale === "en" ? "Choose songs" : "곡 고르러 가기"}</button>
+            <button onClick={() => setPendingSingleArtist(null)} className={`${secondaryButton} w-full`}>{t.cancel}</button>
+          </div>
         )}
+      />
 
+      {/* 시스템이 끼어드는 알림은 중앙 팝업 (dialogs.md 1장) */}
+      <AnimatePresence>
         {/* Spotify API Error 안내 모달 (UX 라이팅 가이드 준수) */}
         {spotifyError && (
           <>
