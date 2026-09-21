@@ -289,34 +289,51 @@ function TurntableOptions() {
   );
 }
 
-/* ---------------------------------------------------------------- 턴테이블 1안 다듬기 (사용자 피드백 반영) */
+/* ---------------------------------------------------------------- 턴테이블 1안 — 플래터와 LP 두 겹 */
 
 export type Emphasis = "quiet" | "normal";
 export type LabelStyle = "small" | "neutral";
+export type JacketMode = "picture" | "label";
+export type TurntableSize = "inside" | "legacy";
 
 /**
- * 1안(밝은 판)을 사용자 피드백대로 고친 것. 실제 LPPlayer 에는 사용자가 이 시안을 확인한 뒤에 옮긴다.
+ * 사용자가 풀어 준 뜻(2026-09-22): "실제 턴테이블은 LP 가 올라가면 원형 판의 면적 대부분을 LP 가 차지한다."
+ * 이전 그림은 큰 원(홈이 있는 면)이 플래터로, 가운데 재킷이 LP 로 읽혔다 — LP 가 플래터 한가운데에 작게 얹힌 모양.
  *
- *  · 판을 줄였다: 지름 160 → 128(모바일). legacy 는 판이 받침 높이(144)의 1.11배라 위아래로 넘치는데,
- *    새 안은 0.89배라 받침 안에 들어온다. 재킷 지름은 72px 로 그대로 — 알아보일 만큼은 유지.
- *  · 파란 빛을 없앴다. 톤암 머리도 중립색. 파랑은 카드의 옅은 빛과 "시작하기" 두 곳에만 남는다.
- *  · 주황을 줄였다. 재킷이 없을 때의 라벨:
- *      small   작은 단색 주황 라벨(판의 30%). legacy(40%)보다 작다
- *      neutral 재킷 자리 크기의 중립색 면 + 가운데 주황 점만
- *  · emphasis: quiet(홈 — 장식. 그림자 없음, 선·면 한 단계 옅게) / normal(월드컵 — 지금 수준)
+ * 그래서 두 겹으로 나눈다.
+ *   플래터  받침 위의 얇은 테. LP 바깥으로 6px 만 보인다
+ *   LP      플래터 지름의 91%. 또렷한 가장자리(선 + 아주 옅은 그림자)와 홈. 재킷은 이 LP 위에 올라온다
+ *
+ * 재킷이 올라오는 방식
+ *   picture (가) 픽처 디스크 — 재킷이 LP 면 전체. 가운데 스핀들 구멍만
+ *   label   (나) 홈이 있는 LP 위에 재킷이 큰 라벨(LP 의 62%)
+ * 재킷이 없을 때: 확정된 B — 작은 단색 주황 라벨(LP 의 30%). A(neutral)는 시안 비교용.
+ *
+ * 크기
+ *   inside  플래터 136 · LP 124 (모바일). 받침(높이 144) 안에 들어온다 — 제안
+ *   legacy  플래터 176 · LP 160. 운영 LPPlayer 와 같은 크기, 받침 위아래로 넘친다 — 비교용
+ *
+ * 나머지 결정은 그대로: 밝은 판(1안), 턴테이블에 파랑 없음, 홈은 quiet.
  */
 export function Turntable1({
   emphasis = "quiet",
-  label = "neutral",
+  label = "small",
   jacket,
+  jacketMode = "picture",
+  size = "inside",
   spinning = false,
 }: {
   emphasis?: Emphasis;
   label?: LabelStyle;
   jacket?: string;
+  jacketMode?: JacketMode;
+  size?: TurntableSize;
   spinning?: boolean;
 }) {
   const quiet = emphasis === "quiet";
+  const platterSize = size === "legacy" ? "w-44 h-44 sm:w-60 sm:h-60" : "w-[8.5rem] h-[8.5rem] sm:w-[11.5rem] sm:h-[11.5rem]";
+  const lpSize = size === "legacy" ? "w-40 h-40 sm:w-56 sm:h-56" : "w-[7.75rem] h-[7.75rem] sm:w-[10.5rem] sm:h-[10.5rem]";
+  const groove = "absolute rounded-full border " + (quiet ? "border-navy/[0.07]" : "border-navy/10");
   return (
     <div
       className={
@@ -328,31 +345,49 @@ export function Turntable1({
         <span key={pos} className={"absolute " + pos + " w-3 h-3 rounded-full border " + (quiet ? "border-navy/10" : "bg-navy/[0.04] border-line")} />
       ))}
       <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
-        <div className={"absolute w-[8.75rem] h-[8.75rem] sm:w-[11.75rem] sm:h-[11.75rem] rounded-full border " + (quiet ? "border-navy/5" : "border-navy/10")} />
-        <div
-          className={
-            "w-32 h-32 sm:w-44 sm:h-44 rounded-full flex items-center justify-center relative border " +
-            (quiet ? "border-navy/10 bg-navy/[0.03] " : "border-navy/20 bg-navy/[0.05] ") +
-            (spinning ? "animate-[spin_1.8s_linear_infinite]" : "")
-          }
-        >
-          <span className={"absolute w-[86%] h-[86%] rounded-full border " + (quiet ? "border-navy/5" : "border-navy/10")} />
-          <span className={"absolute w-[72%] h-[72%] rounded-full border " + (quiet ? "border-navy/5" : "border-navy/10")} />
-          {jacket ? (
-            <div className="w-[56%] h-[56%] rounded-full relative overflow-hidden ring-2 ring-white flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={jacket} alt="" className={"absolute inset-0 w-full h-full object-cover " + (quiet ? "opacity-90" : "")} />
-              <span className="w-3 h-3 rounded-full bg-white relative shadow-sm" />
-            </div>
-          ) : label === "small" ? (
-            <div className={"w-[30%] h-[30%] rounded-full flex items-center justify-center " + (quiet ? "bg-point/85" : "bg-point")}>
-              <span className="w-2.5 h-2.5 rounded-full bg-white" />
-            </div>
-          ) : (
-            <div className={"w-[56%] h-[56%] rounded-full flex items-center justify-center border " + (quiet ? "bg-white/70 border-navy/10" : "bg-white border-line")}>
-              <span className="w-3 h-3 rounded-full bg-point ring-[3px] ring-point/15" />
-            </div>
-          )}
+        {/* 플래터 — 얇은 테로만 보인다 */}
+        <div className={"absolute rounded-full border flex items-center justify-center " + platterSize + " " + (quiet ? "bg-navy/[0.04] border-navy/10" : "bg-navy/[0.07] border-navy/15")}>
+          {/* LP — 플래터의 91% */}
+          <div
+            className={
+              "rounded-full relative overflow-hidden flex items-center justify-center border bg-white " +
+              lpSize + " " +
+              (quiet ? "border-navy/15 shadow-[0_1px_2px_rgba(24,33,59,0.10)] " : "border-navy/25 shadow-[0_2px_6px_rgba(24,33,59,0.18)] ") +
+              (spinning ? "animate-[spin_1.8s_linear_infinite]" : "")
+            }
+          >
+            {jacket && jacketMode === "picture" ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={jacket} alt="" className={"absolute inset-0 w-full h-full object-cover " + (quiet ? "opacity-90" : "")} />
+                {/* 픽처 디스크도 판이라는 것이 읽히게 아주 옅은 홈 두 줄 */}
+                <span className="absolute w-[78%] h-[78%] rounded-full border border-white/25" />
+                <span className="absolute w-[52%] h-[52%] rounded-full border border-white/20" />
+                <span className="w-3 h-3 rounded-full bg-white relative shadow-[0_0_0_2px_rgba(24,33,59,0.18)]" />
+              </>
+            ) : (
+              <>
+                <span className={groove + " w-[90%] h-[90%]"} />
+                <span className={groove + " w-[80%] h-[80%]"} />
+                <span className={groove + " w-[70%] h-[70%]"} />
+                {jacket ? (
+                  <div className="w-[62%] h-[62%] rounded-full relative overflow-hidden ring-2 ring-white flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={jacket} alt="" className={"absolute inset-0 w-full h-full object-cover " + (quiet ? "opacity-90" : "")} />
+                    <span className="w-3 h-3 rounded-full bg-white relative shadow-sm" />
+                  </div>
+                ) : label === "small" ? (
+                  <div className={"w-[30%] h-[30%] rounded-full flex items-center justify-center relative " + (quiet ? "bg-point/85" : "bg-point")}>
+                    <span className="w-2.5 h-2.5 rounded-full bg-white" />
+                  </div>
+                ) : (
+                  <div className={"w-[56%] h-[56%] rounded-full flex items-center justify-center border relative " + (quiet ? "bg-white/70 border-navy/10" : "bg-white border-line")}>
+                    <span className="w-3 h-3 rounded-full bg-point ring-[3px] ring-point/15" />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
         <div className="absolute right-8 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
           <span className={"w-6 h-6 rounded-full bg-white border -mb-1 z-10 " + (quiet ? "border-navy/10" : "border-line shadow-sm")} />
@@ -367,8 +402,8 @@ export function Turntable1({
 function GlowLevels() {
   const levels: { id: GlowLevel; title: string; note: string }[] = [
     { id: "full", title: "지금까지 (100%)", note: "농도 0.70 · 지름 208. 카드 오른쪽 절반이 파랗게 읽혀요. 비교용." },
-    { id: "half", title: "절반 (약 50%)", note: "농도 0.40 · 지름 168, 모서리로 12px 더 밀었어요. 빛이 오른쪽 위 3분의 1 안에 머물러요." },
-    { id: "faint", title: "옅게 (약 30%) — 기본값", note: "농도 0.26 · 지름 140, 모서리로 20px. 흰 면이 주인이고 빛은 모서리에 비치는 정도. 주황 점이 상대적으로 또렷해져요." },
+    { id: "half", title: "절반 (약 50%) — 확정, 기본값", note: "농도 0.40 · 지름 168, 모서리로 12px 더 밀었어요. 빛이 오른쪽 위 3분의 1 안에 머물러요." },
+    { id: "faint", title: "옅게 (약 30%)", note: "농도 0.26 · 지름 140, 모서리로 20px. 흰 면이 주인이고 빛은 모서리에 비치는 정도. 주황 점이 상대적으로 또렷해져요." },
   ];
   return (
     <div className="flex flex-col gap-8">
@@ -384,35 +419,12 @@ function GlowLevels() {
 
 function Turntable1Refine() {
   const [spinning, setSpinning] = useState(false);
-  const states = [
-    { cap: "재킷 없음", src: undefined },
-    { cap: "밝은 재킷", src: JACKETS.light },
-    { cap: "어두운 재킷", src: JACKETS.dark },
-  ];
+  const modes = [
+    { id: "picture", title: "(가) 픽처 디스크", note: "재킷이 LP 면 전체예요. 가운데 스핀들 구멍만 남겨요. \"LP 가 원형 판의 대부분을 차지한다\"에 가장 가깝고, 재킷이 가장 크게 보여요(지름 124)." },
+    { id: "label", title: "(나) 홈이 있는 LP + 큰 라벨", note: "LP 의 62%(지름 77)를 재킷이, 바깥은 홈이 차지해요. LP 다운 모양이 남고, 재킷은 (가)보다 작아요." },
+  ] as const;
   return (
     <div id="turntable-refine" className="flex flex-col gap-10">
-      <div>
-        <Label
-          step=""
-          title="크기 비교 — 같은 너비에 나란히"
-          note="legacy: 받침 352×144, 판 160(받침 높이의 1.11배 — 위아래 8px 넘침), 바깥 링 176, 라벨 64(판의 40%). 새 안: 판 128(0.89배 — 받침 안), 바깥 링 140, 재킷 72."
-        />
-        <div className="flex flex-col gap-9 mt-6">
-          <div>
-            <p className="type-caption text-navy/70 mb-6">지금 운영의 LPPlayer (이 테마의 색으로)</p>
-            <LPPlayer />
-          </div>
-          <div>
-            <p className="type-caption text-navy/70 mb-3">새 안 · 홈용(quiet)</p>
-            <Turntable1 emphasis="quiet" label="neutral" />
-          </div>
-          <div>
-            <p className="type-caption text-navy/70 mb-3">새 안 · 월드컵용(normal)</p>
-            <Turntable1 emphasis="normal" label="neutral" />
-          </div>
-        </div>
-      </div>
-
       <button
         onClick={() => setSpinning((v) => !v)}
         className="self-start inline-flex items-center h-10 px-5 rounded-full bg-navy/5 text-navy type-sub font-semibold cursor-pointer"
@@ -420,31 +432,60 @@ function Turntable1Refine() {
         {spinning ? "회전 멈추기" : "회전시켜 보기"}
       </button>
 
-      {(
-        [
-          { id: "neutral", title: "라벨 A · 중립색 면 + 주황 점", note: "재킷 자리 크기의 흰 면을 비워 두고 주황은 가운데 점 하나. 재킷이 올라올 자리라는 것이 보이고, 주황 면적이 가장 작아요." },
-          { id: "small", title: "라벨 B · 작은 주황 라벨", note: "판의 30% 크기 단색 주황. legacy(40%)보다 작아요. LP 다운 모양은 이쪽이 더 남아요." },
-        ] as const
-      ).map((opt) => (
-        <div key={opt.id}>
-          <Label step="" title={opt.title} note={opt.note} />
-          <div className="grid gap-6 mt-4">
-            {(["quiet", "normal"] as const).map((em) => (
-              <div key={em}>
-                <p className="type-caption text-navy/70 mb-3">{em === "quiet" ? "홈용 (quiet)" : "월드컵용 (normal)"}</p>
-                <div className="flex flex-col gap-4">
-                  {states.map((st) => (
-                    <div key={st.cap}>
-                      <p className="type-caption text-navy/40 mb-1.5">{st.cap}</p>
-                      <Turntable1 emphasis={em} label={opt.id} jacket={st.src} spinning={spinning} />
-                    </div>
-                  ))}
-                </div>
+      <div>
+        <Label step="" title="재킷이 없을 때 — 홈" note="LP 가 플래터를 덮고(플래터는 바깥 6px 테로만 보여요), 가운데는 확정된 B — 작은 주황 라벨. 홈용은 조용하게(quiet)." />
+        <Turntable1 emphasis="quiet" spinning={spinning} />
+      </div>
+
+      {modes.map((m) => (
+        <div key={m.id}>
+          <Label step="" title={m.title} note={m.note} />
+          <div className="flex flex-col gap-4 mt-4">
+            {[
+              { cap: "밝은 재킷 · 월드컵용(normal)", src: JACKETS.light },
+              { cap: "어두운 재킷 · 월드컵용(normal)", src: JACKETS.dark },
+            ].map((st) => (
+              <div key={st.cap}>
+                <p className="type-caption text-navy/40 mb-1.5">{st.cap}</p>
+                <Turntable1 emphasis="normal" jacket={st.src} jacketMode={m.id} spinning={spinning} />
               </div>
             ))}
           </div>
         </div>
       ))}
+
+      <div>
+        <Label
+          step=""
+          title="전체 크기 — 제안과 비교"
+          note="제안: 받침 안에 들어오는 크기(플래터 136 · LP 124). 비교: 운영과 같은 크기(플래터 176 · LP 160, 받침 위아래로 넘침). 맨 아래는 지금 운영의 LPPlayer."
+        />
+        <div className="flex flex-col gap-9 mt-5">
+          <div>
+            <p className="type-caption text-navy/70 mb-2">제안 · 받침 안 (홈용 / 재킷 올라온 월드컵용)</p>
+            <div className="flex flex-col gap-4">
+              <Turntable1 emphasis="quiet" size="inside" />
+              <Turntable1 emphasis="normal" size="inside" jacket={JACKETS.light} />
+            </div>
+          </div>
+          <div>
+            <p className="type-caption text-navy/70 mb-6">비교 · 운영과 같은 크기</p>
+            <div className="flex flex-col gap-10">
+              <Turntable1 emphasis="quiet" size="legacy" />
+              <Turntable1 emphasis="normal" size="legacy" jacket={JACKETS.light} />
+            </div>
+          </div>
+          <div>
+            <p className="type-caption text-navy/70 mb-6 mt-2">지금 운영의 LPPlayer (이 테마의 색으로)</p>
+            <LPPlayer />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <Label step="" title="라벨 A (시안만)" note="재킷 자리 크기의 중립색 면 + 주황 점. B 로 확정돼서 비교용으로만 남겨요." />
+        <Turntable1 emphasis="quiet" label="neutral" jacketMode="label" />
+      </div>
     </div>
   );
 }
@@ -465,7 +506,7 @@ export default function Studies() {
       <div>
         <h3 className="type-title-2 text-navy mb-1">턴테이블 1안 다듬기</h3>
         <p className="type-sub text-navy/70 mb-5 break-keep">
-          판을 줄이고, 파란 빛을 없애고, 주황을 줄였어요. 홈에서는 장식이라 한 단계 더 가라앉혔어요.
+          플래터와 LP 를 두 겹으로 나눴어요. LP 가 플래터의 대부분을 덮고, 재킷은 그 LP 위에 올라와요. 파란 빛은 없고, 홈에서는 조용하게.
         </p>
         <Turntable1Refine />
       </div>

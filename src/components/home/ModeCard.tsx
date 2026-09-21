@@ -24,8 +24,8 @@ const GLOWS = [
  * 빛의 세기. 사용자 피드백(2026-09-22): "푸른 로고 색의 빛을 좀 더 연하게, 덜" — 흰 면이 주인이고 빛은 모서리에 비치는 정도.
  * 농도와 면적을 같이 줄이고, 줄인 만큼 모서리 쪽으로 더 민다.
  *  - full : 첫 시안. 카드 오른쪽 절반이 파랗게 읽힌다 (비교용)
- *  - half : 농도 0.70 → 0.40, 지름 208 → 168
- *  - faint: 농도 0.70 → 0.26, 지름 208 → 140  ← 기본
+ *  - half : 농도 0.70 → 0.40, 지름 208 → 168  ← 기본 (2026-09-22 사용자 확정)
+ *  - faint: 농도 0.70 → 0.26, 지름 208 → 140 (비교용)
  */
 export type GlowLevel = "full" | "half" | "faint";
 const LEVELS: Record<GlowLevel, { size: number; opacity: number; push: number }> = {
@@ -41,7 +41,7 @@ export default function ModeCard({
   title,
   desc,
   tone = 0,
-  glow = "faint",
+  glow = "half",
 }: {
   badge: string;
   title: string;

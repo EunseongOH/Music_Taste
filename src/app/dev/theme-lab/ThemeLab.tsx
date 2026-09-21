@@ -23,7 +23,7 @@ import {
   useToast,
 } from "@/components/space/SpaceUI";
 import FeedbackModal from "@/components/FeedbackModal";
-import Studies, { type LabelStyle } from "./Studies";
+import Studies, { type TurntableSize } from "./Studies";
 import type { GlowLevel } from "@/components/home/ModeCard";
 import HomePreview from "./HomePreview";
 
@@ -147,8 +147,8 @@ export default function ThemeLab() {
   const [sheet, setSheet] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [feedback, setFeedback] = useState(false);
-  const [glow, setGlow] = useState<GlowLevel>("faint");
-  const [label, setLabel] = useState<LabelStyle>("neutral");
+  const [glow, setGlow] = useState<GlowLevel>("half");
+  const [ttSize, setTtSize] = useState<TurntableSize>("inside");
   const { toast, showToast } = useToast();
 
   const readVars = useCallback(() => {
@@ -398,16 +398,16 @@ export default function ThemeLab() {
               </button>
             ))}
           </div>
-          <p className="type-caption text-navy/70 mt-1">턴테이블 라벨 (재킷이 없을 때)</p>
+          <p className="type-caption text-navy/70 mt-1">턴테이블 전체 크기</p>
           <div className="flex gap-2">
-            {([["neutral", "A · 중립 면 + 주황 점"], ["small", "B · 작은 주황 라벨"]] as const).map(([id, text]) => (
-              <button key={id} onClick={() => setLabel(id)} className={`${label === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
+            {([["inside", "제안 · 받침 안"], ["legacy", "비교 · 운영과 같은 크기"]] as const).map(([id, text]) => (
+              <button key={id} onClick={() => setTtSize(id)} className={`${ttSize === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
                 {text}
               </button>
             ))}
           </div>
         </div>
-        <HomePreview glow={glow} label={label} />
+        <HomePreview glow={glow} size={ttSize} />
       </section>
 
       {/* 카드·턴테이블 시안 */}
