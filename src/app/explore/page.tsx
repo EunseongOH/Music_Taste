@@ -16,6 +16,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { curatedArtists } from "@/utils/curatedArtists";
+import SpotifyLink from "@/components/SpotifyLink";
 import { trackEvent } from "@/utils/gtag";
 import { MIX_MATCH } from "@/config/modes";
 
@@ -975,6 +976,18 @@ export default function ExplorePage() {
           </div>
         )}
       </div>
+
+      {/* 목록 끝의 Spotify 링크백 (약관 II.4). 아티스트 사진이 Spotify 에서 오므로 이 묶음에 하나가 필요하다.
+          디자인 가이드가 말하는 자리 그대로다 —
+          "At the end of each content set, a link to the Spotify app should allow listeners to keep exploring." */}
+      {artists.length > 0 && !isLoadingMore && (
+        <div className="flex justify-center pb-8">
+          <SpotifyLink
+            href="https://open.spotify.com/"
+            label={locale === "ko" ? "Spotify에서 더 보기" : "Keep exploring on Spotify"}
+          />
+        </div>
+      )}
       
       {/* Bottom Fixed Dock Panel (Full-Width Segmented View) */}
       <AnimatePresence>
