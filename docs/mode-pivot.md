@@ -244,22 +244,23 @@ GA: `home_mode_click { mode_id: "together" }` 가 자동으로 잡힌다. 별도
 
 **한계와 성장 경로**: 지금 확보 풀이 67명이라 피드 상단이 반복적으로 보일 수 있다. 이건 canonical 작업이 채우는 만큼 자동으로 넓어진다 — **성공 지표를 `coverage ≥ 0.9` 아티스트 수로 잡으면 서비스 화면과 정확히 같은 값**이 된다(부록 C).
 
-### 7.2 게이트에 사전 상한을 넣는다 (안전망)
+### 7.2 엔드포인트 일일 예산 — **이미 있다** (main → develop 병합 완료)
 
-지금 `spotify_endpoint_gate(ep)` 는 세기만 하고, Spotify 가 429 를 줘야 막는다. 엔드포인트별 일일 상한으로 **터지기 전에** 멈춘다.
+계획할 때는 새로 만들 생각이었는데, 다른 세션이 이미 넣어 두었다(main `5c16afe`·`3e1a960`, develop 에 병합 `2416760`).
 
-```sql
--- supabase/migrations/2026XXXXXXXXXX_spotify_soft_limit.sql (additive)
-alter table spotify_endpoint_quota add column if not exists daily_limit int;  -- null = 무제한
--- gate 함수: calls_today >= daily_limit 이면 false 를 돌려준다(429 기록 없이).
-update spotify_endpoint_quota set daily_limit = 60  where endpoint = '/v1/artists/{id}/albums';
-update spotify_endpoint_quota set daily_limit = 300 where endpoint = '/v1/albums/{id}/tracks';
-update spotify_endpoint_quota set daily_limit = 120 where endpoint = '/v1/search';
-```
+| 엔드포인트 | 하루 예산 | 어디서 |
+|---|---|---|
+| `/v1/artists/{id}/albums` | **50** | `getArtistAlbums` 가 Spotify 를 부르기 직전 |
+| `/v1/albums/{id}/tracks` | **600** (`SPOTIFY_TRACK_BUDGET`) | `getAlbumTracks` 가 부르기 직전 |
 
-7.1 이 먼저 들어가면 상한은 **실제로 새 아티스트를 담는 호출에만** 걸린다 — 하루 새 아티스트 9~10명(§12.2). 순서가 중요하다: 7.1 없이 상한만 걸면 둘러보기로 그날 몫이 사라진다.
+`endpointBudgetLeft(endpoint, budget)` 가 `spotify_endpoint_quota.calls_today` 를 읽어 예산이 남았는지 본다. 예산을 다 쓰면 **조용히 빈 결과**를 돌려준다(캐시·DB 경로는 그 위에서 이미 반환되므로 영향 없음).
 
-**선행 확인**: `spotifyFetch` 가 게이트 false 를 받았을 때의 동작이 "캐시에 있는 것만 보여주고 조용히 멈춘다"인지 확인한다. 아니면 그렇게 고친다. 화면 문구는 확보율을 드러내지 않는 쪽으로 — 상한에 걸렸을 때만, 그 자리에서.
+→ **`daily_limit` 열을 새로 만들지 않는다.** 계획에 있던 마이그레이션은 취소한다. 대신 남은 일은 둘뿐이다.
+
+1. 예산 숫자 재검토: albums 50 은 9/17 차단(81콜)보다 보수적이라 지금은 맞다. §7.1 이 들어가 둘러보기가 캐시로 흡수되면 그때 다시 본다.
+2. **`/v1/search` 에는 아직 예산이 없다.** 오늘만 164콜이다. 같은 방식으로 한 줄 추가하면 된다(`searchSpotifyArtists`·`searchArtistsByGenres` 앞단).
+
+⚠️ 캐시 전용 모드(§7.0)와 예산 가드는 **둘 다 "조용히 빈 결과"** 를 돌려준다. 검사 스크립트에서 빈 트랙 목록을 실패로 단정하지 않는다(다른 세션 지적).
 
 ### 7.3 전곡 프리페치 미루기 — **하지 않는다(관찰 후 재검토)**
 
@@ -292,7 +293,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
 
 ## 8. DB
 
-**스키마 변경 없음.** 유일한 추가는 §7.2 의 `daily_limit` 열 하나(additive, 기본 NULL = 지금과 동일 동작).
+**스키마 변경 없음.** (계획에 있던 `daily_limit` 열은 취소했다 — 같은 일을 하는 예산 가드가 이미 코드에 있다, §7.2.)
 
 - `tournament_drafts.is_single_artist` — not null default false, `(user_id, is_single_artist)` 유니크가 모든 upsert 의 onConflict 키다. **절대 건드리지 않는다.**
 - 믹스 매치 드래프트 6건·결과 27건 — 그대로 둔다.
@@ -315,7 +316,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
 | P3 | 검사 동기화 (§5, 부록 B) — **한 커밋**(되돌리기 단위) | `check:web`, `check:toss`, `remove-check`, `saved-view-check`, `baseline:verify` 전부 통과 |
 | P4 | 같이 소트하기 진입점 3곳 (§6) + `/together` 색인 열기 (§13.2) | 홈 → `/together` → 코드 발급 → 참여까지 한 바퀴 |
 | **P5** | 피드를 확보된 아티스트로 (§7.1) | 전곡 모드 기본 목록이 coverage 순. 피드에서 연 아티스트는 대부분 콜 0 |
-| P6 | 일일 상한 (§7.2) — **P5 다음에** | 상한에 걸려도 화면이 깨지지 않고 캐시분만 보여준다 |
+| P6 | `/v1/search` 예산 한 줄 (§7.2) | albums·tracks 예산은 이미 있다. 검색만 남았다 |
 | — | 전곡 프리페치 미루기 | **하지 않는다.** §7.3 의 지표가 나빠지면 그때 |
 | P7 | 대역폭 페이지네이션 (§7.4) | 취향 스페이스·아카이브가 20건씩 받는다 |
 | P8 | 문구 정리 (`ux-writing.md` 용어표에 "믹스 매치 월드컵 — 현재 미노출") | — |
@@ -325,7 +326,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
 
 - **P0 를 맨 앞에 둔 이유**: 이 작업 자체(화면 확인·검사 실행)가 쿼터를 태운다. 9/17 차단이 바로 그렇게 났다. 스위치부터 만들어 두고 나머지를 한다.
 - **P2~P3 는 같은 날 붙여서** 한다. 중간 상태로 두면 검사가 빨갛다.
-- **P5 → P6 순서를 바꾸지 않는다.** 피드를 고치기 전에 상한을 걸면, 둘러보기만으로 그날 몫이 사라진다.
+- **P5 를 먼저 한다.** 예산(albums 50)은 이미 걸려 있어서, 피드를 고치기 전에는 둘러보기만으로 그날 몫이 사라질 수 있다.
 - P7 은 독립적이라 언제 해도 된다.
 
 ---
@@ -365,7 +366,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
 | 2 | `/genres` 는 **302(임시 이동)** 로 `/explore?mode=single` 에 보낸다 | **확정** 2026-09-21 |
 | 3 | 9/17 429 의 원인은 **운영자가 전곡 모드에서 아티스트 여러 명의 트랙리스트를 열어본 것** | **확인됨**. 대책은 §7.0 + 피드 교체(§7.1). 프리페치 구조 변경은 **보류**(§7.3) |
 | 4 | 대역폭: **페이지네이션을 넣는다**. 선호 아티스트 기반 정렬은 **후순위** | **확정** 2026-09-21 — §7.4 |
-| 5 | 일일 상한 숫자(albums 60 · tracks 300 · search 120) | §7.1 적용 **후에** 넣는다 |
+| 5 | 일일 상한 | **이미 구현돼 있었다**(albums 50 · tracks 600). 새 마이그레이션 취소. 남은 것은 `/v1/search` 예산 한 줄 — §7.2 |
 | 6 | 이용자가 아티스트를 여러 명 둘러보는 일은 드물다 → **프리페치 구조는 건드리지 않는다** | **확정** 2026-09-21. 대신 피드를 확보된 아티스트로 채운다 |
 
 ### 12.1 왜 301 이 아니라 302 인가
@@ -376,8 +377,8 @@ where q.endpoint = '/v1/artists/{id}/albums';
 
 전곡이 찬 아티스트 20명 기준 **평균 앨범 26장(중앙값 19)**. 새 아티스트 한 명을 처음 담는 비용은 앨범 목록 `ceil(26/10)` ≈ 3콜 + 앨범별 곡 목록 ≈ 26콜 = **약 29콜**.
 
-- §7.1 **적용 전**: 피드 아티스트의 97.6% 가 DB 에 없어, 아무거나 3명 눌러보면 87콜 → 상한 60 이면 첫 사람이 그날을 다 쓴다.
-- §7.1 **적용 후**: 피드에서 여는 아티스트는 대부분 0콜. 이름으로 검색해 새로 담는 아티스트만 29콜 → 상한 300(곡 목록) 안에서 **하루 새 아티스트 9~10명**.
+- §7.1 **적용 전**: 피드 아티스트의 97.6% 가 DB 에 없어, 아무거나 3명 눌러보면 87콜 → 현재 예산(albums 50)이면 첫 사람이 그날을 다 쓴다.
+- §7.1 **적용 후**: 피드에서 여는 아티스트는 대부분 0콜. 이름으로 검색해 새로 담는 아티스트만 29콜 → 현재 예산(albums 50 · tracks 600) 안에서 **하루 새 아티스트 16명** 남짓.
 
 ---
 
