@@ -161,6 +161,41 @@ async function loadMbDigests(supabase: ReturnType<typeof createAdminClient>, rel
   return out;
 }
 
+/** Discogs 는 재생시간을 "3:39" 처럼 적는다 */
+const dgDurMs = (s: string): number => {
+  const p = String(s || "").trim().split(":").map(Number);
+  if (!p.length || p.some((x) => !Number.isFinite(x))) return 0;
+  return p.reduce((a, b) => a * 60 + b, 0) * 1000;
+};
+
+async function loadDgDigests(supabase: ReturnType<typeof createAdminClient>, releases: number[]) {
+  const out = new Map<number, Digest>();
+  const ids = [...new Set(releases.filter((x) => Number.isFinite(x)))];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await supabase.from("discogs_release_digest")
+      .select("release_id, n_distinct, h_raw, h_base, h_pre, durs").in("release_id", ids.slice(i, i + 200));
+    for (const d of data ?? []) out.set(Number(d.release_id), d as Digest);
+  }
+  const missing = ids.filter((id) => !out.has(id));
+  for (let i = 0; i < missing.length; i += 40) {
+    const chunk = missing.slice(i, i + 40);
+    const rows: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data } = await supabase.from("discogs_track")
+        .select("release_id, idx, title, duration")
+        .in("release_id", chunk).order("release_id").order("idx").range(from, from + 999);
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    const byRel = new Map<number, any[]>();
+    for (const t of rows) { const k = Number(t.release_id); byRel.set(k, [...(byRel.get(k) ?? []), t]); }
+    for (const id of chunk) {
+      out.set(id, buildDigest((byRel.get(id) ?? []).map((t) => ({ title: t.title, ms: dgDurMs(t.duration) }))));
+    }
+  }
+  return out;
+}
+
 async function loadDzDigests(supabase: ReturnType<typeof createAdminClient>, albums: number[]) {
   const out = new Map<number, Digest>();
   const ids = [...new Set(albums.filter((x) => Number.isFinite(x)))];
@@ -266,6 +301,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     // 화면에서 중복 제거되므로 여기서도 빼고 센다 — 목록의 곡 수와 실제 보이는 곡 수를 맞춘다.
     const releaseIds = [...byAlbum.values()].map((v) => v.release).filter(Boolean) as string[];
     const digestOf = await loadMbDigests(supabase, releaseIds);
+    const dgDigestOf = await loadDgDigests(supabase, discogsIds);
     const trackCount = new Map<string, number>([...digestOf].map(([k, d]) => [k, d.n_distinct]));
 
     // 재킷 2순위용: 이 앨범에 연결된 Deezer 앨범 (Cover Art Archive 에 재킷이 없을 때 쓴다)
@@ -316,11 +352,14 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         ],
         source: "db",
       });
-      if (src.release) {
-        const d = digestOf.get(src.release);
-        songsOf.set(albumId, new Set(d?.h_raw ?? []));
-        titlesOfAlbum.set(albumId, toAlbumTracks(d));
-        durOfAlbum.set(albumId, d?.durs ?? []);
+      // 같은 앨범 판정에 쓸 요약을 붙인다. Discogs 로만 아는 앨범도 붙여야 한다 —
+      // 안 붙이면 비교 대상에서 통째로 빠져서, 같은 앨범이 두 번 나간다
+      // (Nirvana "In Utero" 가 "In Utero (Super Deluxe Edition)" 과 따로 나갔다).
+      const dg = src.release ? digestOf.get(src.release) : (src.discogs ? dgDigestOf.get(src.discogs) : undefined);
+      if (dg) {
+        songsOf.set(albumId, new Set(dg.h_raw ?? []));
+        titlesOfAlbum.set(albumId, toAlbumTracks(dg));
+        durOfAlbum.set(albumId, dg.durs ?? []);
       }
     }
     // 3) MusicBrainz 단독: Spotify 앨범 ID 가 없는 발매그룹도 낸다 (앨범 ID 는 "mb:<발매그룹>")
@@ -442,11 +481,17 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           for (const k of new Set([t.raw[i], t.base[i]])) byTitle.set(k, [...(byTitle.get(k) ?? []), a.id]);
         }
       }
-      // 남길 순서: 라이브·모음집이 아닌 것 -> 곡 많은 것 -> Spotify·MusicBrainz 쪽
+      // 남길 순서: 라이브·모음집이 아닌 것 -> 먼저 나온 것 -> 곡 많은 것 -> Spotify·MusicBrainz 쪽
+      //
+      // "곡 많은 것"을 먼저 보면 원본이 사라진다. Nirvana 는 "In Utero (Super Deluxe Edition)"(25곡,
+      // 2013) 만 남고 "In Utero"(12곡, 1993) 가 숨었고, Radiohead 는 "OK Computer" 대신
+      // "OKNOTOK 1997 2017" 이 남았다. 이용자가 찾는 건 원본이다. 발매일을 먼저 본다.
+      // (디럭스에만 있는 곡은 대개 데모·라이브판이라, 빠져도 중복이 줄지 손해가 아니다)
       const LIVE = /(live|box|collection|anthology|greatest|best of|complete|singles)/i;
       const rank2 = (a: DbAlbum) => (LIVE.test(a.name) ? 1 : 0);
+      const day = (a: DbAlbum) => a.release_date?.slice(0, 10) || "9999";
       const order = [...cand].sort((x, y) =>
-        rank2(x) - rank2(y) || y.total_tracks - x.total_tracks ||
+        rank2(x) - rank2(y) || day(x).localeCompare(day(y)) || y.total_tracks - x.total_tracks ||
         (x.id.startsWith("deezer:") ? 1 : 0) - (y.id.startsWith("deezer:") ? 1 : 0));
       const keep = new Set<string>();
       for (const a of order) {
@@ -462,9 +507,24 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
             hits.set(other, set);
           }
         }
+        const nameOf = new Map(cand.map((c) => [c.id, normAlbum(c.name)]));
+        // 제목이 같은 계열인가 ("In Utero" / "In Utero (Super Deluxe Edition)",
+        // "Kid A" / "KID A MNESIA", "OK Computer" / "OK Computer OKNOTOK 1997 2017").
+        // 판 표기는 normAlbum 이 이미 뗐으므로, 남은 건 앞부분이 같은지만 보면 된다.
+        const sameFamily = (x: string, y: string) => {
+          const a2 = nameOf.get(x) ?? "", b2 = nameOf.get(y) ?? "";
+          if (!a2 || !b2) return false;
+          const short = a2.length <= b2.length ? a2 : b2;
+          return short.length >= 4 && (a2 === b2 || (a2.length <= b2.length ? b2 : a2).startsWith(short));
+        };
         for (const [other, matched] of hits) {
           const size = titlesOfAlbum.get(other)?.raw.length ?? 0;
-          if (size >= BIG && matched.size / size >= 0.8) merged.add(other);   // 상대 앨범이 내 안에 거의 다 들어 있다
+          if (size < BIG) continue;
+          // 상대 앨범이 내 안에 거의 다 들어 있다 -> 상대를 뺀다
+          if (matched.size / size >= 0.8) { merged.add(other); continue; }
+          // 반대로 내가 상대 안에 거의 다 들어 있다. 이때는 제목이 같은 계열일 때만 뺀다.
+          // 제목까지 보지 않으면 먼저 나온 EP 때문에 뒤에 나온 정규 앨범이 통째로 숨는다.
+          if (mine.raw.length >= BIG && matched.size / mine.raw.length >= 0.8 && sameFamily(a.id, other)) merged.add(other);
         }
         // 제목이 서로 다른 언어라 안 겹쳐도, 곡 수와 자리별 재생시간이 맞으면 같은 앨범이다
         for (const other of cand) {
