@@ -114,7 +114,7 @@ export default function ExplorePage() {
   const t = {
     ko: {
       title: isSingleArtistMode ? "최애 아티스트를 선택해 주세요" : "어떤 아티스트를 좋아하시나요?",
-      desc: isSingleArtistMode ? "단 한 명의 아티스트를 선택해, 그동안 발표된 모든 곡을 내 마음에 드는 순서대로 정렬해보세요." : "최소 3명의 아티스트를 선택해 주세요.",
+      desc: isSingleArtistMode ? "아티스트 한 명을 골라 주세요. 발표한 곡을 모두 소트해볼 수 있어요." : "최소 3명의 아티스트를 선택해 주세요.",
       genreLabel: "선택 장르:",
       placeholder: "아티스트 검색 (예: The Beatles)...",
       searchResult: "검색 결과",
@@ -138,7 +138,7 @@ export default function ExplorePage() {
     },
     en: {
       title: isSingleArtistMode ? "Select your favorite artist" : "Who are your favorite artists?",
-      desc: isSingleArtistMode ? "Select a single artist and line up all of their tracks in the order of your choice." : "Please select at least 3 artists.",
+      desc: isSingleArtistMode ? "Pick one artist. You can sort every song they've released." : "Please select at least 3 artists.",
       genreLabel: "Selected Genres:",
       placeholder: "Search artists (e.g., The Beatles)...",
       searchResult: "Search Results",
