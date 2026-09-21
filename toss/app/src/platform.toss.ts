@@ -13,6 +13,9 @@ import * as htmlToImage from 'html-to-image';
  * `Share.sendMessage` · `Device.openURL` · `Clipboard.setText`)을 쓴다.
  */
 
+/** 웹 구현(`src/utils/platform.ts`)의 같은 상수와 짝이다. */
+export const platformName = 'toss';
+
 export type ShareTarget = 'link' | 'image' | 'x' | 'instagram' | 'kakao';
 
 /** 사용자에게 그대로 보여도 되는 오류. (src/utils/platform.ts 와 같은 역할) */

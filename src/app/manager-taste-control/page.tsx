@@ -7,9 +7,14 @@ import {
   Check, X, Disc, ExternalLink, Clock, Music, Video,
   ChevronLeft, ChevronRight, FileText, Sparkles, LayoutDashboard,
   ListMusic, BookOpen, History, Shield,
-  AlertCircle, Loader2
+  AlertCircle, Loader2, MessageSquare, Mail
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  fetchFeedback,
+  markFeedbackDone,
+  type FeedbackRow,
+} from "@/utils/feedbackDb";
 import {
   fetchPendingUnreleasedTracks,
   approveUnreleasedTrack,
@@ -52,7 +57,7 @@ interface PendingLyricSuggestion {
   };
 }
 
-type NavSection = "tracks" | "lyrics" | "manage" | "history";
+type NavSection = "tracks" | "lyrics" | "manage" | "history" | "feedback";
 
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -63,6 +68,7 @@ export default function AdminPage() {
   const [lyricsSuggestions, setLyricsSuggestions] = useState<PendingLyricSuggestion[]>([]);
   const [manageTracks, setManageTracks] = useState<PendingTrack[]>([]);
   const [releasedHistory, setReleasedHistory] = useState<PendingTrack[]>([]);
+  const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -109,6 +115,18 @@ export default function AdminPage() {
       navLyrics: "가사 수정 요청",
       navManage: "미발매곡 상태 관리",
       navHistory: "공식 발매 완료 목록",
+      navFeedback: "이용자 의견",
+      feedbackKindDataError: "곡·아티스트 정보 오류",
+      feedbackKindIdea: "기능 아이디어",
+      feedbackKindService: "서비스 의견",
+      feedbackDoneBtn: "처리 완료",
+      feedbackDoneConfirm: "이 의견을 처리 완료로 표시할까요?\n적어주신 이메일은 함께 지워집니다.",
+      feedbackDoneSuccess: "처리 완료로 표시했어요.",
+      feedbackDoneError: "처리에 실패했어요. 다시 시도해 주세요.",
+      feedbackNoEmail: "이메일 없음",
+      feedbackAnon: "비로그인",
+      noFeedbackTitle: "새로 들어온 의견이 없어요",
+      noFeedbackDesc: "이용자들이 보낸 의견을 모두 확인했어요.\n잠시 쉬어가도 좋아요. ☕",
       unreleased: "미발매곡",
       submittedDate: "신청일",
       performedDate: "공연일",
@@ -163,6 +181,18 @@ export default function AdminPage() {
       navLyrics: "Lyrics Edits",
       navManage: "Manage Tracks",
       navHistory: "Released History",
+      navFeedback: "User Feedback",
+      feedbackKindDataError: "Wrong track/artist info",
+      feedbackKindIdea: "Feature idea",
+      feedbackKindService: "Service feedback",
+      feedbackDoneBtn: "Mark as handled",
+      feedbackDoneConfirm: "Mark this feedback as handled?\nThe submitted email will be deleted.",
+      feedbackDoneSuccess: "Marked as handled.",
+      feedbackDoneError: "Failed to update. Please try again.",
+      feedbackNoEmail: "No email",
+      feedbackAnon: "Anonymous",
+      noFeedbackTitle: "No new feedback",
+      noFeedbackDesc: "You've reviewed everything users sent.\nTime for a short break. ☕",
       unreleased: "Unreleased",
       submittedDate: "Submitted",
       performedDate: "Performed",
@@ -237,6 +267,8 @@ export default function AdminPage() {
         } else if (activeSection === "history") {
           const data = await fetchAllReleasedUnreleasedTracks();
           setReleasedHistory(data as PendingTrack[]);
+        } else if (activeSection === "feedback") {
+          setFeedback(await fetchFeedback("new"));
         }
       } catch (err: any) {
         setError(t.loadError);
@@ -392,6 +424,7 @@ export default function AdminPage() {
     { id: "lyrics",  icon: <BookOpen size={18} />,   label: t.navLyrics,  count: activeSection === "lyrics"  ? lyricsSuggestions.length : undefined },
     { id: "manage",  icon: <FileText size={18} />,   label: t.navManage,  count: activeSection === "manage"  ? manageTracks.length       : undefined },
     { id: "history", icon: <History size={18} />,    label: t.navHistory, count: activeSection === "history" ? releasedHistory.length    : undefined },
+    { id: "feedback", icon: <MessageSquare size={18} />, label: t.navFeedback, count: activeSection === "feedback" ? feedback.length : undefined },
   ];
 
   const cardVariants = {
@@ -730,11 +763,119 @@ export default function AdminPage() {
       )
   );
 
+  const handleFeedbackDone = async (id: string) => {
+    if (!window.confirm(t.feedbackDoneConfirm)) return;
+    try {
+      await markFeedbackDone(id);
+      setFeedback(prev => prev.filter(f => f.id !== id));
+      showToast(t.feedbackDoneSuccess, "success");
+    } catch {
+      showToast(t.feedbackDoneError, "error");
+    }
+  };
+
+  const feedbackKindLabel: Record<FeedbackRow["kind"], string> = {
+    data_error: t.feedbackKindDataError,
+    idea: t.feedbackKindIdea,
+    service: t.feedbackKindService,
+  };
+
+  const renderFeedbackSection = () => (
+    feedback.length === 0
+      ? <EmptyState icon={<MessageSquare size={26} />} title={t.noFeedbackTitle} desc={t.noFeedbackDesc} />
+      : (
+        <div className={isMobileDevice ? "flex flex-col gap-4" : "grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-5"}>
+          <AnimatePresence mode="popLayout">
+            {feedback.map((item) => {
+              // 진입점이 붙여 준 컨텍스트. 이게 없으면 자유 서술만 남아 확인할 방법이 없다.
+              const ctx = item.context ?? {};
+              const artistName = typeof ctx.artist_name === "string" ? ctx.artist_name : null;
+              const albumTitle = typeof ctx.album_title === "string" ? ctx.album_title : null;
+              const isDataError = item.kind === "data_error";
+
+              return (
+                <motion.div
+                  key={item.id}
+                  layout
+                  variants={cardVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                  className={`bg-white/75 border rounded-3xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-4 text-left ${isDataError ? "border-point/35 bg-point/[0.02]" : "border-navy/10"}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <span className={`font-sans text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isDataError ? "text-point bg-point/12" : "text-navy/55 bg-navy/6"}`}>
+                          {feedbackKindLabel[item.kind]}
+                        </span>
+                        <span className="font-sans text-[10px] font-bold text-navy/45 uppercase tracking-wider bg-navy/6 px-2 py-0.5 rounded-full">
+                          {String(ctx.platform ?? "web")}
+                        </span>
+                        {!item.user_id && (
+                          <span className="font-sans text-[10px] font-bold text-navy/40 uppercase tracking-wider bg-navy/6 px-2 py-0.5 rounded-full">
+                            {t.feedbackAnon}
+                          </span>
+                        )}
+                      </div>
+
+                      {(artistName || albumTitle) && (
+                        <h2 className="font-serif text-lg text-navy font-bold leading-tight break-keep">
+                          {[artistName, albumTitle].filter(Boolean).join(" · ")}
+                        </h2>
+                      )}
+
+                      <div className="flex items-center gap-1.5 mt-1 font-sans text-xs text-charcoal/45">
+                        <Clock size={11} />
+                        <span>{formatDate(item.created_at)}</span>
+                        {typeof ctx.path === "string" && (
+                          <>
+                            <span className="text-navy/20">•</span>
+                            <span className="font-mono text-[11px]">{ctx.path}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-11 h-11 rounded-2xl bg-cream border border-navy/8 flex items-center justify-center shrink-0">
+                      <MessageSquare size={19} className={isDataError ? "text-point" : "text-navy/45"} />
+                    </div>
+                  </div>
+
+                  <p className="font-sans text-sm text-charcoal/85 leading-relaxed whitespace-pre-wrap break-keep bg-navy/[0.03] border border-navy/5 rounded-2xl p-4">
+                    {item.message}
+                  </p>
+
+                  <div className="flex items-center gap-1.5 font-sans text-xs text-charcoal/55">
+                    <Mail size={12} className="shrink-0" />
+                    {item.email
+                      ? <a href={`mailto:${item.email}`} className="text-point hover:underline break-all">{item.email}</a>
+                      : <span className="text-charcoal/35">{t.feedbackNoEmail}</span>}
+                  </div>
+
+                  <div className="border-t border-navy/6 pt-4">
+                    <button
+                      onClick={() => handleFeedbackDone(item.id)}
+                      className="w-full py-2.5 bg-navy hover:bg-navy/90 text-cream font-sans font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-md shadow-navy/15"
+                    >
+                      <Check size={15} strokeWidth={2.5} className="text-point" />
+                      {t.feedbackDoneBtn}
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )
+  );
+
   const sectionContent: Record<NavSection, () => React.ReactNode> = {
     tracks: renderTracksSection,
     lyrics: renderLyricsSection,
     manage: renderManageSection,
     history: renderHistorySection,
+    feedback: renderFeedbackSection,
   };
 
   const currentNavItem = navItems.find(n => n.id === activeSection)!;

@@ -12,6 +12,7 @@ import { getArtistAlbums, getAlbumTracks, getArtistDiscography } from "@/utils/s
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
 import { trackEvent } from "@/utils/gtag";
 import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
+import FeedbackModal from "@/components/FeedbackModal";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
@@ -37,6 +38,7 @@ const translations = {
     next: "다음",
     unreleased: "미발매곡",
     addUnreleasedBtn: "미발매곡 추가",
+    reportInfoBtn: "곡 정보가 잘못됐나요?",
     createWorldCup: "월드컵 대진 만드는 중",
     startWorldCup: "월드컵 시작하기",
     fetchingAllTracks: "발매곡 수집 중...",
@@ -90,6 +92,7 @@ const translations = {
     next: "Next",
     unreleased: "Unreleased Tracks",
     addUnreleasedBtn: "Add Unreleased Track",
+    reportInfoBtn: "Something wrong with this info?",
     createWorldCup: "Preparing lineup...",
     startWorldCup: "Start World Cup",
     fetchingAllTracks: "Fetching releases...",
@@ -195,6 +198,8 @@ export default function TracksPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalArtistId, setModalArtistId] = useState<string | null>(null);
+  // 오류 제보 모달. 아티스트 컨텍스트를 같이 들고 있어야 제보가 쓸모 있다.
+  const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; name: string; albumId?: string; albumTitle?: string } | null>(null);
   const [unreleasedForm, setUnreleasedForm] = useState({ title: '', videoUrl: '', date: '' });
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -1796,6 +1801,25 @@ export default function TracksPage() {
                          <Plus size={16} />
                          미발매곡 추가
                        </button>
+
+                       {/* 오류 제보. 펼쳐 둔 앨범이 이 아티스트의 것이면 그 앨범까지 컨텍스트에 담는다 */}
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           const openAlbum = [...(artist.albums ?? []), ...(artist.unreleasedAlbums ?? [])]
+                             .find(al => al.id === expandedAlbumId);
+                           setFeedbackTarget({
+                             id: artist.id,
+                             name: artist.name,
+                             albumId: openAlbum?.id,
+                             albumTitle: openAlbum?.title,
+                           });
+                         }}
+                         className="w-full mt-2 py-2.5 rounded-2xl text-navy/45 font-sans text-xs font-medium flex items-center justify-center gap-1.5 hover:text-point hover:bg-navy/5 transition-colors"
+                       >
+                         <AlertCircle size={13} />
+                         {t.reportInfoBtn}
+                       </button>
                      </motion.div>
                    )}
                  </AnimatePresence>
@@ -1993,6 +2017,34 @@ export default function TracksPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 곡 정보 오류 제보 */}
+      <FeedbackModal
+        isOpen={feedbackTarget !== null}
+        onClose={() => setFeedbackTarget(null)}
+        locale={locale}
+        kind="data_error"
+        contextLabel={
+          feedbackTarget
+            ? [feedbackTarget.name, feedbackTarget.albumTitle].filter(Boolean).join(" · ")
+            : undefined
+        }
+        context={
+          feedbackTarget
+            ? {
+                artist_id: feedbackTarget.id,
+                artist_name: feedbackTarget.name,
+                ...(feedbackTarget.albumId
+                  ? { album_id: feedbackTarget.albumId, album_title: feedbackTarget.albumTitle }
+                  : {}),
+              }
+            : undefined
+        }
+        onSubmitted={(msg) => {
+          setNotification(msg);
+          setTimeout(() => setNotification(null), 5000);
+        }}
+      />
 
       {/* Notification Toast */}
       <AnimatePresence>

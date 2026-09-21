@@ -18,6 +18,9 @@ import * as htmlToImage from "html-to-image";
  * 페이지에 그대로 남긴다** — 그래야 두 빌드의 동작이 갈라지지 않는다.
  */
 
+/** 의견 수집이 어느 빌드에서 왔는지 구분하는 값. 토스 빌드는 이 파일째로 치환된다. */
+export const platformName = "web";
+
 export type ShareTarget = "link" | "image" | "x" | "instagram" | "kakao";
 
 /**

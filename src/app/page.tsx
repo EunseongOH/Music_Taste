@@ -13,6 +13,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale, setSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
+import { countNewFeedback } from "@/utils/feedbackDb";
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,6 +27,15 @@ export default function Home() {
   const [activeDraft, setActiveDraft] = useState<any | null>(null);
   const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
+
+  // 새 의견이 들어왔는지 알 수 있는 유일한 곳이다. 어드민에게만 보이는 버튼에 붙인다.
+  const isAdmin = user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true;
+  const [newFeedbackCount, setNewFeedbackCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    countNewFeedback().then(setNewFeedbackCount);
+  }, [isAdmin]);
 
   const modes = [
     {
@@ -490,7 +500,7 @@ export default function Home() {
       <div className="w-full flex flex-col items-center justify-center mt-auto pt-16 pb-8 z-10 gap-4">
         <LPPlayer />
 
-        {(user?.app_metadata?.is_admin === true || user?.user_metadata?.is_admin === true) && (
+        {isAdmin && (
           <motion.a
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -503,6 +513,11 @@ export default function Home() {
           >
             <span className="h-1.5 w-1.5 rounded-full bg-point animate-pulse" />
             어드민 페이지로 이동
+            {newFeedbackCount > 0 && (
+              <span className="ml-0.5 px-2 py-0.5 rounded-full bg-point text-white text-[10px] font-bold leading-none">
+                새 의견 {newFeedbackCount}
+              </span>
+            )}
           </motion.a>
         )}
       </div>
