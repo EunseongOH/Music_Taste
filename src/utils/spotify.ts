@@ -380,12 +380,51 @@ const RATE_LIMITED_RESPONSE = () =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+/**
+ * 캐시 전용 모드 (2026-09-21). 문서: docs/mode-pivot.md §7.0
+ *
+ * 로컬 개발 서버와 Playwright 검사는 운영과 **같은 Spotify 앱·같은 일일 쿼터**를 쓴다.
+ * 9/17 차단(/v1/artists/{id}/albums, QUOTA_EXCEEDED, 11시간)은 이용자가 아니라
+ * 화면을 확인하며 아티스트 여러 명을 열어본 데서 났다. 이용자가 없는 날에도 문이 닫힌다.
+ *
+ * 그래서 개발·검사는 **기본으로 캐시만** 본다. 캐시에 없는 아티스트는 비어 보이는데,
+ * 그게 맞다 — 확인은 이미 담긴 아티스트로 한다.
+ *
+ *   SPOTIFY_CACHE_ONLY=0  새 아티스트를 일부러 담아야 할 때만 끈다
+ *   SPOTIFY_CACHE_ONLY=1  운영에서도 켤 수 있다(쿼터를 다 쓴 날의 비상 브레이크)
+ *
+ * 기본값은 운영만 꺼짐. scripts/prelaunch-warm.ts 와 scripts/warmup_artists.ts 는
+ * spotifyFetch 를 지나지 않아 영향받지 않는다(각자 예산·게이트를 따로 들고 있다).
+ */
+function isCacheOnly(): boolean {
+  const flag = process.env.SPOTIFY_CACHE_ONLY;
+  if (flag === "1" || flag === "true") return true;
+  if (flag === "0" || flag === "false") return false;
+  return process.env.NODE_ENV !== "production";
+}
+
+let cacheOnlyNoticeShown = false;
+
 async function spotifyFetch(
   url: string,
   options: RequestInit = {},
   retries = 3
 ): Promise<Response> {
   const endpoint = endpointKey(url);
+
+  // 캐시에 없는 것은 조용히 비운다. 게이트 RPC 도 부르지 않는다(호출 수가 늘면 안 된다).
+  // lastSpotifyError 는 건드리지 않는다 — 화면에 연결 오류 배너를 띄울 일이 아니다.
+  if (isCacheOnly()) {
+    if (!cacheOnlyNoticeShown) {
+      cacheOnlyNoticeShown = true;
+      console.warn("[Spotify] 캐시 전용 모드. Spotify 를 부르지 않는다. 끄려면 SPOTIFY_CACHE_ONLY=0 (docs/mode-pivot.md §7.0)");
+    }
+    return new Response(`{"error":{"status":503,"message":"cache-only mode","endpoint":"${endpoint}"}}`, {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   if (!(await takeQuotaToken(endpoint))) {
     lastSpotifyError = "429";
     return RATE_LIMITED_RESPONSE();
