@@ -17,6 +17,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { coverPlaceholder } from "@/utils/coverPlaceholder";
 import { songKey, betterTitle } from "@/utils/songKey";
+import SpotifyLink from "@/components/SpotifyLink";
 
 const translations = {
   ko: {
@@ -1491,6 +1492,8 @@ export default function TracksPage() {
                          </p>
                       </div>
                     </div>
+                    {/* 이 아티스트 묶음의 Spotify 링크백 (약관 II.4). 카드마다가 아니라 묶음에 하나 */}
+                    <SpotifyLink href={`https://open.spotify.com/artist/${artist.id}`} />
                  </div>
 
                  {/* Artist Albums Grid (Accordion Content) */}
@@ -1775,6 +1778,17 @@ export default function TracksPage() {
                                                   </div>
                                                 )
                                               })
+                                            )}
+
+                                            {/* 이 앨범의 Spotify 링크백 (약관 II.4). 우리 DB 로만 아는 앨범
+                                                (mb:/deezer:)은 재킷·곡이 Spotify 에서 온 게 아니라 링크를 걸지 않는다 */}
+                                            {!album.id.includes(":") && !album.id.startsWith("al_unreleased_") && (
+                                              <div className="flex justify-center mt-3">
+                                                <SpotifyLink
+                                                  href={`https://open.spotify.com/album/${album.id}`}
+                                                  label={locale === "ko" ? "Spotify에서 듣기" : "Play on Spotify"}
+                                                />
+                                              </div>
                                             )}
 
                                             <button
