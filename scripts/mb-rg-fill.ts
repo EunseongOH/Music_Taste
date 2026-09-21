@@ -12,6 +12,7 @@
 // MusicBrainz 는 IP 당 초당 1회다. Spotify 는 부르지 않는다.
 
 import { createAdminClient } from "../src/utils/supabase/admin";
+import { buildDigest } from "../src/utils/trackDigest";
 
 const sb = createAdminClient();
 const UA = "Sortify/1.0 ( https://sortify.kr )";
@@ -162,6 +163,12 @@ async function tracks(limit: number) {
     if (rows.length) {
       const { error } = await sb.from("mb_release_track").upsert(rows, { onConflict: "release_mbid,disc,position" });
       if (error) throw new Error(error.message);
+      // 화면이 읽을 요약도 함께 만든다 (앨범 목록에서 트랙 행을 다시 읽지 않게 한다)
+      const ordered = [...rows].sort((x: any, y: any) => x.disc - y.disc || x.position - y.position);
+      const { error: e2 } = await sb.from("mb_release_digest")
+        .upsert({ release_mbid: r.release_mbid, ...buildDigest(ordered.map((t: any) => ({ title: t.title, ms: t.length_ms ?? 0 }))) },
+          { onConflict: "release_mbid" });
+      if (e2) throw new Error(e2.message);
     }
     await sb.from("mb_rg_release").update({
       tracks_filled_at: new Date().toISOString(), track_count: rows.length || r.track_count, checked_at: new Date().toISOString(),

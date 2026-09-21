@@ -11,6 +11,7 @@
 // 이미지·미리듣기 URL 은 저장하지 않는다. 호출 간격은 초당 4회 이하로 둔다.
 
 import { createAdminClient } from "../src/utils/supabase/admin";
+import { buildDigest } from "../src/utils/trackDigest";
 
 const sb = createAdminClient();
 // Supabase 무료 한도는 500MB. 여유를 두고 멈춘다.
@@ -161,6 +162,11 @@ async function albums(limitArtists: number) {
         }));
         const { error: e2 } = await sb.from("deezer_track").upsert(rows, { onConflict: "deezer_album_id,idx" });
         if (e2) throw new Error(e2.message);
+        // 화면이 읽을 요약도 함께 만든다
+        const { error: e3 } = await sb.from("deezer_album_digest")
+          .upsert({ deezer_album_id: alb.id, ...buildDigest(rows.map((t: any) => ({ title: t.title, ms: (t.duration_s ?? 0) * 1000 }))) },
+            { onConflict: "deezer_album_id" });
+        if (e3) throw new Error(e3.message);
         albumCount++; trackCount += rows.length;
       }
       if (!list?.next) break;

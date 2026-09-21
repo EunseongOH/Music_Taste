@@ -1,0 +1,68 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv *)",
+      "Read(//c/Users/User/AppData/Local/Temp/claude/c--Users-User-Music-Taste/ac4de0cb-5485-4d4e-920d-1dc824636ed3/scratchpad/ait-new/**)",
+      "Bash(unzip -o -q /c/Users/User/Music_Taste/Sortify.ait)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',c=>s+=c\\).on\\('end',\\(\\)=>{const c=JSON.parse\\(s\\);console.log\\('sdk:',c.sdk.name,c.sdk.version\\);console.log\\('byteLength:',c.byteLength\\);console.log\\('config:'\\);console.log\\(JSON.stringify\\(c.config,null,1\\)\\)}\\)\")",
+      "Bash(grep -rhoE \"objectFit[^}]{0,120}\" node_modules/next/dist/shared/lib/get-img-props.js)",
+      "Bash(grep -rhoE \"position:\\\\\"absolute\\\\\"[^}]{0,200}\" node_modules/next/dist/shared/lib/get-img-props.js)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "Bash(awk '/createResolver = function|var createResolver/,/^};/' node_modules/@webview-bridge/utils/dist/index.js)",
+      "Bash(awk '/function getConstant\\\\\\(/,/^}/' node_modules/@apps-in-toss/web-framework/dist/index.js)",
+      "Bash(awk '/function getAppsInTossGlobals\\\\\\(/,/^}/' node_modules/@apps-in-toss/web-framework/dist/index.js)",
+      "Bash(node -e \"const f=require\\('./toss/baseline/fixture.json'\\); console.log\\('len', f.length\\); console.log\\(JSON.stringify\\(f[0],null,1\\)\\)\")",
+      "Bash(node --check toss/baseline/share-check.mjs)",
+      "Bash(node -e \"import\\('./toss/baseline/share-check.mjs'\\).catch\\(e=>{console.log\\('로드 오류:', e.message\\)}\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(node -e ' *)",
+      "Bash([ -f \"$f\" ])",
+      "Read(//c/Users/User/.ait/**)",
+      "Bash(MB_BATCH=3 npm run mb:albums)",
+      "Bash(MB_BATCH=340 npm run mb:albums)",
+      "Bash(MB_BATCH=800 npm run mb:resolve)",
+      "Bash(grep -oE \"VITE_API_BASE=[^ \\\\\"'\\\\\\\\\\\\\\\\]+\" \"C:/Users/User/.claude/projects/c--Users-User-Music-Taste/ac4de0cb-5485-4d4e-920d-1dc824636ed3.jsonl\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' https://music-taste-git-develop-erindella7991-2730s-projects.vercel.app/)",
+      "Bash(curl -s -i -X OPTIONS https://music-taste-git-develop-erindella7991-2730s-projects.vercel.app/api/toss/spotify -H 'Origin: https://sortify-musictaste.private-apps.tossmini.com' -H 'Access-Control-Request-Method: POST')",
+      "Bash(rm -f *.ait)",
+      "Bash(VITE_API_BASE=https://music-taste-git-develop-erindella7991-2730s-projects.vercel.app npm run build:toss)",
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Bash(grep -vE \"^\\\\s*│?\\\\s*$\")",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "Bash(:)",
+      "Bash(grep -iv \"crlf\\\\|^$\")",
+      "Bash(node -e \"const f='C:/Users/User/AppData/Roaming/com.vercel.cli/Data/auth.json';const j=require\\('fs'\\).existsSync\\(f\\)?JSON.parse\\(require\\('fs'\\).readFileSync\\(f,'utf8'\\)\\):null;console.log\\(j?\\('auth.json keys: '+Object.keys\\(j\\).join\\(','\\)+' | token? '+Boolean\\(j.token\\)\\):'no auth.json'\\)\")",
+      "Bash(npx --yes vercel@latest whoami)",
+      "Bash(npx --yes vercel@latest link --yes --project shortstable)",
+      "Bash(curl -s -o /dev/null -w \"3100:%{http_code}\\\\n\" http://localhost:3100/)",
+      "Bash(curl -s -o /dev/null -w \"5173:%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(npx --yes vercel@latest deploy --prod --yes)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\User\\Music_Taste-share\\toss\\baseline",
+      "C:\\Users\\User\\ShortsTable-v2\\references\\research"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "graphify hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "graphify hook-guard read"
+          }
+        ]
+      }
+    ]
+  }
+}
