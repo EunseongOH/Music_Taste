@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Search, X } from "lucide-react";
+import { motion } from "framer-motion";
 import { SafeImage } from "@/components/SafeImage";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
@@ -13,7 +14,7 @@ import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
-import { NICKNAME_ERROR_TEXT, validateNickname } from "@/utils/nickname";
+import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 import { rememberNickname, rememberedNickname } from "@/utils/togetherDb";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
@@ -124,14 +125,37 @@ export default function TogetherNewPage() {
   const [cards, setCards] = useState<SavedRow[] | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
+  /*
+   * 두 단계로 나눈다. 1단계는 아티스트만 고르고, 2단계에서 앨범을 펼쳐 곡을 고른다
+   * (전곡 모드와 같은 순서). 단계를 옮길 때 주소에 자국을 남겨 브라우저 뒤로가기가
+   * 그대로 1단계로 돌아오게 한다 — 이 코드베이스는 useSearchParams 를 쓰지 않고
+   * history 를 직접 다룬다(토스 빌드의 라우터 shim 도 같은 전제다).
+   */
+  const [step, setStep] = useState<1 | 2>(1);
+  /** 1단계에서 눌러 둔 아티스트. 곡은 2단계로 넘어갈 때 받는다. */
+  const [pendingArtist, setPendingArtist] = useState<CatalogArtist | null>(null);
   /** 펼쳐 둔 앨범. 처음에는 전부 접혀 있다. */
   const [openAlbums, setOpenAlbums] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
   /** 초대 문구에 "{방장}님과 얼마나 비슷한지"가 들어간다 — 이름이 없으면 안내가 헐거워진다. */
   const [nickname, setNickname] = useState("");
   const [nicknameError, setNicknameError] = useState("");
+  /*
+   * 이름을 묻는 창은 **만들기를 누른 뒤**에 뜬다. 이름이 이미 있는 사람에게는 뜨지 않는다.
+   * "이름이 없다" = 비로그인이거나, 로그인했지만 닉네임을 아직 확인하지 않은 경우
+   * (자동 배정된 기본값을 쓰는 상태 — 결과 화면의 공유 이름 확인과 같은 판정이다).
+   */
+  const [askName, setAskName] = useState(false);
+  const needsNameConfirm = !!user && user.user_metadata?.nickname_confirmed !== true;
   const [busy, setBusy] = useState(false);
   const [madeCode, setMadeCode] = useState<string | null>(null);
+
+  // 뒤로가기로 2단계에서 나오면 1단계(고른 아티스트는 그대로)로 돌아온다.
+  useEffect(() => {
+    const onPop = () => setStep(1);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   // 지난번에 쓴 이름이 있으면 채워 둔다(비로그인).
   useEffect(() => {
@@ -229,7 +253,14 @@ export default function TogetherNewPage() {
     };
   }, [artistQuery]);
 
-  const pickArtist = async (artist: CatalogArtist) => {
+  /** 1단계: 누르면 고르기만 한다. 곡은 아직 받지 않는다. */
+  const pickArtist = (artist: CatalogArtist) => {
+    setPendingArtist(artist);
+    setTitle(artist.name);
+  };
+
+  /** 2단계로. 여기서 곡을 받고 주소에 자국을 남긴다. */
+  const openTracks = async (artist: CatalogArtist) => {
     setArtistBusy(true);
     const res = await fetch(`/api/together/catalog?artistId=${encodeURIComponent(artist.id)}`);
     const json = (await res.json()) as { tracks?: CatalogTrack[] };
@@ -259,6 +290,14 @@ export default function TogetherNewPage() {
     setOff(new Set(tracks.map((track) => track.id)));
     setOpenAlbums(new Set());
     setTitle(artist.name);
+    window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?artist=${artist.id}`);
+    setStep(2);
+  };
+
+  /** 2단계 → 1단계. 주소 자국을 되돌려 브라우저 뒤로가기와 같은 길로 나간다. */
+  const backToArtists = () => {
+    if (window.history.state?.togetherStep === 2) window.history.back();
+    else setStep(1);
   };
 
   /** 이미 해 둔 소트에서 곡을 가져오는 길 — 아티스트 목록 아래에 따로 둔다. */
@@ -310,20 +349,48 @@ export default function TogetherNewPage() {
     setSourceKey(next.key);
     setOff(new Set());
     setTitle(next.title);
+    window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?from=${next.key}`);
+    setStep(2);
   };
+
+  /** 이름을 물어야 하는가. 이미 확인된 닉네임이 있으면 묻지 않는다. */
+  const shouldAskName = () => (user ? needsNameConfirm : !rememberedNickname().trim());
 
   const make = async () => {
     if (!source || chosen.length < 4) return;
-    const profileName = user?.user_metadata?.nickname as string | undefined;
-    const name = (profileName || nickname).trim();
-    if (!profileName) {
-      const bad = validateNickname(name);
-      if (bad) {
-        setNicknameError(NICKNAME_ERROR_TEXT.ko[bad]);
+    if (shouldAskName()) {
+      setNickname((prev) => prev || (user?.user_metadata?.nickname as string | undefined) || rememberedNickname());
+      setAskName(true);
+      return;
+    }
+    await create(user ? ((user.user_metadata?.nickname as string | undefined) ?? null) : rememberedNickname() || null);
+  };
+
+  /** 이름 창에서 "이 이름으로 만들기". 로그인 사용자는 계정 닉네임도 이 이름이 된다. */
+  const createWithName = async () => {
+    const name = nickname.trim();
+    const bad = validateNickname(name);
+    if (bad) {
+      setNicknameError(NICKNAME_ERROR_TEXT.ko[bad]);
+      return;
+    }
+    if (user) {
+      setBusy(true);
+      const saved = await saveNickname(name);
+      setBusy(false);
+      if (saved !== "ok") {
+        setNicknameError(NICKNAME_ERROR_TEXT.ko[saved]);
         return;
       }
+    } else {
       rememberNickname(name);
     }
+    setAskName(false);
+    await create(name);
+  };
+
+  const create = async (name: string | null) => {
+    if (!source || chosen.length < 4) return;
     setBusy(true);
     const made = await createChallenge({
       creatorId: user?.id ?? null,
@@ -400,12 +467,23 @@ export default function TogetherNewPage() {
 
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
-      <BackButton onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
-      <h1 className="type-title-1 text-navy mt-2">같이 소트하기 만들기</h1>
+      <BackButton
+        className="w-9 h-9"
+        onClick={() => {
+          if (step === 2) return backToArtists();
+          if (window.history.length > 1) return router.back();
+          router.push("/");
+        }}
+      />
+      <h1 className="type-title-1 text-navy mt-2">{step === 2 ? source?.label ?? "곡 고르기" : "같이 소트하기 만들기"}</h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
-        곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요.
+        {step === 2
+          ? "소트할 곡을 골라 주세요. 앨범을 눌러 펼치면 곡이 나와요."
+          : "곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요."}
       </p>
 
+      {step === 1 && (
+      <>
       {/* 1. 아티스트 고르기 — "한 아티스트 전곡" 모드와 같은 모양(검색창 + 동그란 목록). */}
       <div className="relative w-full mt-7">
         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -438,7 +516,7 @@ export default function TogetherNewPage() {
             </li>
           )}
           {(artists ?? []).map((artist) => {
-            const isOn = artistSource?.key === `artist:${artist.id}`;
+            const isOn = pendingArtist?.id === artist.id;
             return (
               <li key={artist.id}>
                 <button
@@ -468,7 +546,7 @@ export default function TogetherNewPage() {
         <p className="type-caption text-navy/60">전곡이 다 있는 아티스트 중에서 매주 바꿔 올려요.</p>
         <ul className="grid grid-cols-3 gap-x-3 gap-y-6 mt-5">
           {(artists ?? []).map((artist) => {
-            const isOn = artistSource?.key === `artist:${artist.id}`;
+            const isOn = pendingArtist?.id === artist.id;
             return (
               <li key={artist.id}>
                 <button
@@ -514,10 +592,27 @@ export default function TogetherNewPage() {
         </>
       )}
 
-      {source && (
+      {/* 고른 아티스트로 넘어가는 자리. 눌러야 곡 목록을 받는다. */}
+      {pendingArtist && (
+        <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+          <div className="w-full max-w-[382px] pointer-events-auto">
+            <button
+              onClick={() => openTracks(pendingArtist)}
+              disabled={artistBusy}
+              className={`${primaryButton} w-full`}
+            >
+              {artistBusy ? "곡을 불러오는 중" : `${pendingArtist.name} 곡 고르기`}
+            </button>
+          </div>
+        </div>
+      )}
+      </>
+      )}
+
+      {step === 2 && source && (
         <>
           <div id="together-tracks" className="scroll-mt-4" />
-          <SectionTitle title="곡 고르기" count={chosen.length} className="mt-8 mb-3" />
+          <SectionTitle title="고른 곡" count={chosen.length} className="mt-8 mb-3" />
           <label className="flex flex-col gap-1 mb-3">
             <span className="type-caption text-navy/70">링크에 보일 이름</span>
             <input
@@ -528,26 +623,6 @@ export default function TogetherNewPage() {
               className="h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
             />
           </label>
-          {!user && (
-            <label className="flex flex-col gap-1 mb-4">
-              <span className="type-caption text-navy/70">내 이름</span>
-              <input
-                id="together-nickname"
-                value={nickname}
-                onChange={(e) => {
-                  setNickname(e.target.value);
-                  setNicknameError("");
-                }}
-                maxLength={12}
-                placeholder="리스너"
-                className="h-11 px-3 rounded-xl bg-white border border-navy/15 type-body text-navy"
-              />
-              <span className={`type-caption ${nicknameError ? "text-danger" : "text-navy/70"}`}>
-                {nicknameError || "초대 화면과 일치율 화면에 이 이름으로 나와요."}
-              </span>
-            </label>
-          )}
-
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => pickTracks(source.tracks.map((track) => track.id), true)}
@@ -669,6 +744,57 @@ export default function TogetherNewPage() {
           </div>
         </>
       )}
+      {/*
+        입력이 있는 창이라 하단 시트가 아니라 중앙 팝업이다(dialogs.md).
+        키보드가 올라오면 하단 시트는 가려진다. 폼 팝업의 기준은 FeedbackModal 이다.
+      */}
+      {askName && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 bg-navy/40 backdrop-blur-sm"
+            onClick={() => setAskName(false)}
+          />
+          <motion.div
+            initial={{ y: 50, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            className="bg-cream w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 border border-navy/10 flex flex-col p-6 gap-3"
+          >
+            <h3 className="type-title-1 text-navy">어떤 이름으로 할까요?</h3>
+            <p className="type-sub text-navy/70 break-keep">
+              초대 화면과 일치율 화면에 이 이름으로 나와요.
+              {user ? " 처음 한 번만 확인해요. 프로필 닉네임도 이 이름으로 바뀌어요." : ""}
+            </p>
+            <input
+              id="together-nickname"
+              value={nickname}
+              onChange={(e) => {
+                setNickname(e.target.value);
+                setNicknameError("");
+              }}
+              maxLength={12}
+              placeholder="리스너"
+              className="h-12 px-4 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/40"
+            />
+            {nicknameError && <p className="type-caption text-danger">{nicknameError}</p>}
+            <button onClick={createWithName} disabled={busy} className={`${primaryButton} w-full mt-1`}>
+              {busy ? "만드는 중" : "이 이름으로 만들기"}
+            </button>
+            <button
+              onClick={() => {
+                setAskName(false);
+                create(null);
+              }}
+              disabled={busy}
+              className="type-caption text-navy/70 cursor-pointer"
+            >
+              이름 없이 만들기
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       <Toast toast={toast} />
     </main>
   );
