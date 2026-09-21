@@ -78,3 +78,8 @@ temp_search_results.json
 *.p12
 *.pfx
 *.pem
+scripts/.*.tmp.*
+
+# graphify 산출물. `graphify update .` 로 언제든 다시 만든다.
+# 추적하면 세션마다 "내 것이 아닌 미커밋 변경"으로 잡힌다 (57파일 3.2MB).
+graphify-out/

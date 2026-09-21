@@ -103,7 +103,10 @@ async function main() {
         if (A.al.release_date.slice(0, 10) === B.al.release_date.slice(0, 10)) continue;   // 날짜 같은 건 이미 합쳐졌다
         const small = A.t.size <= B.t.size ? A.t : B.t;
         const big = A.t.size <= B.t.size ? B.t : A.t;
-        if (small.size < 2) continue;                        // 1곡짜리는 우연히 겹칠 수 있다
+        // 화면(dbCatalog 5-b)은 4곡 미만 앨범을 합치지 않는다. 싱글은 앨범 안에 통째로 들어 있어도
+        // 따로 내는 게 맞기 때문이다 (Pixies "Catfish Kate" 는 디럭스반에 다 들어 있지만 별개 발매다).
+        // 감사가 화면보다 엄한 기준을 쓰면 오탐만 쌓인다. 같은 기준으로 본다.
+        if (small.size < 4) continue;
         let hit = 0;
         for (const x of small) if (big.has(x)) hit++;
         if (hit / small.size >= 0.8) sameAlbumPairs.push(`${A.al.name} (${A.al.release_date}) = ${B.al.name} (${B.al.release_date})`);
