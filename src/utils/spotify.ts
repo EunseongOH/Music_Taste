@@ -820,13 +820,14 @@ async function cachedSpotifyAlbums(artistId: string, lang: string): Promise<{ it
       .eq('artist_id', artistId)
       .eq('locale', lang)
       .gt('expires_at', new Date().toISOString());
-    const items: any[] = [];
+    // 페이지 캐시가 겹칠 수 있다. 같은 앨범을 두 번 세면 "남은 수" 계산이 틀어진다
+    const byId = new Map<string, any>();
     let total = 0;
     for (const row of data ?? []) {
-      for (const it of (row.items ?? []) as any[]) if (it?.id) items.push(it);
+      for (const it of (row.items ?? []) as any[]) if (it?.id && !byId.has(it.id)) byId.set(it.id, it);
       total = Math.max(total, row.total ?? 0);
     }
-    return { items, total };
+    return { items: [...byId.values()], total };
   } catch (e) {
     console.warn("[Spotify Cache DB] cachedSpotifyAlbums failed:", e);
     return { items: [], total: 0 };
@@ -863,57 +864,71 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   let merged = mergeAlbums(known.items, dbAlbums);
   let spotifyTotal = known.total;
 
-  const page = () => ({
-    items: merged.slice(offset, offset + limit),
-    total: Math.max(spotifyTotal, merged.length),
-  });
-  const done = (result: { items: any[]; total: number }) => {
+  /**
+   * 총 개수는 추측하지 않는다. 받아 본 만큼만 말한다.
+   *
+   * 중복을 걸러 내면 합친 목록이 Spotify 가 말한 수보다 적어진다. 예전에는 Spotify 수를 그대로
+   * 알려 줘서 UI 가 그만큼 쪽을 만들고 뒤쪽이 빈 채로 남았다 (The Libertines 가 3쪽까지 생기고
+   * 2·3쪽이 비어 있었다). 그래서 "지금 낼 수 있는 항목 수" 를 그대로 총 개수로 쓴다.
+   *
+   * 대신 마지막 쪽에 다다르면 Spotify 에서 한두 쪽 더 받아 목록을 늘린 뒤에 답한다.
+   * 그래야 "다음" 단추가 실제로 보여 줄 것이 있을 때만 생긴다.
+   */
+  const done = (items: any[], total: number) => {
+    const result = { items, total };
     albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
     return result;
   };
+  const slice = () => merged.slice(offset, offset + limit);
 
-  // 요청한 쪽이 이미 채워지면 Spotify 를 부르지 않는다. 예산이 없어도 있는 것으로 답한다.
-  if (merged.length >= offset + limit) return done(page());
-  if (merged.length && !(await albumBudgetLeft())) return done(page());
+  const budgetLeft = await albumBudgetLeft();
+  const moreOnSpotify = () => spotifyTotal === 0 || known.items.length < spotifyTotal;
 
-  // Fetch only the requested page to minimize requests
-  const response = await spotifyFetch(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${offset}`
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
-    // 쿼터 소진·오류 시 지금까지 확보한 목록으로 답한다
-    return done(page());
+  // 이 쪽과 다음 쪽까지 채워져 있으면 더 부르지 않는다
+  if (merged.length > offset + limit || !budgetLeft || !moreOnSpotify()) {
+    if (merged.length || !budgetLeft) return done(slice(), merged.length);
   }
 
-  const data = await response.json();
-  merged = mergeAlbums([...known.items, ...(data.items || [])], dbAlbums);
-  spotifyTotal = Math.max(spotifyTotal, data.total || 0);
-  const result = page();
+  // 모자라면 Spotify 에서 이어서 받는다. 한 번에 두 쪽까지만 (쿼터를 아낀다).
+  for (let i = 0; i < 2 && budgetLeft && moreOnSpotify(); i++) {
+    if (merged.length > offset + limit) break;               // 다음 쪽까지 확보됐으면 그만
+    const from = known.items.length;                          // Spotify 쪽 위치는 받아 둔 원본 수 기준이다
+    const response = await spotifyFetch(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single,ep&limit=${limit}&offset=${from}`
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Spotify API Error in getArtistAlbums (Status: ${response.status}):`, errorText);
+      break;
+    }
+    const data = await response.json();
+    const fresh = (data.items || []).filter((x: any) => x?.id);
+    spotifyTotal = Math.max(spotifyTotal, data.total || 0);
+    if (!fresh.length) break;
+    known.items.push(...fresh);
+    merged = mergeAlbums(known.items, dbAlbums);
 
-  // 3. Save to DB Cache (오류로 인한 빈 배열이 영구 캐싱되지 않도록 유효성 검사 후 저장)
-  if ((data.total || 0) > 0 && (data.items || []).length > 0) {
-    try {
-      const supabase = createAdminClient();
-      const expiresAt = getCacheExpiresAt();
-      await supabase
-        .from('spotify_cache_artist_albums')
-        .upsert({
-          artist_id: artistId,
-          locale: lang,
-          offset,
-          limit,
-          items: data.items || [],
-          total: data.total || 0,
-          expires_at: expiresAt
-        }, { onConflict: 'artist_id,locale,offset,limit' });
-    } catch (e) {
-      console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
+    // 받은 쪽은 캐시에 남긴다 (오류로 인한 빈 배열이 영구 캐싱되지 않도록 검사한다)
+    if ((data.total || 0) > 0 && fresh.length) {
+      try {
+        const supabase = createAdminClient();
+        await supabase
+          .from('spotify_cache_artist_albums')
+          .upsert({
+            artist_id: artistId,
+            locale: lang,
+            offset: from,
+            limit,
+            items: data.items || [],
+            total: data.total || 0,
+            expires_at: getCacheExpiresAt(),
+          }, { onConflict: 'artist_id,locale,offset,limit' });
+      } catch (e) {
+        console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
+      }
     }
   }
-
+  const result = { items: slice(), total: merged.length };
   albumsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 };
