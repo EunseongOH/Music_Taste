@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Compass, Disc, Search, Plus, X, Info, AlertCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -176,6 +176,26 @@ const getYouTubeVideoId = (url: string) => {
  * "전체 선택"과 같은 규칙(songKey)으로 세야 머리말과 시작 버튼의 숫자가 맞는다.
  * 아직 수록곡을 안 받은 앨범은 셀 방법이 없으니 앨범이 말하는 수를 그대로 더한다.
  */
+/**
+ * 고른 곡 중 월드컵에 실제로 올라가는 것만 남긴다.
+ *
+ * 같은 곡을 리패키지·라이브·일본어판으로 여러 번 낸 아티스트에서, 앨범을 통째로 고르면
+ * 같은 곡이 여러 번 담긴다. 월드컵으로 넘길 때(handleStartWorldCup)는 이미 songKey 로
+ * 걸러 내고 있었는데 화면에 적는 수는 안 걸러서, 뉴진스는 46곡이라고 적고 28곡만 넘어갔다.
+ * 세는 쪽과 넘기는 쪽이 같은 함수를 써야 한다.
+ */
+function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<string> {
+  const best = new Map<string, string>();      // 곡 키 -> 남길 트랙 ID
+  for (const id of ids) {
+    const m = meta[id];
+    const key = m?.title ? songKey(m.artistName ?? "", m.title) : id;   // 메타가 없으면 따로 센다
+    const prev = best.get(key);
+    // 판 표기가 없는 쪽을 남긴다 (handleStartWorldCup 과 같은 규칙)
+    if (!prev || betterTitle(meta[prev]?.title ?? "", m?.title ?? "") > 0) best.set(key, id);
+  }
+  return new Set(best.values());
+}
+
 function countDistinctTracks(artist: ArtistGroup): number {
   const keys = new Set<string>();
   let unloaded = 0;
@@ -200,6 +220,9 @@ export default function TracksPage() {
   
   // Advanced Selection Metadata Cache & Debounced Search States
   const [selectedTracksMetadata, setSelectedTracksMetadata] = useState<Record<string, any>>({});
+  // 화면에 적는 곡 수. 월드컵에 실제로 올라가는 수와 같아야 한다.
+  const pickedIds = useMemo(() => distinctSongIds(selectedTrackIds, selectedTracksMetadata),
+    [selectedTrackIds, selectedTracksMetadata]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -1991,7 +2014,7 @@ export default function TracksPage() {
       {/* FAB Bottom - Morphing Unified Dock / Button */}
       {(() => {
         const isCurrentlyLoadingTracks = artistData.some(a => a.backgroundLoading) || loadingAlbums.size > 0;
-        const isReadyToStart = !isCurrentlyLoadingTracks && selectedTrackIds.size >= 4;
+        const isReadyToStart = !isCurrentlyLoadingTracks && pickedIds.size >= 4;
 
         return (
           <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
@@ -2074,7 +2097,7 @@ export default function TracksPage() {
                     <div className="w-full py-3 rounded-[1.4rem] bg-navy/10 text-navy/50 text-center font-semibold text-sm border border-navy/5 flex items-center justify-center gap-2">
                       <span>{t.createWorldCup}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy/60 font-bold">
-                        {selectedTrackIds.size}
+                        {pickedIds.size}
                       </span>
                     </div>
                   </motion.div>
@@ -2082,7 +2105,7 @@ export default function TracksPage() {
               </AnimatePresence>
 
               {/* 2. Loaded & Ready State (Standalone Navy Button) */}
-              {!isCurrentlyLoadingTracks && selectedTrackIds.size >= 4 && (
+              {!isCurrentlyLoadingTracks && pickedIds.size >= 4 && (
                 <motion.div
                   key="ready-content"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -2092,13 +2115,13 @@ export default function TracksPage() {
                 >
                   <span>{t.startWorldCup}</span>
                   <span className="text-xs bg-point text-white px-2.5 py-1 rounded-full font-bold">
-                    {selectedTrackIds.size}
+                    {pickedIds.size}
                   </span>
                 </motion.div>
               )}
 
               {/* 3. Minimal Counter when < 4 tracks */}
-              {!isCurrentlyLoadingTracks && selectedTrackIds.size > 0 && selectedTrackIds.size < 4 && (
+              {!isCurrentlyLoadingTracks && pickedIds.size > 0 && pickedIds.size < 4 && (
                 <motion.div
                   key="minimal-counter"
                   initial={{ opacity: 0 }}
@@ -2106,7 +2129,7 @@ export default function TracksPage() {
                   exit={{ opacity: 0 }}
                   className="text-center font-sans font-bold text-xs text-navy w-full"
                 >
-                  {t.selectMore.replace("{count}", String(4 - selectedTrackIds.size))}
+                  {t.selectMore.replace("{count}", String(4 - pickedIds.size))}
                 </motion.div>
               )}
             </motion.div>
