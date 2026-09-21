@@ -97,7 +97,7 @@ export default function Home() {
       tagline1: "내 손안에서 깔끔하게 정리되는 음악 취향, Sortify",
       tagline2: "좋아하는 음악을 소트하고, 나의 색깔을 증폭시켜 보세요.",
       start: "시작하기",
-      continue: "이어서 소트하기",
+      continue: "이어서 진행하기",
       cancel: "취소",
       startNewBtn: "새로 시작",
     },
@@ -105,7 +105,7 @@ export default function Home() {
       tagline1: "Record your clearest taste.",
       tagline2: "List your music preferences and amplify them with your own colors.",
       start: "Start",
-      continue: "Continue sorting",
+      continue: "Continue Progress",
       cancel: "Cancel",
       startNewBtn: "Start New",
     }
@@ -551,7 +551,7 @@ export default function Home() {
         closeLabel={t.cancel}
         header={
           <>
-            <h2 className="type-title-1 text-navy">{locale === "en" ? "You have a sort in progress" : "진행 중인 소트가 있어요"}</h2>
+            <h2 className="type-title-1 text-navy">{locale === "en" ? "You have a World Cup in progress" : "진행 중인 월드컵이 있어요"}</h2>
             <p className="type-sub text-navy/70 mt-1 whitespace-pre-line break-keep">
               {(activeDraft && draftExpiresAt(activeDraft) !== null
                 ? `${activeDraft.current_round_name} · ${formatDraftExpiry(activeDraft, locale)}`
@@ -562,7 +562,7 @@ export default function Home() {
         }
         footer={
           <div className="flex flex-col gap-2">
-            <button onClick={() => { setShowRestoreModal(false); handleRestore(); }} className={`${primaryButton} w-full`}>{locale === "en" ? "Continue sorting" : "이어서 소트하기"}</button>
+            <button onClick={() => { setShowRestoreModal(false); handleRestore(); }} className={`${primaryButton} w-full`}>{t.continue}</button>
             <button onClick={handleStartNew} className={`${dangerButton} w-full`}>{t.startNewBtn}</button>
           </div>
         }

@@ -1170,7 +1170,7 @@ export default function ExplorePage() {
               {locale === "en" ? `Sort songs by ${pendingSingleArtist.name}?` : `${pendingSingleArtist.name}의 곡을 소트해볼까요?`}
             </h2>
             <p className="type-sub text-navy/70 mt-1">
-              {locale === "en" ? "Next, pick the songs to sort." : "다음 화면에서 소트할 곡을 골라요."}
+              {locale === "en" ? "Next, pick the songs to put in the World Cup." : "다음 화면에서 월드컵에 올릴 곡을 골라요."}
             </p>
           </>
         )}

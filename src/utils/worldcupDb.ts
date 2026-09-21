@@ -17,8 +17,8 @@ export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleA
 
   const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
   const title = selectedArtists.length > 0
-    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 소트`
-    : "내 음악 소트";
+    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
+    : "내 음악 월드컵";
 
   const { error } = await supabase
     .from('tournament_drafts')
@@ -72,8 +72,8 @@ export const downgradeDraftToArtistSelection = async (selectedArtists: any[], is
 
   const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
   const title = selectedArtists.length > 0
-    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 소트`
-    : "내 음악 소트";
+    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
+    : "내 음악 월드컵";
 
   const { error } = await supabase
     .from('tournament_drafts')
@@ -206,7 +206,7 @@ export const saveWorldcupDraft = async (
   opts: { confirm?: boolean; withTracks?: boolean },
   selectedArtists: any[],
   isSingleArtist: boolean,
-  title = "내 음악 소트"
+  title = "내 음악 월드컵"
 ): Promise<boolean> => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
