@@ -93,10 +93,15 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
           </motion.div>
         </div>
 
-        {/* Tonearm — 새 테마에서는 LP 가 작아진 만큼 안쪽으로 당겨 바늘이 판 위에 놓이게 한다 */}
+        {/*
+          Tonearm. 재생 중에는 헤드가 돌아가는 LP **위에** 있어야 한다(사용자 피드백 2026-09-22).
+          새 테마에서는 회전축을 받침 오른쪽 끝이 아니라 **판 중심 기준**으로 잡는다 — 받침 너비가 달라져도
+          헤드가 같은 자리에 내려온다. 43° 로 내려오면 헤드 중심이 LP 반지름의 약 2/3 지점(첫 곡 자리)에 놓인다.
+          정지 상태에서는 LP 밖에 수직으로 서 있다. 판·재킷보다 위(z-20). legacy 는 25° 그대로.
+        */}
         <motion.div
-          className="absolute right-8 top-1/2 -translate-y-1/2 w-4 origin-top z-20 newtone:right-16"
-          animate={{ rotate: isPlaying ? 25 : 0 }}
+          className="absolute right-8 top-1/2 -translate-y-1/2 w-4 origin-top z-20 newtone:right-auto newtone:left-[calc(50%+98px)] newtone:sm:left-[calc(50%+128px)]"
+          animate={{ rotate: isPlaying ? (newtone ? 43 : 25) : 0 }}
           transition={{ duration: 0.6, ease: "easeInOut" }}
         >
           {/* Tonearm Base */}
@@ -104,9 +109,9 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
              <div className="w-3 h-3 rounded-full bg-navy/20 newtone:hidden" />
           </div>
           {/* Arm */}
-          <div className="w-2 h-28 sm:h-32 border-x-2 border-t-2 border-navy bg-cream/80 ml-1 rounded-t-full shadow-sm newtone:w-1.5 newtone:h-[5.5rem] newtone:sm:h-28 newtone:ml-[5px] newtone:border newtone:border-navy/10 newtone:bg-white newtone:rounded-full newtone:shadow-none" />
+          <div className="w-2 h-28 sm:h-32 border-x-2 border-t-2 border-navy bg-cream/80 ml-1 rounded-t-full shadow-sm newtone:w-1.5 newtone:h-[5.5rem] newtone:sm:h-28 newtone:ml-[5px] newtone:border newtone:border-navy/15 newtone:bg-white newtone:rounded-full newtone:shadow-[0_1px_2px_rgba(24,33,59,0.14)]" />
           {/* Head-shell */}
-          <div className="w-6 h-10 border-2 border-navy bg-cream -ml-1 rounded-sm shadow-sm flex flex-col items-center pt-1 mt-[-2px] newtone:w-4 newtone:h-7 newtone:ml-0 newtone:border-0 newtone:bg-navy/15 newtone:rounded-md newtone:shadow-none">
+          <div className="w-6 h-10 border-2 border-navy bg-cream -ml-1 rounded-sm shadow-sm flex flex-col items-center pt-1 mt-[-2px] newtone:w-4 newtone:h-7 newtone:ml-0 newtone:border newtone:border-navy/20 newtone:bg-white newtone:rounded-md newtone:shadow-[0_1px_3px_rgba(24,33,59,0.20)]">
              <div className="w-4 h-1 border-b-2 border-navy/50 newtone:hidden" />
              <div className="w-4 h-1 border-b-2 border-navy/50 mt-1 newtone:hidden" />
           </div>
