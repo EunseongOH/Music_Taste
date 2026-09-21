@@ -88,6 +88,13 @@ await context.route('**://i.scdn.co/**', async (route) => {
   });
 });
 
+// THEME=sky-tint 처럼 주면 그 화면 테마에서 저장한다. 저장 이미지는 legacy 고정이라 결과가 같아야 한다.
+if (process.env.THEME) {
+  await page.addInitScript((theme) => {
+    try { localStorage.setItem("sortify_theme", theme); } catch {}
+  }, process.env.THEME);
+}
+
 await page.addInitScript(
   ({ ranking }) => {
     try {

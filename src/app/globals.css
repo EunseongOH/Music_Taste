@@ -83,6 +83,12 @@
 }
 
 /*
+ * 새 테마에서만 먹는 변형. 부품이 테마별 모양을 가질 때 조건문 대신 쓴다(예: components/home/ModeCard).
+ * legacy 에는 data-theme 속성이 없거나 "legacy" 라서 걸리지 않는다.
+ */
+@custom-variant newtone (&:where([data-theme="toss-white"] *, [data-theme="sky-tint"] *));
+
+/*
  * 테마. 기본(:root)은 지금까지의 톤(legacy)이라 속성이 없으면 화면이 하나도 달라지지 않는다.
  * <html data-theme="…"> 는 layout.tsx 의 작은 스크립트가 ?theme= 또는 localStorage 로 붙인다.
  */

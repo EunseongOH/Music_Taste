@@ -10,7 +10,7 @@
  * 로고 마크의 색·모양은 바꾸지 않는다.
  */
 
-import React from "react";
+import React, { useState } from "react";
 import LPPlayer from "@/components/LPPlayer";
 
 const MODE = {
@@ -169,6 +169,125 @@ function TurntableC() {
   );
 }
 
+/* ---------------------------------------------------------------- 턴테이블: (b)와 (c) 사이 두 안 */
+
+export type TurntableLook = "light" | "dark";
+
+/**
+ * 네트워크를 타지 않는 가짜 재킷(SVG data URI). 밝은 것 하나, 어두운 것 하나.
+ * 월드컵에서는 고른 곡의 재킷이 이 자리에 올라온다 — 판이 재킷을 받쳐 줘야지 경쟁하면 안 된다.
+ */
+const svg = (body: string) =>
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' + body + "</svg>");
+
+export const JACKETS = {
+  light: svg(
+    '<rect width="200" height="200" fill="#F6D9C8"/><circle cx="130" cy="78" r="46" fill="#F2A7A0"/>' +
+      '<rect y="128" width="200" height="72" fill="#F9EFE4"/><path d="M0 150 Q50 120 100 150 T200 150 V200 H0Z" fill="#9CC7D9"/>'
+  ),
+  dark: svg(
+    '<rect width="200" height="200" fill="#10131F"/><circle cx="66" cy="70" r="26" fill="#E9E4D4"/><circle cx="76" cy="62" r="24" fill="#10131F"/>' +
+      '<path d="M0 200 L60 120 L100 160 L140 100 L200 200Z" fill="#232A45"/><path d="M0 200 L90 150 L200 200Z" fill="#2F3A63"/>'
+  ),
+};
+
+/**
+ * 공통: (b)의 가벼움(흰 받침, 옅은 선, 부드러운 그림자) + (c)의 빛(받침 뒤 로고 파랑의 옅은 빛, brand 톤암 머리).
+ * 라벨 자리는 재킷의 자리다. 재킷이 없을 때만 단색 주황(point). 주황 그라데이션 라벨은 두지 않는다.
+ *  - light: 판도 밝다. 재킷이 화면에서 가장 짙은 것이 된다.
+ *  - dark : 판만 어둡다(실제 LP 처럼). (c)보다 가볍게 — 빛 반사 쐐기와 짙은 그림자를 덜었다.
+ */
+export function TurntableStudy({ look, jacket, spinning = false }: { look: TurntableLook; jacket?: string; spinning?: boolean }) {
+  const dark = look === "dark";
+  return (
+    <div className="relative w-full max-w-lg h-36 sm:h-48 border border-line rounded-2xl bg-white shadow-[0_10px_30px_-14px_rgba(56,91,240,0.3)]">
+      {["top-4 left-4", "top-4 right-4", "bottom-4 left-4", "bottom-4 right-4"].map((pos) => (
+        <span key={pos} className={"absolute " + pos + " w-3 h-3 rounded-full bg-fill border border-line"} />
+      ))}
+      <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
+        {/* 받침 뒤의 빛. (c)의 60% → 35% 로 낮췄다 */}
+        <span
+          aria-hidden
+          className="absolute w-44 h-44 sm:w-60 sm:h-60 rounded-full blur-2xl opacity-35"
+          style={{ background: LOGO_BLUE }}
+        />
+        <div className="absolute w-44 h-44 sm:w-60 sm:h-60 rounded-full border border-navy/10 flex items-center justify-center">
+          <div
+            className={
+              "w-40 h-40 sm:w-56 sm:h-56 rounded-full flex items-center justify-center relative " +
+              (dark ? "shadow-[0_6px_16px_-8px_rgba(24,33,59,0.45)] " : "border border-navy/20 bg-fill ") +
+              (spinning ? "animate-[spin_1.8s_linear_infinite]" : "")
+            }
+            style={dark ? { background: "repeating-radial-gradient(circle, #222B47 0 1.5px, #2B3556 1.5px 3px)" } : undefined}
+          >
+            {!dark && (
+              <>
+                <span className="absolute w-[85%] h-[85%] rounded-full border border-navy/10" />
+                <span className="absolute w-[70%] h-[70%] rounded-full border border-navy/10" />
+              </>
+            )}
+            {/* 라벨 = 재킷의 자리. 원본(40%)보다 키워 재킷이 주인공이 되게 */}
+            <div
+              className={
+                "w-[46%] h-[46%] rounded-full flex items-center justify-center relative overflow-hidden " +
+                (jacket ? "ring-2 ring-white" : "bg-point")
+              }
+            >
+              {jacket && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={jacket} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              )}
+              <span className="w-3.5 h-3.5 rounded-full bg-white relative shadow-sm" />
+            </div>
+          </div>
+        </div>
+        <div className="absolute right-8 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
+          <span className="w-7 h-7 rounded-full bg-white border border-line shadow-sm -mb-1 z-10" />
+          <span className="w-1.5 h-24 sm:h-28 rounded-full bg-white border border-line" />
+          <span className="w-5 h-8 rounded-lg bg-brand shadow-[0_6px_12px_-4px_rgba(56,91,240,0.55)] -mt-1" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TurntableOptions() {
+  const [spinning, setSpinning] = useState(false);
+  const rows: { look: TurntableLook; title: string; note: string }[] = [
+    { look: "light", title: "1안 · 밝은 판", note: "(b)에 (c)의 빛과 brand 톤암만 더했어요. 판이 밝아서 재킷이 화면에서 가장 짙은 것이 돼요." },
+    { look: "dark", title: "2안 · 어두운 판", note: "판만 (c)처럼 어둡게, 나머지는 (b). 실제 LP 처럼 어두운 테가 재킷을 받쳐 줘요. (c)의 빛 반사와 짙은 그림자는 덜었어요." },
+  ];
+  const states = [
+    { cap: "재킷 없음 — 홈, 고르기 전", src: undefined },
+    { cap: "밝은 재킷이 올라온 상태", src: JACKETS.light },
+    { cap: "어두운 재킷이 올라온 상태", src: JACKETS.dark },
+  ];
+  return (
+    <div id="turntable-options" className="flex flex-col gap-10">
+      <button
+        onClick={() => setSpinning((v) => !v)}
+        className="self-start inline-flex items-center h-10 px-5 rounded-full bg-navy/5 text-navy type-sub font-semibold cursor-pointer"
+      >
+        {spinning ? "회전 멈추기" : "회전시켜 보기"}
+      </button>
+      {rows.map((r) => (
+        <div key={r.look}>
+          <Label step="" title={r.title} note={r.note} />
+          <div className="flex flex-col gap-9 mt-6">
+            {states.map((j) => (
+              <div key={j.cap}>
+                <p className="type-caption text-navy/70 mb-6">{j.cap}</p>
+                <TurntableStudy look={r.look} jacket={j.src} spinning={spinning} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- 묶음 */
 
 export default function Studies() {
@@ -218,6 +337,15 @@ export default function Studies() {
             <TurntableC />
           </div>
         </div>
+      </div>
+
+      <div>
+        <h3 className="type-title-2 text-navy mb-1">턴테이블 — (b)와 (c) 사이 두 안</h3>
+        <p className="type-sub text-navy/70 mb-5 break-keep">
+          월드컵에서 고른 곡의 재킷이 라벨 자리에 올라와요. 그래서 라벨은 재킷의 자리로 비워 두고, 재킷이 없을 때만 단색 주황을 둬요.
+          재킷은 네트워크를 타지 않는 가짜 그림이에요.
+        </p>
+        <TurntableOptions />
       </div>
     </div>
   );

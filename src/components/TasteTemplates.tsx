@@ -101,7 +101,7 @@ function CardFrame({
 }) {
   const t = text[meta.locale];
   return (
-    <div className="w-[450px] h-[800px] bg-[#F5F2ED] text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden">
+    <div data-theme="legacy" className="w-[450px] h-[800px] bg-[#F5F2ED] text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden">
       <header className="flex flex-col gap-1 mb-5">
         <p className="text-[12px] leading-[18px] text-navy/70">
           {meta.date} · {meta.single ? t.single : t.multi} · {t.count(meta.total)}
@@ -498,7 +498,7 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
   const tier = (from: number, to: number) => shown.slice(from, Math.min(to, shown.length));
 
   return (
-    <div ref={rootRef} className="w-[450px] h-[800px] bg-[#F5F2ED] text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center">
+    <div ref={rootRef} data-theme="legacy" className="w-[450px] h-[800px] bg-[#F5F2ED] text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center">
       <div className="flex flex-col items-center gap-[3px] pb-2">
         <p className="text-[11px] leading-[16px] font-semibold tracking-[0.18em] text-point-ink">Sortify {t.lineup}</p>
         <h2 className="text-[32px] leading-[1] font-extrabold tracking-[-0.05em] truncate max-w-full">{meta.heading}</h2>

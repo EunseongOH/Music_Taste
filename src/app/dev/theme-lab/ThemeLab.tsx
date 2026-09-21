@@ -23,7 +23,8 @@ import {
   useToast,
 } from "@/components/space/SpaceUI";
 import FeedbackModal from "@/components/FeedbackModal";
-import Studies from "./Studies";
+import Studies, { type TurntableLook } from "./Studies";
+import HomePreview from "./HomePreview";
 
 const THEMES = [
   { id: "legacy", label: "지금 (cream · navy)" },
@@ -145,6 +146,7 @@ export default function ThemeLab() {
   const [sheet, setSheet] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [feedback, setFeedback] = useState(false);
+  const [look, setLook] = useState<TurntableLook>("light");
   const { toast, showToast } = useToast();
 
   const readVars = useCallback(() => {
@@ -377,6 +379,22 @@ export default function ThemeLab() {
             오류 토스트
           </button>
         </div>
+      </section>
+
+      {/* 홈 미리보기 */}
+      <section id="home-preview" className="flex flex-col gap-4">
+        <SectionTitle title="홈 미리보기" />
+        <p className="type-sub text-navy/70 break-keep">
+          실제로 갈아 끼울 카드 컴포넌트(ModeCard) 네 장이에요. 옆으로 넘겨 보세요. 지금 톤에서는 운영 홈과 같은 카드로 보여요.
+        </p>
+        <div className="flex gap-2">
+          {([["light", "턴테이블 1안 · 밝은 판"], ["dark", "턴테이블 2안 · 어두운 판"]] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setLook(id)} className={`${look === id ? primaryButton : secondaryButton} flex-1 !px-3 !h-10 !text-[13px]`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <HomePreview look={look} />
       </section>
 
       {/* 카드·턴테이블 시안 */}
