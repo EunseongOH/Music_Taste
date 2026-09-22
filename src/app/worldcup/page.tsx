@@ -11,6 +11,7 @@ import ProfileHeader from "@/components/ProfileHeader";
 import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
+import { rememberedNickname } from "@/utils/togetherDb";
 import { saveWorldcupDraft, loadActiveDraft, deleteActiveDraft, hydrateDraft, type DraftPick, type WorldcupState } from "@/utils/worldcupDb";
 import { onAppExit } from "@/utils/platform";
 import { createClient } from "@/utils/supabase/client";
@@ -530,9 +531,13 @@ export default function WorldCupPage() {
         runnerUp={rivalWasSkipped ? null : rival}
         championOnLeft={finalists[0]?.id === champion.id}
         totalTracks={tracks.length}
-        // 진 곡 하나 = 고른 횟수 하나. 빼기로 넘어간 매치는 세지 않는다.
-        choices={eliminatedTracks.length}
         isSingleArtistMode={isSingleArtistMode}
+        /*
+         * 1위 공개 문구에 넣을 이름. 로그인 계정의 닉네임을 먼저 쓰고, 없으면 같이
+         * 소트하기에서 적어 둔 이름을 쓴다 — 그 판에서 남들에게 보이는 이름과 같아야 한다.
+         * 둘 다 없으면 null 로 넘겨 문구에서 이름을 뺀다.
+         */
+        nickname={(user?.user_metadata?.nickname as string | undefined) || rememberedNickname() || null}
         locale={locale}
         onContinue={() => {
           // 같이 소트하기로 들어온 판이면 취향표 대신 일치율 화면으로 보낸다.
