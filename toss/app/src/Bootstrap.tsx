@@ -79,6 +79,15 @@ export default function Bootstrap() {
           <p className="font-sans text-sm text-charcoal/80 leading-relaxed whitespace-pre-line">
             {error?.message ?? '접속에 실패했어요.'}
           </p>
+          {/* 원인 코드. 서버 응답의 오류 이름과 HTTP 상태만 — 식별키·토큰은 응답에 없다.
+              2026-09-22 실제 기기에서 "접속에 실패했어요"만 떠서 원인을 못 갈랐던 일 때문에 둔다. */}
+          {error && (
+            <p className="font-sans text-[11px] text-charcoal/40 break-all">
+              {[error.reason, error.cause instanceof Error ? error.cause.message.slice(0, 120) : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          )}
           {/* 구버전 앱은 다시 눌러도 같은 결과라, 안내만 남기고 버튼을 숨긴다. */}
           {error?.reason !== 'unsupported' && (
             <button
