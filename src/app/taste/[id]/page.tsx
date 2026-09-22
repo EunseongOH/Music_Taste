@@ -192,7 +192,7 @@ export default function TasteSharedPage() {
                 transition={{ repeat: Infinity, duration: 14, ease: "linear" }}
               >
                 <img src={top.albumImage} alt="" className="absolute inset-0 m-auto w-[56px] h-[56px] rounded-full object-cover" />
-                <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-[#F5F2ED]" />
+                <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-cream" />
               </motion.div>
               <img
                 src={top.albumImage}

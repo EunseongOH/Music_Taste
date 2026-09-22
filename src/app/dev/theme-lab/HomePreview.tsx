@@ -30,7 +30,7 @@ export default function HomePreview({ glow }: { glow: GlowLevel }) {
   return (
     <div className="mx-auto w-full max-w-[400px] rounded-[2rem] border border-navy/10 bg-cream overflow-hidden">
       <div className="flex flex-col items-center px-4 pt-10 pb-8">
-        <h4 className="font-wordmark text-5xl text-navy tracking-tight font-bold">Sortify</h4>
+        <h4 className="font-wordmark text-5xl text-navy tracking-tight">Sortify</h4>
         <p className="font-sans text-xs text-charcoal/60 leading-relaxed text-center mt-1">
           좋아하는 곡 중에서도,
           <br />더 마음이 가는 곡을 찾는 곳, Sortify

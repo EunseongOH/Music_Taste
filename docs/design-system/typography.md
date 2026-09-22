@@ -15,7 +15,7 @@
 |---|---|---|---|
 | Pretendard | 기본(`font-sans`) | 모든 한글·영문 글자, 문장 속 숫자("1위 Harmony", "총 8매치 중 3번째") | — |
 | 원티드산스 Std | `font-num` | **숫자만 혼자 강조되는 자리**: 순위 숫자(1, 2, 3…), 퍼센트(32.4%), 곡 수·날짜처럼 크게 떼어 쓰는 숫자 | 글자와 한 덩어리로 읽히는 숫자 |
-| Playfair Display | `font-wordmark` | **홈 화면의 큰 "Sortify" 워드마크 한 곳** | 그 밖의 모든 곳 |
+| **Nunito ExtraBold** (새 톤) / Playfair Display (지금 톤) | `font-wordmark` | **홈 화면의 큰 "Sortify" 워드마크 한 곳** | 그 밖의 모든 곳 |
 
 - Playfair 는 `latin` 서브셋만 로드한다. 한글에 쓰면 기기마다 다른 대체 글꼴로 보여서, 워드마크 외에는 쓰지 않는다.
 - 원티드산스는 숫자·기호만 쓰므로 라틴 전용 **Std 가변 폰트**(약 82KB)를 번들에 넣었다. 라이선스는 SIL OFL 1.1이고, 원문은 `src/app/fonts/WantedSans-OFL.txt` 에 있다.
@@ -91,7 +91,11 @@
 | 모든 화면의 `font-serif` 제거(워드마크 → `font-wordmark`, 숫자 → `font-num`) | 적용 |
 | 결과 템플릿(`TasteTemplates`) | 적용. 9:16 카드는 고정 크기 이미지라 px 크기를 쓰되 최소 11px(저장 시 55px), 순위 숫자는 `font-num tabular-nums`. `--font-serif` 토큰 제거 |
 
-## 6. 워드마크 서체 시안 (2026-09-22, 브랜치 design/logo-theme — 채택 전)
+## 6. 워드마크 서체 — **Nunito ExtraBold 확정** (2026-09-22, 브랜치 design/logo-theme)
+
+사용자 결정: "일단 Nunito 로". 새 톤(`toss-white` · `sky-tint`)에서 `font-wordmark` = Nunito 800, latin 서브셋, SIL OFL 1.1, 가변 woff2 약 39 KB(굵기 800 하나만 받아 실제로는 약 16 KB). `next/font/google` 로 `layout.tsx` 에서 로드하고 `--font-nunito` 로 넘긴다. 지금 톤(legacy)은 Playfair 700 그대로 — 둘 다 실리며, 채택이 굳으면 Playfair 를 뺀다. 굵기는 `.font-wordmark` 가 `--t-wordmark-weight` 변수로 받으므로 호출부에서 `font-bold` 를 붙이지 않는다. 다른 후보(Quicksand · Outfit · Plus Jakarta Sans)는 번들에서 뺐다.
+
+아래는 결정 전 비교 기록이다.
 
 지금 워드마크는 Playfair Display(세리프, 굵기 대비가 큰 디돈 계열)다. 크림 바탕·남색 테두리와는 맞았지만, 새 로고는 **둥글고 부드러운 유리 질감 그라데이션**이라 날카로운 세리프와 결이 다르다. 후보를 `/dev/theme-lab` 에서 로고 옆에 나란히 볼 수 있다.
 

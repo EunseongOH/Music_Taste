@@ -788,7 +788,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         </div>
         <button
           onClick={handleExit}
-          className="w-10 h-10 rounded-full border-2 border-navy flex items-center justify-center bg-white hover:bg-navy/5 transition-colors cursor-pointer"
+          className="w-10 h-10 rounded-full border-2 border-navy flex items-center justify-center bg-white hover:bg-navy/5 transition-colors cursor-pointer newtone:border newtone:border-navy/15"
           title="종료하기"
         >
           <X size={18} className="text-navy font-bold" />
@@ -856,7 +856,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
             <div className="w-full max-w-[380px] flex gap-3 pointer-events-auto">
               <button
                 onClick={() => setShowSaveSheet(true)}
-                className="flex-1 h-[48px] bg-white border-2 border-navy text-navy hover:bg-navy/5 rounded-2xl font-sans font-bold text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 h-[48px] bg-white border-2 border-navy text-navy hover:bg-navy/5 rounded-2xl font-sans font-bold text-sm newtone:bg-navy/5 newtone:border-0 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Archive size={18} />
                 <span>{t.saveBtn}</span>
@@ -911,13 +911,13 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   className="w-full h-[52px] px-5 bg-white border border-navy/20 hover:bg-navy/5 text-navy font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-between shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                 >
                   <div className="flex items-center gap-3">
-                    <Archive size={20} className="text-point" />
+                    <Archive size={20} className="text-point newtone:text-brand" />
                     <span>{t.saveToSpaceOption}</span>
                   </div>
                   {isSavingArchive ? (
                     <Loader2 size={18} className="text-navy/60 animate-spin" />
                   ) : (
-                    isSaved && <Check size={18} className="text-emerald-600" />
+                    isSaved && <Check size={18} className="text-emerald-600 newtone:text-brand" />
                   )}
                 </button>
                 )}
@@ -937,7 +937,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   onClick={handleDownloadExcel}
                   className="w-full h-[52px] px-5 bg-white border border-navy/20 hover:bg-navy/5 text-navy font-bold text-sm rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center gap-3 shadow-sm"
                 >
-                  <FileSpreadsheet size={20} className="text-[#0F766E]" />
+                  <FileSpreadsheet size={20} className="text-[#0F766E] newtone:text-navy/70" />
                   <span>{t.saveExcelOption}</span>
                 </button>
               </div>
@@ -985,7 +985,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
             />
             <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4 pointer-events-none">
               <motion.div
-                className="bg-cream w-full max-w-sm rounded-[2.5rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
+                className="bg-cream w-full max-w-sm rounded-[2.5rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto newtone:bg-white newtone:border newtone:border-navy/10 newtone:rounded-[2rem] newtone:shadow-[0_20px_50px_-20px_rgba(24,33,59,0.35)] flex flex-col items-center text-center"
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1080,7 +1080,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                     autoComplete="off"
                     className="w-full h-[48px] px-4 bg-white border border-navy/20 rounded-xl text-navy font-sans font-bold text-sm focus:outline-none focus:border-navy"
                   />
-                  <p className={`mt-1.5 font-sans text-xs ${shareNameError ? "text-red-500" : "text-navy/50"}`}>
+                  <p className={`mt-1.5 font-sans text-xs ${shareNameError ? "text-red-500 newtone:text-danger" : "text-navy/50"}`}>
                     {shareNameError || t.shareNameHint}
                   </p>
                 </div>
@@ -1181,7 +1181,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
             />
             <div className="fixed inset-0 flex items-center justify-center z-[1000] p-4 pointer-events-none">
               <motion.div
-                className="bg-cream w-full max-w-sm rounded-[2.5rem] border-[3px] border-navy p-7 shadow-2xl relative pointer-events-auto flex flex-col items-center text-center"
+                className="bg-cream w-full max-w-sm rounded-[2.5rem] border-[3px] border-navy p-7 shadow-2xl relative pointer-events-auto newtone:bg-white newtone:border newtone:border-navy/10 newtone:rounded-[2rem] newtone:shadow-[0_20px_50px_-20px_rgba(24,33,59,0.35)] flex flex-col items-center text-center"
                 initial={{ opacity: 0, scale: 0.93, y: 24 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.93, y: 24 }}
@@ -1286,14 +1286,14 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -15, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 400, damping: 28 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[1100] w-[calc(100%-3rem)] max-w-xs px-4.5 py-3 rounded-2xl bg-[#FAF7F2]/95 text-navy border-2 border-navy shadow-xl backdrop-blur-md flex items-center justify-center gap-2.5 pointer-events-none text-center"
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[1100] w-[calc(100%-3rem)] max-w-xs px-4.5 py-3 rounded-2xl bg-[#FAF7F2]/95 newtone:bg-white/95 text-navy border-2 border-navy shadow-xl backdrop-blur-md flex items-center justify-center gap-2.5 pointer-events-none text-center"
           >
             {toast.type === "success" ? (
-              <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-5 h-5 rounded-full bg-emerald-500 newtone:bg-brand text-white flex items-center justify-center shrink-0 shadow-sm">
                 <Check size={12} strokeWidth={3} />
               </div>
             ) : (
-              <div className="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-5 h-5 rounded-full bg-red-500 newtone:bg-danger text-white flex items-center justify-center shrink-0 shadow-sm">
                 <X size={12} strokeWidth={3} />
               </div>
             )}

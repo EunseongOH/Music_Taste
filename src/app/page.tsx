@@ -442,7 +442,7 @@ export default function Home() {
 
       <div className="flex flex-col items-center justify-center flex-1 w-full text-center z-10 space-y-6 mt-12 md:mt-0">
         <div className="space-y-2">
-          <h1 className="font-wordmark text-5xl md:text-7xl text-navy tracking-tight drop-shadow-sm font-bold">
+          <h1 className="font-wordmark text-5xl md:text-7xl text-navy tracking-tight drop-shadow-sm">
             Sortify
           </h1>
           <p className="font-sans text-xs md:text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed break-keep mt-1">

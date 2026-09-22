@@ -96,7 +96,7 @@ export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }:
              opacity: isLP ? 1 : 0,
           }}
           whileDrag={{ scale: 1.1, zIndex: 50 }}
-          className="absolute w-[90%] h-[90%] rounded-full border-2 border-navy bg-[#1a1a1a] flex items-center justify-center shadow-2xl z-20 cursor-grab active:cursor-grabbing origin-center"
+          className="absolute w-[90%] h-[90%] rounded-full border-2 border-navy bg-[#1a1a1a] newtone:border newtone:border-navy/20 newtone:bg-[#222B47] newtone:shadow-[0_10px_24px_-10px_rgba(24,33,59,0.5)] flex items-center justify-center shadow-2xl z-20 cursor-grab active:cursor-grabbing origin-center"
         >
           {/* Grooves */}
           <div className="absolute w-[85%] h-[85%] rounded-full border border-white/10 pointer-events-none" />
@@ -119,7 +119,7 @@ export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }:
             rotate: isLP ? -5 : 0
           }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(26,42,108,0.15)] overflow-hidden z-30 pointer-events-none"
+          className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(26,42,108,0.15)] newtone:bg-white newtone:border-navy/10 newtone:shadow-[0_8px_24px_-12px_rgba(24,33,59,0.25)] overflow-hidden z-30 pointer-events-none"
         >
           <Image src={track.albumImage} alt={track.title} fill sizes="(max-width: 768px) 140px, 160px" className="object-cover" />
           <div className="absolute inset-0 bg-black/0 hover:bg-black/5 transition-colors" />

@@ -33,26 +33,6 @@ const THEMES = [
   { id: "sky-tint", label: "B. 옅은 하늘빛 바탕" },
 ] as const;
 
-const WORDMARKS = [
-  { id: "playfair", label: "Playfair Display", note: "지금 · 세리프 · OFL · 38 KB" },
-  { id: "pretendard", label: "Pretendard ExtraBold", note: "추가 없음 · 본문과 같은 서체" },
-  { id: "wanted", label: "Wanted Sans Std", note: "추가 없음 · 숫자용으로 이미 번들(82 KB)" },
-  { id: "nunito", label: "Nunito", note: "둥근 끝 · OFL · 39 KB" },
-  { id: "quicksand", label: "Quicksand", note: "둥근 기하 · OFL · 28 KB" },
-  { id: "outfit", label: "Outfit", note: "기하 산세리프 · OFL · 32 KB" },
-  { id: "jakarta", label: "Plus Jakarta Sans", note: "현대 산세리프 · OFL · 27 KB" },
-] as const;
-
-const WORDMARK_FONT: Record<string, string> = {
-  playfair: "var(--font-playfair)",
-  pretendard: "var(--font-pretendard)",
-  wanted: "var(--font-wanted)",
-  nunito: "var(--font-nunito)",
-  quicksand: "var(--font-quicksand)",
-  outfit: "var(--font-outfit)",
-  jakarta: "var(--font-jakarta)",
-};
-
 /** 역할 → CSS 변수. 대비는 항상 "바탕(cream) 위 글자" 기준. */
 const SWATCHES = [
   { v: "--t-cream", name: "cream", role: "화면·시트 바탕" },
@@ -140,7 +120,6 @@ const SCREENS = [
 
 export default function ThemeLab() {
   const [theme, setTheme] = useState("legacy");
-  const [wordmark, setWordmark] = useState("playfair");
   const [vars, setVars] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<"a" | "b">("a");
   const [on, setOn] = useState(true);
@@ -160,20 +139,18 @@ export default function ThemeLab() {
   useEffect(() => {
     const d = document.documentElement;
     setTheme(d.getAttribute("data-theme") ?? "legacy");
-    setWordmark(d.getAttribute("data-wordmark") ?? "playfair");
     readVars();
   }, [readVars]);
 
-  const apply = (kind: "theme" | "wordmark", value: string) => {
+  const apply = (kind: "theme", value: string) => {
     const d = document.documentElement;
-    const isDefault = value === "legacy" || value === "playfair";
+    const isDefault = value === "legacy";
     if (isDefault) d.removeAttribute(`data-${kind}`);
     else d.setAttribute(`data-${kind}`, value);
     try {
       localStorage.setItem(`sortify_${kind}`, value);
     } catch {}
-    if (kind === "theme") setTheme(value);
-    else setWordmark(value);
+    setTheme(value);
     readVars();
   };
 
@@ -206,42 +183,17 @@ export default function ThemeLab() {
         </div>
       </section>
 
-      {/* 워드마크 */}
+      {/* 워드마크 — Nunito ExtraBold 확정 (2026-09-22). legacy 는 Playfair 그대로 */}
       <section className="flex flex-col gap-4">
-        <SectionTitle title="워드마크 서체" />
-        <ul className="divide-y divide-navy/10">
-          {WORDMARKS.map((w) => (
-            <li key={w.id}>
-              <button
-                onClick={() => apply("wordmark", w.id)}
-                className="w-full flex items-center gap-4 py-4 text-left cursor-pointer"
-              >
-                <Image src="/logo-mark.png" alt="" width={48} height={48} className="rounded-xl shrink-0" />
-                <span className="flex-1 min-w-0">
-                  <span
-                    className="block text-4xl font-bold tracking-tight leading-none"
-                    style={{ fontFamily: WORDMARK_FONT[w.id], fontWeight: w.id === "playfair" ? 700 : 800 }}
-                  >
-                    Sortify
-                  </span>
-                  <span className="block type-caption text-navy/70 mt-1.5">
-                    {w.label} · {w.note}
-                  </span>
-                </span>
-                <span className={`type-sub font-semibold shrink-0 ${wordmark === w.id ? "text-point-ink" : "text-navy/40"}`}>
-                  {wordmark === w.id ? "적용 중" : "적용"}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <SectionTitle title="워드마크" />
         <div className="rounded-2xl bg-navy/5 p-6 flex flex-col items-center gap-2">
-          <p className="type-caption text-navy/70">홈에서 보이는 모습 (font-wordmark)</p>
-          <p className="font-wordmark text-5xl font-bold tracking-tight">Sortify</p>
+          <Image src="/logo-mark.png" alt="" width={56} height={56} className="rounded-xl" />
+          <p className="font-wordmark text-5xl text-navy tracking-tight mt-2">Sortify</p>
           <p className="type-sub text-navy/70 text-center">
             좋아하는 곡 중에서도,
             <br />더 마음이 가는 곡을 찾는 곳, Sortify
           </p>
+          <p className="type-caption text-navy/70 mt-2">새 톤: Nunito ExtraBold · latin · OFL · 약 39 KB — 지금 톤: Playfair Display</p>
         </div>
       </section>
 

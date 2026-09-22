@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Playfair_Display, Nunito, Quicksand, Outfit, Plus_Jakarta_Sans } from "next/font/google";
+import { Playfair_Display, Nunito } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { LayoutWrapper } from "@/components/LayoutWrapper";
@@ -20,26 +20,18 @@ const playfair = Playfair_Display({
   variable: "--font-playfair",
 });
 
-/*
- * 워드마크 서체 후보 (design/logo-theme 시안 전용, docs/design-system/typography.md 6장).
- * 전부 SIL OFL 1.1, latin 서브셋, 가변 폰트. preload 를 꺼서 고르기 전에는 받지 않는다.
- * 채택되면 하나만 남기고 나머지와 Playfair 를 지운다.
- */
-const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito", preload: false });
-const quicksand = Quicksand({ subsets: ["latin"], variable: "--font-quicksand", preload: false });
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit", preload: false });
-const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", preload: false });
-const wordmarkCandidates = [nunito, quicksand, outfit, jakarta].map((f) => f.variable).join(" ");
+// 새 톤의 워드마크 — Nunito ExtraBold (2026-09-22 확정). latin 서브셋, SIL OFL 1.1, 가변 woff2 약 39KB.
+// legacy 테마에서는 Playfair 가 그대로라 둘 다 싣는다. 채택이 굳으면 Playfair 를 뺀다.
+const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito", weight: ["800"] });
 
 /**
- * 테마 부트. 첫 페인트 전에 <html data-theme data-wordmark> 를 붙인다.
- * ?theme= / ?wordmark= 가 오면 localStorage 에 저장하고, 없으면 저장된 값을 쓴다.
+ * 테마 부트. 첫 페인트 전에 <html data-theme> 를 붙인다.
+ * ?theme= 가 오면 localStorage 에 저장하고, 없으면 저장된 값을 쓴다.
  * 값이 없으면 아무것도 붙이지 않는다 = legacy(지금까지의 톤) 그대로.
  */
-const THEME_BOOT = `(function(){try{var q=new URLSearchParams(location.search),d=document.documentElement;
-[["theme","sortify_theme",["legacy","toss-white","sky-tint"]],["wordmark","sortify_wordmark",["playfair","pretendard","wanted","nunito","quicksand","outfit","jakarta"]]].forEach(function(x){
-var v=q.get(x[0]);if(v&&x[2].indexOf(v)>=0)localStorage.setItem(x[1],v);v=localStorage.getItem(x[1]);
-if(v&&x[2].indexOf(v)>=0&&v!=="legacy"&&v!=="playfair")d.setAttribute("data-"+x[0],v);});}catch(e){}})();`;
+const THEME_BOOT = `(function(){try{var q=new URLSearchParams(location.search),d=document.documentElement,ok=["legacy","toss-white","sky-tint"];
+var v=q.get("theme");if(v&&ok.indexOf(v)>=0)localStorage.setItem("sortify_theme",v);v=localStorage.getItem("sortify_theme");
+if(v&&ok.indexOf(v)>=0&&v!=="legacy")d.setAttribute("data-theme",v);}catch(e){}})();`;
 
 // 숫자만 혼자 강조되는 자리(순위·%·큰 숫자) 전용(font-num).
 // 숫자·기호만 쓰므로 라틴 전용 Std 가변 폰트(82KB)를 쓴다. OFL: ./fonts/WantedSans-OFL.txt
@@ -95,7 +87,7 @@ export default async function RootLayout({
   const lang = cookieStore.get("locale")?.value || "ko";
 
   return (
-    <html lang={lang} suppressHydrationWarning className={`${pretendard.variable} ${playfair.variable} ${wantedSans.variable} ${wordmarkCandidates} h-full antialiased`}>
+    <html lang={lang} suppressHydrationWarning className={`${pretendard.variable} ${playfair.variable} ${wantedSans.variable} ${nunito.variable} h-full antialiased`}>
 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />

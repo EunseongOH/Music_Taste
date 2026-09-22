@@ -23,8 +23,7 @@ for (const theme of THEMES) {
   const ctx = await browser.newContext({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   for (const p of PAGES) {
-    const wm = theme === "legacy" ? "playfair" : "nunito";
-    await page.goto(`${BASE}${p.path}${p.path.includes("?") ? "&" : "?"}theme=${theme}&wordmark=${wm}`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}${p.path}${p.path.includes("?") ? "&" : "?"}theme=${theme}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(600);
     const file = `${OUT}/${p.name}-${theme}.png`;
     await page.screenshot({ path: file, fullPage: p.full });

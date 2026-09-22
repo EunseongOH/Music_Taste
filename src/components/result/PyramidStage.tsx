@@ -104,16 +104,16 @@ export default function PyramidStage({
       transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
       className={
         playing
-          ? "fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 bg-[#F5F2ED] overflow-hidden flex flex-col"
+          ? "fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 bg-cream overflow-hidden flex flex-col"
           : "w-full relative"
       }
     >
-      {playing && <div className="absolute inset-0 z-0 bg-[#F5F2ED]" />}
+      {playing && <div className="absolute inset-0 z-0 bg-cream" />}
 
       {playing && (
         <button
           onClick={onDone}
-          className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+          className="absolute top-4 right-4 z-50 px-3.5 py-1.5 bg-white/90 hover:bg-white text-navy hover:text-point newtone:hover:text-brand font-bold text-xs rounded-full border border-navy/15 hover:border-point/40 newtone:hover:border-brand/40 shadow-md backdrop-blur-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1"
         >
           {skipLabel}
         </button>

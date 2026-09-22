@@ -544,7 +544,7 @@ export default function WorldCupPage() {
   }
 
   return (
-    <main className="flex flex-col min-h-screen relative z-10 w-full overflow-hidden bg-[#F5F2ED]">
+    <main className="flex flex-col min-h-screen relative z-10 w-full overflow-hidden bg-cream">
       {/* Header */}
       <div className="relative z-40 bg-cream/95 backdrop-blur-md pt-6 pb-4 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/10 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
@@ -565,9 +565,9 @@ export default function WorldCupPage() {
                <div className="inline-block bg-navy/5 px-3 py-1 rounded-full mb-2 shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)]">
                  <p className="font-sans text-xs font-bold text-navy/80 tracking-wide">
                    {locale === "en" ? (
-                     <>Match <span className="text-point">{currentMatchIndex + 1}</span> of {matches.length}</>
+                     <>Match <span className="text-point newtone:text-point-ink">{currentMatchIndex + 1}</span> of {matches.length}</>
                    ) : (
-                     <>총 {matches.length}매치 중 <span className="text-point">{currentMatchIndex + 1}번째</span></>
+                     <>총 {matches.length}매치 중 <span className="text-point newtone:text-point-ink">{currentMatchIndex + 1}번째</span></>
                    )}
                  </p>
                </div>
@@ -688,7 +688,7 @@ export default function WorldCupPage() {
                        {locale === "en" ? (
                          <>Hold and select the cover of your preferred song</>
                        ) : (
-                         <>더 좋아하는 곡의 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point"}>꾹</strong> 눌러 선택해 주세요</>
+                         <>더 좋아하는 곡의 커버를 <strong className={isAnyLpActive ? "text-white" : "text-point newtone:text-point-ink"}>꾹</strong> 눌러 선택해 주세요</>
                        )}
                      </span>
                   )}
