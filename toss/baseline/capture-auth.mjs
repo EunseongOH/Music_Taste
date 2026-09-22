@@ -130,7 +130,9 @@ log('  템플릿 탭 노출됨');
 
 await page.addStyleTag({
   content: `*, *::before, *::after {
-    animation: none !important; transition: none !important; animation-play-state: paused !important; }`,
+    animation: none !important; transition: none !important; animation-play-state: paused !important; }
+    /* dev 서버의 Next 배지(<nextjs-portal>)가 저장 버튼 위에 얹혀 클릭을 가로챈다. 내보내기 캔버스와는 무관. */
+    nextjs-portal { display: none !important; }`,
 });
 
 const settle = async () => {
