@@ -518,6 +518,8 @@ export default function TogetherNewPage() {
       return;
     }
     setMadeCode(made.code);
+    // 다음에 할 일을 한 줄로 알려 준다 — 만들고 나면 화면에 코드와 버튼만 남는다.
+    showToast("링크를 만들었어요. 보내면 바로 시작돼요.");
   };
 
   if (isLoading || picked === null || (user && cards === null)) {

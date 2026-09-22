@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
@@ -43,6 +43,12 @@ export default function TogetherInvitePage() {
   const [iAmCreator, setIAmCreator] = useState(false);
   /** 소트를 시작하기 전에 이름을 묻는다 — 일치율 화면에서 누가 누구인지 알아야 한다. */
   const [askName, setAskName] = useState(false);
+  /*
+   * 이 화면을 보고 있는 동안 새로 끝낸 사람. "방금"이라고 말해도 되는 건 이때뿐이다.
+   * 시계로 재지 않는다 — 며칠 전 기록을 두고 방금이라고 하면 새로 들어온 줄 안다.
+   */
+  const [justFinished, setJustFinished] = useState<string | null>(null);
+  const lastSeen = useRef<string | null>(null);
 
   // 한자리에 모여 할 때 옆 사람이 끝나는 게 바로 보이도록 몇 초마다 다시 읽는다.
   useEffect(() => {
@@ -58,10 +64,18 @@ export default function TogetherInvitePage() {
         return;
       }
       setIAmCreator(isMine(found, user?.id));
-      setEntries(await fetchEntries(found.id));
+      const first = await fetchEntries(found.id);
+      if (!alive) return;
+      setEntries(first);
+      // 들어올 때 이미 있던 사람은 "방금"이 아니다.
+      lastSeen.current = first[first.length - 1]?.id ?? null;
       timer = setInterval(async () => {
         const list = await fetchEntries(found.id);
-        if (alive) setEntries(list);
+        if (!alive) return;
+        setEntries(list);
+        const newest = list[list.length - 1]?.id ?? null;
+        if (newest && newest !== lastSeen.current) setJustFinished(newest);
+        lastSeen.current = newest;
       }, 8000);
     })();
     return () => {
@@ -137,6 +151,10 @@ export default function TogetherInvitePage() {
    * 초대 화면 배경. 방을 만들 때 적어 둔 아티스트 사진을 쓰고, 없으면 첫 곡의 앨범 재킷.
    * 둘 다 없으면 배경 없이 간다 — 무관한 사진을 끌어오지 않는다.
    */
+  /* 가장 최근에 끝낸 사람. fetchEntries 는 오래된 순이라 마지막이 최신이다. */
+  const latest = entries.length > 0 ? entries[entries.length - 1] : null;
+  const justNow = !!latest && justFinished === latest.id;
+
   const hero = challenge.artist_image || challenge.tracks[0]?.albumImage || "";
   const artist = challenge.artist_name;
 
@@ -195,6 +213,19 @@ export default function TogetherInvitePage() {
       ) : null}
 
       <div className="mt-6 flex flex-col gap-2">
+        {/*
+          * 방장에게는 숫자보다 "누가 방금 끝냈는지" 가 먼저다 — 링크를 보내 놓고
+          * 기다리는 사람이 보고 싶은 것은 그것이다. 이름표 줄이 아래에 이미 있지만
+          * 여럿이 되면 누가 새로 들어왔는지 한눈에 안 보인다.
+          *
+          * "방금" 은 실제로 방금일 때만 쓴다. 며칠 전 기록을 두고 방금이라고 하면
+          * 새로 들어온 줄 알고 다시 들여다보게 된다.
+          */}
+        {iAmCreator && latest && (
+          <p className="type-body-strong text-navy break-keep">
+            {latest.nickname || "익명 리스너"}님이 {justNow ? "방금 " : ""}소트를 끝냈어요
+          </p>
+        )}
         <p className="type-caption text-navy/70">
           {iAmCreator && entries.length === 0
             ? "아직 아무도 소트하지 않았어요. 링크를 보내 보세요."
