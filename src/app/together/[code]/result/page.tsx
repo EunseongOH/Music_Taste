@@ -31,6 +31,20 @@ function rankingFromSession(): { ids: string[]; skipped: number } | null {
 }
 
 /**
+ * 평균 일치율을 사람 말로 한 번 읽어 준다.
+ *
+ * 숫자만 있으면 62% 가 높은 건지 낮은 건지 알 수 없다. 낮은 쪽도 나쁜 일로
+ * 쓰지 않는다 — 취향이 다른 건 실패가 아니라 그냥 다른 것이고, 여기서 "낮아요"
+ * 라고 하면 같이 한 일이 헛일이 된다.
+ */
+function rateLine(rate: number): string {
+  if (rate >= 80) return "거의 같은 귀예요.";
+  if (rate >= 60) return "취향이 꽤 닮았어요.";
+  if (rate >= 40) return "반은 같고 반은 달라요.";
+  return "서로 다른 곡을 아끼고 있어요.";
+}
+
+/**
  * 같이 소트하기 — 결과·일치율(실험). 문서: docs/together-sort.md
  *
  * 소트를 막 끝내고 오면 그 순위를 저장하고, 같은 링크로 소트한 사람들과의 일치율을 보여준다.
@@ -149,12 +163,16 @@ export default function TogetherResultPage() {
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
       <p className="type-caption text-navy/70">같이 소트하기 · {challenge.title}</p>
+      {/* 숫자 위에 한 줄. 감정은 여기서 한 번만 쓴다 — 아래 사람별 줄까지 들뜨면 시끄럽다. */}
+      {others.length > 0 && average !== null && (
+        <p className="type-body text-navy mt-1 break-keep">{rateLine(average)}</p>
+      )}
       <h1 className="type-title-1 text-navy mt-1">
         {others.length === 0 ? "아직 나 혼자예요" : average !== null ? `평균 일치율 ${average}%` : ""}
       </h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
         {others.length === 0
-          ? `코드 ${challenge.code} 를 알려 주세요. 옆 사람이 끝나면 여기에 바로 뜹니다.`
+          ? "링크를 보내면 여기에 이름이 늘어나요."
           : `${others.length}명과 비교했어요 · 몇 초마다 새로 확인해요.`}
       </p>
 
@@ -189,8 +207,10 @@ export default function TogetherResultPage() {
                       {match.common}곡 비교 · 1위 {match.sameTop ? "같음" : "다름"} · TOP 5 중 {match.topFiveOverlap}곡 겹침
                     </p>
                     {gapTrack && (
+                      /* "상대" 가 아니라 이름을 부른다 — 누구와 갈렸는지가 이 줄의 전부다. */
                       <p className="type-caption text-navy/70 break-keep">
-                        가장 갈린 곡 · {gapTrack.title} (내 {match.biggestGap!.mine}위 / 상대 {match.biggestGap!.theirs}위)
+                        가장 갈린 곡 · {gapTrack.title} — {entry.nickname || "익명 리스너"}님은{" "}
+                        {match.biggestGap!.theirs}위, 나는 {match.biggestGap!.mine}위
                       </p>
                     )}
                   </div>
