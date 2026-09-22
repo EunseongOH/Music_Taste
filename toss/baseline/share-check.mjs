@@ -43,8 +43,8 @@ const TOSS_LABELS = ['다른 앱으로 공유하기', '취향표 링크 복사�
 /** 공유 본문(`<TOP 10>\n\n<유도 문구>\n<링크>`)에서 유도 문구·링크를 뺀 앞부분. */
 const topTenPart = (text) => text.split('\n\n').slice(0, -1).join('\n\n');
 
-/** src/app/taste/page.tsx 의 SHARE_CTA 와 같아야 한다. */
-const CTA = '내 진짜 최애곡을 알고 싶다면? Sortify에서 직접 뽑아보기 👇';
+/** src/components/result/ResultScreen.tsx 의 SHARE_CTA 와 같아야 한다. */
+const CTA = '내 1위는 뭘까? 직접 골라 보기';
 
 let failed = 0;
 const check = (ok, label, detail = '') => {
