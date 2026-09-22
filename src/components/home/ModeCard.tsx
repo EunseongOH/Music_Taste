@@ -60,7 +60,10 @@ export default function ModeCard({
         "w-full bg-[#FAF7F2] border-[3px] border-navy rounded-[2.5rem] p-6 shadow-md hover:shadow-lg transition-shadow duration-300 relative flex flex-col items-center justify-between text-center min-h-[170px] select-none " +
         // 새 테마 — (c-1)
         "newtone:bg-white newtone:border-0 newtone:rounded-[1.75rem] newtone:items-start newtone:justify-end newtone:text-left newtone:overflow-hidden " +
-        "newtone:shadow-[0_12px_36px_-14px_rgba(56,91,240,0.35)] newtone:hover:shadow-[0_16px_40px_-14px_rgba(56,91,240,0.45)]"
+        // 그림자는 잉크색, 캐러셀의 여백(위아래 12px) 안에서 끝나는 크기. 전에는 파란 그림자가 36px 까지 번져
+        // 캐러셀의 overflow-hidden 에 직선으로 잘렸고, 화살표 옆에 "네모난 그라데이션" 으로 보였다(사용자 2026-09-22).
+        // 파랑은 배지 글자·빛·시작하기 세 곳으로 유지 (color.md 원칙 7).
+        "newtone:shadow-[0_6px_14px_-8px_rgba(24,33,59,0.22)] newtone:hover:shadow-[0_6px_14px_-8px_rgba(24,33,59,0.30)]"
       }
     >
       {/* 빛과 주황 점은 새 테마에서만 */}

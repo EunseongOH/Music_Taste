@@ -13,6 +13,14 @@ export interface LPPlayerProps {
   } | null;
   onTogglePlay?: () => void;
   className?: string;
+  /**
+   * 새 테마의 LP 면 질감. legacy 에는 아무 영향이 없다(요소가 hidden).
+   *  flat   흰 면(지금까지의 모양)
+   *  soft   회백 유리 — 옅은 방사형 하이라이트 + 반사 한 줄
+   *  strong 회백 유리 — 가는 홈 + 반사 두 줄 + 얕은 내부 그림자
+   * 채택 전 비교용. 정해지면 기본값을 바꾼다.
+   */
+  disc?: "flat" | "soft" | "strong";
 }
 
 /**
@@ -27,7 +35,7 @@ export interface LPPlayerProps {
  *          면적 대부분을 차지한다"). 재킷이 없으면 작은 단색 주황 라벨(LP 의 30%).
  *          받침 안에 들어오는 크기(플래터 136 · LP 124), 파랑 없음, 그림자 없음 — 조용하게.
  */
-export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay, className = "" }: LPPlayerProps) {
+export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay, className = "", disc = "flat" }: LPPlayerProps) {
   // 재킷을 받아 올 해상도에만 쓴다. 새 테마에서는 재킷이 LP 전체(최대 168px)라 80px 로는 흐리다.
   // 모양은 전부 CSS(newtone:)가 가르므로 이 값이 늦게 정해져도 깜빡이지 않는다. legacy 는 "80px" 그대로.
   const [newtone, setNewtone] = useState(false);
@@ -38,6 +46,7 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
 
   const screw = "w-4 h-4 rounded-full border-2 border-navy/30 newtone:w-3 newtone:h-3 newtone:border newtone:border-navy/10";
   const groove = "rounded-full border border-navy/20 newtone:border-navy/[0.07]";
+  const lpSize = "newtone:w-[7.75rem] newtone:h-[7.75rem] newtone:sm:w-[10.5rem] newtone:sm:h-[10.5rem]";
 
   return (
     <div className={`relative w-full max-w-lg h-36 sm:h-48 border-2 border-navy rounded-xl px-6 flex flex-col justify-between bg-cream/50 backdrop-blur-sm shadow-sm newtone:border newtone:border-navy/10 newtone:rounded-2xl newtone:bg-white/60 newtone:backdrop-blur-none newtone:shadow-none ${className}`}>
@@ -61,6 +70,10 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
                 : { duration: 1, ease: "easeOut" }
             }
           >
+            {/* 유리 질감의 면 — 재킷이 없을 때만, 라벨·홈 아래. 새 테마에서만 보인다 */}
+            {disc !== "flat" && !currentTrack && (
+              <span aria-hidden className={`hidden newtone:block absolute inset-0 rounded-full ${disc === "soft" ? "disc-glass-soft" : "disc-glass-strong"}`} />
+            )}
             {/* Record Grooves - Line-art style */}
             <div className={`absolute w-[85%] h-[85%] newtone:w-[90%] newtone:h-[90%] ${groove}`} />
             <div className={`absolute w-[70%] h-[70%] newtone:w-[80%] newtone:h-[80%] ${groove}`} />
@@ -91,6 +104,10 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
               />
             </div>
           </motion.div>
+          {/* 유리 반사 — 판 밖에 두어 판이 돌아도 반사는 제자리. 재킷 위에도 얹힌다(z-10). 새 테마에서만 */}
+          {disc !== "flat" && (
+            <span aria-hidden className={`hidden newtone:block absolute inset-0 m-auto rounded-full pointer-events-none z-10 ${lpSize} ${disc === "soft" ? "disc-gloss-soft" : "disc-gloss-strong"}`} />
+          )}
         </div>
 
         {/*
