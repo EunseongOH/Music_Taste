@@ -29,16 +29,19 @@ const SUMMARY_NODES = 7;
 const NAME = (p: GraphParticipant | undefined): string => p?.nickname?.trim() || "익명 리스너";
 
 /**
- * 사람 수에 맞춘 판과 타원.
+ * 사람 수에 맞춘 판.
  *
- * 노드가 겹치면 관계도가 아니라 얼룩이 된다. 사람이 늘수록 판을 키우고(둘레 확보)
- * 이름표는 좁힌다. 10명이 최대인데, 그때 필요한 둘레가 약 900px 이라 판이 380px 까지 간다 —
- * 화면이 길어지는 건 받아들인다. 한 화면에 욱여넣는 것보다 읽히는 쪽이 낫다.
+ * **판을 정사각에 가깝게 잡는다.** 세로로 긴 타원에 각도를 고르게 나누면 간격이
+ * 고르지 않다 — 같은 각도라도 위아래에서는 호가 짧아 노드가 몰리고 좌우는 벌어진다.
+ * 10명에서 위아래가 빽빽하고 가운데가 휑해 보이던 게 그 탓이었다. 원에서는 각도가
+ * 곧 간격이라 따로 계산할 것이 없다.
+ *
+ * `size` 는 판의 한 변. 사람이 늘면 키우고(둘레 확보) 이름표는 좁힌다.
  */
-function ovalFor(n: number): { height: number; pill: number; rx: number; ry: number } {
-  if (n <= 4) return { height: 208, pill: 96, rx: 32, ry: 34 };
-  if (n <= 7) return { height: 288, pill: 88, rx: 36, ry: 38 };
-  return { height: 380, pill: 72, rx: 38, ry: 42 };
+function ovalFor(n: number): { size: number; pill: number; r: number } {
+  if (n <= 4) return { size: 220, pill: 96, r: 33 };
+  if (n <= 7) return { size: 292, pill: 88, r: 36 };
+  return { size: 348, pill: 70, r: 39 };
 }
 
 /**
@@ -114,12 +117,12 @@ export default function TasteRelationGraph({
 
     const hiddenCount = participants.length - shownKeys.length;
     const slots = shownKeys.length + (hiddenCount > 0 ? 1 : 0);
-    const { height, pill, rx, ry } = ovalFor(slots);
+    const { size, pill, r } = ovalFor(slots);
 
     // 나는 언제나 12시. 나머지는 시계 방향으로 고르게.
     const at = (i: number) => {
       const angle = -Math.PI / 2 + (i / slots) * Math.PI * 2;
-      return { x: 50 + Math.cos(angle) * rx, y: 50 + Math.sin(angle) * ry };
+      return { x: 50 + Math.cos(angle) * r, y: 50 + Math.sin(angle) * r };
     };
     const positions = new Map<string, { x: number; y: number }>();
     shownKeys.forEach((key, i) => positions.set(key, at(i)));
@@ -148,14 +151,15 @@ export default function TasteRelationGraph({
       edges.push({ pair: selectedPair, kind: "plain" });
     }
 
-    return { byKey, shownKeys, hiddenCount, positions, morePos, edges, height, pill, selectedPair, summary };
+    return { byKey, shownKeys, hiddenCount, positions, morePos, edges, size, pill, selectedPair, summary };
   }, [participants, pairs, myKey, selectedKey, trackCount]);
 
   const isSelectedEdge = (p: PairMatch) =>
     !!selectedKey && (p.aKey === myKey || p.bKey === myKey) && otherKey(p, myKey) === selectedKey;
 
   return (
-    <div className="relative w-full" style={{ height: view.height }}>
+    /* 좁은 화면에서는 폭에 맞춰 줄어든다(그만큼 세로로 조금 길어진다). */
+    <div className="relative w-full mx-auto" style={{ height: view.size, maxWidth: view.size }}>
       {/* 관계선. 장식이라 읽어 줄 필요가 없다 — 같은 내용을 아래 글로 적는다. */}
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
         {view.edges.map(({ pair, kind }) => {
