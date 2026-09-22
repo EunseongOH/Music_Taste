@@ -121,6 +121,22 @@ await page.addInitScript(
 
 page.on('dialog', (d) => d.accept());
 
+/*
+ * 로그인이 살아 있는지는 쿠키만 봐서는 알 수 없다.
+ *
+ * 저장된 프로필의 리프레시 토큰은 시간이 지나면 죽는데(`Invalid Refresh Token:
+ * Already Used`), 쿠키 자체는 그대로 남는다. 그러면 스크립트는 "로그인됨" 으로
+ * 읽고 앱은 비로그인으로 그려서, 로그아웃 상태 화면이 기준선으로 찍히고
+ * 자동저장도 안 걸린다. 2026-09-23 에 이걸로 한나절을 썼다 — 앱이 취향표를
+ * 저장하지 않는 것처럼 보였다.
+ *
+ * 그래서 토큰 갱신이 거절당하는지를 직접 본다.
+ */
+const authFailures = [];
+page.on('response', (r) => {
+  if (r.url().includes('/auth/v1/') && r.status() >= 400) authFailures.push(`${r.status()} ${new URL(r.url()).pathname}`);
+});
+
 const log = (...a) => console.log(...a);
 log(`→ ${BASE}/taste  (로그인 프로필, ${RANKING.length}곡)`);
 await page.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
@@ -147,7 +163,7 @@ await settle();
 log('  자동저장 대기…');
 await page.waitForTimeout(8000);
 
-const manifest = { fixedTime: FIXED_TIME.toISOString(), trackCount: RANKING.length, mode: 'authenticated', files: [], shares: [], savedId: null, user: null };
+const manifest ={ fixedTime: FIXED_TIME.toISOString(), trackCount: RANKING.length, mode: 'authenticated', files: [], shares: [], savedId: null, user: null };
 
 // 세션은 쿠키에 들어있고, 4KB 를 넘으면 `...auth-token.0`, `.1` 로 쪼개진다.
 manifest.user = await page.evaluate(() => {
@@ -182,6 +198,31 @@ manifest.user = await page.evaluate(() => {
   }
 });
 log(`  사용자: ${manifest.user?.nickname ?? '?'} (${manifest.user?.id ?? '?'})`);
+
+/*
+ * 로그인이 살아 있지 않으면 여기서 멈춘다.
+ *
+ * 저장된 프로필의 리프레시 토큰은 시간이 지나면 죽는다. 그러면 앱은 비로그인으로
+ * 그리고 자동저장도 안 걸리는데, 예전에는 그대로 찍혀서 **로그아웃 상태 화면이
+ * 기준선**이 되고 savedId 만 null 로 남았다. 2026-09-23 에 그 null 을 보고
+ * "앱이 취향표를 저장하지 않는다" 로 의심하며 시간을 썼다 — 원인은 만료된
+ * 프로필 하나였다.
+ *
+ * 토큰이 죽는 방식이 둘이라 둘 다 본다. 갱신이 거절당하거나(4xx), 한 번 거절당한
+ * 뒤 아예 지워져 쿠키가 없거나. 어느 쪽이든 찍을 수 있는 상태가 아니다.
+ */
+if (!manifest.user?.id) {
+  console.error([
+    '',
+    authFailures.length
+      ? `로그인이 만료됐습니다 (${[...new Set(authFailures)].join(', ')}).`
+      : '로그인 상태가 아닙니다 (세션 쿠키가 없습니다).',
+    '이대로 찍으면 로그아웃 상태 화면이 기준선이 되고 자동저장도 걸리지 않습니다.',
+    '먼저 다시 로그인하세요:  node toss/baseline/login.mjs',
+  ].join('\n'));
+  await context.close();
+  process.exit(1);
+}
 
 async function drain(label) {
   const items = await page.evaluate(() => {
