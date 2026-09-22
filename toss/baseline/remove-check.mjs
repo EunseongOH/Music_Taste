@@ -117,7 +117,10 @@ try {
     const cta = page.getByRole('button', { name: '취향표 보기' });
     await cta.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
     check((await cta.count()) > 0, '결승에서 빼면 상대가 우승하고 1위 공개로');
-    check((await page.locator('h1').first().textContent())?.trim() === finalists[0], '1위 공개 제목 = 남은 곡', await page.locator('h1').first().textContent());
+    // 제목은 한 문장이 됐다: `'{아티스트}' {n}곡 중 {닉네임}님의 1위곡은 '{곡제목}'`.
+    // 곡 제목이 그 안에 들어 있는지로 본다 — 앞부분은 문구라 바뀔 수 있다.
+    const revealTitle = (await page.locator('h1').first().textContent())?.trim() ?? '';
+    check(revealTitle.includes(finalists[0]), '1위 공개 문구에 남은 곡이 들어감', revealTitle);
     // 모른다고 뺀 곡을 "결승 상대"(이긴 곡)로 부르면 안 된다.
     check((await page.getByText('결승 상대').count()) === 0, '뺀 곡은 결승 상대로 보이지 않음');
 

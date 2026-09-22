@@ -192,8 +192,8 @@ export default function ResultLab() {
                 runnerUp={tracks[1] ?? null}
                 championOnLeft
                 totalTracks={tracks.length}
-                choices={Math.max(0, tracks.length - 1)}
                 isSingleArtistMode={single}
+                nickname="은은"
                 locale={locale}
                 onContinue={openResult}
               />
