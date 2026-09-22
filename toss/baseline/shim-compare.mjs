@@ -22,15 +22,16 @@ import { createHash } from 'node:crypto';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nextBase, vite } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, 'shim-out');
 mkdirSync(OUT, { recursive: true });
 
 const ROUTE = process.argv[2] ?? '/shim-probe';
-const NEXT_URL = `http://localhost:3000${ROUTE}`;
+const NEXT_URL = `${nextBase()}${ROUTE}`;
 // Vite dev 는 SPA 폴백이 있어 Next 와 같은 경로를 그대로 쓴다.
-const VITE_URL = `http://localhost:5173${ROUTE}`;
+const VITE_URL = `${vite()}${ROUTE}`;
 
 /**
  * 비교 대상 루트 후보. 앞에서부터 존재하는 첫 번째를 쓴다.

@@ -301,15 +301,38 @@ export default function ExplorePage() {
             console.warn("[explore] Initial API fetch for genres failed, using curated only:", e);
           }
 
-          // Merge: curated first (familiar names), then API extras
+          /*
+           * 곡까지 DB 에 있는 아티스트를 앞에 둔다 (docs/mode-pivot.md §7.1).
+           *
+           * 목록에 뜨는 아티스트 대부분은 아직 곡이 없어서, 아무나 누르면 그 자리에서
+           * 앨범·곡을 전부 받아온다(아티스트 한 명에 약 29콜). 곡이 있는 아티스트를
+           * 앞에 두면 눌러도 Spotify 를 안 부르고 화면도 바로 뜬다.
+           *
+           * 통째로 정렬하지 않고 **두 묶음 안에서만 섞는다** — 순서를 고정하면 올 때마다
+           * 같은 얼굴이고, 전부 섞으면 여기서 맞춘 순서가 사라진다(예전 코드가 그랬다).
+           */
           const merged = [...curatedUnique, ...apiArtists];
-          
-          // Shuffle the consolidated results
-          for (let i = merged.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [merged[i], merged[j]] = [merged[j], merged[i]];
+          type FeedArtist = { id: string; name: string; image: string; popularity: number };
+          const shuffle = (list: FeedArtist[]) => {
+            for (let i = list.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [list[i], list[j]] = [list[j], list[i]];
+            }
+            return list;
+          };
+          let servable = new Set<string>();
+          try {
+            const res = await fetch("/api/together/catalog?servable=1");
+            servable = new Set(((await res.json()) as { ids?: string[] }).ids ?? []);
+          } catch {
+            /* 못 받아도 목록은 그대로 보여 준다 */
           }
-          results = merged;
+          results = servable.size
+            ? [
+                ...shuffle(merged.filter((a: FeedArtist) => servable.has(a.id))),
+                ...shuffle(merged.filter((a: FeedArtist) => !servable.has(a.id))),
+              ]
+            : shuffle(merged);
           // Set genre offset to 50 (past the initial API batch) — write DIRECTLY to ref
           genreOffsetRef.current = 50;
           setHasMoreGenre(true);

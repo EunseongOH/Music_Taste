@@ -16,6 +16,9 @@ export interface SortChallenge {
   creator_id: string | null;
   creator_nickname: string | null;
   artist_name: string | null;
+  /** 방을 만들 때 고른 아티스트(초대 화면 배경). 마이그레이션 전 방은 없다. */
+  artist_id?: string | null;
+  artist_image?: string | null;
   title: string;
   tracks: RankedTrack[];
   source_result_id: string | null;
@@ -101,30 +104,53 @@ export async function createChallenge(input: {
   creatorId: string | null;
   creatorNickname: string | null;
   artistName: string | null;
+  /** 초대 화면 배경에 쓸 아티스트. 아티스트를 골라 만든 방에만 있다. */
+  artistId?: string | null;
+  artistImage?: string | null;
   title: string;
   tracks: RankedTrack[];
   sourceResultId: string | null;
 }): Promise<SortChallenge | null> {
   const supabase = createClient();
-  for (let attempt = 0; attempt < 5; attempt++) {
+  /*
+   * artist_id·artist_image 는 나중에 더해진 칸이다(20260922000000).
+   * 아직 적용되지 않은 DB 에서는 그 칸을 넣으면 insert 가 통째로 실패한다 —
+   * 그때는 칸 없이 한 번 더 시도해 방 만들기 자체는 되게 한다.
+   */
+  let withArtistColumns = true;
+  for (let attempt = 0; attempt < 6; attempt++) {
     const code = makeCode();
-    const { data, error } = await supabase
-      .from("sort_challenges")
-      .insert({
-        code,
-        creator_id: input.creatorId,
-        creator_nickname: input.creatorNickname,
-        artist_name: input.artistName,
-        title: input.title,
-        tracks: input.tracks,
-        source_result_id: input.sourceResultId,
-      })
-      .select("*")
-      .single();
+    const row: Record<string, unknown> = {
+      code,
+      creator_id: input.creatorId,
+      creator_nickname: input.creatorNickname,
+      artist_name: input.artistName,
+      title: input.title,
+      tracks: input.tracks,
+      source_result_id: input.sourceResultId,
+    };
+    if (withArtistColumns) {
+      row.artist_id = input.artistId ?? null;
+      row.artist_image = input.artistImage ?? null;
+    }
+    const { data, error } = await supabase.from("sort_challenges").insert(row).select("*").single();
     if (!error) {
       const made = data as SortChallenge;
       rememberMine(made.code);
       return made;
+    }
+    /*
+     * 그런 칸이 없다 = 마이그레이션 전이라는 뜻. 칸 없이 다시 시도한다.
+     * PostgREST 는 스키마 캐시에 없는 칸을 PGRST204 로 돌려주고(메시지에 칸 이름이 있다),
+     * 데이터베이스까지 간 경우에는 42703 이다. 둘 다 본다.
+     */
+    const noColumn =
+      error.code === "PGRST204" ||
+      error.code === "42703" ||
+      /artist_id|artist_image/.test(error.message ?? "");
+    if (noColumn && withArtistColumns) {
+      withArtistColumns = false;
+      continue;
     }
     // 23505 = unique 위반(코드 중복). 그 밖의 오류는 바로 알린다.
     if (error.code !== "23505") {
@@ -133,6 +159,31 @@ export async function createChallenge(input: {
     }
   }
   return null;
+}
+
+/*
+ * 참여자 닉네임.
+ *
+ * 로그인하지 않아도 참여할 수 있어서, 이름을 안 받으면 일치율 화면에 전부
+ * "익명 리스너"로 나온다 — 여러 명이 모여 하면 누가 누군지 알 수 없다.
+ * 소트를 시작하기 전에 받아서 기기에 기억해 둔다(다음 방에서도 채워 준다).
+ */
+const NICK_KEY = "together_nickname";
+
+export function rememberedNickname(): string {
+  try {
+    return safeLocalStorage.getItem(NICK_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function rememberNickname(name: string): void {
+  try {
+    safeLocalStorage.setItem(NICK_KEY, name.trim());
+  } catch {
+    /* 저장 못 해도 이번 참여에는 쓴다 */
+  }
 }
 
 /** 같은 사람이 다시 하면 덮어쓴다. */

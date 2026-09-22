@@ -12,10 +12,12 @@
  * 사용: node toss/baseline/router-check.mjs
  */
 import { chromium } from 'playwright';
+import { announce, vite } from './base.mjs';
 
 // Vite dev 도 `/` 로 index.html 을 준다. 실제 번들과 진입 경로를 맞춰야
 // usePathname() 이 dev 에서만 '/index.html' 로 보이는 일이 없다.
-const PAGE_URL = `http://localhost:5173/${process.env.VITE_PAGE ?? ''}`;
+const PAGE_URL = `${vite()}/${process.env.VITE_PAGE ?? ''}`;
+announce(['기준 서버:', vite()]);
 
 let failed = 0;
 const check = (ok, label, detail = '') => {
@@ -107,7 +109,7 @@ try {
    * history 를 움직이게 두면 depth 0 에서 자연스럽게 종료된다. (Phase 8 에서 확인)
    */
   for (const route of ['/', '/explore', '/tracks', '/taste', '/my-taste', '/archive']) {
-    await page.goto(`http://localhost:5173${route}`, {
+    await page.goto(`${vite()}${route}`, {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });

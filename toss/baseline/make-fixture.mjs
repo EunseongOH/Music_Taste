@@ -11,10 +11,11 @@
 import { writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, 'fixture.json');
-const API = 'http://localhost:3000/api/toss/spotify';
+const API = `${nextBase()}/api/toss/spotify`;
 
 const IU = '7c1HgFDe8ogy5NOZ1ANCJQ';
 const TARGET = 20; // 20곡 → pyramid 1장, list 2장(15/page), retro 2장(10/page)

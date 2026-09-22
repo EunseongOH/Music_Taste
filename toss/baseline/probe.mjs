@@ -7,10 +7,12 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { announce, nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROFILE = join(HERE, '.profile');
-const BASE = 'http://localhost:3000';
+const BASE = nextBase();
+announce(['기준 서버:', BASE]);
 
 const context = await chromium.launchPersistentContext(PROFILE, {
   headless: true,

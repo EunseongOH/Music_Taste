@@ -45,6 +45,11 @@ interface Track {
   m?: string;
 }
 
+/** 목록 한 줄에 실제로 쓰는 열. ranking 은 무거워서 넣지 않는다(상세 화면에서 읽는다). */
+const LIST_COLUMNS =
+  "id,title,winner_track_title,winner_track_artist,winner_track_image,user_nickname,user_profile_image,created_at,is_single_artist";
+const PAGE_SIZE = 20;
+
 interface TournamentResult {
   id: string;
   user_id: string;
@@ -89,6 +94,7 @@ const translations = {
     singleDiscography: "최애 곡 소트하기",
     mixLabel: "믹스 매치",
     loading: "불러오는 중이에요",
+    moreBtn: "더 보기",
     loginSuccess: "로그인했어요.",
     required: "필수",
 
@@ -172,6 +178,7 @@ const translations = {
     singleDiscography: "Favorite Songs Sort",
     mixLabel: "Mix Match",
     loading: "Loading",
+    moreBtn: "Show more",
     loginSuccess: "Logged in.",
     required: "required",
 
@@ -256,6 +263,9 @@ export default function ArchivePage() {
   
   // Taste cards state
   const [results, setResults] = useState<TournamentResult[]>([]);
+  /** 더 받을 게 남았는지. 한 번에 20건씩 받는다. */
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [loadingMoreResults, setLoadingMoreResults] = useState(false);
   
   // Unreleased tracks state
   const [unreleasedTracks, setUnreleasedTracks] = useState<UnreleasedTrack[]>([]);
@@ -295,21 +305,55 @@ export default function ArchivePage() {
     setLocale(getSafeLocale());
   }, []);
 
+  /** "더 보기" — 다음 20건을 뒤에 붙인다. */
+  const loadMoreResults = async () => {
+    if (loadingMoreResults) return;
+    setLoadingMoreResults(true);
+    try {
+      const { data, error } = await supabase
+        .from("tournament_results")
+        .select(LIST_COLUMNS)
+        .eq("is_public", true)
+        .in("is_single_artist", VISIBLE_MODES)
+        .order("created_at", { ascending: false })
+        .range(results.length, results.length + PAGE_SIZE - 1);
+      if (error) throw error;
+      const rows = (data || []) as unknown as TournamentResult[];
+      setResults((prev) => [...prev, ...rows]);
+      setHasMoreResults(rows.length === PAGE_SIZE);
+    } catch (err) {
+      console.error("Error loading more archives:", err);
+    } finally {
+      setLoadingMoreResults(false);
+    }
+  };
+
   // Fetch Public Taste Cards
   useEffect(() => {
     const fetchPublicData = async () => {
       if (activeTab !== "taste") return;
       setIsLoading(true);
       try {
+        /*
+         * 목록에 필요한 열만, 20건씩 받는다.
+         *
+         * 예전에는 `select("*")` 에 limit 도 없어서, 화면에 들어올 때마다 공개 취향표
+         * **전건의 ranking jsonb**(곡 제목·아티스트·커버 주소 전부)가 내려왔다.
+         * 목록에는 1위 한 곡만 보이는데도 그랬다. 취향표가 쌓일수록 선형으로 무거워진다.
+         *
+         * VISIBLE_MODES 필터는 .range() 보다 **먼저** 걸어야 20건이 꽉 찬다.
+         */
         const { data, error } = await supabase
           .from("tournament_results")
-          .select("*")
+          .select(LIST_COLUMNS)
           .eq("is_public", true)
           .in("is_single_artist", VISIBLE_MODES)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range(0, PAGE_SIZE - 1);
 
         if (error) throw error;
-        setResults(data || []);
+        setResults((data || []) as unknown as TournamentResult[]);
+        setHasMoreResults((data?.length ?? 0) === PAGE_SIZE);
       } catch (err) {
         console.error("Error fetching public archives:", err);
       } finally {
@@ -738,6 +782,14 @@ export default function ArchivePage() {
               })}
             </ul>
           )
+        )}
+
+        {!isLoading && activeTab === "taste" && hasMoreResults && (
+          <div className="flex justify-center mt-6">
+            <button onClick={loadMoreResults} disabled={loadingMoreResults} className={secondaryButton}>
+              {loadingMoreResults ? t.loading : t.moreBtn}
+            </button>
+          </div>
         )}
 
         {/* 미발매곡 목록 */}
