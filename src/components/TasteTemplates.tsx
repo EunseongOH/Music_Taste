@@ -101,7 +101,7 @@ function CardFrame({
 }) {
   const t = text[meta.locale];
   return (
-    <div data-theme="legacy" className="w-[450px] h-[800px] bg-[#F5F2ED] text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden">
+    <div className="w-[450px] h-[800px] bg-cream text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden">
       <header className="flex flex-col gap-1 mb-5">
         <p className="text-[12px] leading-[18px] text-navy/70">
           {meta.date} · {meta.single ? t.single : t.multi} · {t.count(meta.total)}
@@ -118,7 +118,7 @@ function CardFrame({
 function CardFooter({ page, pages }: { page?: number; pages?: number }) {
   return (
     <footer className="flex items-baseline gap-2 mt-4 text-[12px] leading-[18px] text-navy/70">
-      <span className="text-[15px] font-extrabold tracking-[-0.04em] text-navy">Sortify</span>
+      <span className="text-[15px] font-extrabold tracking-[-0.04em] text-navy newtone:font-wordmark">Sortify</span>
       <span>sortify.kr</span>
       {pages && pages > 1 && (
         <span className="ml-auto font-num tabular-nums text-[13px] font-semibold">
@@ -232,7 +232,7 @@ function MiniRecord({ src, size }: { src: string; size: number }) {
   return (
     <span className="relative shrink-0 rounded-full overflow-hidden" style={{ width: size, height: size }}>
       <Cover src={src} size={size} round />
-      <span className="absolute inset-0 m-auto w-[5px] h-[5px] rounded-full bg-[#F5F2ED]" />
+      <span className="absolute inset-0 m-auto w-[5px] h-[5px] rounded-full bg-cream" />
     </span>
   );
 }
@@ -291,12 +291,12 @@ export function RecordCard({
               style={{ left: Math.round(sleeve * 0.51), top: Math.round((sleeve - disc) / 2), width: disc, height: disc, background: DISC_BACKGROUND }}
             >
               <Cover src={top.albumImage} size={Math.round(disc * 0.35)} round className="absolute inset-0 m-auto" />
-              <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-[#F5F2ED]" />
+              <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-cream" />
             </div>
             <Cover
               src={top.albumImage}
               size={sleeve}
-              className="absolute left-0 top-0 !rounded-none shadow-[0_10px_24px_-10px_rgba(26,42,108,0.45)]"
+              className="absolute left-0 top-0 !rounded-none shadow-[0_10px_24px_-10px_rgba(26,42,108,0.45)] newtone:shadow-[0_10px_24px_-10px_rgba(24,33,59,0.4)]"
             />
           </div>
           <div className="mb-4 flex flex-col justify-end items-center text-center gap-1" style={{ height: RECORD_INFO_H }}>
@@ -373,7 +373,7 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
               // 순위 표시가 없으니 곡으로 읽히지 않는다.
               const filler = tracks.length ? tracks[i % Math.min(tracks.length, layout.shown || 1)] : null;
               return (
-                <div key={i} className="absolute overflow-hidden bg-[#E9E3D9]" style={box}>
+                <div key={i} className="absolute overflow-hidden bg-[#E9E3D9] newtone:bg-navy/[0.06]" style={box}>
                   {filler && <img src={filler.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover opacity-30" />}
                 </div>
               );
@@ -452,7 +452,7 @@ function joined(list: CardTrack[]) {
       {i > 0 && (
         <>
           {" "}
-          <span className="text-point">•</span>{" "}
+          <span className="text-point newtone:text-point-ink">•</span>{" "}
         </>
       )}
       <span className="inline-block max-w-full">{tr.title}</span>
@@ -498,7 +498,7 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
   const tier = (from: number, to: number) => shown.slice(from, Math.min(to, shown.length));
 
   return (
-    <div ref={rootRef} data-theme="legacy" className="w-[450px] h-[800px] bg-[#F5F2ED] text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center">
+    <div ref={rootRef} className="w-[450px] h-[800px] bg-cream text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center">
       <div className="flex flex-col items-center gap-[3px] pb-2">
         <p className="text-[11px] leading-[16px] font-semibold tracking-[0.18em] text-point-ink">Sortify {t.lineup}</p>
         <h2 className="text-[32px] leading-[1] font-extrabold tracking-[-0.05em] truncate max-w-full">{meta.heading}</h2>
@@ -583,7 +583,7 @@ export function ScaledCard({ children, className = "" }: { children: React.React
   return (
     <div ref={ref} className={`w-full ${className}`}>
       <div
-        className="relative overflow-hidden rounded-[6px] shadow-[0_1px_2px_rgba(26,42,108,0.08),0_12px_32px_-12px_rgba(26,42,108,0.28)] mx-auto"
+        className="relative overflow-hidden rounded-[6px] shadow-[0_1px_2px_rgba(26,42,108,0.08),0_12px_32px_-12px_rgba(26,42,108,0.28)] newtone:shadow-[0_1px_2px_rgba(24,33,59,0.08),0_12px_32px_-12px_rgba(24,33,59,0.25)] mx-auto"
         style={{ width: 450 * scale, height: 800 * scale }}
       >
         <div className="absolute left-0 top-0 origin-top-left" style={{ width: 450, height: 800, transform: `scale(${scale})` }}>
