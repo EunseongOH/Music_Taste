@@ -934,6 +934,18 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
   return result;
 };
 
+/**
+ * 오늘 수록곡을 더 불러올 수 있나. 화면이 빈 앨범의 이유를 갈라 말하는 데 쓴다.
+ *
+ * getAlbumTracks 는 예산이 떨어져도 예외가 아니라 빈 배열을 준다. 그 자체는 맞는 설계지만,
+ * 화면이 "이 앨범에 곡이 없다"와 "오늘은 더 못 가져온다"를 구별할 수 없게 된다. 앞엣것은
+ * 다른 앨범을 고르면 되고 뒤엣것은 눌러 봐야 전부 같다 — 안내가 정반대여야 한다.
+ *
+ * 이유를 getAlbumTracks 반환값에 실어 보내지 않는 것은, 예산 소진이 앨범의 성질이 아니라
+ * 그날 전체의 성질이기 때문이다. 앨범마다 들려 보내면 잘못된 층에 모델링하는 셈이다.
+ */
+export const getTrackBudgetLeft = async (): Promise<boolean> => trackBudgetLeft();
+
 // Fetch album's tracks (Sequentially fetched in chunks of 10 to avoid 429 Rate Limits)
 export const getAlbumTracks = async (albumId: string) => {
   if (!albumId) {

@@ -9,7 +9,7 @@ import { SafeImage } from "@/components/SafeImage";
 import BackButton from "@/components/BackButton";
 import { Sheet, Toast, primaryButton, secondaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
 import ProfileHeader from "@/components/ProfileHeader";
-import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
+import { getArtistAlbums, getAlbumTracks, getTrackBudgetLeft } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
 import { trackEvent } from "@/utils/gtag";
 import { MIX_MATCH } from "@/config/modes";
@@ -40,6 +40,8 @@ const translations = {
     clearAll: "전체 해제",
     loadingTracks: "트랙을 불러오는 중...",
     noTracks: "이 앨범의 수록곡은 아직 준비 중이에요. 다른 앨범을 골라주세요.",
+    noTracksBudget: "오늘은 수록곡을 더 불러올 수 없어요. 내일 다시 시도해 주세요.",
+    noTracksError: "수록곡을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
     close: "닫기",
     prev: "이전",
     next: "다음",
@@ -81,6 +83,8 @@ const translations = {
     clearAll: "Deselect All",
     loadingTracks: "Loading tracks...",
     noTracks: "We don't have this album's tracks yet. Try another album.",
+    noTracksBudget: "We can't load any more tracks today. Please try again tomorrow.",
+    noTracksError: "We couldn't load the tracks. Please try again in a moment.",
     close: "Close",
     prev: "Prev",
     next: "Next",
@@ -214,6 +218,12 @@ export default function TracksPage() {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadingAlbums, setLoadingAlbums] = useState<Set<string>>(new Set());
+  /**
+   * 오늘 수록곡을 더 불러올 수 있나. 빈 앨범의 이유를 갈라 말하는 데만 쓴다.
+   * null 이면 아직 안 물어본 상태다 — 빈 앨범을 처음 만났을 때 한 번만 묻는다.
+   * 예산은 그날 전체의 상태라 앨범마다 물을 필요가 없다.
+   */
+  const [trackBudgetLeft, setTrackBudgetLeft] = useState<boolean | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1063,6 +1073,14 @@ export default function TracksPage() {
     setLoadingAlbums(prev => new Set(prev).add(albumId));
     try {
       const tracksRaw = await getAlbumTracks(albumId);
+
+      // 빈손으로 왔다. 이유를 갈라 말하려면 오늘 예산이 남았는지 알아야 한다.
+      // 예산은 그날 전체의 상태라 앨범마다 물을 필요가 없다 — 처음 한 번만 묻는다.
+      // (우리 DB 로만 아는 앨범은 애초에 Spotify 를 부르지 않으므로 예산과 무관하다)
+      if (tracksRaw.length === 0 && !albumId.includes(":") && trackBudgetLeft === null) {
+        try { setTrackBudgetLeft(await getTrackBudgetLeft()); } catch { /* 물어보다 실패해도 화면은 돈다 */ }
+      }
+
       const tracks = tracksRaw.map((t: any) => {
         const totalSeconds = Math.floor(t.duration_ms / 1000);
         const mins = Math.floor(totalSeconds / 60);
@@ -1576,9 +1594,18 @@ export default function TracksPage() {
                                         <span>{t.loadingTracks}</span>
                                       </div>
                                     ) : album.tracks.length === 0 ? (
-                                      // 트랙리스트가 아직 없는 앨범. 빈 칸만 보이면 고장으로 읽힌다
+                                      // 빈 앨범. 이유가 셋인데 할 일이 서로 다르다.
+                                      //   우리 DB 로만 아는 앨범 -> 다른 앨범을 고르면 된다
+                                      //   오늘 예산 소진        -> 다른 앨범도 전부 같다. 내일 와야 한다
+                                      //   그 밖(일시적 오류)    -> 잠시 뒤 다시
+                                      // 하나로 뭉쳐 "다른 앨범을 골라주세요"라고 하면, 예산이 떨어진 날에는
+                                      // 시키는 대로 눌러도 같은 화면만 보게 된다.
                                       <div className="py-6 px-4 text-center text-navy/50 font-sans text-sm">
-                                        {t.noTracks}
+                                        {album.id.includes(":") || album.id.startsWith("al_unreleased_")
+                                          ? t.noTracks
+                                          : trackBudgetLeft === false
+                                            ? t.noTracksBudget
+                                            : t.noTracksError}
                                       </div>
                                     ) : (
                                       <div className="flex flex-col gap-1">

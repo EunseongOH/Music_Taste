@@ -1,5 +1,5 @@
 // 예산 가드 확인: 예산 0 이면 Spotify 를 부르지 않고 빈 배열, DB 에 있는 앨범은 그대로 나온다.
-import { getAlbumTracks } from "../src/utils/spotify";
+import { getAlbumTracks, getTrackBudgetLeft } from "../src/utils/spotify";
 
 // 사용: SPOTIFY_TRACK_BUDGET=0 npx tsx --env-file=.env.local scripts/check-track-budget.ts
 // 예산을 0 으로 두고 돌린다. 그래야 Spotify 를 실제로 부르지 않는다.
@@ -16,6 +16,11 @@ async function main() {
     if (a.length === 0) throw new Error("실패: DB 앨범은 예산과 무관하게 나와야 한다");
     if (b.length !== 0) throw new Error("실패: 예산 0 인데 Spotify 를 불렀다");
     console.log("통과: 예산 0 에서 DB 는 살고 Spotify 는 안 부른다");
+
+    // 화면이 빈 앨범의 이유를 가르는 근거다. 예산이 0 이면 false 여야 "내일 다시" 문구가 나온다.
+    const left = await getTrackBudgetLeft();
+    if (left !== false) throw new Error(`실패: 예산 0 인데 getTrackBudgetLeft 가 ${left}`);
+    console.log("통과: getTrackBudgetLeft 가 false — 화면이 \"내일 다시\" 를 낸다");
   }
 }
 main().catch((e) => { console.error(e.message); process.exit(1); });
