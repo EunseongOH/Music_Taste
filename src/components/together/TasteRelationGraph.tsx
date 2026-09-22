@@ -23,8 +23,10 @@ export interface GraphParticipant {
 
 /** 관계도에 개별 노드로 세울 수 있는 최대 인원. 넘으면 대표만 세우고 나머지는 묶는다. */
 export const GRAPH_NODE_LIMIT = 10;
-/** 11명 이상일 때 관계도에 세우는 대표 인원(나 포함). */
+/** 대표만 세울 때의 인원(나 포함). 공유 이미지는 자리가 좁아 한 명 덜 세운다. */
 const SUMMARY_NODES = 7;
+const COMPACT_LIMIT = 7;
+const COMPACT_NODES = 6;
 
 const NAME = (p: GraphParticipant | undefined): string => p?.nickname?.trim() || "익명 리스너";
 
@@ -38,7 +40,9 @@ const NAME = (p: GraphParticipant | undefined): string => p?.nickname?.trim() ||
  *
  * `size` 는 판의 한 변. 사람이 늘면 키우고(둘레 확보) 이름표는 좁힌다.
  */
-function ovalFor(n: number): { size: number; pill: number; r: number } {
+function ovalFor(n: number, compact: boolean): { size: number; pill: number; r: number } {
+  // 공유 이미지 안에서는 자리가 정해져 있다. 노드를 최대 7개로 줄이므로 판도 하나면 된다.
+  if (compact) return { size: 236, pill: 62, r: 37 };
   if (n <= 4) return { size: 220, pill: 96, r: 33 };
   if (n <= 7) return { size: 292, pill: 88, r: 36 };
   return { size: 348, pill: 70, r: 39 };
@@ -54,12 +58,13 @@ function pickRepresentatives(
   all: GraphParticipant[],
   pairs: PairMatch[],
   myKey: string,
-  trackCount?: number
+  trackCount: number | undefined,
+  limit: number
 ): string[] {
   const { highest, lowest } = pickHighlightEdges(pairs, trackCount);
   const picked: string[] = [myKey];
   const add = (k: string) => {
-    if (k && !picked.includes(k) && picked.length < SUMMARY_NODES) picked.push(k);
+    if (k && !picked.includes(k) && picked.length < limit) picked.push(k);
   };
   for (const e of [...highest, ...(lowest ? [lowest] : [])]) {
     add(e.aKey);
@@ -81,6 +86,7 @@ export default function TasteRelationGraph({
   onSelect,
   onOpenMore,
   trackCount,
+  compact,
 }: {
   participants: GraphParticipant[];
   pairs: PairMatch[];
@@ -92,14 +98,21 @@ export default function TasteRelationGraph({
   onOpenMore: () => void;
   /** 방의 곡 수. 강조선 문턱에 쓴다. */
   trackCount?: number;
+  /**
+   * 공유 이미지 안에 넣을 때. 판을 줄이고 노드를 최대 7개로 묶으며, 누를 수 없게 한다.
+   * 화면에서 쓰는 것과 같은 배치·같은 강조선이라 그림이 달라지지 않는다.
+   */
+  compact?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
+  const still = compact || reduceMotion;
 
   const view = useMemo(() => {
     const byKey = new Map(participants.map((p) => [p.key, p]));
-    const summary = participants.length > GRAPH_NODE_LIMIT;
+    const limit = compact ? COMPACT_LIMIT : GRAPH_NODE_LIMIT;
+    const summary = participants.length > limit;
     const shownKeys = summary
-      ? pickRepresentatives(participants, pairs, myKey, trackCount)
+      ? pickRepresentatives(participants, pairs, myKey, trackCount, compact ? COMPACT_NODES : SUMMARY_NODES)
       : // 나를 맨 위에 두고, 나머지는 나와 닮은 순으로 시계 방향. 자료가 같으면 자리도 같다.
         [
           myKey,
@@ -117,7 +130,7 @@ export default function TasteRelationGraph({
 
     const hiddenCount = participants.length - shownKeys.length;
     const slots = shownKeys.length + (hiddenCount > 0 ? 1 : 0);
-    const { size, pill, r } = ovalFor(slots);
+    const { size, pill, r } = ovalFor(slots, !!compact);
 
     // 나는 언제나 12시. 나머지는 시계 방향으로 고르게.
     const at = (i: number) => {
@@ -152,7 +165,7 @@ export default function TasteRelationGraph({
     }
 
     return { byKey, shownKeys, hiddenCount, positions, morePos, edges, size, pill, selectedPair, summary };
-  }, [participants, pairs, myKey, selectedKey, trackCount]);
+  }, [participants, pairs, myKey, selectedKey, trackCount, compact]);
 
   const isSelectedEdge = (p: PairMatch) =>
     !!selectedKey && (p.aKey === myKey || p.bKey === myKey) && otherKey(p, myKey) === selectedKey;
@@ -180,7 +193,7 @@ export default function TasteRelationGraph({
               /* 고른 선 말고는 흐리게 하되 지우지는 않는다. 들어오자마자 한 명이 골라져 있어서
                  너무 흐리면 "가장 닮은 조합 둘, 가장 다른 하나"라는 기본 그림이 사라진다. */
               opacity={dim ? 0.5 : kind === "close" ? 0.95 : kind === "far" ? 0.6 : 0.75}
-              style={{ transition: reduceMotion ? undefined : "opacity .2s, stroke-width .2s" }}
+              style={{ transition: still ? undefined : "opacity .2s, stroke-width .2s" }}
             />
           );
         })}
@@ -199,9 +212,9 @@ export default function TasteRelationGraph({
           <motion.button
             key={key}
             type="button"
-            layout={!reduceMotion}
-            transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 260, damping: 30 }}
-            disabled={me}
+            layout={!still}
+            transition={still ? { duration: 0 } : { type: "spring", stiffness: 260, damping: 30 }}
+            disabled={me || !!compact}
             onClick={() => !me && onSelect(key)}
             aria-pressed={me ? undefined : selected}
             aria-label={

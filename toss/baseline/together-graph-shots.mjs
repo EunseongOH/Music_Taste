@@ -156,6 +156,27 @@ for (const n of [2, 6, 10, 15]) {
       await page.waitForTimeout(700);
       await shoot('n6-detail', true);
     }
+    /*
+     * 공유 이미지 카드. 제품 코드에서는 화면 밖(-9999px)에 두는데 — html-to-image 는 DOM 을
+     * 읽으므로 보이지 않아도 된다 — Playwright 는 그 자리로 스크롤하지 못해 엉뚱한 곳을 찍는다.
+     * 그래서 찍을 때만 잠깐 화면 안으로 끌어온다.
+     */
+    const card = page.locator('#together-share-card');
+    if (await card.count()) {
+      await page.evaluate(() => {
+        const el = document.getElementById('together-share-card');
+        Object.assign(el.parentElement.style, { position: 'fixed', top: '0', left: '0', zIndex: '99999' });
+      });
+      await page.waitForTimeout(500);
+      writeFileSync(join(OUT, 'n6-card.png'), await card.screenshot());
+      const box = await card.boundingBox();
+      console.log(`  n6-card.png  ${box.width}×${box.height} (${(box.width / box.height).toFixed(3)} — 4:5 는 0.800)`);
+      await page.evaluate(() => {
+        const el = document.getElementById('together-share-card');
+        Object.assign(el.parentElement.style, { position: '', top: '', left: '', zIndex: '' });
+      });
+      await page.waitForTimeout(300);
+    }
     // 공유 시트
     const share = page.getByRole('button', { name: '결과 공유하기' });
     if (await share.count()) {

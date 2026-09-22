@@ -270,6 +270,13 @@ export default function TogetherNewPage() {
    * 아티스트로 만든 방은 아티스트명, 그 밖에는 출처의 제목을 그대로 쓴다.
    */
   const [title, setTitle] = useState("");
+  /**
+   * 직접 적은 방 이름. `title` 과 따로 둔다 — `title` 은 아티스트를 고르면 그 이름으로
+   * 채워져서(로딩 화면·공유 문구가 쓴다) 입력칸에 그대로 물리면 "선택"이 아니게 된다.
+   * 비워 두면 지금까지처럼 아티스트명이 방 이름이 된다.
+   */
+  const [roomName, setRoomName] = useState("");
+  const [namingRoom, setNamingRoom] = useState(false);
   /*
    * 이름을 묻는 창은 **만들기를 누른 뒤**에 뜬다. 이름이 이미 있는 사람에게는 뜨지 않는다.
    * "이름이 없다" = 비로그인이거나, 로그인했지만 닉네임을 아직 확인하지 않은 경우
@@ -531,7 +538,7 @@ export default function TogetherNewPage() {
       // 아티스트를 골라 만든 방이면 초대 화면 배경에 쓸 사진을 함께 남긴다.
       artistId: source.artistId ?? null,
       artistImage: source.artistImage ?? null,
-      title: title.trim() || source.title,
+      title: roomName.trim() || title.trim() || source.title,
       tracks: chosen,
       sourceResultId: source.resultId,
     });
@@ -922,6 +929,37 @@ export default function TogetherNewPage() {
             >
               <AlertCircle size={13} />
               곡 정보가 잘못됐나요?
+            </button>
+          )}
+
+          {/*
+           * 방 이름은 선택이다. 대부분은 아티스트 이름 그대로 두면 되므로 입력칸을 늘 열어 두지
+           * 않는다 — 빈 칸이 보이면 채워야 할 것 같아진다. 누른 사람에게만 연다.
+           * 비워 두면 `title.trim() || source.title` 이 아티스트명을 그대로 쓴다.
+           */}
+          {namingRoom ? (
+            <div className="mt-6">
+              <label htmlFor="room-name" className="type-caption text-navy/70">
+                방 이름 (선택)
+              </label>
+              <input
+                id="room-name"
+                autoFocus
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                maxLength={40}
+                placeholder={source.title}
+                className="w-full mt-1.5 h-12 px-4 rounded-2xl bg-cream border border-navy/15 text-navy type-body placeholder:text-navy/50 focus:outline-2 focus:outline-offset-0 focus:outline-[var(--t-point-ink)]"
+              />
+              <p className="type-caption text-navy/70 mt-1.5">비워 두면 &apos;{source.title}&apos;로 보여요.</p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setNamingRoom(true)}
+              className="w-full mt-6 py-2.5 rounded-2xl text-navy/70 type-caption flex items-center justify-center gap-1.5 hover:text-navy hover:bg-navy/5 transition-colors cursor-pointer"
+            >
+              <Plus size={13} />
+              방 이름 추가 (선택)
             </button>
           )}
 

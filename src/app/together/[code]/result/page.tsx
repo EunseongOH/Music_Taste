@@ -12,6 +12,8 @@ import {
   rememberedNickname, fetchChallenge, fetchEntries, participantKey, saveEntry, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
 import { RankList, Sheet, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
 import TogetherPairDetail from "@/components/together/TogetherPairDetail";
+import TogetherResultShareCard from "@/components/together/TogetherResultShareCard";
+import { useInlinedCovers } from "@/utils/useInlinedCovers";
 
 interface StoredTrack {
   id?: string;
@@ -129,6 +131,10 @@ export default function TogetherResultPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [showAllMine, setShowAllMine] = useState(false);
+  const [saving, setSaving] = useState(false);
+  /** 공유 카드 안의 아티스트 사진. 저장 시점에 다시 내려받으면 빈 칸으로 찍힐 수 있다. */
+  const heroForCard = challenge?.artist_image || null;
+  const inlined = useInlinedCovers(heroForCard ? [heroForCard] : []);
 
   /*
    * 고른 사람은 기억하되 **자리를 계산으로 정한다**(상태를 고쳐 맞추지 않는다).
@@ -350,6 +356,25 @@ export default function TogetherResultPage() {
             }}
           />
           <SheetAction
+            label={saving ? "이미지를 만들고 있어요" : "결과 이미지 저장"}
+            onClick={async () => {
+              if (saving) return;
+              const el = document.getElementById(SHARE_CARD_ID);
+              if (!el) return;
+              setSaving(true);
+              try {
+                await platform.saveImage(el, `${artistLabel}_Sortify_together.png`);
+                setShareOpen(false);
+                showToast("이미지를 저장했어요");
+              } catch (e) {
+                // 토스 구버전은 저장 자체를 지원하지 않는다(PlatformError 로 이유가 온다).
+                showToast(e instanceof Error ? e.message : "이미지를 저장하지 못했어요", "error");
+              } finally {
+                setSaving(false);
+              }
+            }}
+          />
+          <SheetAction
             label="링크 복사하기"
             onClick={async () => {
               const how = await platform.copyText(link);
@@ -405,10 +430,33 @@ export default function TogetherResultPage() {
           setSheetOpen(false);
         }}
       />
+      {/*
+        공유 이미지용 카드. 화면 밖에 두되 마운트는 해 둔다 — display:none 이면 크기가 0 이라
+        캡처가 빈 이미지가 된다(취향표 내보내기가 쓰는 방식 그대로).
+      */}
+      <div className="absolute top-[-9999px] left-[-9999px] pointer-events-none select-none" aria-hidden>
+        <TogetherResultShareCard
+          id={SHARE_CARD_ID}
+          artistLabel={artistLabel}
+          trackCount={challenge.tracks.length}
+          participantCount={entries.length}
+          groupRate={groupRate}
+          participants={participants}
+          pairs={pairs}
+          myKey={key}
+          artistImage={heroForCard ? inlined[heroForCard] ?? heroForCard : null}
+          /* 방 이름을 따로 적은 경우에만. 기본값은 아티스트명이라 두 번 적게 된다. */
+          roomName={challenge.title && challenge.title !== challenge.artist_name ? challenge.title : null}
+        />
+      </div>
+
       <Toast toast={toast} />
     </main>
   );
 }
+
+/** 공유 카드를 캡처할 때 찾는 이름. */
+const SHARE_CARD_ID = "together-share-card";
 
 /** 공유·초대 시트의 한 줄. 손가락에 맞는 높이와 포커스 표시를 한곳에서 지킨다. */
 function SheetAction({ label, onClick }: { label: string; onClick: () => void }) {
