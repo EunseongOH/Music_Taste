@@ -97,7 +97,11 @@ export interface PairMatch {
   rate: number;
   common: number;
   sameTop: boolean;
-  /** 둘 다 자기 TOP N 에 둔 곡 수. N 은 `getTopK(common)`. */
+  /**
+   * 서로 TOP N 에 둔 곡 수. N 은 `getTopK(common)`.
+   * **두 사람이 모두 줄 세운 곡 안에서** 센다 — 한 사람을 골라 보는 자리의 숫자라,
+   * 상대가 빼 버린 곡까지 넣어 세면 그 사람과의 관계를 말하는 게 아니게 된다.
+   */
   topOverlap: number;
   /**
    * 순위가 가장 갈린 곡. **고르는 기준은 공통 곡 안에서의 순위 차이**(실제 의견 차),
@@ -130,7 +134,26 @@ export function getTopK(common: number): number {
   return 0;
 }
 
-/** 둘 다 자기 TOP k 에 둔 곡(내 순위 순). */
+/**
+ * 두 사람이 모두 줄 세운 곡만 남긴, 각자의 순서.
+ *
+ * 한 사람을 골라 비교할 때는 이 순서를 쓴다. 상대가 모르는 곡으로 뺀 곡이
+ * 내 1위였다면, 그 사람과의 TOP 3 는 **그 사람도 줄 세운 곡 중에서** 세는 게 맞다.
+ */
+export function commonOrders(mine: string[], theirs: string[]): { mine: string[]; theirs: string[] } {
+  const theirSet = new Set(theirs);
+  const shared = mine.filter((id) => theirSet.has(id));
+  const sharedSet = new Set(shared);
+  return { mine: shared, theirs: theirs.filter((id) => sharedSet.has(id)) };
+}
+
+/**
+ * 둘 다 자기 TOP k 에 둔 곡(내 순위 순).
+ *
+ * 넘기는 순위가 무엇이냐로 뜻이 갈린다.
+ * - 전체 소트를 넘기면 "둘 다 자기 전체 3위 안에 넣은 곡"
+ * - `commonOrders()` 를 거쳐 넘기면 "그 사람과 겹친 곡 중 서로 3위 안에 둔 곡"
+ */
 export function getSharedTopTracks(mine: string[], theirs: string[], k: number): string[] {
   if (k <= 0) return [];
   const theirTop = new Set(theirs.slice(0, k));
@@ -161,6 +184,7 @@ function pairOf(a: Participant, b: Participant): PairMatch {
   const gapId = m.biggestGap?.id ?? null;
   const aRank = rankMap(a.ranking);
   const bRank = rankMap(b.ranking);
+  const shared = commonOrders(a.ranking, b.ranking);
   return {
     aKey: a.key,
     bKey: b.key,
@@ -169,7 +193,7 @@ function pairOf(a: Participant, b: Participant): PairMatch {
     rate: m.rate,
     common: m.common,
     sameTop: m.sameTop,
-    topOverlap: getSharedTopTracks(a.ranking, b.ranking, getTopK(m.common)).length,
+    topOverlap: getSharedTopTracks(shared.mine, shared.theirs, getTopK(m.common)).length,
     biggestGap: gapId ? { id: gapId, aRank: aRank.get(gapId)!, bRank: bRank.get(gapId)! } : null,
     comparable: m.common >= 2,
   };
@@ -208,11 +232,24 @@ export function groupMatchRate(pairs: PairMatch[]): number | null {
  * 쌍이 셋 미만이면 `lowest` 를 두지 않는다. 둘뿐인데 "가장 다른 조합"이라고 부르면
  * 같은 선에 두 이름을 붙이는 꼴이고, 하나뿐이면 비교 자체가 없다.
  */
-export function pickHighlightEdges(pairs: PairMatch[]): {
+export function pickHighlightEdges(
+  pairs: PairMatch[],
+  /**
+   * 방의 곡 수. 주면 **절반 이상을 함께 줄 세운 쌍만** 강조선 후보가 된다.
+   *
+   * 곡을 적게 남길수록 우연히 순서가 맞을 확률이 높다 — 12곡 중 4곡만 겹친 쌍이
+   * 100% 로 머리기사를 가져가면 끝까지 맞춘 쌍이 밀린다. 보통은 뺀 곡이 없거나
+   * 한둘이라 아무 영향이 없고, 극단적인 경우에만 걸린다.
+   * 후보가 하나도 안 남으면 문턱을 무시한다(강조선이 사라지는 편이 더 나쁘다).
+   */
+  trackCount?: number
+): {
   highest: PairMatch[];
   lowest: PairMatch | null;
 } {
-  const usable = pairs.filter((p) => p.comparable);
+  const comparable = pairs.filter((p) => p.comparable);
+  const enough = trackCount ? comparable.filter((p) => p.common * 2 >= trackCount) : comparable;
+  const usable = enough.length > 0 ? enough : comparable;
   if (usable.length === 0) return { highest: [], lowest: null };
   const highest = [...usable].sort((x, y) => y.rate - x.rate || byKey(x, y)).slice(0, 2);
   if (usable.length < 3) return { highest, lowest: null };

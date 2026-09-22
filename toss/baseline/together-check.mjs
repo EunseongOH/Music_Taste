@@ -6,7 +6,7 @@
 import {
   matchRate, averageRate, makeCode,
   buildPairwiseMatches, groupMatchRate, pickHighlightEdges, partnersOf,
-  getTopK, getSharedTopTracks, buildRankComparison,
+  getTopK, getSharedTopTracks, buildRankComparison, commonOrders,
 } from '../../src/utils/togetherMatch.ts';
 
 let failed = 0;
@@ -201,8 +201,56 @@ const rateOf = (pairs, a, b) =>
   const a = ['t1', 't2', 't3', 't4', 't5'];
   const b = ['t3', 't9', 't1', 't4', 't5'];
   check(JSON.stringify(getSharedTopTracks(a, b, 3)) === JSON.stringify(['t1', 't3']),
-    '둘 다 TOP 3 에 둔 곡', JSON.stringify(getSharedTopTracks(a, b, 3)));
+    '전체 소트 기준 — 둘 다 자기 TOP 3 에 둔 곡', JSON.stringify(getSharedTopTracks(a, b, 3)));
   check(getSharedTopTracks(a, b, 0).length === 0, 'TOP N 이 0 이면 빈 목록');
+}
+
+{
+  // 전체 기준과 상대 기준은 다른 답을 낸다 — 화면이 둘을 갈라 쓴다.
+  const mine = ['t1', 't2', 't3', 't4', 't5', 't6'];
+  const theirs = ['t3', 't4', 't5', 't6'];       // 내 1·2위를 모르는 곡으로 뺐다
+  check(JSON.stringify(getSharedTopTracks(mine, theirs, 3)) === JSON.stringify(['t3']),
+    '전체 기준 — 상대가 뺀 곡까지 세어 1곡', JSON.stringify(getSharedTopTracks(mine, theirs, 3)));
+
+  const co = commonOrders(mine, theirs);
+  check(JSON.stringify(co.mine) === JSON.stringify(['t3', 't4', 't5', 't6']) &&
+        JSON.stringify(co.theirs) === JSON.stringify(['t3', 't4', 't5', 't6']),
+    '겹친 곡만 남긴 각자의 순서');
+  check(JSON.stringify(getSharedTopTracks(co.mine, co.theirs, 3)) === JSON.stringify(['t3', 't4', 't5']),
+    '상대 기준 — 겹친 곡 안에서 서로 TOP 3 에 둔 곡 3곡',
+    JSON.stringify(getSharedTopTracks(co.mine, co.theirs, 3)));
+
+  // 쌍의 topOverlap 은 상대 기준이다
+  const pair = buildPairwiseMatches([p('a', '나', mine), p('b', '너', theirs)])[0];
+  check(pair.common === 4 && getTopK(4) === 2 && pair.topOverlap === 2,
+    'PairMatch.topOverlap 은 겹친 곡 기준', `공통 ${pair.common}곡 · TOP ${getTopK(pair.common)} 중 ${pair.topOverlap}`);
+}
+
+{
+  // 강조선 문턱 — 곡을 적게 남긴 쌍이 머리기사를 가져가지 않는다
+  const T = ids(12);
+  const people = [
+    p('a', '은은', T),
+    p('b', '지민', [T[2], T[0], T[1], ...T.slice(3)]),   // 12곡 끝까지, 거의 같음
+    p('c', '현우', T.slice(0, 4)),                        // 4곡만 남김 → a 와 100%
+  ];
+  const pairs = buildPairwiseMatches(people);
+  const loose = pickHighlightEdges(pairs);
+  const tight = pickHighlightEdges(pairs, 12);
+  check(loose.highest[0].rate === 100 && loose.highest[0].bKey === 'c',
+    '문턱이 없으면 4곡만 남긴 쌍이 1등', `${loose.highest[0].aKey}-${loose.highest[0].bKey} ${loose.highest[0].rate}%`);
+  check(tight.highest.every((x) => x.common * 2 >= 12),
+    '문턱을 주면 절반 이상 겹친 쌍만 강조선에 오른다',
+    tight.highest.map((x) => `${x.aKey}-${x.bKey}(${x.common}곡)`).join(', '));
+
+  // 뺀 곡이 없거나 한둘인 보통 방에서는 문턱이 아무것도 바꾸지 않는다
+  const normal = buildPairwiseMatches([p('a', '가', T), p('b', '나', [...T].reverse()), p('c', '다', T.slice(0, 11))]);
+  check(JSON.stringify(pickHighlightEdges(normal)) === JSON.stringify(pickHighlightEdges(normal, 12)),
+    '보통 방에서는 문턱이 결과를 바꾸지 않는다');
+
+  // 아무도 문턱을 못 넘으면 문턱을 무시한다 — 강조선이 사라지는 편이 더 나쁘다
+  const allShort = buildPairwiseMatches([p('a', '가', T.slice(0, 3)), p('b', '나', T.slice(0, 3))]);
+  check(pickHighlightEdges(allShort, 12).highest.length === 1, '후보가 없으면 문턱을 무시한다');
 }
 
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);
