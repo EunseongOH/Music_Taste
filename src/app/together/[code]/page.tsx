@@ -148,13 +148,21 @@ export default function TogetherInvitePage() {
         방장 화면은 예전 그대로다.
       */}
       {!iAmCreator && hero ? (
-        <div className="relative h-[320px]">
-          <SafeImage src={hero} alt={artist ?? challenge.title} fill sizes="430px" fallbackType="artist" className="object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/5 via-[var(--app-bg)]/60 to-[var(--app-bg)]" />
-          <div className="absolute left-4 top-4">
+        /*
+         * 사진은 화면 폭을 꽉 채운다. 이 화면을 감싸는 레이아웃이 좌우 여백을 주므로
+         * 그만큼 밖으로 빼낸다(-mx-6 + w-[calc(100%+3rem)]).
+         *
+         * 딤은 위에서부터 시작한다 — 초대 문구 둘째 줄(회색)이 사진이 비치는 자리에
+         * 걸리면 첫 줄보다 읽기 어렵다. 글자가 놓이는 아래 절반은 바탕색에 거의 닿게 둬서
+         * 밝은 사진에서도 4.5:1 을 넘긴다.
+         */
+        <div className="relative h-[320px] -mx-6 w-[calc(100%+3rem)]">
+          <SafeImage src={hero} alt={artist ?? challenge.title} fill sizes="100vw" fallbackType="artist" className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/20 via-[var(--app-bg)]/85 to-[var(--app-bg)]" />
+          <div className="absolute left-10 top-4">
             <BackButton className="w-9 h-9" onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
           </div>
-          <div className="absolute inset-x-0 bottom-0 px-6 pb-4">
+          <div className="absolute inset-x-0 bottom-0 px-12 pb-4">
             <h1 className="type-title-1 text-navy break-keep">
               {artist ? `${artist} 소트에 초대받았어요!` : `'${challenge.title}' 소트에 초대받았어요!`}
             </h1>

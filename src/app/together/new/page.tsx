@@ -596,9 +596,16 @@ export default function TogetherNewPage() {
         </>
       )}
 
-      {/* 고른 아티스트로 넘어가는 자리. 눌러야 곡 목록을 받는다. */}
+      {/*
+        고른 아티스트로 넘어가는 자리. 눌러야 곡 목록을 받는다.
+
+        하단 고정 래퍼에는 z 를 준다 — 앨범 카드가 framer-motion layout 으로 움직이며
+        쌓임 문맥을 만들고, 펼친 카드와 LP 에 z 가 붙어 있어 z 없는 고정 버튼을 넘어섰다.
+        시트(999·1000)와 토스트(1100)보다는 낮게 둔다 — 그것들은 버튼 위에 떠야 한다.
+      */}
       {pendingArtist && (
-        <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[900] px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
           <div className="w-full max-w-[382px] pointer-events-auto">
             <button
               onClick={() => openTracks(pendingArtist)}
@@ -806,7 +813,7 @@ export default function TogetherNewPage() {
             </ul>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+          <div className="fixed bottom-0 left-0 right-0 z-[900] px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
             <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
               {chosen.length < 4 && <p className="type-caption text-point-ink text-center">최소 4곡이 필요해요</p>}
               <button onClick={make} disabled={busy || chosen.length < 4} className={`${primaryButton} w-full`}>
