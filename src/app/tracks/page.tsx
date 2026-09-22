@@ -23,11 +23,10 @@ import { songKey, betterTitle } from "@/utils/songKey";
 import SpotifyLink from "@/components/SpotifyLink";
 import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { getYouTubeVideoId, type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const translations = {
   ko: {
-    loadingTitle: "트랙 정리 중...",
-    loadingDesc: "아티스트의 발매곡 정보를 받아오고 있어요",
     title: "트랙 디깅하기",
     subtitle: "앨범 커버를 탭해서 수록곡을 파헤쳐보세요",
     searchPlaceholder: "선택한 아티스트의 곡 제목 검색...",
@@ -69,8 +68,6 @@ const translations = {
     needAtLeast4: "월드컵을 하려면 최소 4곡을 골라야 해요.",
   },
   en: {
-    loadingTitle: "Organizing Tracks...",
-    loadingDesc: "Fetching release information from the artists",
     title: "Digging Tracks",
     subtitle: "Tap album covers to explore their tracks",
     searchPlaceholder: "Search track titles of selected artists...",
@@ -1293,17 +1290,14 @@ export default function TracksPage() {
   const t = locale === "en" ? translations.en : translations.ko;
 
   if (!isLoaded) {
+    /*
+     * 아직 누구의 곡인지 모른다 — 고른 아티스트를 저장소에서 읽는 중이라
+     * 이름을 줄 수 없다. 같이 소트하기는 아티스트를 이미 알고 들어오므로
+     * 거기서는 이름이 들어간다.
+     */
     return (
-      <main className="flex flex-col min-h-screen relative z-10 w-full items-center justify-center bg-[var(--app-bg)]">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-          className="mb-8 relative w-20 h-20 flex items-center justify-center text-point opacity-80"
-        >
-          <Disc size={80} strokeWidth={1} />
-        </motion.div>
-        <h1 className="text-2xl text-navy font-bold tracking-tight">{t.loadingTitle}</h1>
-        <p className="font-sans text-sm text-charcoal/70 mt-2 font-medium">{t.loadingDesc}</p>
+      <main className="relative z-10">
+        <LoadingScreen locale={locale === "en" ? "en" : "ko"} />
       </main>
     );
   }

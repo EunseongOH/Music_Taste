@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, Loader2, Plus, Search, X } from "lucide-react";
 import { SafeImage } from "@/components/SafeImage";
-import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
+import { AlbumCard, useAlbumAccordion, useAlbumPaging } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
 import FeedbackModal from "@/components/FeedbackModal";
+import LoadingScreen from "@/components/LoadingScreen";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
@@ -51,6 +52,9 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
     </span>
   );
 }
+
+/** 한 번에 보여 줄 앨범 수. 2열 그리드라 5줄이다. */
+const ALBUM_PAGE = 10;
 
 /** 카탈로그가 주는 곡. RankedTrack 에 앨범 정보가 더 붙어 있다. */
 type CatalogTrack = RankedTrack & { albumName?: string; releaseDate?: string };
@@ -381,6 +385,14 @@ export default function TogetherNewPage() {
     null;
   const chosen = useMemo(() => (source ? source.tracks.filter((t) => !off.has(t.id)) : []), [source, off]);
 
+  /*
+   * 앨범 묶음. 한 화면에 ALBUM_PAGE 장씩 보여 주고 "더 보기"로 뒤에 붙인다 —
+   * 앨범을 많이 낸 아티스트에서 목록 아래의 미발매곡 추가·제보까지 스크롤이
+   * 너무 길었다. 아티스트가 바뀌면 처음 묶음으로 돌아간다.
+   */
+  const albums = useMemo(() => (source?.artistId ? groupByAlbum(source.tracks) : []), [source]);
+  const paging = useAlbumPaging(albums.length, ALBUM_PAGE, source?.key ?? null);
+
   /** 주어진 곡들을 한꺼번에 넣거나 뺀다(`off` 는 "뺀 곡" 목록이다). */
   const pickTracks = (ids: string[], on: boolean) =>
     setOff((prev) => {
@@ -485,6 +497,15 @@ export default function TogetherNewPage() {
     );
   }
 
+  /*
+   * 곡을 모으는 동안은 화면을 넘긴다 — 전곡 모드와 같은 화면이다.
+   * 버튼 글자만 바꾸면 눌렀는데 아무 일도 안 일어난 것처럼 보이고, 그 사이에
+   * 다른 아티스트를 또 누를 수도 있다.
+   */
+  if (artistBusy && pendingArtist) {
+    return <LoadingScreen artist={pendingArtist.name} />;
+  }
+
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
       <BackButton
@@ -563,7 +584,6 @@ export default function TogetherNewPage() {
             — 다음에 와서 얼굴이 바뀌어 있는 게 의도된 것임을 알린다. 교체 규칙은
             /api/together/catalog 의 PICK_COVERAGE·PICK_SIZE·weekIndex 에 있다. */}
         <SectionTitle title="이번주 소트 추천 아티스트" className="mt-8 mb-1" />
-        <p className="type-caption text-navy/60">전곡이 다 있는 아티스트 중에서 매주 바꿔 올려요.</p>
         <ul className="grid grid-cols-3 gap-x-3 gap-y-6 mt-5">
           {(artists ?? []).map((artist) => {
             const isOn = pendingArtist?.id === artist.id;
@@ -628,7 +648,7 @@ export default function TogetherNewPage() {
               disabled={artistBusy}
               className={`${primaryButton} w-full`}
             >
-              {artistBusy ? "곡을 불러오는 중" : `${pendingArtist.name} 곡 고르기`}
+              {`${pendingArtist.name} 곡 고르기`}
             </button>
           </div>
         </div>
@@ -662,7 +682,7 @@ export default function TogetherNewPage() {
              * 모양·모션은 src/components/album/AlbumCard.tsx 에서만 정한다.
              */
             <ul className="grid grid-cols-2 gap-4">
-              {groupByAlbum(source.tracks).map((album) => {
+              {albums.slice(0, paging.shown).map((album) => {
                 const ids = album.tracks.map((track) => track.id);
                 const picked = ids.filter((id) => !off.has(id)).length;
                 return (
@@ -740,6 +760,14 @@ export default function TogetherNewPage() {
                 );
               })}
             </ul>
+          )}
+
+          {paging.hasMore && (
+            <div className="flex justify-center mt-6">
+              <button onClick={paging.more} className={secondaryButton}>
+                앨범 더 보기 ({albums.length - paging.shown}장 남음)
+              </button>
+            </div>
           )}
 
           {source.artistId && (

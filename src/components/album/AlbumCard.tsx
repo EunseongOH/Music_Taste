@@ -53,6 +53,30 @@ export function useAlbumAccordion(onOpen?: (id: string) => void) {
   return { openId, setOpenId, toggle, cardRef, reduceMotion };
 }
 
+/**
+ * 앨범을 몇 장씩 끊어 보여 준다.
+ *
+ * 앨범을 많이 낸 아티스트에서는 목록 아래에 있는 것들(미발매곡 추가, 오류 제보,
+ * 만들기 버튼)까지 스크롤이 너무 길어 사실상 못 쓴다. 페이지 번호가 아니라
+ * "더 보기"로 뒤에 붙이는 이유: 앨범이 사라지지 않으므로 펼쳐 둔 앨범도,
+ * 골라 둔 곡도 그대로 있다. 페이지를 넘기며 뭘 접을지 정할 일이 없다.
+ *
+ * @param pageSize 한 번에 보여 줄 장수. 주지 않으면 전부 보여 준다.
+ * @param resetKey 이게 바뀌면 처음 한 묶음으로 돌아간다(보통 아티스트 id).
+ */
+export function useAlbumPaging(total: number, pageSize?: number, resetKey?: string | null) {
+  const [pages, setPages] = useState(1);
+  // 되돌리기는 effect 가 아니라 렌더 중에 한다 — effect 로 하면 한 번 옛 묶음을 그린 뒤
+  // 다시 그려서 화면이 깜빡인다(React 가 권하는 "prop 이 바뀌면 state 조정" 꼴).
+  const [lastKey, setLastKey] = useState(resetKey);
+  if (resetKey !== lastKey) {
+    setLastKey(resetKey);
+    setPages(1);
+  }
+  const shown = pageSize ? Math.min(total, pages * pageSize) : total;
+  return { shown, hasMore: shown < total, more: () => setPages((n) => n + 1) };
+}
+
 interface AlbumCardProps {
   id: string;
   title: string;
