@@ -92,15 +92,17 @@ export async function verifyAnonKey(hash: string): Promise<VerifyResult> {
             });
             return;
           }
-          let parsed: { resultType?: string; success?: string; error?: { errorCode?: string; reason?: string } };
+          let parsed: { resultType?: string; success?: string | boolean; error?: { errorCode?: string; reason?: string } };
           try {
             parsed = JSON.parse(body);
           } catch {
             resolve({ ok: false, reason: 'upstream_error', detail: `파싱 실패: ${body.slice(0, 200)}` });
             return;
           }
-          // success 는 문자열 "true" 다(불리언이 아니다).
-          if (parsed.resultType === 'SUCCESS' && parsed.success === 'true') {
+          // success 는 문서상 문자열 "true" 인데 실제로는 불리언 true 로도 온다
+          // (2026-09-22 실기기: {"resultType":"SUCCESS","success":true} 를 문자열 비교로 떨어뜨려
+          //  유효한 키를 invalid_key 로 막았다). 둘 다 받는다.
+          if (parsed.resultType === 'SUCCESS' && (parsed.success === 'true' || parsed.success === true)) {
             resolve({ ok: true });
             return;
           }
