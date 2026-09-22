@@ -53,6 +53,67 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
   );
 }
 
+/** 카탈로그가 흘려보내는 진행 상황 한 줄. 라우트의 Progress 와 짝이다. */
+type CatalogLine =
+  | { t: "albums"; got: number; total: number }
+  | { t: "tracks"; done: number; total: number }
+  | { t: "done"; tracks: CatalogTrack[]; notReady: boolean };
+
+/**
+ * 곡을 받으면서 진행률을 알려 준다.
+ *
+ * 일의 총량은 "앨범 수 x 2" 다 — 앨범 목록에 오르는 일과 그 앨범의 곡을 받는 일.
+ * 두 루프가 모두 앨범 단위라 실제로 끝난 만큼만 센다. 전체 앨범 수를 모르는
+ * 첫 구간은 null(불확정)로 둔다.
+ *
+ * 스트림을 못 읽는 환경(오래된 WebView, 중간에서 모아 보내는 프록시)이면 본문을
+ * 통째로 받아 마지막 줄만 쓴다 — 진행률만 못 보고 결과는 같다.
+ */
+async function streamCatalog(
+  artistId: string,
+  onProgress: (value: number | null) => void
+): Promise<{ tracks: CatalogTrack[]; notReady: boolean }> {
+  const empty = { tracks: [] as CatalogTrack[], notReady: true };
+  let result = empty;
+
+  const take = (line: string) => {
+    if (!line.trim()) return;
+    let msg: CatalogLine;
+    try {
+      msg = JSON.parse(line) as CatalogLine;
+    } catch {
+      return; // 잘린 줄. 다음 조각에서 이어 붙는다.
+    }
+    if (msg.t === "albums") onProgress(msg.total ? msg.got / (msg.total * 2) : null);
+    else if (msg.t === "tracks") onProgress(msg.total ? 0.5 + msg.done / (msg.total * 2) : null);
+    else result = { tracks: msg.tracks ?? [], notReady: !!msg.notReady };
+  };
+
+  try {
+    const res = await fetch(`/api/together/catalog?artistId=${encodeURIComponent(artistId)}&stream=1`);
+    if (!res.body) {
+      (await res.text()).split("\n").forEach(take);
+      return result;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      lines.forEach(take);
+    }
+    take(buffer);
+  } catch (err) {
+    console.error("[together] 곡을 받지 못했습니다:", err);
+    return empty;
+  }
+  return result;
+}
+
 /** 한 번에 보여 줄 앨범 수. 2열 그리드라 5줄이다. */
 const ALBUM_PAGE = 10;
 
@@ -123,6 +184,8 @@ export default function TogetherNewPage() {
   const [artistQuery, setArtistQuery] = useState("");
   const [artists, setArtists] = useState<CatalogArtist[] | null>(null);
   const [artistBusy, setArtistBusy] = useState(false);
+  /** 곡을 모으는 진행률 0~1. 전체 앨범 수를 모르는 구간은 null 이다. */
+  const [progress, setProgress] = useState<number | null>(null);
   /** 어떤 검색어로 받아 온 목록인지. 지금 입력과 다르면 아직 찾는 중이다. */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [artistSource, setArtistSource] = useState<Source | null>(null);
@@ -302,26 +365,46 @@ export default function TogetherNewPage() {
     setTitle(artist.name);
   };
 
-  /** 2단계로. 여기서 곡을 받고 주소에 자국을 남긴다. */
+  /**
+   * 2단계로. **먼저 넘어가고 그다음 받는다.**
+   *
+   * 전에는 다 받을 때까지 1단계에 머물며 버튼 글자만 바뀌어서, 눌렀는데 아무 일도
+   * 안 일어난 것처럼 보였다(그사이 다른 아티스트를 또 누를 수도 있었다).
+   * 이제 화면이 바로 바뀌고, 그 안에서 진행 상황을 보여 준다.
+   *
+   * 진행률은 서버가 흘려보내 주는 실제 숫자다. 일의 총량을 "앨범 수 × 2"
+   * (목록에 실린 앨범 + 곡까지 받은 앨범)로 잡고 끝난 만큼만 채운다. 전체 앨범
+   * 수를 모르는 첫 구간만 불확정 바다.
+   */
   const openTracks = async (artist: CatalogArtist) => {
     setArtistBusy(true);
-    const res = await fetch(`/api/together/catalog?artistId=${encodeURIComponent(artist.id)}`);
-    const json = (await res.json()) as { tracks?: CatalogTrack[]; notReady?: boolean };
-    const tracks = json.tracks ?? [];
+    setProgress(null);
+    setArtistSource(null);
+    setSourceKey(`artist:${artist.id}`);
+    setOpenAlbum(null);
+    setTitle(artist.name);
+    window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?artist=${artist.id}`);
+    setStep(2);
+
+    const done = await streamCatalog(artist.id, setProgress);
     setArtistBusy(false);
+
     /*
      * 빈손으로 왔다 = 아직 담기지 않았거나 그날 적재 예산이 끝났다는 뜻이다.
      * "곡이 없는 아티스트"로 읽히지 않게 말을 갈라 준다(라우트의 notReady).
+     * 예산은 다음 날 풀리므로 "잠시 뒤"가 아니라 "내일"이라고 말한다.
      */
-    if (json.notReady || tracks.length === 0) {
-      showToast("이 아티스트는 아직 준비 중이에요. 잠시 뒤에 다시 찾아 주세요.", "error");
-      return;
+    const tracks = done.tracks;
+    if (done.notReady || tracks.length === 0) {
+      showToast("이 아티스트는 아직 준비 중이에요. 내일 다시 찾아 주세요.", "error");
+      return backToArtists();
     }
     if (tracks.length < 4) {
       showToast("이 아티스트는 아직 담긴 곡이 적어요. 다른 아티스트를 찾아 주세요.", "error");
-      return;
+      return backToArtists();
     }
-    const next: Source = {
+
+    setArtistSource({
       key: `artist:${artist.id}`,
       label: artist.name,
       title: artist.name,
@@ -330,19 +413,13 @@ export default function TogetherNewPage() {
       artistImage: artist.image || null,
       tracks,
       resultId: null,
-    };
-    setArtistSource(next);
-    setSourceKey(next.key);
+    });
     /*
      * 아무것도 선택하지 않은 채로 시작한다 — 전곡 모드(/tracks)와 같다.
      * 전에는 전곡이 선택된 채로 열려서, 전곡으로 할 생각이 아니던 사람도
      * 빼는 일부터 해야 했다. `off` 는 "뺀 곡"이라 전부 넣어 두면 아무것도 안 고른 상태다.
      */
     setOff(new Set(tracks.map((track) => track.id)));
-    setOpenAlbum(null);
-    setTitle(artist.name);
-    window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?artist=${artist.id}`);
-    setStep(2);
   };
 
   /** 2단계 → 1단계. 주소 자국을 되돌려 브라우저 뒤로가기와 같은 길로 나간다. */
@@ -497,15 +574,6 @@ export default function TogetherNewPage() {
     );
   }
 
-  /*
-   * 곡을 모으는 동안은 화면을 넘긴다 — 전곡 모드와 같은 화면이다.
-   * 버튼 글자만 바꾸면 눌렀는데 아무 일도 안 일어난 것처럼 보이고, 그 사이에
-   * 다른 아티스트를 또 누를 수도 있다.
-   */
-  if (artistBusy && pendingArtist) {
-    return <LoadingScreen artist={pendingArtist.name} />;
-  }
-
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
       <BackButton
@@ -516,11 +584,16 @@ export default function TogetherNewPage() {
           router.push("/");
         }}
       />
-      <h1 className="type-title-1 text-navy mt-2">{step === 2 ? source?.label ?? "곡 고르기" : "같이 소트하기 만들기"}</h1>
+      {/* 곡을 모으는 동안에도 누구의 화면인지는 이미 보여야 한다 — 곡보다 이름이 먼저 온다. */}
+      <h1 className="type-title-1 text-navy mt-2">
+        {step === 2 ? source?.label ?? pendingArtist?.name ?? "곡 고르기" : "같이 소트하기 만들기"}
+      </h1>
       <p className="type-body text-navy/70 mt-2 break-keep">
-        {step === 2
-          ? "소트할 곡을 골라 주세요. 앨범을 눌러 펼치면 곡이 나와요."
-          : "곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요."}
+        {step !== 2
+          ? "곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요."
+          : source
+            ? "소트할 곡을 골라 주세요. 앨범을 눌러 펼치면 곡이 나와요."
+            : "곡이 다 오면 앨범이 여기 펼쳐져요."}
       </p>
 
       {step === 1 && (
@@ -654,6 +727,14 @@ export default function TogetherNewPage() {
         </div>
       )}
       </>
+      )}
+
+      {/*
+        * 2단계인데 곡이 아직 없다 = 지금 모으는 중이다. 화면은 이미 넘어와 있고
+        * 제목에 아티스트 이름이 떠 있으므로, 여기서는 진행 상황만 보여 준다.
+        */}
+      {step === 2 && !source && artistBusy && (
+        <LoadingScreen inline artist={pendingArtist?.name ?? title} progress={progress} />
       )}
 
       {step === 2 && source && (
