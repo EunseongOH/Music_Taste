@@ -13,8 +13,10 @@
  * 사용: node toss/baseline/deeplink-check.mjs
  */
 import { chromium } from 'playwright';
+import { announce, vite } from './base.mjs';
 
-const BASE = 'http://localhost:5173';
+const BASE = vite();
+announce(['기준 서버:', BASE]);
 const SHARED_ID = '631ac9fe-0305-4b26-bad8-05908a5ccae4';
 
 let failed = 0;

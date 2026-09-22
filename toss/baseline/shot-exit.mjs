@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
@@ -38,7 +39,7 @@ await page.addInitScript(
   { ranking: RANKING }
 );
 
-await page.goto('http://localhost:3000/taste', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+await page.goto(`${nextBase()}/taste`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
 await page.waitForTimeout(1200);
 

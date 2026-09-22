@@ -71,7 +71,22 @@ export async function refreshArtists(d: Deps): Promise<Result> {
 }
 
 async function main() {
-  const limit = Number(process.argv[2] ?? 40);
+  // 워크플로가 입력을 안 주면 빈 문자열이 올 수 있다. Number("") 는 0 이라 한 명도 안 돈다.
+  const limit = Number(process.argv[2]) || 40;
+
+  // 어떤 비밀값이 비었는지 이름만 먼저 찍는다 (값은 절대 찍지 않는다).
+  // 실패해도 Actions 로그 첫 줄만 보면 원인을 안다 — 2026-09-22 에 3초 만에 죽은 원인을
+  // 로그를 못 읽어 추정만 해야 했다.
+  const need = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"];
+  const missing = need.filter((k) => !process.env[k]);
+  console.log("env 확인: " + need.map((k) => `${k} ${process.env[k] ? "ok" : "MISSING"}`).join(" · "));
+  if (missing.length) {
+    console.error(`비어 있는 값: ${missing.join(", ")}`);
+    console.error("리포 Settings > Secrets and variables > Actions 에 등록해야 한다.");
+    console.error("NEXT_PUBLIC_SUPABASE_URL 은 이름에 PUBLIC 이 붙어도 Actions 시크릿으로 따로 넣어야 한다 (Vercel 환경변수와 별개).");
+    process.exit(1);
+  }
+
   const sb = createAdminClient();
 
   // 만료가 가까운 순서로 집는다
@@ -104,10 +119,15 @@ async function main() {
     save: async (a: any) => {
       const exp = new Date();
       exp.setDate(exp.getDate() + TTL_DAYS);
-      // genres 는 건드리지 않는다 — 우리가 고른 16종 라벨이 들어 있다
+      // genres 는 건드리지 않는다 — 우리가 고른 16종 라벨이 들어 있다.
+      // cached_at 은 반드시 같이 쓴다. 기본값 now() 는 INSERT 때만 먹어서, 갱신만 하면
+      // "마지막으로 받아 온 시각"이 첫 수집 때에 멈춰 있다. 2026-09-22 실행에서 실제로
+      // expires_at 은 +90일로 갱신됐는데 cached_at 은 하루 전 그대로였다 — 그 값으로
+      // "작업이 돌았나"를 확인하면 성공을 실패로 읽는다.
       const { error: e2 } = await sb.from("spotify_cache_artists").upsert({
         id: a.id, locale: "ko", name: a.name, images: a.images ?? [],
-        popularity: a.popularity ?? 0, expires_at: exp.toISOString(),
+        popularity: a.popularity ?? 0,
+        cached_at: new Date().toISOString(), expires_at: exp.toISOString(),
       }, { onConflict: "id,locale" });
       if (e2) throw new Error(e2.message);
     },

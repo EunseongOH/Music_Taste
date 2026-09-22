@@ -16,10 +16,12 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { announce, nextBase, vite } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TOSS = process.env.TARGET === 'toss';
-const BASE = process.env.BASE ?? (TOSS ? 'http://localhost:5173' : 'http://localhost:3000');
+const BASE = TOSS ? vite() : nextBase();
+announce(['기준 서버:', BASE]);
 /**
  * 실제 공개 취향표(43곡). 읽기만 한다.
  * 자동 저장은 16곡 이상일 때만 돌기 때문에, 16곡 미만 취향표로는 옛 버그가 재현되지 않는다.

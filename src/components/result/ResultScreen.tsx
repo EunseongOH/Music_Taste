@@ -165,7 +165,7 @@ function buildShareText(winners: Track[], nickname?: string | null): string {
  * 링크 바로 위에 붙는 참여 유도 문구. 주소는 넣지 않는다(위 경고와 같은 이유).
  * 공유 본문은 항상 `본문 \n\n 유도 문구 \n 링크` 순서다.
  */
-const SHARE_CTA = "내 진짜 최애곡을 알고 싶다면? Sortify에서 직접 뽑아보기 👇";
+const SHARE_CTA = "내 1위는 뭘까? 직접 골라 보기";
 
 /**
  * 결과 화면.

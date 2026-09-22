@@ -16,11 +16,13 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { announce, nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROFILE = join(HERE, '.profile');
 const OUT = join(HERE, process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : 'refs-auth');
-const BASE = process.argv.includes('--base') ? process.argv[process.argv.indexOf('--base') + 1] : 'http://localhost:3000';
+const BASE = nextBase();
+announce(['기준 서버:', BASE]);
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 
 // capture.mjs 와 동일해야 두 기준선을 나란히 비교할 수 있다.

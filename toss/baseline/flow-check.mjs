@@ -15,10 +15,12 @@
  * 사용: node toss/baseline/flow-check.mjs
  */
 import { chromium } from 'playwright';
+import { announce, nextBase, vite } from './base.mjs';
 
-const VITE = 'http://localhost:5173';
+const VITE = vite();
 // 3000 을 다른 앱이 쓰고 있으면 NEXT_BASE 로 바꾼다(토스 dev 서버는 VITE_DEV_API_BASE 도 같이).
-const NEXT = process.env.NEXT_BASE ?? 'http://localhost:3000';
+const NEXT = nextBase();
+announce(['웹:', NEXT], ['토스:', VITE]);
 
 /** 아이유 — 기준선(fixture.json)에서 쓰는 것과 같은 아티스트다. */
 /*

@@ -1,16 +1,34 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { ARTIST_TRANSLATION_MAP } from "@/utils/artistNames";
+import { betterTitle, songKey } from "@/utils/songKey";
+import { getAlbumTracks, getArtistAlbums } from "@/utils/spotify";
 import { corsHeaders, preflight } from "../../toss/cors";
 
 /**
- * 같이 소트하기 — 아티스트·곡 목록(실험). 문서: docs/together-sort.md
+ * 같이 소트하기 — 아티스트·곡 목록. 문서: docs/together-sort.md
  *
- * **이미 DB 에 담긴 Spotify 캐시만 읽는다. Spotify 를 호출하지 않는다.**
- * (캐시 테이블은 RLS 로 클라이언트에서 못 읽어 서버에서 읽어 준다.)
+ * **전곡 모드(/tracks)와 같은 데이터 경로를 쓴다.**
+ * 같이 소트하기는 전곡 모드를 같이 하게 해 주는 기능일 뿐 별개의 서비스가 아니다.
+ * 예전에는 이 라우트만 `spotify_cache_*` 를 직접 읽어서, 같은 아티스트를 두 화면에서
+ * 열면 앨범 수·곡 수가 달랐다(판본 병합·미발매곡·중복 판정이 전부 달랐다).
+ * 이제 `getArtistAlbums`/`getAlbumTracks` 를 그대로 부르고 `songKey` 로 센다.
  *
- *   GET /api/together/catalog?q=윤하        → 곡까지 캐시된 아티스트 찾기
- *   GET /api/together/catalog?artistId=...  → 그 아티스트의 캐시된 전곡
+ * 비용 경계 (사용자 승인):
+ *  ① 캐시·DB 히트는 그대로 즉시 — 대부분의 요청이 여기서 끝난다
+ *     (`getAlbumTracks` 는 우리 DB → mb:/deezer: → Spotify 캐시 → 예산 → Spotify 순이라
+ *      DB 로 답되면 예산을 아예 건드리지 않는다)
+ *  ② 미스는 `spotify.ts` 의 일일 예산 안에서만 Spotify 로 나간다. 가드가 함수 안쪽에
+ *     있어 서버 라우트에서 불러도 그대로 먹는다(`SPOTIFY_CACHE_ONLY` 포함)
+ *  ③ 예산이 떨어지면 두 함수는 **예외가 아니라 빈 배열**을 준다. 그때는 `notReady` 를
+ *     돌려준다 — 화면이 "아직 준비 중"이라고 말해야 한다. 조용히 빈 목록을 주면
+ *     이용자는 곡이 없는 아티스트로 읽는다
+ *  ④ 목록은 담긴 아티스트를 앞에 둔다(is_full → coverage 순)
+ *
+ *   GET /api/together/catalog                → 이번주 추천(전곡 확보 풀에서 12명)
+ *   GET /api/together/catalog?q=윤하         → 아티스트 찾기
+ *   GET /api/together/catalog?servable=1     → 지금 곡을 낼 수 있는 아티스트 id 목록
+ *   GET /api/together/catalog?artistId=...   → 그 아티스트의 곡(전곡 모드와 같은 결과)
  */
 
 interface SpotifyImage {
@@ -18,39 +36,31 @@ interface SpotifyImage {
   width?: number;
 }
 
-interface CachedAlbum {
-  id: string;
+/** 확보 현황 뷰(`artist_coverage`, 정의 B). 목록 순서와 "전곡" 판정을 여기서만 가져온다. */
+interface CoverageRow {
+  spotify_id: string;
   name: string;
-  images?: SpotifyImage[];
-  release_date?: string;
-  album_type?: string;
+  name_ko: string | null;
+  distinct_tracks: number;
+  is_full: boolean;
+  coverage: string | number | null;
 }
 
-interface CachedTrack {
-  id: string;
-  name: string;
-  artists?: { name: string }[];
-  duration_ms?: number;
-}
-
-interface CatalogRow {
-  id: string;
-  name: string;
-  images: SpotifyImage[] | null;
-}
-
-/** 이보다 적으면 소트할 거리가 안 된다(중복 제거 전 기준). */
+/** 이보다 적으면 소트할 거리가 안 된다. */
 const MIN_TRACKS = 8;
+/** 앨범 한 페이지. /tracks 와 같은 값이어야 캐시를 함께 쓴다(캐시 키에 limit·offset 이 들어간다). */
+const ALBUM_PAGE = 10;
+/** 한 아티스트에서 볼 앨범 수 상한. 그 이상은 소트로 감당이 안 된다. */
+const MAX_ALBUMS = 120;
+/** 곡 목록을 몇 앨범씩 묶어 받을지. 너무 넓히면 예산을 순식간에 쓴다. */
+const TRACK_BATCH = 5;
+/** 이번주 추천에 올릴 수. 전곡 확보(is_full) 풀에서 고른다. */
+const PICK_SIZE = 12;
 
 /**
  * 한글로 쳐도 영문으로 등록된 아티스트가 잡히게 한다.
- *
- * 이 뷰의 `name` 은 Spotify 가 준 이름 하나뿐이라, 한국 아티스트도 영문으로만 들어 있는
- * 경우가 많다(까치산 → `KACHISAN`, 김승주 → `kimseungjoo`, 라쿠나 → `Lacuna`).
- * 본 검색(`utils/spotify.ts`)은 같은 맵을 거치는데 여기만 빠져 있어서, 한글로 치면
- * 아무것도 안 나왔다. 부분 일치까지 본 검색과 같은 규칙을 쓴다.
- *
- * 더 넓히려면 `canonical_artist.name_ko` 를 같이 보면 된다 — 이 맵은 356 쌍뿐이다.
+ * `artist_coverage` 에 `name_ko` 가 있어 대부분 그것으로 잡히지만, 아직 비어 있는
+ * 아티스트가 있어 본 검색(`utils/spotify.ts`)과 같은 맵을 함께 쓴다.
  */
 function altNames(q: string): string[] {
   const key = q.trim().toLowerCase();
@@ -62,37 +72,47 @@ function altNames(q: string): string[] {
 }
 
 /**
- * 검색 전 첫 화면에 올리는 "이번주 소트 추천 아티스트".
- *
- * 전곡이 다 있는 아티스트만 올린다 — 추천해 놓고 들어갔더니 곡이 비면 안 된다.
- * 그 풀이 지금 22명뿐이라(2026-09-21 실측) 한 번에 18명을 보여주면 매주 바꿔도
- * 얼굴이 거의 안 바뀐다. 그래서 12명씩 끊어 주마다 다음 묶음으로 넘긴다.
- *
- * 풀이 넉넉해지면 PICK_SIZE 를 올리면 되고, 소트 횟수 지표가 쌓이면 아래 정렬을
- * popularity 대신 그 횟수로 바꾸면 "많이 소트한 아티스트"가 된다. 그때도 이 창은 그대로 쓴다.
- */
-const PICK_COVERAGE = 1;
-const PICK_SIZE = 12;
-
-/**
  * 한국 시간 월요일 0시에 넘어가는 주차 번호.
- *
  * 1970-01-01 이 목요일이라 3일을 더해야 월요일이 경계가 된다.
- * 같은 주 안에서는 항상 같은 목록이 나온다(새로고침해도 안 바뀐다).
  */
 function weekIndex(now: number = Date.now()): number {
   const DAY = 86_400_000;
   return Math.floor((now + 9 * 3_600_000 + 3 * DAY) / (7 * DAY));
 }
 
-/** 같은 곡이 앨범마다 다시 담기므로(정규판·리패키지) 제목으로 한 번만 남긴다. */
-const titleKey = (title: string) =>
-  title
-    .toLowerCase()
-    .replace(/\(.*?\)|\[.*?\]/g, "")
-    .replace(/\s*-\s*(inst\.?|instrumental|remaster(ed)?.*|live|feat\..*)$/i, "")
-    .replace(/[^0-9a-z가-힣]/g, "")
-    .trim();
+/** 아티스트 사진은 뷰에 없다. 캐시에서 따로 붙인다. */
+async function withImages(rows: CoverageRow[]) {
+  if (rows.length === 0) return [];
+  const { data } = await createAdminClient()
+    .from("spotify_cache_artists")
+    .select("id,images")
+    .in(
+      "id",
+      rows.map((r) => r.spotify_id)
+    );
+  const pic = new Map<string, string>();
+  for (const row of (data ?? []) as { id: string; images: SpotifyImage[] | null }[]) {
+    const url = row.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? row.images?.[0]?.url ?? "";
+    if (url && !pic.has(row.id)) pic.set(row.id, url);
+  }
+  return rows.map((r) => ({
+    id: r.spotify_id,
+    // 한글 이름이 있으면 그쪽을 보여 준다 — 우리 화면은 한국어다.
+    name: r.name_ko || r.name,
+    image: pic.get(r.spotify_id) ?? "",
+  }));
+}
+
+/** 담긴 아티스트가 앞에 오도록 정렬한 기본 쿼리. */
+function coverageQuery() {
+  return createAdminClient()
+    .from("artist_coverage")
+    .select("spotify_id,name,name_ko,distinct_tracks,is_full,coverage")
+    .gte("distinct_tracks", MIN_TRACKS)
+    .order("is_full", { ascending: false })
+    .order("coverage", { ascending: false })
+    .order("distinct_tracks", { ascending: false });
+}
 
 /** 토스 미니앱(별도 origin)에서도 부른다 — 같은 CORS 규칙을 쓴다. */
 export async function OPTIONS(request: Request) {
@@ -102,120 +122,204 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const cors = corsHeaders(request.headers.get("origin"));
   const { searchParams } = new URL(request.url);
-
-  /*
-   * `?servable=1` — 지금 곡까지 낼 수 있는 아티스트의 id 목록.
-   *
-   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 이 목록에 있는 아티스트를 누르면
-   * DB 에 곡이 있어 Spotify 를 부르지 않고 바로 뜬다. 지금 67명이라 통째로 보내도 가볍다.
-   */
-  if (searchParams.get("servable") === "1") {
-    const { data } = await createAdminClient()
-      .from("together_artist_catalog")
-      .select("id")
-      .gte("track_count", MIN_TRACKS)
-      .limit(500);
-    return NextResponse.json({ ids: (data ?? []).map((r) => (r as { id: string }).id) }, { headers: cors });
-  }
-
   const q = searchParams.get("q")?.trim() ?? "";
   const artistId = searchParams.get("artistId")?.trim() ?? "";
-  const supabase = createAdminClient();
+
+  /*
+   * `?servable=1` — 지금 곡을 낼 수 있는 아티스트 id 목록.
+   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 정의 B(`artist_coverage`)를 그대로
+   * 따르므로, 예전에 임시로 두었던 확보율 하한(0.8)은 없앴다.
+   */
+  if (searchParams.get("servable") === "1") {
+    const supabase = createAdminClient();
+    const [view, cache] = await Promise.all([
+      supabase.from("artist_coverage").select("spotify_id").gte("distinct_tracks", MIN_TRACKS).limit(4000),
+      // 뷰에 없지만 곡은 이미 담긴 아티스트도 있다(아래 주석 참고).
+      supabase.from("together_artist_catalog").select("id").gte("track_count", MIN_TRACKS).limit(4000),
+    ]);
+    const ids = new Set<string>();
+    for (const r of (view.data ?? []) as { spotify_id: string }[]) ids.add(r.spotify_id);
+    for (const r of (cache.data ?? []) as { id: string }[]) ids.add(r.id);
+    return NextResponse.json({ ids: [...ids] }, { headers: cors });
+  }
 
   if (artistId) {
-    const { data: albumRows } = await supabase
-      .from("spotify_cache_artist_albums")
-      .select("items")
-      .eq("artist_id", artistId);
-
-    const albums = new Map<string, CachedAlbum>();
-    for (const row of albumRows ?? []) {
-      for (const album of ((row as { items: CachedAlbum[] }).items ?? [])) {
-        if (album?.id && !albums.has(album.id)) albums.set(album.id, album);
-      }
-    }
-    if (albums.size === 0) return NextResponse.json({ tracks: [] }, { headers: cors });
-
-    const { data: trackRows } = await supabase
-      .from("spotify_cache_album_tracks")
-      .select("album_id,items")
-      .in("album_id", [...albums.keys()]);
-
-    const seen = new Set<string>();
-    const tracks: { id: string; title: string; artistName: string; albumImage: string; albumName: string; releaseDate: string }[] = [];
-    for (const row of (trackRows ?? []) as { album_id: string; items: CachedTrack[] }[]) {
-      const album = albums.get(row.album_id);
-      if (!album) continue;
-      const cover = album.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? album.images?.[0]?.url ?? "";
-      for (const track of row.items ?? []) {
-        if (!track?.id || !track.name) continue;
-        // 이 아티스트가 참여한 곡만
-        if (!(track.artists ?? []).some((a) => a?.name)) continue;
-        const key = titleKey(track.name);
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        tracks.push({
-          id: track.id,
-          title: track.name,
-          artistName: (track.artists ?? []).map((a) => a.name).join(", "),
-          albumImage: cover,
-          albumName: album.name,
+    /*
+     * 앨범 목록 — /tracks 와 같은 함수·같은 페이지 크기로 받는다.
+     * 같은 캐시 항목을 쓰기 때문에, 그 화면에서 이미 열어 본 아티스트는 Spotify 를
+     * 부르지 않는다. 캐시가 없으면 예산 안에서만 나간다.
+     */
+    const albums: { id: string; name: string; cover: string; releaseDate: string }[] = [];
+    let total = Infinity;
+    for (let offset = 0; offset < Math.min(total, MAX_ALBUMS); offset += ALBUM_PAGE) {
+      const page = await getArtistAlbums(artistId, offset, ALBUM_PAGE);
+      total = page.total || page.items.length;
+      if (!page.items.length) break;
+      for (const album of page.items as { id: string; name: string; images?: SpotifyImage[]; release_date?: string }[]) {
+        if (!album?.id) continue;
+        albums.push({
+          id: album.id,
+          name: album.name,
+          cover: album.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? album.images?.[0]?.url ?? "",
           releaseDate: album.release_date ?? "",
         });
       }
     }
-    // 최근 발매 순으로 보여 준다(고를 때 익숙한 곡이 위에 온다).
-    tracks.sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? ""));
-    return NextResponse.json({ tracks }, { headers: cors });
-  }
 
-  const toArtist = (a: CatalogRow) => ({
-    id: a.id,
-    name: a.name,
-    image: a.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? a.images?.[0]?.url ?? "",
-  });
+    type Row = {
+      id: string;
+      title: string;
+      artistName: string;
+      albumImage: string;
+      albumName: string;
+      releaseDate: string;
+      unreleased?: boolean;
+    };
+    const rows: Row[] = [];
+
+    // 앨범별 곡 목록. 몇 개씩 묶어 받는다 — 한 번에 다 던지면 예산을 순식간에 쓴다.
+    for (let i = 0; i < albums.length; i += TRACK_BATCH) {
+      const batch = albums.slice(i, i + TRACK_BATCH);
+      const results = await Promise.all(batch.map((album) => getAlbumTracks(album.id)));
+      results.forEach((tracks, n) => {
+        const album = batch[n];
+        for (const track of (tracks ?? []) as { id: string; name: string; artists?: { name: string }[] }[]) {
+          if (!track?.id || !track.name) continue;
+          rows.push({
+            id: track.id,
+            title: track.name,
+            artistName: (track.artists ?? []).map((a) => a.name).join(", "),
+            albumImage: album.cover,
+            albumName: album.name,
+            releaseDate: album.releaseDate,
+          });
+        }
+      });
+    }
+
+    /*
+     * 이용자가 올린 미발매곡도 전곡 모드처럼 함께 낸다. **승인된 것만** —
+     * 서버에서 읽으므로 RLS 가 아니라 여기서 걸러야 한다(누구나 들어오는 방에 남의
+     * 미심사 제보를 넣지 않는다). 곡 id 는 Spotify id 가 아니라 이 표의 id 이고,
+     * 방(`sort_challenges.tracks`)에 그대로 저장된다. 일치율은 id 로 비교하므로 섞여도 된다.
+     */
+    const { data: unreleased } = await createAdminClient()
+      .from("unreleased_tracks")
+      .select("id,title,artist_name,video_url,release_date")
+      .eq("artist_id", artistId)
+      .eq("is_released", false)
+      .eq("is_approved", true);
+    for (const track of (unreleased ?? []) as {
+      id: string;
+      title: string;
+      artist_name: string | null;
+      video_url: string | null;
+      release_date: string | null;
+    }[]) {
+      const youtube = (track.video_url ?? "").match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)?.[1];
+      rows.push({
+        id: track.id,
+        title: track.title,
+        artistName: track.artist_name ?? "",
+        albumImage: youtube ? `https://img.youtube.com/vi/${youtube}/hqdefault.jpg` : "",
+        albumName: "미발매곡",
+        releaseDate: track.release_date ?? "",
+        unreleased: true,
+      });
+    }
+
+    /*
+     * 같은 곡이 앨범마다 다시 담긴다(정규판·리패키지·일본어판). 한 번만 남기되
+     * **화면 전체가 쓰는 같은 규칙**으로 센다 — utils/songKey. 남길 쪽은 판 표기가
+     * 없는 제목(betterTitle). 아티스트 자리에는 artistId 를 넣는다(이 요청은 한
+     * 아티스트만 다루므로 상수면 되고, 피처링 표기로 키가 갈리지 않는다).
+     */
+    const best = new Map<string, Row>();
+    for (const row of rows) {
+      const key = songKey(artistId, row.title);
+      if (!key) continue;
+      const kept = best.get(key);
+      const swap =
+        !kept ||
+        // 미발매곡이 발매곡과 겹치면 발매곡을 남긴다(제보는 정식 발매되면 지워진다).
+        (kept.unreleased && !row.unreleased) ||
+        (!!kept.unreleased === !!row.unreleased && betterTitle(row.title, kept.title) < 0);
+      if (swap) best.set(key, row);
+    }
+    const tracks = [...best.values()].sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? ""));
+
+    return NextResponse.json({ tracks, notReady: tracks.length === 0 }, { headers: cors });
+  }
 
   // 검색어가 없으면 이번주 추천 묶음을 낸다.
   if (!q) {
-    const { data: full } = await supabase
-      .from("together_artist_catalog")
-      .select("id,name,images")
-      .gte("track_count", MIN_TRACKS)
-      .gte("coverage", PICK_COVERAGE)
-      // 주 안에서의 차례만 정한다. 이 순서가 고정이라 같은 주엔 같은 묶음이 나온다.
-      // popularity 로 정렬하지 않는다 — 이 뷰의 popularity 는 현재 전 행이 0이다(2026-09-21 실측).
-      .order("track_count", { ascending: false })
-      .order("id", { ascending: true })
-      .limit(200);
-
-    const pool = (full ?? []) as CatalogRow[];
+    const { data } = await coverageQuery().eq("is_full", true).limit(400);
+    const pool = (data ?? []) as CoverageRow[];
     if (pool.length >= PICK_SIZE) {
-      // 창이 끝을 넘어가면 앞에서 마저 채운다(한 바퀴 돌면 처음으로).
+      /*
+       * 창이 끝을 넘어가면 앞에서 마저 채운다(한 바퀴 돌면 처음으로).
+       *
+       * 추천에는 **사진이 있는 아티스트만** 올린다. 확보 풀이 777명으로 넓어지면서
+       * 사진이 없는 아티스트가 섞이는데, 얼굴 없는 동그라미가 추천 자리에 뜨면
+       * 고장으로 읽힌다. 그래서 창을 넉넉히 잡고 사진이 붙는 것만 12명 채운다.
+       */
       const start = (weekIndex() * PICK_SIZE) % pool.length;
-      const picked = [...pool.slice(start), ...pool.slice(0, start)].slice(0, PICK_SIZE);
-      return NextResponse.json({ artists: picked.map(toArtist) }, { headers: cors });
+      const window = [...pool.slice(start), ...pool.slice(0, start)];
+      const withPics = (await withImages(window.slice(0, PICK_SIZE * 6))).filter((a) => a.image);
+      const picked = withPics.slice(0, PICK_SIZE);
+      if (picked.length >= PICK_SIZE) return NextResponse.json({ artists: picked }, { headers: cors });
+      // 사진이 붙는 아티스트가 12명도 안 되면 아래 기본 목록으로 떨어진다.
     }
-    // 전곡 확보가 12명도 안 되면 화면을 비우지 않고 아래 기존 경로로 떨어진다.
+    // 전곡 확보가 12명도 안 되면 화면을 비우지 않고 아래 기본 목록으로 떨어진다.
   }
 
-  // 아티스트 찾기 — 전곡을 확실히 낼 수 있는 아티스트가 먼저 온다.
-  // coverage = 곡까지 받아 둔 앨범 / 스포티파이가 말한 앨범 수 (뷰: together_artist_catalog)
-  let query = supabase
-    .from("together_artist_catalog")
-    .select("id,name,images,coverage")
-    .gte("track_count", MIN_TRACKS)
-    .order("coverage", { ascending: false })
-    .order("track_count", { ascending: false })
-    .limit(q ? 20 : 18);
+  let query = coverageQuery().limit(q ? 20 : 18);
   if (q) {
     // 쉼표는 or() 의 구분자라 값에 들어가면 안 된다. 괄호·점도 같이 턴다.
     const safe = (v: string) => v.replace(/[,().]/g, " ").trim();
     const terms = [q, ...altNames(q)].map(safe).filter(Boolean);
-    query = query.or(terms.map((t) => `name.ilike.%${t}%`).join(","));
+    query = query.or(terms.flatMap((t) => [`name.ilike.%${t}%`, `name_ko.ilike.%${t}%`]).join(","));
   }
 
-  // coverage 는 순서로만 쓴다 — 화면에 확보율을 적지 않는다(없는 쪽을 먼저 알리는 꼴이 된다).
   const { data: artists } = await query;
+  let rows = (artists ?? []) as CoverageRow[];
 
-  return NextResponse.json({ artists: ((artists ?? []) as CatalogRow[]).map(toArtist) }, { headers: cors });
+  /*
+   * 뷰에서 못 찾으면 캐시 쪽으로 한 번 더 본다.
+   *
+   * `artist_coverage` 는 확신 있는 연결(url_rel·manual·wikidata)만 담는다 — 이름만 맞은
+   * 연결은 정확도가 57% 라 뺀 것이고, 그 판단은 맞다. 그런데 그 때문에 **곡은 이미
+   * 담겨 있는데 뷰에는 없는** 아티스트가 생긴다(전환 시점에 11명: indigo la End·김동률·
+   * Megadeth·The Libertines·Sasha Alex Sloan·나상현씨밴드 등). 검색해도 안 나오면
+   * 이용자에게는 "없는 아티스트"다 — 실제로는 157곡이 있는데도.
+   *
+   * 그래서 목록 순서와 추천은 뷰를 따르고(확신 있는 쪽을 앞에), 찾지 못했을 때만
+   * 캐시를 본다. 뷰가 넓어지면 이 경로는 자연히 안 타게 된다.
+   */
+  if (q && rows.length === 0) {
+    const safe = (v: string) => v.replace(/[,().]/g, " ").trim();
+    const terms = [q, ...altNames(q)].map(safe).filter(Boolean);
+    const { data: fallback } = await createAdminClient()
+      .from("together_artist_catalog")
+      .select("id,name,track_count,coverage")
+      .gte("track_count", MIN_TRACKS)
+      .or(terms.map((term) => `name.ilike.%${term}%`).join(","))
+      .order("coverage", { ascending: false })
+      .limit(20);
+    rows = ((fallback ?? []) as { id: string; name: string; track_count: number; coverage: string | number | null }[]).map(
+      (r) => ({
+        spotify_id: r.id,
+        name: r.name,
+        name_ko: null,
+        distinct_tracks: r.track_count,
+        is_full: false,
+        coverage: r.coverage,
+      })
+    );
+  }
+
+  // 사진이 없는 아티스트는 뒤로 보낸다(목록에서 얼굴 없는 동그라미가 먼저 보이지 않게).
+  const listed = await withImages(rows);
+  listed.sort((a, b) => Number(!a.image) - Number(!b.image));
+  return NextResponse.json({ artists: listed }, { headers: cors });
 }

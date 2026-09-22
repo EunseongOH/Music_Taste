@@ -5,6 +5,11 @@ on:
     # 매일 한국 시간(KST) 새벽 3시 (UTC 18시)
     - cron: '0 18 * * *'
   workflow_dispatch:
+    inputs:
+      count:
+        description: '갱신할 아티스트 수 (비우면 40)'
+        required: false
+        default: '40'
 
 # 아티스트 캐시(이름·사진)를 ID 로 갱신한다.
 #
@@ -26,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -39,4 +44,5 @@ jobs:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         # TTL 90일 · 2,829팀이면 하루 32명이면 충분하다. 여유를 둬서 40.
-        run: npm run db:refresh-artists -- 40
+        # 예약 실행에는 inputs 가 없어 40 이 된다. 수동 실행에서만 수를 바꾼다.
+        run: npm run db:refresh-artists -- ${{ inputs.count || 40 }}
