@@ -27,11 +27,11 @@ const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito", weight: [
 /**
  * 테마 부트. 첫 페인트 전에 <html data-theme> 를 붙인다.
  * ?theme= 가 오면 localStorage 에 저장하고, 없으면 저장된 값을 쓴다.
- * 값이 없으면 아무것도 붙이지 않는다 = legacy(지금까지의 톤) 그대로.
+ * 값이 없으면 아무것도 붙이지 않는다 = 기본(sky-tint, 2026-09-23 채택). legacy 는 ?theme=legacy 로 붙여야 나온다.
  */
 const THEME_BOOT = `(function(){try{var q=new URLSearchParams(location.search),d=document.documentElement,ok=["legacy","toss-white","sky-tint"];
 var v=q.get("theme");if(v&&ok.indexOf(v)>=0)localStorage.setItem("sortify_theme",v);v=localStorage.getItem("sortify_theme");
-if(v&&ok.indexOf(v)>=0&&v!=="legacy")d.setAttribute("data-theme",v);}catch(e){}})();`;
+if(v&&ok.indexOf(v)>=0)d.setAttribute("data-theme",v);}catch(e){}})();`;
 
 // 숫자만 혼자 강조되는 자리(순위·%·큰 숫자) 전용(font-num).
 // 숫자·기호만 쓰므로 라틴 전용 Std 가변 폰트(82KB)를 쓴다. OFL: ./fonts/WantedSans-OFL.txt
