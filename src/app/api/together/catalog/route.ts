@@ -114,6 +114,132 @@ function coverageQuery() {
     .order("distinct_tracks", { ascending: false });
 }
 
+/** 진행 상황 한 줄. 화면이 프로그레스 바를 채우는 데 쓴다. */
+type Progress =
+  /** 앨범 목록을 받는 중 — got/total. total 은 첫 페이지 뒤에야 안다 */
+  | { t: "albums"; got: number; total: number }
+  /** 앨범별 곡을 받는 중 — done/total */
+  | { t: "tracks"; done: number; total: number };
+
+/**
+ * 한 아티스트의 곡을 모은다.
+ *
+ * 두 갈래(한 번에 주는 JSON · 한 줄씩 흘려보내는 NDJSON)가 **같은 코드**를 쓴다.
+ * 진행 상황이 필요한 쪽만 `emit` 으로 받아 간다 — 두 벌이 되면 어느 한쪽만
+ * 고쳐져서 두 화면의 곡 수가 또 갈린다.
+ */
+async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
+  /*
+   * 앨범 목록 — /tracks 와 같은 함수·같은 페이지 크기로 받는다.
+   * 같은 캐시 항목을 쓰기 때문에, 그 화면에서 이미 열어 본 아티스트는 Spotify 를
+   * 부르지 않는다. 캐시가 없으면 예산 안에서만 나간다.
+   */
+  const albums: { id: string; name: string; cover: string; releaseDate: string }[] = [];
+  let total = Infinity;
+  for (let offset = 0; offset < Math.min(total, MAX_ALBUMS); offset += ALBUM_PAGE) {
+    const page = await getArtistAlbums(artistId, offset, ALBUM_PAGE);
+    total = page.total || page.items.length;
+    if (!page.items.length) break;
+    for (const album of page.items as { id: string; name: string; images?: SpotifyImage[]; release_date?: string }[]) {
+      if (!album?.id) continue;
+      albums.push({
+        id: album.id,
+        name: album.name,
+        cover: album.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? album.images?.[0]?.url ?? "",
+        releaseDate: album.release_date ?? "",
+      });
+    }
+    // 총 장수는 첫 페이지를 받고 나서야 안다. 그 전까지 화면은 불확정 바를 보여 준다.
+    emit({ t: "albums", got: albums.length, total: Math.min(total, MAX_ALBUMS) });
+  }
+
+  type Row = {
+    id: string;
+    title: string;
+    artistName: string;
+    albumImage: string;
+    albumName: string;
+    releaseDate: string;
+    unreleased?: boolean;
+  };
+  const rows: Row[] = [];
+
+  // 앨범별 곡 목록. 몇 개씩 묶어 받는다 — 한 번에 다 던지면 예산을 순식간에 쓴다.
+  for (let i = 0; i < albums.length; i += TRACK_BATCH) {
+    const batch = albums.slice(i, i + TRACK_BATCH);
+    const results = await Promise.all(batch.map((album) => getAlbumTracks(album.id)));
+    results.forEach((tracks, n) => {
+      const album = batch[n];
+      for (const track of (tracks ?? []) as { id: string; name: string; artists?: { name: string }[] }[]) {
+        if (!track?.id || !track.name) continue;
+        rows.push({
+          id: track.id,
+          title: track.name,
+          artistName: (track.artists ?? []).map((a) => a.name).join(", "),
+          albumImage: album.cover,
+          albumName: album.name,
+          releaseDate: album.releaseDate,
+        });
+      }
+    });
+    emit({ t: "tracks", done: Math.min(i + TRACK_BATCH, albums.length), total: albums.length });
+  }
+
+  /*
+   * 이용자가 올린 미발매곡도 전곡 모드처럼 함께 낸다. **승인된 것만** —
+   * 서버에서 읽으므로 RLS 가 아니라 여기서 걸러야 한다(누구나 들어오는 방에 남의
+   * 미심사 제보를 넣지 않는다). 곡 id 는 Spotify id 가 아니라 이 표의 id 이고,
+   * 방(`sort_challenges.tracks`)에 그대로 저장된다. 일치율은 id 로 비교하므로 섞여도 된다.
+   */
+  const { data: unreleased } = await createAdminClient()
+    .from("unreleased_tracks")
+    .select("id,title,artist_name,video_url,release_date")
+    .eq("artist_id", artistId)
+    .eq("is_released", false)
+    .eq("is_approved", true);
+  for (const track of (unreleased ?? []) as {
+    id: string;
+    title: string;
+    artist_name: string | null;
+    video_url: string | null;
+    release_date: string | null;
+  }[]) {
+    const youtube = (track.video_url ?? "").match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)?.[1];
+    rows.push({
+      id: track.id,
+      title: track.title,
+      artistName: track.artist_name ?? "",
+      albumImage: youtube ? `https://img.youtube.com/vi/${youtube}/hqdefault.jpg` : "",
+      albumName: "미발매곡",
+      releaseDate: track.release_date ?? "",
+      unreleased: true,
+    });
+  }
+
+  /*
+   * 같은 곡이 앨범마다 다시 담긴다(정규판·리패키지·일본어판). 한 번만 남기되
+   * **화면 전체가 쓰는 같은 규칙**으로 센다 — utils/songKey. 남길 쪽은 판 표기가
+   * 없는 제목(betterTitle). 아티스트 자리에는 artistId 를 넣는다(이 요청은 한
+   * 아티스트만 다루므로 상수면 되고, 피처링 표기로 키가 갈리지 않는다).
+   */
+  const best = new Map<string, Row>();
+  for (const row of rows) {
+    const key = songKey(artistId, row.title);
+    if (!key) continue;
+    const kept = best.get(key);
+    const swap =
+      !kept ||
+      // 미발매곡이 발매곡과 겹치면 발매곡을 남긴다(제보는 정식 발매되면 지워진다).
+      (kept.unreleased && !row.unreleased) ||
+      (!!kept.unreleased === !!row.unreleased && betterTitle(row.title, kept.title) < 0);
+    if (swap) best.set(key, row);
+  }
+  const tracks = [...best.values()].sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? ""));
+
+
+  return { tracks, notReady: tracks.length === 0 };
+}
+
 /** 토스 미니앱(별도 origin)에서도 부른다 — 같은 CORS 규칙을 쓴다. */
 export async function OPTIONS(request: Request) {
   return preflight(request);
@@ -145,110 +271,38 @@ export async function GET(request: Request) {
 
   if (artistId) {
     /*
-     * 앨범 목록 — /tracks 와 같은 함수·같은 페이지 크기로 받는다.
-     * 같은 캐시 항목을 쓰기 때문에, 그 화면에서 이미 열어 본 아티스트는 Spotify 를
-     * 부르지 않는다. 캐시가 없으면 예산 안에서만 나간다.
+     * `?stream=1` — 진행 상황을 한 줄씩(NDJSON) 흘려보낸다. 곡 고르기 화면이
+     * 이걸로 프로그레스 바를 채운다. 마지막 줄이 결과다.
+     *
+     * 스트림을 못 읽는 환경이면 화면이 본문을 통째로 받아 마지막 줄만 쓴다 —
+     * 진행률만 못 보고 결과는 같다.
      */
-    const albums: { id: string; name: string; cover: string; releaseDate: string }[] = [];
-    let total = Infinity;
-    for (let offset = 0; offset < Math.min(total, MAX_ALBUMS); offset += ALBUM_PAGE) {
-      const page = await getArtistAlbums(artistId, offset, ALBUM_PAGE);
-      total = page.total || page.items.length;
-      if (!page.items.length) break;
-      for (const album of page.items as { id: string; name: string; images?: SpotifyImage[]; release_date?: string }[]) {
-        if (!album?.id) continue;
-        albums.push({
-          id: album.id,
-          name: album.name,
-          cover: album.images?.find((i) => (i.width ?? 0) <= 400)?.url ?? album.images?.[0]?.url ?? "",
-          releaseDate: album.release_date ?? "",
-        });
-      }
-    }
-
-    type Row = {
-      id: string;
-      title: string;
-      artistName: string;
-      albumImage: string;
-      albumName: string;
-      releaseDate: string;
-      unreleased?: boolean;
-    };
-    const rows: Row[] = [];
-
-    // 앨범별 곡 목록. 몇 개씩 묶어 받는다 — 한 번에 다 던지면 예산을 순식간에 쓴다.
-    for (let i = 0; i < albums.length; i += TRACK_BATCH) {
-      const batch = albums.slice(i, i + TRACK_BATCH);
-      const results = await Promise.all(batch.map((album) => getAlbumTracks(album.id)));
-      results.forEach((tracks, n) => {
-        const album = batch[n];
-        for (const track of (tracks ?? []) as { id: string; name: string; artists?: { name: string }[] }[]) {
-          if (!track?.id || !track.name) continue;
-          rows.push({
-            id: track.id,
-            title: track.name,
-            artistName: (track.artists ?? []).map((a) => a.name).join(", "),
-            albumImage: album.cover,
-            albumName: album.name,
-            releaseDate: album.releaseDate,
-          });
-        }
+    if (searchParams.get("stream") === "1") {
+      const enc = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          const line = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+          try {
+            line({ t: "done", ...(await buildCatalog(artistId, line)) });
+          } catch (err) {
+            console.error("[api/together/catalog] 곡을 모으지 못했습니다:", err);
+            line({ t: "done", tracks: [], notReady: true });
+          }
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          ...cors,
+          "content-type": "application/x-ndjson; charset=utf-8",
+          "cache-control": "no-store",
+          // 중간 프록시가 모아 뒀다 한 번에 보내면 진행률이 의미 없어진다.
+          "x-accel-buffering": "no",
+        },
       });
     }
 
-    /*
-     * 이용자가 올린 미발매곡도 전곡 모드처럼 함께 낸다. **승인된 것만** —
-     * 서버에서 읽으므로 RLS 가 아니라 여기서 걸러야 한다(누구나 들어오는 방에 남의
-     * 미심사 제보를 넣지 않는다). 곡 id 는 Spotify id 가 아니라 이 표의 id 이고,
-     * 방(`sort_challenges.tracks`)에 그대로 저장된다. 일치율은 id 로 비교하므로 섞여도 된다.
-     */
-    const { data: unreleased } = await createAdminClient()
-      .from("unreleased_tracks")
-      .select("id,title,artist_name,video_url,release_date")
-      .eq("artist_id", artistId)
-      .eq("is_released", false)
-      .eq("is_approved", true);
-    for (const track of (unreleased ?? []) as {
-      id: string;
-      title: string;
-      artist_name: string | null;
-      video_url: string | null;
-      release_date: string | null;
-    }[]) {
-      const youtube = (track.video_url ?? "").match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)?.[1];
-      rows.push({
-        id: track.id,
-        title: track.title,
-        artistName: track.artist_name ?? "",
-        albumImage: youtube ? `https://img.youtube.com/vi/${youtube}/hqdefault.jpg` : "",
-        albumName: "미발매곡",
-        releaseDate: track.release_date ?? "",
-        unreleased: true,
-      });
-    }
-
-    /*
-     * 같은 곡이 앨범마다 다시 담긴다(정규판·리패키지·일본어판). 한 번만 남기되
-     * **화면 전체가 쓰는 같은 규칙**으로 센다 — utils/songKey. 남길 쪽은 판 표기가
-     * 없는 제목(betterTitle). 아티스트 자리에는 artistId 를 넣는다(이 요청은 한
-     * 아티스트만 다루므로 상수면 되고, 피처링 표기로 키가 갈리지 않는다).
-     */
-    const best = new Map<string, Row>();
-    for (const row of rows) {
-      const key = songKey(artistId, row.title);
-      if (!key) continue;
-      const kept = best.get(key);
-      const swap =
-        !kept ||
-        // 미발매곡이 발매곡과 겹치면 발매곡을 남긴다(제보는 정식 발매되면 지워진다).
-        (kept.unreleased && !row.unreleased) ||
-        (!!kept.unreleased === !!row.unreleased && betterTitle(row.title, kept.title) < 0);
-      if (swap) best.set(key, row);
-    }
-    const tracks = [...best.values()].sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? ""));
-
-    return NextResponse.json({ tracks, notReady: tracks.length === 0 }, { headers: cors });
+    return NextResponse.json(await buildCatalog(artistId, () => {}), { headers: cors });
   }
 
   // 검색어가 없으면 이번주 추천 묶음을 낸다.
