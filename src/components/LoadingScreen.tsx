@@ -58,7 +58,8 @@ export default function LoadingScreen({ artist, locale = "ko", progress = null, 
         aria-hidden
         width={80}
         height={80}
-        className="w-20 h-20 rounded-full"
+        // 새 톤: 흰 원판이 하늘빛 위에 떠 보이게 옅은 잉크 그림자(legacy 는 그대로). 파랑·주황을 더하지 않는다 — color.md 원칙 7.
+        className="w-20 h-20 rounded-full newtone:shadow-[0_10px_24px_-10px_rgba(24,33,59,0.28)]"
         animate={reduceMotion ? undefined : { y: [0, -14, 0] }}
         transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
       />

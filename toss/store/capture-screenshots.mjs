@@ -84,7 +84,9 @@ const SCREENS = [
   {
     name: '5-taste',
     route: '/taste?mode=single',
-    seed: { worldcup_is_single_artist: 'true', worldcup_ranking: JSON.stringify(RANKING) },
+    // 상위 8곡만 — 16곡이면 기록표가 두 장(1/2)이 되어 두 번째 장 머리가 하단 바 밑으로 비친다.
+    // 어떤 스크롤 위치로도 가려지지 않으므로(한 장 556px + 머리 157px 로 화면이 다 찬다) 한 장짜리 결과로 찍는다.
+    seed: { worldcup_is_single_artist: 'true', worldcup_ranking: JSON.stringify(RANKING.slice(0, 8)) },
     wait: 3000,
     // 결과 화면은 순위를 하나씩 공개하는 연출로 시작한다. 최종 취향표를
     // 보여 줘야 하므로 '스킵' 을 눌러 끝으로 보낸다.
