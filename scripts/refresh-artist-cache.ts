@@ -56,8 +56,16 @@ export async function refreshArtists(d: Deps): Promise<Result> {
     r.calls++;
     const res = await d.fetchArtist(a.id);
     if (res.status === 429) {
-      // 그 자리에서 멈춘다. 재시도도 다음 ID 도 없다 — 이미 한도를 넘긴 상태다
-      await d.block(res.retryAfter ?? 3600);
+      // 그 자리에서 멈춘다. 재시도도 다음 ID 도 없다 — 이미 한도를 넘긴 상태다.
+      //
+      // Retry-After 가 오면 그 값을 그대로 쓴다. 달력으로 "하루 뒤"를 세면 안 된다 —
+      // 실측한 차단 길이가 11.2시간과 23.8시간으로 달랐다(spotify_429_log). 고정 24시간이
+      // 아니라 롤링 창이다. 짧은 쪽을 24시간으로 세면 13시간을 헛되이 쉬고, 긴 쪽을 그렇게
+      // 세면 아직 안 풀린 채로 다시 때려 차단이 연장된다.
+      //
+      // 헤더가 없을 때만 쓰는 기본값은 6시간이다. 1시간이면 쿼터 차단(실측 11시간 이상)이
+      // 안 풀린 상태에서 매시간 다시 때리게 된다 — 그게 연장을 부른다.
+      await d.block(res.retryAfter ?? 6 * 3600);
       r.stopped = `429 (Retry-After ${res.retryAfter ?? "?"}) — 차단을 기록하고 멈췄다`;
       break;
     }
