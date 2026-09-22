@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
-import { averageRate, matchRate } from "@/utils/togetherMatch";
+import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
+import TasteRelationGraph from "@/components/together/TasteRelationGraph";
+import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
   rememberedNickname, fetchChallenge, fetchEntries, participantKey, saveEntry, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
-import { Cover, RankList, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { RankList, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 
 interface StoredTrack {
   id?: string;
@@ -28,20 +30,6 @@ function rankingFromSession(): { ids: string[]; skipped: number } | null {
   } catch {
     return null;
   }
-}
-
-/**
- * 평균 일치율을 사람 말로 한 번 읽어 준다.
- *
- * 숫자만 있으면 62% 가 높은 건지 낮은 건지 알 수 없다. 낮은 쪽도 나쁜 일로
- * 쓰지 않는다 — 취향이 다른 건 실패가 아니라 그냥 다른 것이고, 여기서 "낮아요"
- * 라고 하면 같이 한 일이 헛일이 된다.
- */
-function rateLine(rate: number): string {
-  if (rate >= 80) return "거의 같은 귀예요.";
-  if (rate >= 60) return "취향이 꽤 닮았어요.";
-  if (rate >= 40) return "반은 같고 반은 달라요.";
-  return "서로 다른 곡을 아끼고 있어요.";
 }
 
 /**
@@ -122,7 +110,43 @@ export default function TogetherResultPage() {
       .sort((a, b) => b.match.rate - a.match.rate);
   }, [entries, mine, key]);
 
-  const average = averageRate(others.map((o) => o.match.rate));
+  /* ── 그룹 계산. 화면은 여기서 나온 값만 쓴다(utils/togetherMatch.ts) ── */
+
+  const participants = useMemo(
+    () => (entries ?? []).map((e) => ({ key: e.participant_key, nickname: e.nickname })),
+    [entries]
+  );
+  const pairs = useMemo(
+    () => buildPairwiseMatches((entries ?? []).map((e) => ({ key: e.participant_key, nickname: e.nickname, ranking: e.ranking }))),
+    [entries]
+  );
+  const groupRate = useMemo(() => groupMatchRate(pairs), [pairs]);
+  const myPartners = useMemo(() => partnersOf(pairs, key), [pairs, key]);
+
+  const [picked, setPicked] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  /*
+   * 고른 사람은 기억하되 **자리를 계산으로 정한다**(상태를 고쳐 맞추지 않는다).
+   * 그러면 두 가지가 저절로 해결된다 — 들어오자마자 아무도 안 골라진 상태가 없고,
+   * 고른 사람이 자료에서 사라져도(드문 예외) 다음 사람으로 조용히 넘어간다.
+   */
+  const selectedKey = useMemo(() => {
+    if (myPartners.length === 0) return null;
+    if (picked && myPartners.some((p) => otherKey(p, key) === picked)) return picked;
+    return otherKey(myPartners[0], key);
+  }, [myPartners, picked, key]);
+
+  /* 옆 사람이 끝나면 화면이 저절로 바뀐다. 무엇이 바뀌었는지 한 줄로 알려 준다. */
+  const seenCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (!entries) return;
+    const before = seenCount.current;
+    seenCount.current = entries.length;
+    if (before !== null && entries.length > before) {
+      showToast(`새 결과가 반영됐어요 · ${entries.length}명이 함께했어요`);
+    }
+  }, [entries, showToast]);
 
   if (entries === null) {
     return (
@@ -160,32 +184,84 @@ export default function TogetherResultPage() {
   const myTracks = mine.ranking.map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
   const link = typeof window === "undefined" ? "" : `${window.location.origin}/together/${challenge.code}`;
 
-  return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
-      <p className="type-caption text-navy/70">같이 소트하기 · {challenge.title}</p>
-      {/* 숫자 위에 한 줄. 감정은 여기서 한 번만 쓴다 — 아래 사람별 줄까지 들뜨면 시끄럽다. */}
-      {others.length > 0 && average !== null && (
-        <p className="type-body text-navy mt-1 break-keep">{rateLine(average)}</p>
-      )}
-      <h1 className="type-title-1 text-navy mt-1">
-        {others.length === 0 ? "아직 나 혼자예요" : average !== null ? `평균 일치율 ${average}%` : ""}
-      </h1>
-      <p className="type-body text-navy/70 mt-2 break-keep">
-        {others.length === 0
-          ? "링크를 보내면 여기에 이름이 늘어나요."
-          : `${others.length}명과 비교했어요 · 몇 초마다 새로 확인해요.`}
-      </p>
+  /* 아티스트 사진이 없는 방(마이그레이션 전)에서는 그 아티스트의 앨범 재킷을 쓴다.
+     둘 다 없으면 사진 없이 간다 — 상관없는 사진을 채우지 않는다. */
+  const heroImage = challenge.artist_image || myTracks[0]?.albumImage || null;
+  const artistLabel = challenge.artist_name || challenge.title;
 
-      {/* 내 1위 */}
-      {myTracks[0] && (
-        <div className="flex items-center gap-3 mt-6">
-          <Cover src={myTracks[0].albumImage} alt={myTracks[0].title} size={56} />
-          <div className="min-w-0">
-            <p className="type-caption font-semibold text-point-ink">내 1위</p>
-            <p className="type-body-strong text-navy truncate">{myTracks[0].title}</p>
-            <p className="type-caption text-navy/70 truncate">{myTracks[0].artistName}</p>
+  return (
+    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pb-32">
+      {/* ── Hero ── */}
+      <header className="relative">
+        {/* 사진이 없으면 사진 자리를 비워 두지 않는다 — 빈 280px 은 고장으로 읽힌다. */}
+        {heroImage && (
+          <div className="relative h-[280px] overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={heroImage} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover" />
+            {/* 아래로 갈수록 바탕색에 잠기게 — 사진과 글이 같은 면 위에 있어 보여야 한다. */}
+            <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/30 via-[var(--app-bg)]/80 to-[var(--app-bg)]" />
           </div>
+        )}
+
+        <div className={`relative px-6 ${heroImage ? "-mt-24" : "pt-10"}`}>
+          <p className="type-caption text-navy/70">
+            {artistLabel} · {challenge.tracks.length}곡
+          </p>
+          <p className="type-body text-navy/70 mt-0.5">같이 소트한 결과</p>
+          {groupRate !== null ? (
+            <>
+              <p className="type-display font-num tabular-nums text-navy mt-2 leading-none">{groupRate}%</p>
+              <p className="type-body-strong text-navy mt-1">종합 일치율</p>
+            </>
+          ) : (
+            <p className="type-title-1 text-navy mt-2 break-keep">
+              {others.length === 0 ? "아직 나 혼자예요" : "아직 비교할 곡이 모자라요"}
+            </p>
+          )}
+          <p className="type-body text-navy/70 mt-2">
+            {entries.length}명이 함께했어요
+          </p>
         </div>
+      </header>
+
+      <div className="px-6">
+
+      {/* ── 관계도 ── */}
+      {others.length === 0 ? (
+        /* 나만 끝낸 상태. 실패 화면처럼 보이지 않게, 다음에 할 일을 준다. */
+        <section className="mt-8 rounded-2xl border border-dashed border-navy/20 px-5 py-8 text-center">
+          <p className="type-body-strong text-navy break-keep">같이 소트할 사람을 불러 보세요</p>
+          <p className="type-caption text-navy/70 mt-1 break-keep">
+            한 명만 더 끝내도 취향이 얼마나 닮았는지 바로 보여요.
+          </p>
+          <button
+            onClick={async () => {
+              const how = await platform.copyText(link);
+              showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+            }}
+            className={`${primaryButton} mt-5`}
+          >
+            링크 복사하기
+          </button>
+        </section>
+      ) : (
+        <section className="mt-8">
+          <h2 className="type-title-2 text-navy">우리의 취향 관계도</h2>
+          <p className="type-caption text-navy/70 mt-0.5 break-keep">
+            이름을 누르면 나와 무엇이 같고 달랐는지 볼 수 있어요.
+          </p>
+          <TasteRelationGraph
+            participants={participants}
+            pairs={pairs}
+            myKey={key}
+            selectedKey={selectedKey}
+            onSelect={setPicked}
+            onOpenMore={() => setSheetOpen(true)}
+            trackCount={challenge.tracks.length}
+          />
+          {/* 그림으로만 끝내지 않는다. 선이 무엇을 뜻하는지 글로도 적는다. */}
+          <GraphLegend pairs={pairs} participants={participants} trackCount={challenge.tracks.length} />
+        </section>
       )}
 
       {/* 사람별 일치율 */}
@@ -247,7 +323,92 @@ export default function TogetherResultPage() {
           </button>
         </div>
       </div>
+      </div>
+
+      <ParticipantSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        participants={participants}
+        pairs={pairs}
+        myKey={key}
+        selectedKey={selectedKey}
+        onPick={(k) => {
+          setPicked(k);
+          setSheetOpen(false);
+        }}
+      />
       <Toast toast={toast} />
     </main>
+  );
+}
+
+/**
+ * 관계도에 그린 선을 글로도 적는다.
+ *
+ * 선 모양과 색으로만 말하면 색을 구분하기 어려운 사람에게는 아무것도 전해지지 않는다.
+ * 어차피 "누가 누구와 닮았나"는 이 화면에서 가장 궁금한 것이라 글로도 적을 값어치가 있다.
+ */
+function GraphLegend({
+  pairs,
+  participants,
+  trackCount,
+}: {
+  pairs: ReturnType<typeof buildPairwiseMatches>;
+  participants: { key: string; nickname: string | null }[];
+  trackCount: number;
+}) {
+  const { highest, lowest } = useMemo(
+    () => pickHighlightEdges(pairs, trackCount),
+    [pairs, trackCount]
+  );
+  const name = (k: string) => participants.find((p) => p.key === k)?.nickname?.trim() || "익명 리스너";
+  const single = pairs.filter((p) => p.comparable).length === 1;
+  if (highest.length === 0) return null;
+
+  return (
+    <ul className="mt-3 flex flex-col">
+      {single ? (
+        <LegendRow label="두 사람" pair={highest[0]} name={name} />
+      ) : (
+        <>
+          {highest.map((p) => (
+            <LegendRow key={`${p.aKey}-${p.bKey}`} label="가장 닮은 조합" pair={p} name={name} />
+          ))}
+          {lowest && <LegendRow label="가장 다른 조합" pair={lowest} name={name} dashed />}
+        </>
+      )}
+    </ul>
+  );
+}
+
+function LegendRow({
+  label,
+  pair,
+  name,
+  dashed,
+}: {
+  label: string;
+  pair: ReturnType<typeof buildPairwiseMatches>[number];
+  name: (k: string) => string;
+  dashed?: boolean;
+}) {
+  return (
+    <li className="flex items-center gap-2.5 py-1">
+      {/* 관계도에 그린 선과 같은 모양. 색만으로 가르지 않으니 여기서도 실선·파선을 그대로 쓴다. */}
+      <span
+        aria-hidden
+        className="w-6 h-0 shrink-0"
+        style={{
+          borderTopWidth: dashed ? 1.5 : 2,
+          borderTopStyle: dashed ? "dashed" : "solid",
+          borderTopColor: dashed ? "rgb(var(--t-ink-rgb) / 0.5)" : "var(--t-point-ink)",
+        }}
+      />
+      <span className="type-caption text-navy/70 shrink-0">{label}</span>
+      <span className="type-caption text-navy truncate">
+        {name(pair.aKey)} · {name(pair.bKey)}
+      </span>
+      <span className="type-caption font-num tabular-nums text-navy/70 ml-auto shrink-0">{pair.rate}%</span>
+    </li>
   );
 }
