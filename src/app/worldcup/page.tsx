@@ -697,6 +697,7 @@ export default function WorldCupPage() {
 
             <div className="w-full relative z-10 pb-4 mt-4">
               <LPPlayer
+                disc="soft" // 새 테마: 재킷이 주인공이라 판은 유리 약. 홈은 재킷 없이 늘 보여 유리 강(기본). legacy 무관
                 isPlaying={isPlaying}
                 currentTrack={droppedTrack}
                 className={droppedTrack ? 'border-point shadow-[0_4px_25px_rgba(230,126,34,0.3)]' : ''}

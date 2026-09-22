@@ -420,10 +420,10 @@ function GlowLevels() {
 /** LP 면 질감 — 지금(흰 면) · 유리 약 · 유리 강. 실제 LPPlayer 의 disc prop. 2026-09-22 "판을 회백색 계열의 유리 질감으로" */
 function DiscGlass() {
   const [playing, setPlaying] = useState(false);
-  const discs: { disc: "flat" | "soft" | "strong"; title: string; note: string }[] = [
-    { disc: "flat", title: "지금 · 흰 면", note: "비교용. 하이라이트 없이 흰 면과 옅은 홈." },
-    { disc: "soft", title: "1안 · 유리 약", note: "회백 방사형 면 + 왼쪽 위 반사 한 줄 + 얇은 림. 재킷 위에는 반사와 림만." },
-    { disc: "strong", title: "2안 · 유리 강", note: "가는 홈이 비치는 회백 면 + 반사 두 줄 + 가장자리 안쪽 그림자. 재킷 위에도 같은 반사 두 줄." },
+  const discs: { key: string; disc: "flat" | "soft" | "strong"; look: "line" | "surface"; title: string; note: string }[] = [
+    { key: "line", disc: "flat", look: "line", title: "지금 · 선화", note: "비교용. 옅은 선으로 그린 받침·나사·플래터·톤암, 흰 판." },
+    { key: "home", disc: "strong", look: "surface", title: "재디자인 · 홈", note: "받침·나사·플래터·톤암을 면과 빛으로. 판은 유리 강(2안) — 재킷 없이 늘 보이니 질감이 필요." },
+    { key: "wc", disc: "soft", look: "surface", title: "재디자인 · 월드컵", note: "같은 몸체에 판만 유리 약(1안) — 재킷이 주인공이라 판이 물러난다." },
   ];
   const states = [
     { cap: "재킷 없음", track: null, spin: false },
@@ -443,7 +443,7 @@ function DiscGlass() {
           상태별 한 줄에 세 대를 가로로 두고, 좁으면 가로 스크롤. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {discs.map((d) => (
-          <Label key={d.disc} step={d.disc === "flat" ? "(0)" : d.disc === "soft" ? "(1)" : "(2)"} title={d.title} note={d.note} />
+          <Label key={d.key} step={d.key === "line" ? "(0)" : d.key === "home" ? "(홈)" : "(월드컵)"} title={d.title} note={d.note} />
         ))}
       </div>
       {states.map((st) => (
@@ -451,8 +451,8 @@ function DiscGlass() {
           <p className="type-caption text-navy/70 mb-2">{st.cap}</p>
           <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
             {discs.map((d) => (
-              <div key={d.disc} className="w-[22rem] shrink-0">
-                <LPPlayer disc={d.disc} isPlaying={st.spin && playing} currentTrack={st.track} />
+              <div key={d.key} className="w-[22rem] shrink-0">
+                <LPPlayer disc={d.disc} look={d.look} isPlaying={st.spin && playing} currentTrack={st.track} />
               </div>
             ))}
           </div>
@@ -575,10 +575,10 @@ export default function Studies() {
       </div>
 
       <div>
-        <h3 className="type-title-2 text-navy mb-1">턴테이블 LP 면 — 회백 유리 질감 두 안</h3>
+        <h3 className="type-title-2 text-navy mb-1">턴테이블 — 선화에서 면과 빛으로 (재디자인)</h3>
         <p className="type-sub text-navy/70 mb-5 break-keep">
-          "지금 턴테이블이 좀 심심하다." (c) 시안의 유리 질감을 어둡지 않게, 회백색으로. 픽처 디스크·받침 안 크기·파랑 없음·조용함은 그대로예요.
-          지금 톤으로 바꾸면 세 열이 똑같이(운영 선화) 보여요.
+          "선화도 면과 빛으로 하던 재디자인 안의 방식으로. 톤암도." 받침·나사·플래터·톤암을 무채색 면과 빛으로 바꾸고, 판은 홈에서 유리 강·월드컵에서 유리 약.
+          픽처 디스크·받침 안 크기·파랑 없음·조용함은 그대로. 지금 톤으로 바꾸면 세 열이 똑같이(운영 선화) 보여요.
         </p>
         <DiscGlass />
       </div>

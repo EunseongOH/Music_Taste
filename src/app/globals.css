@@ -166,6 +166,38 @@
  *  disc-gloss-*  항상 맨 위에 얹는 반사(판 밖, 돌지 않는다). 재킷 위에서는 얇은 유리 한 장처럼 보여야 한다.
  * soft = 질감 약, strong = 질감 강.
  */
+/*
+ * 턴테이블의 나머지(받침·나사·플래터·톤암)를 선화에서 "면과 빛"으로 — (c) 재디자인의 방식 (2026-09-22 사용자).
+ * 전부 무채색 + 알파. 대비는 선화일 때를 넘지 않게: 그림자는 짧고 옅게, 하이라이트는 흰 1px.
+ */
+@utility tt-plinth {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.62) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 10px 24px -14px rgba(24, 33, 59, 0.22), 0 1px 2px rgba(24, 33, 59, 0.05);
+}
+@utility tt-screw {
+  /* 얕게 파인 구멍: 위쪽 안쪽 그림자 + 아래쪽 흰 하이라이트 */
+  background: rgba(24, 33, 59, 0.06);
+  box-shadow: inset 0 1px 2px rgba(24, 33, 59, 0.18), 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+@utility tt-platter {
+  /* 얕은 접시. LP 바깥으로 보이는 6px 테가 턱으로 읽힌다 */
+  background: rgba(24, 33, 59, 0.05);
+  box-shadow: inset 0 1px 3px rgba(24, 33, 59, 0.12), 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+@utility tt-pivot {
+  background: radial-gradient(circle at 40% 30%, #ffffff 0%, #eceff3 100%);
+  box-shadow: 0 2px 4px -1px rgba(24, 33, 59, 0.2), inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(24, 33, 59, 0.06);
+}
+@utility tt-arm {
+  /* 세로 막대라 가로 그라데이션이 둥근 몸통으로 읽힌다 */
+  background: linear-gradient(90deg, #e9ecf0 0%, #ffffff 45%, #e3e7ec 100%);
+  box-shadow: 0 2px 3px -1px rgba(24, 33, 59, 0.22);
+}
+@utility tt-head {
+  background: linear-gradient(180deg, #ffffff 0%, #eceff3 100%);
+  box-shadow: 0 3px 6px -2px rgba(24, 33, 59, 0.28), inset 0 1px 0 #ffffff;
+}
+
 @utility disc-glass-soft {
   background: radial-gradient(circle at 36% 30%, #ffffff 0%, #f3f4f6 46%, #e5e8ed 100%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9), inset 0 -2px 6px rgba(24, 33, 59, 0.06);

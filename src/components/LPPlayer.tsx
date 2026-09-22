@@ -21,6 +21,12 @@ export interface LPPlayerProps {
    * 채택 전 비교용. 정해지면 기본값을 바꾼다.
    */
   disc?: "flat" | "soft" | "strong";
+  /**
+   * 새 테마에서 판 말고 나머지(받침·나사·플래터·톤암)의 그리는 방식. legacy 에는 영향 없음.
+   *  surface 면과 빛 — (c) 재디자인의 방식 (2026-09-22 사용자 결정, 기본)
+   *  line    옅은 선화 — 비교용
+   */
+  look?: "line" | "surface";
 }
 
 /**
@@ -35,7 +41,7 @@ export interface LPPlayerProps {
  *          면적 대부분을 차지한다"). 재킷이 없으면 작은 단색 주황 라벨(LP 의 30%).
  *          받침 안에 들어오는 크기(플래터 136 · LP 124), 파랑 없음, 그림자 없음 — 조용하게.
  */
-export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay, className = "", disc = "flat" }: LPPlayerProps) {
+export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay, className = "", disc = "strong", look = "surface" }: LPPlayerProps) {
   // 재킷을 받아 올 해상도에만 쓴다. 새 테마에서는 재킷이 LP 전체(최대 168px)라 80px 로는 흐리다.
   // 모양은 전부 CSS(newtone:)가 가르므로 이 값이 늦게 정해져도 깜빡이지 않는다. legacy 는 "80px" 그대로.
   const [newtone, setNewtone] = useState(false);
@@ -44,12 +50,22 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
     setNewtone(t === "toss-white" || t === "sky-tint");
   }, []);
 
-  const screw = "w-4 h-4 rounded-full border-2 border-navy/30 newtone:w-3 newtone:h-3 newtone:border newtone:border-navy/10";
+  /* 새 테마의 요소별 클래스. [0] 선화(비교용) / [1] 면과 빛. 요소·legacy 클래스는 같다. */
+  const s = look === "surface" ? 1 : 0;
+  const nt = {
+    plinth: ["newtone:border newtone:border-navy/10 newtone:rounded-2xl newtone:bg-white/60 newtone:backdrop-blur-none newtone:shadow-none", "newtone:border-0 newtone:rounded-2xl newtone:backdrop-blur-none newtone:tt-plinth"][s],
+    screw: ["newtone:w-3 newtone:h-3 newtone:border newtone:border-navy/10", "newtone:w-3 newtone:h-3 newtone:border-0 newtone:tt-screw"][s],
+    platter: ["newtone:border newtone:border-navy/10 newtone:bg-navy/[0.04]", "newtone:border-0 newtone:tt-platter"][s],
+    pivot: ["newtone:border newtone:border-navy/10 newtone:bg-white", "newtone:border-0 newtone:tt-pivot"][s],
+    arm: ["newtone:w-1.5 newtone:ml-[5px] newtone:border newtone:border-navy/15 newtone:bg-white newtone:rounded-full newtone:shadow-[0_1px_2px_rgba(24,33,59,0.14)]", "newtone:w-2 newtone:ml-1 newtone:border-0 newtone:rounded-full newtone:tt-arm"][s],
+    head: ["newtone:w-4 newtone:h-7 newtone:ml-0 newtone:border newtone:border-navy/20 newtone:bg-white newtone:rounded-md newtone:shadow-[0_1px_3px_rgba(24,33,59,0.20)]", "newtone:w-[18px] newtone:h-7 newtone:-ml-px newtone:border-0 newtone:rounded-md newtone:tt-head"][s],
+  };
+  const screw = `w-4 h-4 rounded-full border-2 border-navy/30 ${nt.screw}`;
   const groove = "rounded-full border border-navy/20 newtone:border-navy/[0.07]";
   const lpSize = "newtone:w-[7.75rem] newtone:h-[7.75rem] newtone:sm:w-[10.5rem] newtone:sm:h-[10.5rem]";
 
   return (
-    <div className={`relative w-full max-w-lg h-36 sm:h-48 border-2 border-navy rounded-xl px-6 flex flex-col justify-between bg-cream/50 backdrop-blur-sm shadow-sm newtone:border newtone:border-navy/10 newtone:rounded-2xl newtone:bg-white/60 newtone:backdrop-blur-none newtone:shadow-none ${className}`}>
+    <div className={`relative w-full max-w-lg h-36 sm:h-48 border-2 border-navy rounded-xl px-6 flex flex-col justify-between bg-cream/50 backdrop-blur-sm shadow-sm ${nt.plinth} ${className}`}>
       {/* Turn table structure */}
       <div className={`absolute top-4 left-4 ${screw}`} />
       <div className={`absolute top-4 right-4 ${screw}`} />
@@ -59,7 +75,7 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
       {/* Platter and Vinyl */}
       <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
         {/* legacy: 바깥 링 / 새 테마: 플래터 */}
-        <div className="absolute w-44 h-44 sm:w-60 sm:h-60 rounded-full border-2 border-navy/20 flex items-center justify-center newtone:w-[8.5rem] newtone:h-[8.5rem] newtone:sm:w-[11.5rem] newtone:sm:h-[11.5rem] newtone:border newtone:border-navy/10 newtone:bg-navy/[0.04]">
+        <div className={`absolute w-44 h-44 sm:w-60 sm:h-60 rounded-full border-2 border-navy/20 flex items-center justify-center newtone:w-[8.5rem] newtone:h-[8.5rem] newtone:sm:w-[11.5rem] newtone:sm:h-[11.5rem] ${nt.platter}`}>
           {/* legacy: 판 / 새 테마: LP */}
           <motion.div
             className={`w-40 h-40 sm:w-56 sm:h-56 rounded-full border-2 border-navy flex items-center justify-center shadow-inner overflow-hidden ${currentTrack ? 'bg-[#1a1a1a]' : 'bg-navy/5'} newtone:w-[7.75rem] newtone:h-[7.75rem] newtone:sm:w-[10.5rem] newtone:sm:h-[10.5rem] newtone:border newtone:border-navy/15 newtone:bg-white newtone:shadow-[0_1px_2px_rgba(24,33,59,0.10)]`}
@@ -122,13 +138,13 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
           transition={{ duration: 0.6, ease: "easeInOut" }}
         >
           {/* Tonearm Base */}
-          <div className="w-8 h-8 rounded-full border-2 border-navy bg-cream absolute -top-4 -left-2 z-20 flex items-center justify-center newtone:w-6 newtone:h-6 newtone:-top-3 newtone:-left-1 newtone:border newtone:border-navy/10 newtone:bg-white">
+          <div className={`w-8 h-8 rounded-full border-2 border-navy bg-cream absolute -top-4 -left-2 z-20 flex items-center justify-center newtone:w-6 newtone:h-6 newtone:-top-3 newtone:-left-1 ${nt.pivot}`}>
              <div className="w-3 h-3 rounded-full bg-navy/20 newtone:hidden" />
           </div>
           {/* Arm */}
-          <div className="w-2 h-28 sm:h-32 border-x-2 border-t-2 border-navy bg-cream/80 ml-1 rounded-t-full shadow-sm newtone:w-1.5 newtone:h-[5.5rem] newtone:sm:h-28 newtone:ml-[5px] newtone:border newtone:border-navy/15 newtone:bg-white newtone:rounded-full newtone:shadow-[0_1px_2px_rgba(24,33,59,0.14)]" />
+          <div className={`w-2 h-28 sm:h-32 border-x-2 border-t-2 border-navy bg-cream/80 ml-1 rounded-t-full shadow-sm newtone:h-[5.5rem] newtone:sm:h-28 ${nt.arm}`} />
           {/* Head-shell */}
-          <div className="w-6 h-10 border-2 border-navy bg-cream -ml-1 rounded-sm shadow-sm flex flex-col items-center pt-1 mt-[-2px] newtone:w-4 newtone:h-7 newtone:ml-0 newtone:border newtone:border-navy/20 newtone:bg-white newtone:rounded-md newtone:shadow-[0_1px_3px_rgba(24,33,59,0.20)]">
+          <div className={`w-6 h-10 border-2 border-navy bg-cream -ml-1 rounded-sm shadow-sm flex flex-col items-center pt-1 mt-[-2px] ${nt.head}`}>
              <div className="w-4 h-1 border-b-2 border-navy/50 newtone:hidden" />
              <div className="w-4 h-1 border-b-2 border-navy/50 mt-1 newtone:hidden" />
           </div>
