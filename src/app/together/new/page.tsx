@@ -917,7 +917,8 @@ export default function TogetherNewPage() {
         onClose={() => setAskName(false)}
         confirmLabel="이 이름으로 만들기"
         skipLabel="이름 없이 만들기"
-        desc="초대 화면과 일치율 화면에 이 이름으로 나와요."
+        title="링크에 어떤 이름으로 보일까요?"
+        desc="초대받은 사람이 이 이름을 봐요."
         onDone={async (name) => {
           setAskName(false);
           await create(name);

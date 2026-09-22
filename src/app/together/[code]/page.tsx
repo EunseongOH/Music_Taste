@@ -260,7 +260,9 @@ export default function TogetherInvitePage() {
         open={askName}
         onClose={() => setAskName(false)}
         confirmLabel="이 이름으로 소트하기"
-        desc="일치율 화면에서 서로를 이 이름으로 봐요."
+        title="일치율에 어떤 이름으로 보일까요?"
+        /* 방장 이름을 불러 준다 — 이름을 적는 일이 절차가 아니라 상대와의 일이 된다. */
+        desc={`${challenge.creator_nickname ? `${challenge.creator_nickname}님이` : "방을 만든 사람이"} 결과에서 당신을 이 이름으로 봐요.`}
         onDone={() => {
           setAskName(false);
           go();
