@@ -13,6 +13,7 @@ import {
   type SortChallenge,
 } from "@/utils/togetherDb";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
+import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import { SafeImage } from "@/components/SafeImage";
@@ -77,8 +78,9 @@ export default function TogetherInvitePage() {
     const link = `${window.location.origin}/together/${challenge.code}`;
     try {
       const shared = await platform.share({
-        title: "같이 소트하기",
-        text: `${challenge.title} — 같은 곡으로 소트해 봐요`,
+        // 미리보기·초대 화면과 같은 말이어야 한다. 받는 사람이 보는 것은 셋 다 이 링크다.
+        title: inviteTitle(challenge.artist_name, challenge.title),
+        text: inviteDesc(challenge.artist_name, challenge.title, challenge.creator_nickname, challenge.tracks.length),
         url: link,
       });
       if (shared) return;
@@ -131,7 +133,6 @@ export default function TogetherInvitePage() {
     );
   }
 
-  const creator = challenge.creator_nickname || "리스너";
   /*
    * 초대 화면 배경. 방을 만들 때 적어 둔 아티스트 사진을 쓰고, 없으면 첫 곡의 앨범 재킷.
    * 둘 다 없으면 배경 없이 간다 — 무관한 사진을 끌어오지 않는다.
@@ -163,13 +164,9 @@ export default function TogetherInvitePage() {
             <BackButton className="w-9 h-9" onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} />
           </div>
           <div className="absolute inset-x-0 bottom-0 px-12 pb-4">
-            <h1 className="type-title-1 text-navy break-keep">
-              {artist ? `${artist} 소트에 초대받았어요!` : `'${challenge.title}' 소트에 초대받았어요!`}
-            </h1>
+            <h1 className="type-title-1 text-navy break-keep">{inviteTitle(artist, challenge.title)}</h1>
             <p className="type-body text-navy/70 mt-1 break-keep">
-              {artist
-                ? `${artist} 곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`
-                : `곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`}
+              {inviteDesc(artist, challenge.title, challenge.creator_nickname, challenge.tracks.length)}
             </p>
           </div>
         </div>
@@ -190,13 +187,9 @@ export default function TogetherInvitePage() {
         </>
       ) : !hero ? (
         <>
-          <h1 className="type-title-1 text-navy break-keep">
-            {artist ? `${artist} 소트에 초대받았어요!` : `'${challenge.title}' 소트에 초대받았어요!`}
-          </h1>
+          <h1 className="type-title-1 text-navy break-keep">{inviteTitle(artist, challenge.title)}</h1>
           <p className="type-body text-navy/70 mt-2 break-keep">
-            {artist
-              ? `${artist} 곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`
-              : `곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`}
+            {inviteDesc(artist, challenge.title, challenge.creator_nickname, challenge.tracks.length)}
           </p>
         </>
       ) : null}

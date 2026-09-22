@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { createClient } from "@/utils/supabase/server";
+import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
 
 /**
  * 참여 링크(`/together/<코드>`)의 미리보기와 색인 규칙.
@@ -40,13 +41,12 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
     if (!data) return fallback;
 
     const artist = (data.artist_name as string | null) ?? null;
-    const creator = (data.creator_nickname as string | null) || "리스너";
+    const creator = (data.creator_nickname as string | null) || null;
     // artist_image 는 나중에 더해진 칸이다(20260922000000). 없으면 로고로 간다.
     const image = (data.artist_image as string | null) || LOGO;
-    const title = artist ? `${artist} 소트에 초대받았어요!` : `'${data.title}' 소트에 초대받았어요!`;
-    const description = artist
-      ? `${artist} 곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`
-      : `곡 취향이 ${creator}님과 얼마나 비슷한지 확인해 보세요.`;
+    // 미리보기·링크 보내기·초대 화면이 같은 말을 하도록 utils/inviteCopy 에서만 만든다.
+    const title = inviteTitle(artist, data.title as string);
+    const description = inviteDesc(artist, data.title as string, creator, (data.tracks as unknown[] | null)?.length ?? 0);
 
     return {
       title: `${title} - Sortify`,

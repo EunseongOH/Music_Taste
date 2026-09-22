@@ -57,6 +57,29 @@ ux-writing 4장은 "느낌표 남발 — 축하 한 곳만 허용", 6장 메타�
 **초대 화면 둘째 줄** — `[code]/page.tsx:194 아래` · 66
 - og:description 과 같은 문장을 쓴다(한 곳에서 정의해 세 자리가 같이 바뀌게 — 상수 하나).
 
+#### 적용 결과 (2026-09-22)
+
+사용자가 고른 문장으로 세 자리를 통일했다. 상수는 **`src/utils/inviteCopy.ts`** —
+`inviteTitle(artist, roomTitle)` · `inviteDesc(artist, roomTitle, creator, trackCount)`.
+
+| 자리 | 파일 |
+|---|---|
+| 미리보기 og·twitter | `app/together/[code]/layout.tsx` |
+| 링크 보내기(`platform.share`) | `app/together/[code]/page.tsx` — title 도 미리보기와 같은 문장 |
+| 초대 화면 첫 줄·둘째 줄 | 같은 파일, 사진이 있는 경우와 없는 경우 둘 다 |
+
+- 설명: `{닉네임}님이 고른 {아티스트} {n}곡, 같이 소트하고 서로의 취향을 더 깊이 알아봐요.`
+- 닉네임이 없는 방은 앞부분을 통째로 뺀다. 전에는 `리스너님이` 라는 가짜 이름을 지어냈다.
+- `artist_name` 이 없는 방은 그 자리에 `'{제목}'` 이 들어간다.
+- `n` 은 `challenge.tracks.length`. Sortify 는 본문에 넣지 않는다.
+- 확인(jacmea9): og:description · twitter:description · 초대 화면 둘째 줄 세 줄이 글자까지 같다.
+
+**같은 묶음에서 지운 문구** — `together/new` 의 추천 목록 아래 한 줄
+`전곡이 다 있는 아티스트 중에서 매주 바꿔 올려요.` 는 **삭제**했다(e9fef43).
+정의 B 로 사실이 되게 고치는 대신 문장을 뺐다 — 이용자는 당연히 전곡이 있다고
+생각하고 들어오는데, 거기다 대고 "전곡이 다 있는 아티스트 중에서"라고 하면
+나머지는 없다는 말을 우리 입으로 먼저 하는 꼴이다.
+
 **Sortify 를 어디에 넣나** — 사용자: "sortify 를 강조하는 문구"
 - og:title 끝의 ` - Sortify` 는 이미 있다(layout.tsx:52). 카톡은 제목 뒤 사이트명을 따로 보여 주므로 본문에 또 넣으면 두 번이다.
 - 대신 **미리보기 이미지**가 브랜드를 말한다(로고 B + Nunito 워드마크, 66 작업 중). 문장에 넣지 않는 것을 권한다.
