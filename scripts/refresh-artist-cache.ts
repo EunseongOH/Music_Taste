@@ -71,7 +71,22 @@ export async function refreshArtists(d: Deps): Promise<Result> {
 }
 
 async function main() {
-  const limit = Number(process.argv[2] ?? 40);
+  // 워크플로가 입력을 안 주면 빈 문자열이 올 수 있다. Number("") 는 0 이라 한 명도 안 돈다.
+  const limit = Number(process.argv[2]) || 40;
+
+  // 어떤 비밀값이 비었는지 이름만 먼저 찍는다 (값은 절대 찍지 않는다).
+  // 실패해도 Actions 로그 첫 줄만 보면 원인을 안다 — 2026-09-22 에 3초 만에 죽은 원인을
+  // 로그를 못 읽어 추정만 해야 했다.
+  const need = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"];
+  const missing = need.filter((k) => !process.env[k]);
+  console.log("env 확인: " + need.map((k) => `${k} ${process.env[k] ? "ok" : "MISSING"}`).join(" · "));
+  if (missing.length) {
+    console.error(`비어 있는 값: ${missing.join(", ")}`);
+    console.error("리포 Settings > Secrets and variables > Actions 에 등록해야 한다.");
+    console.error("NEXT_PUBLIC_SUPABASE_URL 은 이름에 PUBLIC 이 붙어도 Actions 시크릿으로 따로 넣어야 한다 (Vercel 환경변수와 별개).");
+    process.exit(1);
+  }
+
   const sb = createAdminClient();
 
   // 만료가 가까운 순서로 집는다
