@@ -34,8 +34,18 @@ function hasFinalConsonant(word: string): boolean {
   return false;
 }
 
+/**
+ * 앞말에 맞는 조사만 돌려준다.
+ *
+ * 앞말이 따옴표나 태그로 감싸여 조사를 따로 찍어야 할 때 쓴다 —
+ * `비워 두면 '{이름}'{josaOf(이름, "로")} 보여요.`
+ */
+export function josaOf(word: string, kind: JosaKind): string {
+  const [noBatchim, batchim] = PAIRS[kind];
+  return hasFinalConsonant(word) ? batchim : noBatchim;
+}
+
 /** 앞말에 조사를 붙여 돌려준다. `kind` 는 받침 없을 때의 형태로 적는다(와·이·은·을·로). */
 export function withJosa(word: string, kind: JosaKind): string {
-  const [noBatchim, batchim] = PAIRS[kind];
-  return `${word}${hasFinalConsonant(word) ? batchim : noBatchim}`;
+  return `${word}${josaOf(word, kind)}`;
 }

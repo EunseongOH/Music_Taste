@@ -8,7 +8,7 @@ import {
   buildPairwiseMatches, groupMatchRate, pickHighlightEdges, partnersOf,
   getTopK, getSharedTopTracks, buildRankComparison, commonOrders,
 } from '../../src/utils/togetherMatch.ts';
-import { withJosa } from '../../src/utils/josa.ts';
+import { withJosa, josaOf } from '../../src/utils/josa.ts';
 
 let failed = 0;
 const check = (ok, label, detail = '') => {
@@ -275,6 +275,8 @@ console.log('\n조사 (닉네임 뒤)');
   }
   check(bad === 0, `조사 ${cases.length}가지`, bad === 0 ? '전부 맞음' : `${bad}건 틀림`);
   check(withJosa('', '와') === '와', '빈 이름에도 터지지 않는다');
+  // 따옴표 밖에 조사만 찍는 자리("'카더가든'으로 보여요")
+  check(josaOf('카더가든', '로') === '으로' && josaOf('유라', '로') === '로', "조사만 돌려주기 — '카더가든'으로 / '유라'로");
 }
 
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);

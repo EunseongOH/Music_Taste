@@ -18,6 +18,7 @@ import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import { rememberedNickname } from "@/utils/togetherDb";
+import { josaOf } from "@/utils/josa";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
@@ -615,7 +616,7 @@ export default function TogetherNewPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
+    <main className={`min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 ${step === 2 ? "pb-44" : "pb-32"}`}>
       <BackButton
         className="w-9 h-9"
         onClick={() => {
@@ -951,7 +952,10 @@ export default function TogetherNewPage() {
                 placeholder={source.title}
                 className="w-full mt-1.5 h-12 px-4 rounded-2xl bg-cream border border-navy/15 text-navy type-body placeholder:text-navy/50 focus:outline-2 focus:outline-offset-0 focus:outline-[var(--t-point-ink)]"
               />
-              <p className="type-caption text-navy/70 mt-1.5">비워 두면 &apos;{source.title}&apos;로 보여요.</p>
+              {/* 조사는 이름에 받침이 있느냐로 갈린다 — "'카더가든'로 보여요"가 나갔었다. */}
+              <p className="type-caption text-navy/70 mt-1.5">
+                비워 두면 &apos;{source.title}&apos;{josaOf(source.title, "로")} 보여요.
+              </p>
             </div>
           ) : (
             <button
