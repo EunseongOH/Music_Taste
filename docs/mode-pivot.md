@@ -353,7 +353,7 @@ where q.endpoint = '/v1/artists/{id}/albums';
    → 홈 카드·푸터·JSON-LD·sitemap·`/genres` 리다이렉트·기본 모드가 한 번에 돌아온다.
 2. `toss/app/src/App.tsx` 의 `/genres` 라우트 주석 해제(2줄).
 3. 검사 복원: `git revert <P3 커밋>`.
-4. 스토어 스크린샷 재촬영(`toss/store/capture-screenshots.mjs`).
+4. 스토어 스크린샷 재촬영 — 완료(2026-09-23, `toss/store/capture-v2.mjs`. 옛 `capture-screenshots.mjs`·`fixture-mix.json` 은 지웠다).
 5. `docs/design-system/ux-writing.md` 용어표의 "현재 미노출" 표시 제거.
 6. **같이 소트하기 초대 화면의 "섞인 방"을 정식화한다.** 믹스 매치가 살아나면 한 방에 여러
    아티스트의 곡이 섞인 링크가 다시 생긴다. 지금은 그런 방이 없어서(믹스 매치 취향표를 모두

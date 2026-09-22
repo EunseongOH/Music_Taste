@@ -8,7 +8,8 @@
  * 사용: NEXT_BASE=http://localhost:3300 node toss/store/capture-v2.mjs
  *   - 서버는 채택본(sky-tint 기본)이어야 한다. .next 를 지우고 재시작한 뒤 찍는다(옛 CSS 캐시).
  *   - 5장(내 취향 스페이스)은 toss/baseline/.profile 의 로그인 세션을 쓴다(login.mjs 로 만든다).
- *   - 픽스처는 toss/baseline/fixture.json(카더가든 20곡, 커버 캐시 있음). fixture-mix 는 쓰지 않는다.
+ *   - 픽스처는 toss/baseline/fixture.json(카더가든 20곡, 커버 캐시 있음) + fixture-space.json(4·5장).
+ *     옛 capture-screenshots.mjs(믹스 매치 픽스처·가로형)는 2026-09-23 에 지웠다 — 이 스크립트가 유일하다.
  *   - Spotify 를 부르지 않는다(SPOTIFY_CACHE_ONLY 서버).
  * 출력: toss/store/out/v2-sky/store-1~5.png (636×1048). 저장소에 커밋하지 않는다.
  */
