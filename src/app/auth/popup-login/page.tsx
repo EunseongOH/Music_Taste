@@ -41,17 +41,16 @@ export default function PopupLogin() {
   const isKakao = provider === "kakao";
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-[#FAF7F2] text-navy">
+    <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-[#FAF7F2] newtone:bg-cream text-navy">
       <div
         className="w-12 h-12 rounded-full flex items-center justify-center mb-6 animate-spin"
         style={{
-          border: isKakao ? "3px solid #FEE500" : "3px solid #1a2a6c",
+          // 카카오는 브랜드 색(예외). 구글 쪽은 서비스 잉크색 — 테마를 따른다
+          border: isKakao ? "3px solid #FEE500" : "3px solid var(--t-navy)",
         }}
       >
-        <div
-          className="w-2 h-2 rounded-full"
-          style={{ background: isKakao ? "#000000" : "#e63946" }}
-        />
+        {/* 구글 쪽 점: legacy 는 전과 같은 빨강, 새 테마는 brand */}
+        <div className={`w-2 h-2 rounded-full ${isKakao ? "bg-[#000000]" : "bg-[#e63946] newtone:bg-brand"}`} />
       </div>
       <h3 className="text-2xl font-bold mb-2">
         {isKakao 

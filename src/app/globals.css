@@ -107,6 +107,9 @@
   --t-wordmark: var(--font-playfair);
   --t-wordmark-weight: 700;
   --t-grain: 0.04;
+  /* 그림자·빛의 알파 색. rgba(var(--t-ink-rgb), .2) 꼴로 쓴다 — legacy 값은 전에 하드코딩돼 있던 26,42,108 / 230,126,34 그대로 */
+  --t-ink-rgb: 26, 42, 108;
+  --t-point-rgb: 230, 126, 34;
   --background: #EAE2D6;
   --app-bg: var(--t-cream);
   --foreground: var(--t-charcoal);
@@ -126,6 +129,8 @@
   --t-line: #E5E8EB;
   --t-fill: #F2F4F6;
   --t-grain: 0;
+  --t-ink-rgb: 25, 31, 40;
+  --t-point-rgb: 253, 126, 62;
   --background: #F2F4F6;
 }
 
@@ -143,6 +148,8 @@
   --t-line: #DCE8F7;
   --t-fill: #E6F1FD;
   --t-grain: 0;
+  --t-ink-rgb: 24, 33, 59;
+  --t-point-rgb: 253, 126, 62;
   --background: #E6F1FD;
 }
 

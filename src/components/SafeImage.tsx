@@ -16,9 +16,9 @@ interface SafeImageProps extends Omit<ImageProps, "src"> {
 const PALETTES = [
   { bg: "bg-navy/5", text: "text-navy/20", border: "border-navy/10" },
   { bg: "bg-point/5", text: "text-point/20", border: "border-point/10" },
-  { bg: "bg-[#EBE2D7]/40", text: "text-navy/25", border: "border-navy/10" },
+  { bg: "bg-[#EBE2D7]/40 newtone:bg-navy/[0.06]", text: "text-navy/25", border: "border-navy/10" },
   { bg: "bg-charcoal/5", text: "text-charcoal/20", border: "border-navy/10" },
-  { bg: "bg-[#E6DEC9]/40", text: "text-[#5C5441]/25", border: "border-navy/10" },
+  { bg: "bg-[#E6DEC9]/40 newtone:bg-navy/[0.05]", text: "text-[#5C5441]/25 newtone:text-navy/25", border: "border-navy/10" },
 ];
 
 export function SafeImage({ src, fallbackSrc, fallbackType = "artist", alt, className = "", ...props }: SafeImageProps) {

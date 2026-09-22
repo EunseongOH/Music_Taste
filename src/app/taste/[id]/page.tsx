@@ -197,7 +197,7 @@ export default function TasteSharedPage() {
               <img
                 src={top.albumImage}
                 alt=""
-                className="absolute left-0 top-[12px] w-[176px] h-[176px] object-cover -rotate-3 shadow-[0_10px_24px_-10px_rgba(26,42,108,0.45)]"
+                className="absolute left-0 top-[12px] w-[176px] h-[176px] object-cover -rotate-3 shadow-[0_10px_24px_-10px_rgba(var(--t-ink-rgb),0.45)]"
               />
             </div>
             <p className="type-caption font-semibold text-point-ink">{t.winner}</p>

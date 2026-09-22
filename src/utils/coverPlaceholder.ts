@@ -6,13 +6,26 @@
 //
 // 결과는 data URI 라 네트워크 호출이 없다. next/image 는 data: 로 시작하는 src 를 그대로 내보낸다.
 
-const TONES = [
+// legacy(크림·남색) 팔레트. data URI 라 CSS 변수를 못 받으므로 값을 직접 고른다.
+const TONES_LEGACY = [
   { bg: "#EFEAE1", ink: "#1A2A6C" },
   { bg: "#EAE6DE", ink: "#2D3436" },
   { bg: "#F0E7DA", ink: "#A65309" },
   { bg: "#E8E8E4", ink: "#1A2A6C" },
   { bg: "#F2ECE4", ink: "#5C5441" },
 ];
+// 새 톤(docs/design-system/color.md): 회백·하늘빛 면에 잉크. 호출은 전부 클라이언트 fetch 뒤라 document 를 읽어도 된다.
+const TONES_NEW = [
+  { bg: "#EEF2F7", ink: "#18213B" },
+  { bg: "#F2F4F6", ink: "#333D4B" },
+  { bg: "#F6F1EC", ink: "#C2410C" },
+  { bg: "#EAEEF3", ink: "#18213B" },
+  { bg: "#F3F8FF", ink: "#4B5563" },
+];
+const tones = () => {
+  const t = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") : null;
+  return t === "toss-white" || t === "sky-tint" ? TONES_NEW : TONES_LEGACY;
+};
 
 const hash = (s: string) => {
   let h = 0;
@@ -22,7 +35,8 @@ const hash = (s: string) => {
 
 /** 재킷 없음 대체 이미지 (300x300 SVG data URI). 같은 seed 면 언제나 같은 그림이다. */
 export function coverPlaceholder(seed = ""): string {
-  const t = TONES[hash(seed || "sortify") % TONES.length];
+  const palette = tones();
+  const t = palette[hash(seed || "sortify") % palette.length];
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">` +
     `<rect width="300" height="300" fill="${t.bg}"/>` +

@@ -419,7 +419,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                     type="button"
                     onClick={handleImageChangeClick}
                     aria-label={t.changePhoto}
-                    className="absolute -bottom-1 -right-1 w-9 h-9 flex items-center justify-center rounded-full bg-navy text-cream border-2 border-cream"
+                    className="absolute -bottom-1 -right-1 w-9 h-9 flex items-center justify-center rounded-full bg-navy newtone:bg-brand text-cream border-2 border-cream"
                   >
                     <Camera size={16} />
                   </button>

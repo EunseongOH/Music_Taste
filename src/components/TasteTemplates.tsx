@@ -296,7 +296,7 @@ export function RecordCard({
             <Cover
               src={top.albumImage}
               size={sleeve}
-              className="absolute left-0 top-0 !rounded-none shadow-[0_10px_24px_-10px_rgba(26,42,108,0.45)] newtone:shadow-[0_10px_24px_-10px_rgba(24,33,59,0.4)]"
+              className="absolute left-0 top-0 !rounded-none shadow-[0_10px_24px_-10px_rgba(var(--t-ink-rgb),0.45)]"
             />
           </div>
           <div className="mb-4 flex flex-col justify-end items-center text-center gap-1" style={{ height: RECORD_INFO_H }}>
@@ -583,7 +583,7 @@ export function ScaledCard({ children, className = "" }: { children: React.React
   return (
     <div ref={ref} className={`w-full ${className}`}>
       <div
-        className="relative overflow-hidden rounded-[6px] shadow-[0_1px_2px_rgba(26,42,108,0.08),0_12px_32px_-12px_rgba(26,42,108,0.28)] newtone:shadow-[0_1px_2px_rgba(24,33,59,0.08),0_12px_32px_-12px_rgba(24,33,59,0.25)] mx-auto"
+        className="relative overflow-hidden rounded-[6px] shadow-[0_1px_2px_rgba(var(--t-ink-rgb),0.08),0_12px_32px_-12px_rgba(var(--t-ink-rgb),0.28)] mx-auto"
         style={{ width: 450 * scale, height: 800 * scale }}
       >
         <div className="absolute left-0 top-0 origin-top-left" style={{ width: 450, height: 800, transform: `scale(${scale})` }}>

@@ -96,7 +96,7 @@ export default function WinnerReveal({
               <img src={runnerUp.albumImage} alt="" className="w-full h-full object-cover" />
             </div>
           )}
-          <div className="relative z-10 w-[217px] h-[217px] rounded-[4px] overflow-hidden shadow-[0_18px_40px_-16px_rgba(26,42,108,0.55)]">
+          <div className="relative z-10 w-[217px] h-[217px] rounded-[4px] overflow-hidden shadow-[0_18px_40px_-16px_rgba(var(--t-ink-rgb),0.55)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={champion.albumImage} alt={champion.title} className="w-full h-full object-cover" />
           </div>

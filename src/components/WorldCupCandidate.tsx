@@ -119,7 +119,7 @@ export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }:
             rotate: isLP ? -5 : 0
           }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(26,42,108,0.15)] newtone:bg-white newtone:border-navy/10 newtone:shadow-[0_8px_24px_-12px_rgba(24,33,59,0.25)] overflow-hidden z-30 pointer-events-none"
+          className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(var(--t-ink-rgb),0.15)] newtone:bg-white newtone:border-navy/10 newtone:shadow-[0_8px_24px_-12px_rgba(24,33,59,0.25)] overflow-hidden z-30 pointer-events-none"
         >
           <Image src={track.albumImage} alt={track.title} fill sizes="(max-width: 768px) 140px, 160px" className="object-cover" />
           <div className="absolute inset-0 bg-black/0 hover:bg-black/5 transition-colors" />

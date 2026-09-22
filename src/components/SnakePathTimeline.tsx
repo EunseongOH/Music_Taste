@@ -63,7 +63,7 @@ const HOLE_MASK = `radial-gradient(circle closest-side, transparent ${HOLE}%, bl
 const getNodeDimensions = (S: number, isWinner: boolean) => {
   if (isWinner) {
     return {
-      albumClass: "w-20 h-20 border-point shadow-[0_0_20px_rgba(230,126,34,0.5)] animate-pulse-ring",
+      albumClass: "w-20 h-20 border-point shadow-[0_0_20px_rgba(var(--t-point-rgb),0.5)] animate-pulse-ring",
       badgeClass: "min-w-7 h-7 px-1.5 text-[14px] -top-1.5 -left-1.5 bg-point text-white",
       titleClass: "text-[11px] sm:text-[12px] font-extrabold text-navy tracking-tight",
       artistClass: "text-[8px] sm:text-[9px] text-navy/60 font-semibold",
@@ -268,9 +268,9 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
     <div className="relative w-full" style={{ height: `${viewBoxHeight}px` }}>
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes pulseRing {
-          0% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7); }
-          70% { box-shadow: 0 0 0 15px rgba(230, 126, 34, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); }
+          0% { box-shadow: 0 0 0 0 rgba(var(--t-point-rgb), 0.7); }
+          70% { box-shadow: 0 0 0 15px rgba(var(--t-point-rgb), 0); }
+          100% { box-shadow: 0 0 0 0 rgba(var(--t-point-rgb), 0); }
         }
         @keyframes winnerBounce {
           0%, 100% { transform: scale(1.15) translateY(0); }
@@ -286,11 +286,11 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
         preserveAspectRatio="none"
         overflow="visible" 
       >
-        <path d={pathData} fill="none" stroke="rgba(26,42,108,0.05)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={pathData} fill="none" className="stroke-navy/5" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
         <motion.path 
           d={pathData} 
           fill="none" 
-          stroke="#E67E22" 
+          className="stroke-point" 
           strokeWidth="3" 
           strokeLinecap="round" 
           strokeLinejoin="round"
@@ -353,8 +353,8 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                 >
                   {/* 수정 포인트 1: h-0을 완전히 제거하고, CD 자체 크기를 유지하여 이미지가 사라지는 현상을 원천 방지합니다. */}
                   {/* transform -translate-y-1/2를 통해 CD의 정중앙이 베지어 곡선 라인에 완벽히 교차하도록 정렬합니다. */}
-                  <div className={`relative flex items-center justify-center flex-shrink-0 rounded-full border-2 bg-[#F5F2ED] ${dims.albumClass} transform -translate-y-1/2`}>
-                    <div className={`absolute rounded-full flex items-center justify-center font-num tabular-nums font-bold leading-none z-30 shadow-[0_1px_3px_rgba(26,42,108,0.35)] ${dims.badgeClass}`}>
+                  <div className={`relative flex items-center justify-center flex-shrink-0 rounded-full border-2 bg-cream ${dims.albumClass} transform -translate-y-1/2`}>
+                    <div className={`absolute rounded-full flex items-center justify-center font-num tabular-nums font-bold leading-none z-30 shadow-[0_1px_3px_rgba(var(--t-ink-rgb),0.35)] ${dims.badgeClass}`}>
                       {pt.rank}
                     </div>
                     
@@ -375,7 +375,7 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                       />
                     </div>
                     
-                    <div className="absolute inset-0 m-auto border border-[#E67E22]/30 bg-transparent rounded-full pointer-events-none z-20" style={{ width: `${HOLE}%`, height: `${HOLE}%` }} />
+                    <div className="absolute inset-0 m-auto border border-point/30 bg-transparent rounded-full pointer-events-none z-20" style={{ width: `${HOLE}%`, height: `${HOLE}%` }} />
                   </div>
                   
                   {/* 수정 포인트 3: CD가 공중으로 반만큼 뜬 공간(translate)을 메우기 위해, 명시적인 음수 마진(Negative Margin)을 주어 타이틀을 바짝 붙입니다. */}

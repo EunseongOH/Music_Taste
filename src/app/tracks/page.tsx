@@ -1376,7 +1376,7 @@ export default function TracksPage() {
                     }}
                     className={`flex items-center justify-between p-4 rounded-3xl cursor-pointer transition-all active:scale-[0.98] border ${
                       isSelected 
-                        ? "bg-[#F1EADC] border-point/30 shadow-[0_4px_15px_rgba(26,42,108,0.06)]" 
+                        ? "bg-[#F1EADC] newtone:bg-fill border-point/30 shadow-[0_4px_15px_rgba(var(--t-ink-rgb),0.06)]" 
                         : "bg-white/60 border-navy/5 hover:border-navy/10 shadow-sm"
                     }`}
                   >
@@ -1781,9 +1781,9 @@ export default function TracksPage() {
               onClick={isReadyToStart ? handleStartWorldCup : undefined}
               className={`w-full max-w-[380px] pointer-events-auto transition-colors duration-300 overflow-hidden ${
                 isCurrentlyLoadingTracks
-                  ? "bg-cream/95 backdrop-blur-xl border border-navy/15 shadow-[0_12px_40px_rgba(26,42,108,0.2)] rounded-[2.2rem] p-3.5 flex flex-col gap-3 select-none cursor-not-allowed"
+                  ? "bg-cream/95 backdrop-blur-xl border border-navy/15 shadow-[0_12px_40px_rgba(var(--t-ink-rgb),0.2)] rounded-[2.2rem] p-3.5 flex flex-col gap-3 select-none cursor-not-allowed"
                   : isReadyToStart
-                    ? "bg-brand text-cream border border-navy/20 shadow-[0_10px_30px_rgba(26,42,108,0.35)] rounded-full py-4 px-6 hover:bg-brand/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                    ? "bg-brand text-cream border border-navy/20 shadow-[0_10px_30px_rgba(var(--t-ink-rgb),0.35)] rounded-full py-4 px-6 hover:bg-brand/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
                     : "bg-cream/90 backdrop-blur-md border border-navy/20 shadow-[0_4px_15px_rgba(0,0,0,0.1)] rounded-full py-3 px-6 text-center text-navy font-bold text-sm"
               }`}
             >
@@ -1834,7 +1834,7 @@ export default function TracksPage() {
                     {/* Progress Bar */}
                     <div className="w-full h-1.5 bg-navy/10 rounded-full overflow-hidden relative">
                       <motion.div
-                        className="h-full bg-gradient-to-r from-point to-amber-500 rounded-full"
+                        className="h-full bg-gradient-to-r from-point to-amber-500 newtone:to-point-ink rounded-full"
                         initial={{ width: "10%" }}
                         animate={{
                           width: `${

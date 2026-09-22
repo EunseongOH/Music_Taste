@@ -81,7 +81,7 @@ export default function PopupCallback() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-[#FAF7F2] text-navy">
+    <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-[#FAF7F2] newtone:bg-cream text-navy">
       <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-6 animate-pulse">
         <div className="w-4 h-4 bg-point rounded-full" />
       </div>

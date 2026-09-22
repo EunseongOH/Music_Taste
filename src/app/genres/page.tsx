@@ -167,7 +167,7 @@ export default function GenresPage() {
                   rotate: isSelected ? 18 : 0,
                 }}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className="absolute top-0 right-3 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#1c1c1c] border-2 border-navy/30 shadow-md flex items-center justify-center z-0 pointer-events-none"
+                className="absolute top-0 right-3 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#1c1c1c] newtone:bg-[#222B47] border-2 border-navy/30 shadow-md flex items-center justify-center z-0 pointer-events-none"
               >
                 {/* Vinyl Grooves */}
                 <div className="absolute inset-1.5 rounded-full border border-white/10" />
@@ -178,13 +178,13 @@ export default function GenresPage() {
                   className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-white/30 flex items-center justify-center shadow-inner"
                   style={{ backgroundColor: genre.color }}
                 >
-                  <div className="w-2 h-2 rounded-full bg-[#FAF7F2] border border-black/20" />
+                  <div className="w-2 h-2 rounded-full bg-[#FAF7F2] newtone:bg-cream border border-black/20" />
                 </div>
               </motion.div>
 
               {/* The Record Sleeve Box */}
               <div 
-                className={`relative z-10 bg-[#FAF7F2] rounded-2xl p-3.5 sm:p-4 border-[3px] transition-all duration-300 h-[110px] flex flex-col justify-between ${
+                className={`relative z-10 bg-[#FAF7F2] newtone:bg-white rounded-2xl p-3.5 sm:p-4 border-[3px] transition-all duration-300 h-[110px] flex flex-col justify-between ${
                   isSelected 
                     ? "border-point shadow-sm" 
                     : "border-navy hover:border-navy/70 shadow-sm"
@@ -221,7 +221,7 @@ export default function GenresPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-cream/95 border-t border-navy/15 pt-3.5 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md"
+            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-cream/95 border-t border-navy/15 pt-3.5 pb-7 px-6 shadow-[0_-10px_35px_rgba(var(--t-ink-rgb),0.12)] backdrop-blur-md"
           >
             <div className="w-full max-w-[380px] mx-auto flex flex-col gap-2.5">
               <div className="flex items-center justify-between px-1">

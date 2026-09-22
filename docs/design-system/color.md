@@ -304,6 +304,45 @@
 
 결정할 때 고려할 것: 저장 이미지는 인스타그램 등 **서비스 밖**에서 보인다. 하늘빛 바탕의 9:16 카드는 흰 피드 위에서 크림 카드보다 덜 도드라질 수 있다. 채택 전이라도 **저장할 때만 legacy 팔레트를 강제**하는 한 줄(내보내기 카드 래퍼에 `data-theme="legacy"`)을 넣으면 화면 테마와 저장 이미지를 따로 결정할 수 있다 — 지금은 넣지 않았다.
 
+## 7-2. 세부 뎁스 전수 (2026-09-22, 사용자: "구글·카카오 로그인 눌렀을 때 같은 세부 화면과 링크 미리보기에도 기존 톤이 남아 있다. 세부 뎁스까지 다")
+
+이용자가 도달할 수 있는 화면·모달·시트·팝업·중간 화면의 하드코딩 색을 전부 훑었다(`grep` 으로 hex·rgba·Tailwind 팔레트 이름 전수 → 47곳). 원칙: legacy 값은 그대로(픽셀 동일), 새 테마에서만 달라진다.
+
+**공통 기법 — 그림자 변수.** 남색·주황 알파 그림자 `rgba(26,42,108,…)`·`rgba(230,126,34,…)` 가 열 파일에 흩어져 있었다. 테마 변수 `--t-ink-rgb`(legacy 26,42,108 / sky-tint 24,33,59 / toss-white 25,31,40)·`--t-point-rgb`(230,126,34 / 253,126,62)를 두고 전부 `rgba(var(--t-ink-rgb),…)` 로 바꿨다. legacy 는 같은 숫자로 풀리므로 픽셀 동일(computed 로 확인).
+
+| 파일 | 줄 | 바꾼 것 |
+|---|---|---|
+| `app/auth/popup-login/page.tsx` | 44·48·53 | 바탕 `#FAF7F2` → `newtone:bg-cream`. 구글 쪽 스피너 테두리 `#1a2a6c` → `var(--t-navy)`, 점 `#e63946` → `newtone:bg-brand`. 카카오 테두리·점은 브랜드 색 유지 |
+| `app/auth/popup-callback/page.tsx` | 84 | 바탕 → `newtone:bg-cream` |
+| `components/LoginModal.tsx` | 378·426·669 / 430·607·610·673 | 그림자 → 변수 / 오류 글자 `text-red-500` → `newtone:text-danger`, 오류 테두리 → `newtone:border-danger`, 포커스 → `newtone:focus:border-brand`. 구글·카카오 버튼 색은 그대로 |
+| `app/explore/page.tsx` | 801·1023 / 1060·1077 / 1167 / 1267–1270 | 그림자 → 변수 / 삭제 배지 `bg-red-500` → `newtone:bg-danger` / 스크롤 FAB `bg-navy` → `newtone:bg-brand` / 준비 팝업 `#F5F2ED`·`#E67E22` → `bg-cream`·`bg-point/10`·`text-point newtone:text-point-ink`, 3px 선 → 옅은 선 |
+| `app/tracks/page.tsx` | 1379 / 1784·1786 / 1837 | 선택 앨범 면 `#F1EADC` → `newtone:bg-fill` / 그림자 → 변수 / 진행 바 `to-amber-500` → `newtone:to-point-ink` |
+| `components/SnakePathTimeline.tsx` | 66·271–273 / 289·293 / 356·357·378 | 우승 곡 빛·펄스 → point 변수 / SVG 길 `stroke` 속성 → `className="stroke-navy/5"`·`"stroke-point"` / 노드 면 `#F5F2ED` → `bg-cream`, 그림자 → 변수, 구멍 테 → `border-point/30` |
+| `components/SafeImage.tsx` | 19·21 | 대체 면 `#EBE2D7`·`#E6DEC9`·글자 `#5C5441` → `newtone:bg-navy/[0.06]`·`[0.05]`·`newtone:text-navy/25` |
+| `utils/coverPlaceholder.ts` | 10–14 | data URI 라 변수를 못 받아 팔레트 두 벌. `document.documentElement[data-theme]` 로 고른다(호출은 전부 클라이언트 fetch 뒤) |
+| `components/result/ResultScreen.tsx` | 871 | 공유 주 버튼 hover `#111A3E` → `newtone:hover:bg-brand/90` |
+| `components/result/WinnerReveal.tsx` · `app/taste/[id]/page.tsx` · `components/TasteTemplates.tsx` · `components/WorldCupCandidate.tsx` | 그림자 | → 변수. TasteTemplates 의 같은 뜻이던 `newtone:shadow` 중복 두 곳은 뺐다 |
+| `app/worldcup/page.tsx` | 703 | 고른 곡 강조 그림자 → point 변수(새 테마에서는 어차피 안 나옴) |
+| `components/ProfileModal.tsx` | 422 | 사진 바꾸기 버튼 `bg-navy` → `newtone:bg-brand` |
+| `app/genres/page.tsx` | 170·181·187·224 | 도달 불가(MIX_MATCH 꺼짐). 토큰화만: `#1c1c1c`·`#FAF7F2`·그림자 |
+| `scripts/make-og.mjs` → `public/og-image.png`·`og-sortify.png` | 26–27 | 바탕 `#F5F2ED` → `#E6F1FD`, 글자 `#1A2A6C` → `#18213B`. 로고 B 구성·Nunito 800 그대로. **테마 무관 파일**이라 병합되는 순간 운영 미리보기가 바뀐다 |
+
+**의도적으로 둔 것(색이 아니라 사물).** `AlbumCard` 의 검은 LP(`#222→#0a0a0a`, 테 `#111`)와 `TasteTemplates` 의 검은 판(`#161616/#232323`)은 실제 비닐의 검정. `LPPlayer` 의 `#1a1a1a` 는 legacy 판(새 테마는 `newtone:` 이 덮음). `ModeCard` 의 로고 그라데이션 hex 는 로고 색. `exportLayout.ts` 의 `fill="#000"` 은 마스크.
+
+**브랜드 색 예외 — 바꾸면 가이드라인 위반.**
+| 어디 | 무엇 |
+|---|---|
+| 구글 로그인 버튼 (`LoginModal`) | 흰 면 `#FFFFFF`, 테두리 `#747775`, 글자 `#1F1F1F`, G 로고 네 색 |
+| 카카오 로그인 버튼·팝업 스피너 (`LoginModal`·`popup-login`) | 노랑 `#FEE500`, 검정 `#000000` |
+| 카카오 공유 (`ResultScreen`) | 노랑 `#FEE500`·hover `#F5DC00`·active `#EDD100`, 검정 |
+| X 공유 (`ResultScreen`) | 검정 `#0F1419`·hover `#20262E`·active `#2C353D` |
+| 인스타그램 공유·스토리 (`ResultScreen`) | 그라데이션 `#f09433→#dc2743→#bc1888`, `#f9ce34→#ee2a7b→#6228d7` |
+| 스포티파이 | 로고·녹색(코드에 색 상수 없음 — 이미지) |
+
+**후순위(이용자에게 안 보임).** `app/manager-taste-control/page.tsx` 16곳, `app/dev/theme-lab/Studies.tsx` 24곳·`ThemeLab.tsx` 14곳(대부분 시안 견본용 로고 색)·`dev/result-lab/ResultLab.tsx` 3곳.
+
+**확인 방법.** 로그인 팝업 둘은 OAuth 로 바로 나가므로 외부 요청을 204 로 막아 화면을 고정하고 legacy·sky-tint 각각 computed 값(바탕 250,247,242 / 243,248,255 · 구글 점 230,57,70 / 56,91,240 · 카카오 254,229,0 양쪽 동일)과 스크린샷으로 확인. 콜백 화면·결과 인트로(순위 길 stroke 230,126,34 / 253,126,62)·아티스트 고르기 FAB 그림자(legacy 26,42,108,0.28 유지)도 같은 방법. 일치율 화면 같은 DB 상태가 필요한 곳은 코드로. legacy 홈 픽셀 차이 0, 내보내기 기준선 7/7.
+
 ## 8. 구현 메모
 
 - `@theme inline` 의 토큰 값을 `var(--t-*)` 참조로 두고, 실제 값은 `:root`(=legacy) · `[data-theme="toss-white"]` · `[data-theme="sky-tint"]` 에 둔다. `text-navy/70` 은 `color-mix(in oklab, var(--t-navy) 70%, transparent)` 로 풀려 테마를 바꿔도 그대로 먹는다(빌드된 CSS 로 확인).

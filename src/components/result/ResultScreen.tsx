@@ -868,7 +868,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                   setShareNameError("");
                   setShowShareModal(true);
                 }}
-                className="flex-1 h-[48px] bg-brand text-cream font-sans font-bold text-sm rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md hover:bg-[#111A3E]"
+                className="flex-1 h-[48px] bg-brand text-cream font-sans font-bold text-sm rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md hover:bg-[#111A3E] newtone:hover:bg-brand/90"
               >
                 <Share2 size={18} />
                 <span>{t.shareMainBtn}</span>

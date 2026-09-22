@@ -375,7 +375,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                 <X size={20} strokeWidth={2.5} />
               </button>
               
-              <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 shadow-[4px_4px_0_rgba(26,42,108,0.1)]">
+              <div className="w-12 h-12 rounded-full border-[3px] border-navy flex items-center justify-center mb-4 mt-2 shadow-[4px_4px_0_rgba(var(--t-ink-rgb),0.1)]">
                 <div className="w-4 h-4 bg-point rounded-full border-2 border-navy" />
               </div>
               
@@ -423,11 +423,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <button 
                       type="submit"
                       disabled={!loginId || !loginPw || isLoading}
-                      className="w-full py-3.5 mt-2 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3.5 mt-2 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-[0_4px_15px_rgba(var(--t-ink-rgb),0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? t.loggingIn : t.login}
                     </button>
-                    {loginError && <div className="text-center text-sm font-bold text-red-500 mt-1">{loginError}</div>}
+                    {loginError && <div className="text-center text-sm font-bold text-red-500 newtone:text-danger mt-1">{loginError}</div>}
                   </form>
 
                   <div className="flex items-center gap-3 my-2">
@@ -604,10 +604,10 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                           onChange={handleSignupPwChange}
                           required
                           maxLength={14}
-                          className={`w-full py-3 pl-11 pr-4 bg-white/50 border-2 rounded-xl focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30 transition-colors ${pwError ? 'border-red-400 focus:border-red-500' : 'border-navy/20 focus:border-point'}`}
+                          className={`w-full py-3 pl-11 pr-4 bg-white/50 border-2 rounded-xl focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30 transition-colors ${pwError ? 'border-red-400 focus:border-red-500 newtone:border-danger newtone:focus:border-danger' : 'border-navy/20 focus:border-point newtone:focus:border-brand'}`}
                         />
                       </div>
-                      {pwError && <span className="text-[10px] text-red-500 font-bold ml-1">{pwError}</span>}
+                      {pwError && <span className="text-[10px] text-red-500 newtone:text-danger font-bold ml-1">{pwError}</span>}
                     </div>
 
                     {/* Name */}
@@ -666,11 +666,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <button 
                       type="submit"
                       disabled={!signupId || !signupPw || !signupName || !signupNickname || !!pwError || isLoading}
-                      className="w-full py-3.5 mt-4 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-[0_4px_15px_rgba(26,42,108,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3.5 mt-4 bg-brand text-cream font-bold text-lg rounded-xl hover:bg-brand/90 transition-colors shadow-[0_4px_15px_rgba(var(--t-ink-rgb),0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? t.signingUp : t.signupBtn}
                     </button>
-                    {signupError && <div className="text-center text-sm font-bold text-red-500 mt-1">{signupError}</div>}
+                    {signupError && <div className="text-center text-sm font-bold text-red-500 newtone:text-danger mt-1">{signupError}</div>}
                   </form>
 
                   <div className="mt-2 flex justify-center text-sm font-sans pt-2 border-t border-navy/10">

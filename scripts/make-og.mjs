@@ -22,9 +22,13 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const p = (...parts) => path.join(REPO, ...parts);
 
-/** 디자인 토큰과 같은 값 — globals.css 의 --color-cream / --color-navy */
-const CREAM = '#F5F2ED';
-const NAVY = '#1A2A6C';
+/*
+ * 새 톤(sky-tint) 값 — docs/design-system/color.md 2장. 바탕은 --background(#E6F1FD): 흰 아이콘 타일이 크림(#F3F8FF) 위에서는
+ * 거의 묻히므로 한 단계 짙은 바깥 바탕을 쓴다. 글자는 잉크(--t-navy). 2026-09-22 사용자: "링크 미리보기 이미지도 새 톤으로".
+ * (전에는 legacy 크림 #F5F2ED · 남색 #1A2A6C)
+ */
+const CREAM = '#E6F1FD';
+const NAVY = '#18213B';
 
 const markDataUri = `data:image/png;base64,${readFileSync(p('public', 'logo-mark.png')).toString('base64')}`;
 

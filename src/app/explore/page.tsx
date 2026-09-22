@@ -798,7 +798,7 @@ export default function ExplorePage() {
         onClick={() => handleArtistClick(artist)}
         className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer select-none transition-all duration-300 ${
           isSelected 
-            ? "bg-point/10 border-2 border-point shadow-[0_4px_12px_rgba(230,126,34,0.15)]" 
+            ? "bg-point/10 border-2 border-point shadow-[0_4px_12px_rgba(var(--t-point-rgb),0.15)]" 
             : isSimilar
               ? "bg-point/5 border-2 border-point border-dashed opacity-90 scale-[0.98]"
               : "bg-white/50 hover:bg-white border-2 border-navy/5 hover:border-navy/10"
@@ -859,7 +859,7 @@ export default function ExplorePage() {
       >
         <motion.div 
           layout="position"
-          className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar && !isSelected ? 'border-point border-dashed bg-point/5 scale-90' : isSimilar && isSelected ? 'border-point border-solid bg-point/10 scale-90 shadow-[0_0_15px_rgba(230,126,34,0.4)]' : isSelected ? 'border-point shadow-[0_0_15px_rgba(230,126,34,0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
+          className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 ${isSimilar && !isSelected ? 'border-point border-dashed bg-point/5 scale-90' : isSimilar && isSelected ? 'border-point border-solid bg-point/10 scale-90 shadow-[0_0_15px_rgba(var(--t-point-rgb),0.4)]' : isSelected ? 'border-point shadow-[0_0_15px_rgba(var(--t-point-rgb),0.3)]' : 'border-navy/20 group-hover:border-navy/60 group-hover:shadow-md'}`}
         >
           <div className={`relative w-full h-full rounded-full overflow-hidden ${isSelected ? 'p-1 bg-cream/50' : ''}`}>
             <div className="relative w-full h-full rounded-full overflow-hidden">
@@ -1020,7 +1020,7 @@ export default function ExplorePage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-cream/98 border-t-[2.5px] border-navy/15 pt-4 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md flex flex-col gap-4"
+            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-cream/98 border-t-[2.5px] border-navy/15 pt-4 pb-7 px-6 shadow-[0_-10px_35px_rgba(var(--t-ink-rgb),0.12)] backdrop-blur-md flex flex-col gap-4"
           >
             {/* 1. Selection Horizontal Bar */}
             <div className="flex flex-col gap-1.5 w-full max-w-[380px] mx-auto">
@@ -1057,7 +1057,7 @@ export default function ExplorePage() {
                             e.stopPropagation();
                             handleArtistClick(artist);
                           }}
-                          className="absolute inset-0 bg-red-500/80 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                          className="absolute inset-0 bg-red-500/80 newtone:bg-danger/80 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
                         >
                           <X size={14} className="text-white font-bold" strokeWidth={3} />
                         </button>
@@ -1074,7 +1074,7 @@ export default function ExplorePage() {
                           e.stopPropagation();
                           handleArtistClick(artist);
                         }}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border border-cream flex items-center justify-center shadow-sm cursor-pointer md:hidden"
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 newtone:bg-danger rounded-full border border-cream flex items-center justify-center shadow-sm cursor-pointer md:hidden"
                       >
                         <X size={8} className="text-white font-bold" strokeWidth={3} />
                       </button>
@@ -1164,7 +1164,7 @@ export default function ExplorePage() {
             exit={{ opacity: 0, scale: 0.7, y: 20 }}
             transition={{ type: "spring", stiffness: 400, damping: 28 }}
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className={`fixed right-5 z-50 w-12 h-12 rounded-full bg-navy shadow-[0_6px_24px_rgba(26,42,108,0.28)] flex items-center justify-center hover:bg-navy/90 active:scale-95 transition-all cursor-pointer ${selectedIds.size > 0 && !isSingleArtistMode ? "bottom-56" : "bottom-6"}`}
+            className={`fixed right-5 z-50 w-12 h-12 rounded-full bg-navy newtone:bg-brand shadow-[0_6px_24px_rgba(var(--t-ink-rgb),0.28)] flex items-center justify-center hover:bg-navy/90 newtone:hover:bg-brand/90 active:scale-95 transition-all cursor-pointer ${selectedIds.size > 0 && !isSingleArtistMode ? "bottom-56" : "bottom-6"}`}
             aria-label="맨 위로 이동"
           >
             <ChevronUp size={22} className="text-cream" strokeWidth={2.5} />
@@ -1264,10 +1264,10 @@ export default function ExplorePage() {
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                className="w-full max-w-sm bg-[#F5F2ED] border-2 border-navy p-6 rounded-2xl shadow-xl flex flex-col items-center text-center pointer-events-auto"
+                className="w-full max-w-sm bg-cream border-2 border-navy newtone:border newtone:border-navy/10 p-6 rounded-2xl shadow-xl flex flex-col items-center text-center pointer-events-auto"
               >
-                <div className="w-12 h-12 rounded-full bg-[#E67E22]/10 flex items-center justify-center mb-4">
-                  <Disc className="w-6 h-6 text-[#E67E22] animate-spin" />
+                <div className="w-12 h-12 rounded-full bg-point/10 flex items-center justify-center mb-4">
+                  <Disc className="w-6 h-6 text-point newtone:text-point-ink animate-spin" />
                 </div>
                 
                 <h3 className="text-base font-bold text-navy mb-2">
