@@ -393,7 +393,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                 >
                   <form onSubmit={onLoginSubmit} className="flex flex-col gap-3">
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                         <Mail size={18} />
                       </div>
                       <input 
@@ -402,12 +402,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                         value={loginId}
                         onChange={e => setLoginId(e.target.value)}
                         required
-                        className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-navy placeholder:text-navy/40 transition-colors"
+                        className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-navy placeholder:text-navy/50 transition-colors"
                       />
                     </div>
                     
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                         <Lock size={18} />
                       </div>
                       <input 
@@ -416,7 +416,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                         value={loginPw}
                         onChange={e => setLoginPw(e.target.value)}
                         required
-                        className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-navy placeholder:text-navy/40 transition-colors"
+                        className="w-full py-3.5 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point focus:bg-white font-sans text-navy placeholder:text-navy/50 transition-colors"
                       />
                     </div>
 
@@ -432,7 +432,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
 
                   <div className="flex items-center gap-3 my-2">
                     <div className="flex-1 h-px bg-navy/10" />
-                    <span className="font-sans text-xs text-navy/40 font-bold uppercase tracking-wider">{t.or}</span>
+                    <span className="font-sans text-xs text-navy/65 font-bold uppercase tracking-wider">{t.or}</span>
                     <div className="flex-1 h-px bg-navy/10" />
                   </div>
 
@@ -576,7 +576,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <div className="flex flex-col gap-1">
                       <label className="font-sans text-xs font-bold text-navy ml-1">{t.email} <span className="text-point">*</span></label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                           <Mail size={16} />
                         </div>
                         <input 
@@ -585,7 +585,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                           value={signupId}
                           onChange={e => setSignupId(e.target.value)}
                           required
-                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
+                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/50 transition-colors"
                         />
                       </div>
                     </div>
@@ -594,7 +594,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <div className="flex flex-col gap-1">
                       <label className="font-sans text-xs font-bold text-navy ml-1">{t.password} <span className="text-point">*</span></label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                           <Lock size={16} />
                         </div>
                         <input 
@@ -604,7 +604,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                           onChange={handleSignupPwChange}
                           required
                           maxLength={14}
-                          className={`w-full py-3 pl-11 pr-4 bg-white/50 border-2 rounded-xl focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30 transition-colors ${pwError ? 'border-red-400 focus:border-red-500 newtone:border-danger newtone:focus:border-danger' : 'border-navy/20 focus:border-point newtone:focus:border-brand'}`}
+                          className={`w-full py-3 pl-11 pr-4 bg-white/50 border-2 rounded-xl focus:outline-none font-sans text-sm text-navy placeholder:text-navy/50 transition-colors ${pwError ? 'border-red-400 focus:border-red-500 newtone:border-danger newtone:focus:border-danger' : 'border-navy/20 focus:border-point newtone:focus:border-brand'}`}
                         />
                       </div>
                       {pwError && <span className="text-[10px] text-red-500 newtone:text-danger font-bold ml-1">{pwError}</span>}
@@ -614,7 +614,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <div className="flex flex-col gap-1">
                       <label className="font-sans text-xs font-bold text-navy ml-1">{t.name} <span className="text-point">*</span></label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                           <User size={16} />
                         </div>
                         <input 
@@ -623,7 +623,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                           value={signupName}
                           onChange={e => setSignupName(e.target.value)}
                           required
-                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
+                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/50 transition-colors"
                         />
                       </div>
                     </div>
@@ -632,7 +632,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <div className="flex flex-col gap-1">
                       <label className="font-sans text-xs font-bold text-navy ml-1">{t.nickname} <span className="text-point">*</span></label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                           <User size={16} />
                         </div>
                         <input 
@@ -641,7 +641,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                           value={signupNickname}
                           onChange={e => setSignupNickname(e.target.value)}
                           required
-                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
+                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/50 transition-colors"
                         />
                       </div>
                     </div>
@@ -650,7 +650,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                     <div className="flex flex-col gap-1">
                       <label className="font-sans text-xs font-bold text-navy ml-1">{t.phone}</label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/40">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-navy/50">
                           <Phone size={16} />
                         </div>
                         <input 
@@ -658,7 +658,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
                           placeholder={t.phonePlaceholder} 
                           value={signupPhone}
                           onChange={e => setSignupPhone(e.target.value)}
-                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/30 transition-colors"
+                          className="w-full py-3 pl-11 pr-4 bg-white/50 border-2 border-navy/20 rounded-xl focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/50 transition-colors"
                         />
                       </div>
                     </div>

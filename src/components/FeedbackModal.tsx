@@ -221,7 +221,7 @@ function FeedbackForm({
                   placeholder={
                     kind === "data_error" ? t.messagePlaceholderDataError : t.messagePlaceholder
                   }
-                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/40 resize-none"
+                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/50 resize-none"
                 />
               </div>
 
@@ -235,7 +235,7 @@ function FeedbackForm({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t.emailPlaceholder}
-                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/40"
+                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none type-body text-navy placeholder:text-navy/50"
                 />
                 <p className="type-caption text-navy/70 ml-1 break-keep">
                   {t.emailNotice}

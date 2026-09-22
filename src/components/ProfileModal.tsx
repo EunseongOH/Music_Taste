@@ -361,7 +361,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   }[locale];
 
   const inputClass =
-    "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/40";
+    "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/50";
   const archiveCount = completedResults.length + activeDrafts.length;
 
   return typeof document !== "undefined" ? createPortal(

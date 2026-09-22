@@ -610,7 +610,7 @@ export default function ArchivePage() {
 
   const textAction = "type-sub font-semibold text-navy cursor-pointer disabled:text-navy/40 disabled:cursor-default";
   const inputClass =
-    "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/40";
+    "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/50";
 
   const closeAddTrack = () => {
     setIsAddTrackOpen(false);
@@ -709,7 +709,7 @@ export default function ArchivePage() {
                 placeholder={t.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent outline-none type-body text-navy placeholder:text-navy/40"
+                className="flex-1 bg-transparent outline-none type-body text-navy placeholder:text-navy/50"
               />
             </label>
           </div>
@@ -998,7 +998,7 @@ export default function ArchivePage() {
               value={editLyricsContent}
               onChange={(e) => setEditLyricsContent(e.target.value)}
               rows={8}
-              className="w-full p-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy resize-none placeholder:text-navy/40"
+              className="w-full p-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy resize-none placeholder:text-navy/50"
               placeholder={editLyricsType === "plain" ? t.lyricsPlaceholderPlain : t.lyricsPlaceholderFanchant}
             />
           </div>

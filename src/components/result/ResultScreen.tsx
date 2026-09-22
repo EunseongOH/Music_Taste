@@ -1189,7 +1189,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               >
                 <button
                   onClick={() => setShowInstagramGuideModal(false)}
-                  className="absolute top-5 right-5 text-navy/40 hover:text-navy/70 active:scale-95 transition-all cursor-pointer"
+                  className="absolute top-5 right-5 text-navy/50 hover:text-navy/70 active:scale-95 transition-all cursor-pointer"
                   aria-label="닫기"
                 >
                   <X size={18} strokeWidth={2.5} />

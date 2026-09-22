@@ -914,7 +914,7 @@ export default function ExplorePage() {
           {/* Pre-selected genres badges */}
           {selectedGenres.length > 0 && !isSingleArtistMode && (
             <div className="flex flex-wrap gap-1.5 mt-2.5">
-              <span className="font-sans text-[10px] text-navy/40 font-bold self-center mr-1">{t.genreLabel}</span>
+              <span className="font-sans text-[10px] text-navy/70 font-bold self-center mr-1">{t.genreLabel}</span>
               {selectedGenres.map(genreId => {
                 const label = genreId.toUpperCase();
                 return (
@@ -941,12 +941,12 @@ export default function ExplorePage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t.placeholder} 
-            className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
+            className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/50 transition-colors shadow-inner"
           />
           {searchQuery.length > 0 && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute inset-y-0 right-4 flex items-center justify-center text-navy/40 hover:text-point transition-colors cursor-pointer"
+              className="absolute inset-y-0 right-4 flex items-center justify-center text-navy/50 hover:text-point transition-colors cursor-pointer"
               aria-label="Clear search query"
             >
               <X size={16} strokeWidth={2.5} />
@@ -995,7 +995,7 @@ export default function ExplorePage() {
           (searchQuery.trim().length === 0 && selectedGenres.length > 0 && hasMoreGenre)) && (
           <div className="flex flex-col items-center gap-1.5 py-4">
             <Loader2 className="animate-spin text-point/60" size={24} />
-            <span className="font-sans text-[10px] text-navy/40 font-bold">{t.loadingMore}</span>
+            <span className="font-sans text-[10px] text-navy/70 font-bold">{t.loadingMore}</span>
           </div>
         )}
       </div>

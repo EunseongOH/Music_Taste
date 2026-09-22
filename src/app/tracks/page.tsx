@@ -1346,12 +1346,12 @@ export default function TracksPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/40 transition-colors shadow-inner"
+            className="w-full py-2.5 pl-11 pr-10 bg-white/50 border-2 border-navy/10 rounded-full focus:outline-none focus:border-point font-sans text-sm text-navy placeholder:text-navy/50 transition-colors shadow-inner"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute inset-y-0 right-10 flex items-center text-navy/40 hover:text-navy transition-colors"
+              className="absolute inset-y-0 right-10 flex items-center text-navy/50 hover:text-navy transition-colors"
             >
               <X size={16} />
             </button>
@@ -1412,7 +1412,7 @@ export default function TracksPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-charcoal/40 font-sans mr-1">{result.duration}</span>
+                      <span className="text-xs text-navy/70 font-sans mr-1">{result.duration}</span>
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                         isSelected ? "border-point bg-point text-white" : "border-navy/20"
                       }`}>
@@ -1628,13 +1628,13 @@ export default function TracksPage() {
                                               className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                             >
                                               <div className="flex items-center gap-3">
-                                                <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                <span className="text-xs font-num tabular-nums text-navy/65 w-4 text-right">{idx + 1}</span>
                                                 <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
                                               </div>
                                               {isSelected ? (
                                                 <Check size={18} className="text-point" strokeWidth={3} />
                                               ) : (
-                                                <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                                <span className="text-xs text-navy/70 font-sans">{track.duration}</span>
                                               )}
                                             </div>
                                           );
@@ -1734,13 +1734,13 @@ export default function TracksPage() {
                                               className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                             >
                                               <div className="flex items-center gap-3">
-                                                <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                <span className="text-xs font-num tabular-nums text-navy/65 w-4 text-right">{idx + 1}</span>
                                                 <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
                                               </div>
                                               {isSelected ? (
                                                 <Check size={18} className="text-point" strokeWidth={3} />
                                               ) : (
-                                                <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                                <span className="text-xs text-navy/70 font-sans">{track.duration}</span>
                                               )}
                                             </div>
                                           );

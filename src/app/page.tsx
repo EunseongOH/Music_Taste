@@ -619,7 +619,7 @@ export default function Home() {
 
       {/* Semantic Sitemap Links for Search Engine Crawlers */}
       <nav className="w-full max-w-md mx-auto mt-8 border-t border-navy/10 pt-6 px-4 pb-2 text-center select-none z-10">
-        <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-sans font-bold text-navy/40">
+        <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-sans font-bold text-navy/70">
           {/* 믹스 매치는 내린 동안 링크하지 않는다 — docs/mode-pivot.md */}
           {MIX_MATCH ? (
             <li>
@@ -659,7 +659,7 @@ export default function Home() {
             </Link>
           </li>
         </ul>
-        <p className="text-[10px] font-sans text-navy/20 mt-4">
+        <p className="text-[10px] font-sans text-navy/65 mt-4">
           © {new Date().getFullYear()} Sortify. All rights reserved.
         </p>
       </nav>

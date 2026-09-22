@@ -656,7 +656,7 @@ export default function WorldCupPage() {
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.5 }}
-                      className="shrink-0 italic text-navy/40 text-xl sm:text-3xl md:text-4xl font-black select-none px-1 py-6 sm:py-10"
+                      className="shrink-0 italic text-navy/60 text-xl sm:text-3xl md:text-4xl font-black select-none px-1 py-6 sm:py-10"
                     >
                       VS
                     </motion.div>

@@ -127,7 +127,7 @@ export default function UnreleasedDialog({ open, onClose, artistId, artistName, 
   };
 
   const field =
-    "w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30";
+    "w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/50";
   const label = "font-sans text-xs font-bold text-navy/70 ml-1";
 
   return (
