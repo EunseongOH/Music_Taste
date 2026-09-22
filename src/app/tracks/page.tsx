@@ -1789,7 +1789,7 @@ export default function TracksPage() {
                 isCurrentlyLoadingTracks
                   ? "bg-cream/95 backdrop-blur-xl border border-navy/15 shadow-[0_12px_40px_rgba(26,42,108,0.2)] rounded-[2.2rem] p-3.5 flex flex-col gap-3 select-none cursor-not-allowed"
                   : isReadyToStart
-                    ? "bg-navy text-cream border border-navy/20 shadow-[0_10px_30px_rgba(26,42,108,0.35)] rounded-full py-4 px-6 hover:bg-navy/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                    ? "bg-brand text-cream border border-navy/20 shadow-[0_10px_30px_rgba(26,42,108,0.35)] rounded-full py-4 px-6 hover:bg-brand/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
                     : "bg-cream/90 backdrop-blur-md border border-navy/20 shadow-[0_4px_15px_rgba(0,0,0,0.1)] rounded-full py-3 px-6 text-center text-navy font-bold text-sm"
               }`}
             >
@@ -1944,7 +1944,7 @@ export default function TracksPage() {
           <div className="fixed top-20 left-0 right-0 z-[100] px-4 flex justify-center pointer-events-none">
             <motion.div
               initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}
-              className="bg-navy text-cream px-5 py-3.5 rounded-2xl shadow-lg flex items-center gap-3 max-w-md w-full pointer-events-auto border border-white/10"
+              className="bg-ink text-cream px-5 py-3.5 rounded-2xl shadow-lg flex items-center gap-3 max-w-md w-full pointer-events-auto border border-white/10"
             >
               <Check size={18} className="text-point shrink-0" strokeWidth={3} />
               <p className="font-sans text-sm leading-snug">{notification}</p>

@@ -216,7 +216,7 @@ export default function UnreleasedDialog({ open, onClose, artistId, artistName, 
               </div>
               <button
                 type="submit"
-                className="mt-2 w-full py-3.5 bg-navy text-cream font-sans font-medium rounded-xl shadow-md hover:bg-navy/90 active:scale-[0.98] transition-all cursor-pointer"
+                className="mt-2 w-full py-3.5 bg-brand text-cream font-sans font-medium rounded-xl shadow-md hover:bg-brand/90 active:scale-[0.98] transition-all cursor-pointer"
               >
                 {t.submit}
               </button>

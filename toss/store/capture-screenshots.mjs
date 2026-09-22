@@ -35,6 +35,7 @@ const TONE =
   THEME === 'legacy'
     ? { bg: '#EAE2D6', ink: '26,42,108', title: '#1A2A6C', body: '#2D3436', dot: '#E67E22', font: "'Playfair Display',Georgia,serif", fontUrl: 'Playfair+Display:wght@700', weight: 700 }
     : { bg: THEME === 'sky-tint' ? '#E6F1FD' : '#F2F4F6', ink: '24,33,59', title: '#18213B', body: '#333D4B', dot: '#FD7E3E', font: "'Nunito',system-ui,sans-serif", fontUrl: 'Nunito:wght@800', weight: 800 };
+const ONLY = process.env.ONLY ? process.env.ONLY.split(",") : null; // 예: ONLY=2-explore,3-tracks (가로형은 전체가 있을 때만)
 const LOGO = readFileSync(join(HERE, '..', '..', 'public', 'logo-mark.png')).toString('base64');
 // 여러 아티스트가 섞인 픽스처를 쓴다. 기준선용(카더가든 전용)은 회귀 비교의
 // 고정 입력이라 건드리지 않는다.
@@ -60,16 +61,18 @@ const INVITE_CODE = process.env.INVITE_CODE ?? '9vtwkaq';
 
 const SCREENS = [
   { name: '1-home', route: '/', seed: {}, wait: 3000, logo: true },
-  { name: '2-explore', route: '/explore?mode=single', seed: { worldcup_is_single_artist: 'true' }, wait: 7000 },
+  { name: '2-explore', route: '/explore?mode=single', seed: { worldcup_is_single_artist: 'true' }, wait: 12000 },
   {
     name: '3-tracks',
     route: '/tracks?mode=single',
     seed: { worldcup_is_single_artist: 'true', selectedArtists: JSON.stringify([TRACKS_ARTIST]) },
-    wait: 8000,
-    // 첫 앨범을 펼쳐 수록곡과 LP 연출이 보이게 한다.
+    wait: 6000,
+    // 앨범 목록을 열고 첫 앨범을 펼쳐 수록곡과 LP 연출이 보이게 한다.
     act: async (page) => {
-      const card = page.locator('button', { hasText: /곡$/ }).first();
-      if (await card.count()) { await card.click(); await page.waitForTimeout(2500); }
+      // 한 아티스트 모드는 목록이 저절로 열린다(누르면 닫힌다). 앨범 카드가 뜰 때까지 기다렸다가 첫 카드를 펼친다.
+      const card = page.locator('[class*="col-span-1"] button').first();
+      await card.waitFor({ timeout: 20000 }).catch(() => {});
+      if (await card.count()) { await card.click(); await page.waitForTimeout(3500); }
     },
   },
   {
@@ -86,7 +89,7 @@ const SCREENS = [
     // 결과 화면은 순위를 하나씩 공개하는 연출로 시작한다. 최종 취향표를
     // 보여 줘야 하므로 '스킵' 을 눌러 끝으로 보낸다.
     act: async (page) => {
-      const skip = page.getByRole('button', { name: '스킵' }).first();
+      const skip = page.getByRole('button', { name: /건너뛰기|스킵/ }).first();
       if (await skip.count()) await skip.click();
       await page.waitForTimeout(4000);
     },
@@ -153,6 +156,7 @@ const phoneShots = [];
 
 try {
   for (const s of SCREENS) {
+    if (ONLY && !ONLY.includes(s.name)) continue;
     const ctx = await browser.newContext({
       viewport: { width: PHONE.w, height: PHONE.h },
       deviceScaleFactor: 3, // 1179×2556 (아이폰 16 실제 픽셀) 로 찍어 축소
@@ -206,6 +210,8 @@ try {
   }
 
   // 가로형: 브랜드 배경 위에 세로 화면 3장을 올린다.
+  if (ONLY) { console.log(`
+저장 위치: ${OUT} (일부만)`); throw { partial: true }; }
   const pick = phoneShots.filter((p) => ['1-home', '4-worldcup', '5-taste'].includes(p.name));
   const [titleL, bodyL] = THEME === 'legacy'
     ? ['Sortify', '최애곡 월드컵으로 완성하는<br/>나만의 음악 취향표']
@@ -252,6 +258,8 @@ try {
   await land.close();
 
   console.log(`\n저장 위치: ${OUT}`);
+} catch (e) {
+  if (!e?.partial) throw e;
 } finally {
   await browser.close();
 }

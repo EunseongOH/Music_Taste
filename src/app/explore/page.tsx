@@ -897,7 +897,7 @@ export default function ExplorePage() {
   return (
     <main className="flex flex-col min-h-screen relative z-10 w-full mb-20 bg-[var(--app-bg)]">
       {/* Sticky Header */}
-      <div className="sticky top-0 z-40 bg-[#F5F2ED]/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex flex-col gap-3 shadow-sm">
+      <div className="sticky top-0 z-40 bg-cream/95 backdrop-blur-md pt-6 pb-3 px-6 mx-[-1.5rem] w-[calc(100%+3rem)] border-b border-navy/5 flex flex-col gap-3 shadow-sm">
         <div className="flex items-center justify-between">
           <BackButton onClick={handleBackClick} className="border-none bg-transparent hover:bg-navy/5 w-9 h-9 shadow-none m-0 p-0 relative top-auto left-auto md:top-auto md:left-auto right-auto font-bold" />
           <ProfileHeader locale={locale} className="ml-auto !relative !top-auto !right-auto !md:top-auto !md:right-auto" />
@@ -1020,7 +1020,7 @@ export default function ExplorePage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-[#F5F2ED]/98 border-t-[2.5px] border-navy/15 pt-4 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md flex flex-col gap-4"
+            className="fixed bottom-0 left-0 right-0 z-40 w-full bg-cream/98 border-t-[2.5px] border-navy/15 pt-4 pb-7 px-6 shadow-[0_-10px_35px_rgba(26,42,108,0.12)] backdrop-blur-md flex flex-col gap-4"
           >
             {/* 1. Selection Horizontal Bar */}
             <div className="flex flex-col gap-1.5 w-full max-w-[380px] mx-auto">

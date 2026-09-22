@@ -22,18 +22,18 @@ const HOSTS = [
 
 const ALLOWED_ORIGINS = new Set(HOSTS.map((host) => `https://${APP_NAME}.${host}`));
 
-// 개발 중에는 Vite dev 서버(:5173)에서 이 API 를 부른다. Vite 프록시로
+// 개발 중에는 Vite dev 서버(localhost 의 아무 포트)에서 이 API 를 부른다. Vite 프록시로
 // 같은 출처인 척 우회하면 절대 URL·CORS 경로가 dev 에서 한 번도 실행되지
 // 않는다 — 운영에서 처음 터지는 걸 막으려고 같은 경로를 타게 한다.
 // 프로덕션 번들에는 들어가지 않는다.
-if (process.env.NODE_ENV !== 'production') {
-  ALLOWED_ORIGINS.add('http://localhost:5173');
-  ALLOWED_ORIGINS.add('http://127.0.0.1:5173');
-}
+// 여러 세션이 다른 포트(5174 등)로 Vite 를 띄우므로 포트는 가리지 않는다.
+const DEV_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+const isAllowed = (origin: string) =>
+  ALLOWED_ORIGINS.has(origin) || (process.env.NODE_ENV !== 'production' && DEV_ORIGIN.test(origin));
 
 /** 허용된 origin일 때만 CORS 헤더를 만든다. 그 외에는 빈 객체. */
 export function corsHeaders(origin: string | null): Record<string, string> {
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
+  if (!origin || !isAllowed(origin)) return {};
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
