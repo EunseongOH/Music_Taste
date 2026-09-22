@@ -10,7 +10,8 @@ import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
   rememberedNickname, fetchChallenge, fetchEntries, participantKey, saveEntry, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
-import { RankList, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { RankList, Sheet, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
+import TogetherPairDetail from "@/components/together/TogetherPairDetail";
 
 interface StoredTrack {
   id?: string;
@@ -125,6 +126,9 @@ export default function TogetherResultPage() {
 
   const [picked, setPicked] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [showAllMine, setShowAllMine] = useState(false);
 
   /*
    * 고른 사람은 기억하되 **자리를 계산으로 정한다**(상태를 고쳐 맞추지 않는다).
@@ -136,6 +140,16 @@ export default function TogetherResultPage() {
     if (picked && myPartners.some((p) => otherKey(p, key) === picked)) return picked;
     return otherKey(myPartners[0], key);
   }, [myPartners, picked, key]);
+
+  /** 고른 사람의 쌍과 기록. 상세 비교는 이 둘만 있으면 된다. */
+  const selectedPair = useMemo(
+    () => (selectedKey ? myPartners.find((p) => otherKey(p, key) === selectedKey) ?? null : null),
+    [myPartners, selectedKey, key]
+  );
+  const selectedEntry = useMemo(
+    () => (selectedKey ? entries?.find((e) => e.participant_key === selectedKey) ?? null : null),
+    [entries, selectedKey]
+  );
 
   /* 옆 사람이 끝나면 화면이 저절로 바뀐다. 무엇이 바뀌었는지 한 줄로 알려 준다. */
   const seenCount = useRef<number | null>(null);
@@ -264,66 +278,120 @@ export default function TogetherResultPage() {
         </section>
       )}
 
-      {/* 사람별 일치율 */}
-      {others.length > 0 && (
-        <section className="mt-8">
-          <h2 className="type-title-2 text-navy">사람별 일치율</h2>
-          <ul className="mt-2 flex flex-col divide-y divide-navy/10">
-            {others.map(({ entry, match }) => {
-              const gapTrack = match.biggestGap ? byId.get(match.biggestGap.id) : null;
-              return (
-                <li key={entry.id} className="py-3 flex items-start gap-3">
-                  <span className="type-title-2 font-num tabular-nums text-point-ink w-14 shrink-0">{match.rate}%</span>
-                  <div className="min-w-0">
-                    <p className="type-body-strong text-navy truncate">
-                      {entry.nickname || "익명 리스너"}
-                      {entry.participant_key === challenge.creator_id ? " · 만든 사람" : ""}
-                    </p>
-                    <p className="type-caption text-navy/70 break-keep">
-                      {match.common}곡 비교 · 1위 {match.sameTop ? "같음" : "다름"} · TOP 5 중 {match.topFiveOverlap}곡 겹침
-                    </p>
-                    {gapTrack && (
-                      /* "상대" 가 아니라 이름을 부른다 — 누구와 갈렸는지가 이 줄의 전부다. */
-                      <p className="type-caption text-navy/70 break-keep">
-                        가장 갈린 곡 · {gapTrack.title} — {entry.nickname || "익명 리스너"}님은{" "}
-                        {match.biggestGap!.theirs}위, 나는 {match.biggestGap!.mine}위
-                      </p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+      {/* 고른 사람과 나 */}
+      {selectedPair && selectedEntry && (
+        <TogetherPairDetail
+          pair={selectedPair}
+          myKey={key}
+          myRanking={mine.ranking}
+          theirRanking={selectedEntry.ranking}
+          theirName={selectedEntry.nickname?.trim() || "익명 리스너"}
+          byId={byId}
+        />
       )}
 
-      {/* 내 순위 */}
-      <section className="mt-8">
+      {/* 내 소트 결과 — 처음에는 TOP 5 만. 이미 아는 내 순위보다 위쪽이 새로운 정보다. */}
+      <section className="mt-10">
         <h2 className="type-title-2 text-navy">
-          내 순위 <span className="text-navy/70 font-semibold">{myTracks.length}곡</span>
+          내 소트 결과 <span className="text-navy/70 font-semibold">{myTracks.length}곡</span>
         </h2>
         <div className="mt-2">
-          <RankList tracks={myTracks} />
+          <RankList tracks={showAllMine ? myTracks : myTracks.slice(0, 5)} />
         </div>
+        {myTracks.length > 5 && (
+          <button type="button" onClick={() => setShowAllMine((v) => !v)} className={`${textLink} mt-3`}>
+            {showAllMine ? "접기" : `전체 ${myTracks.length}곡 보기`}
+          </button>
+        )}
       </section>
+      </div>
 
       <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
-          <button
-            onClick={async () => {
-              const how = await platform.copyText(link);
-              showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
-            }}
-            className={`${primaryButton} w-full`}
-          >
-            링크 복사해서 더 불러오기
+          <button onClick={() => setShareOpen(true)} className={`${primaryButton} w-full`}>
+            결과 공유하기
           </button>
-          <button onClick={() => router.push(`/together/${challenge.code}`)} className={`${secondaryButton} w-full`}>
-            곡 목록 보기
+          <button onClick={() => setInviteOpen(true)} className={`${secondaryButton} w-full`}>
+            친구 더 초대하기
           </button>
         </div>
       </div>
-      </div>
+
+      <Sheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        closeLabel="닫기"
+        header={
+          <>
+            <h2 className="type-title-2 text-navy">결과 공유하기</h2>
+            <p className="type-caption text-navy/70 mt-0.5">이 링크를 열면 우리 결과를 같이 볼 수 있어요.</p>
+          </>
+        }
+      >
+        <ul className="flex flex-col divide-y divide-navy/10">
+          {/*
+            `share()` 는 못 열면 false 를 준다(지원하지 않는 브라우저·토스 버전).
+            그때는 조용히 복사로 넘어간다 — 눌렀는데 아무 일도 안 일어나는 것이 제일 나쁘다.
+            어느 쪽을 했는지는 토스트가 말해 준다.
+          */}
+          <SheetAction
+            label="친구에게 보내기"
+            onClick={async () => {
+              const sent = await platform.share({
+                title: "같이 소트하기",
+                text: `${artistLabel} ${challenge.tracks.length}곡, 우리 취향이 얼마나 닮았는지 보세요`,
+                url: link,
+              });
+              setShareOpen(false);
+              if (!sent) {
+                const how = await platform.copyText(link);
+                showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+              }
+            }}
+          />
+          <SheetAction
+            label="링크 복사하기"
+            onClick={async () => {
+              const how = await platform.copyText(link);
+              setShareOpen(false);
+              showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+            }}
+          />
+        </ul>
+      </Sheet>
+
+      <Sheet
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        closeLabel="닫기"
+        header={
+          <>
+            <h2 className="type-title-2 text-navy">친구 더 초대하기</h2>
+            <p className="type-caption text-navy/70 mt-0.5 break-keep">
+              같은 곡으로 소트하면 관계도에 바로 들어와요.
+            </p>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-1">
+          <p className="type-caption text-navy/70">코드</p>
+          <p className="type-title-1 font-num tracking-wider text-navy">{challenge.code}</p>
+        </div>
+        <ul className="mt-4 flex flex-col divide-y divide-navy/10 border-t border-navy/10">
+          <SheetAction
+            label="링크 복사하기"
+            onClick={async () => {
+              const how = await platform.copyText(link);
+              setInviteOpen(false);
+              showToast(how === "sheet" ? "공유 창에서 '복사'를 눌러 주세요" : "링크를 복사했어요");
+            }}
+          />
+          <SheetAction
+            label="곡 목록 보기"
+            onClick={() => router.push(`/together/${challenge.code}`)}
+          />
+        </ul>
+      </Sheet>
 
       <ParticipantSheet
         open={sheetOpen}
@@ -339,6 +407,21 @@ export default function TogetherResultPage() {
       />
       <Toast toast={toast} />
     </main>
+  );
+}
+
+/** 공유·초대 시트의 한 줄. 손가락에 맞는 높이와 포커스 표시를 한곳에서 지킨다. */
+function SheetAction({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full min-h-[52px] -mx-6 px-6 flex items-center type-body-strong text-navy text-left cursor-pointer hover:bg-navy/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--t-point-ink)]"
+      >
+        {label}
+      </button>
+    </li>
   );
 }
 

@@ -8,6 +8,7 @@ import {
   buildPairwiseMatches, groupMatchRate, pickHighlightEdges, partnersOf,
   getTopK, getSharedTopTracks, buildRankComparison, commonOrders,
 } from '../../src/utils/togetherMatch.ts';
+import { withJosa } from '../../src/utils/josa.ts';
 
 let failed = 0;
 const check = (ok, label, detail = '') => {
@@ -251,6 +252,29 @@ const rateOf = (pairs, a, b) =>
   // 아무도 문턱을 못 넘으면 문턱을 무시한다 — 강조선이 사라지는 편이 더 나쁘다
   const allShort = buildPairwiseMatches([p('a', '가', T.slice(0, 3)), p('b', '나', T.slice(0, 3))]);
   check(pickHighlightEdges(allShort, 12).highest.length === 1, '후보가 없으면 문턱을 무시한다');
+}
+
+/* ─── 조사 ──────────────────────────────────────────────────── */
+
+console.log('\n조사 (닉네임 뒤)');
+{
+  const cases = [
+    ['다다', '와', '다다와'], ['민준', '와', '민준과'],     // 받침 없음 / 있음
+    ['초코', '와', '초코와'], ['하루', '와', '하루와'],
+    ['Harmony', '와', 'Harmony와'],                          // 한글이 아니면 받침 없는 쪽
+    ['리스너_하루', '와', '리스너_하루와'],
+    ['서연', '은', '서연은'], ['다다', '은', '다다는'],
+    ['민준', '이', '민준이'], ['초코', '이', '초코가'],
+    ['곡', '을', '곡을'], ['노래', '을', '노래를'],
+    ['3', '와', '3과'], ['2', '와', '2와'],                   // 숫자는 소리로
+  ];
+  let bad = 0;
+  for (const [word, kind, want] of cases) {
+    const got = withJosa(word, kind);
+    if (got !== want) { bad++; console.log(`      ${word}+${kind} → ${got} (${want} 이어야 함)`); }
+  }
+  check(bad === 0, `조사 ${cases.length}가지`, bad === 0 ? '전부 맞음' : `${bad}건 틀림`);
+  check(withJosa('', '와') === '와', '빈 이름에도 터지지 않는다');
 }
 
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);

@@ -114,11 +114,20 @@ for (const n of [2, 6, 10, 15]) {
   await page.addStyleTag({ content: `*{animation:none!important;transition:none!important} nextjs-portal{display:none!important}` });
   await page.waitForTimeout(400);
 
-  const shoot = async (label) => {
-    writeFileSync(join(OUT, `${label}.png`), await page.screenshot({ fullPage: false }));
+  const shoot = async (label, full = false) => {
+    /*
+     * 전체 페이지를 찍을 때는 하단 고정 버튼을 잠시 흐름 속으로 내린다.
+     * 그러지 않으면 버튼이 화면 한가운데에 박혀 그 아래 내용을 가린다(fullPage 의 성질).
+     */
+    /* 하단 CTA 막대만 고른다. `.fixed.bottom-0` 만 쓰면 시트(Sheet)까지 걸려서
+       시트가 화면 아래가 아니라 본문 끝에 붙는다 — CTA 막대에만 있는 pointer-events-none 으로 가른다. */
+    if (full) await page.addStyleTag({ content: `.fixed.bottom-0.pointer-events-none{position:static!important;background:none!important;padding-top:1.5rem!important}` });
+    writeFileSync(join(OUT, `${label}.png`), await page.screenshot({ fullPage: full }));
     console.log(`  ${label}.png`);
   };
   await shoot(`n${n}`);
+  // 6명은 페이지 전체를 한 장으로 — 섹션 사이 여백과 흐름을 통째로 본다.
+  if (n === 6) await shoot('n6-full', true);
 
   // 15명은 묶음 노드(+N)를 눌러 참여자 시트까지 본다.
   if (n === 15) {
@@ -138,6 +147,23 @@ for (const n of [2, 6, 10, 15]) {
       await node.first().click();
       await page.waitForTimeout(700);
       await shoot('n6-selected');
+    }
+    /* 기본 선택은 100% 라 "가장 갈린 곡"이 없다. 69% 인 민준을 골라 상세를 통째로 본다
+       — 받침 있는 이름("민준과 나")과 없는 이름("다다와 나")을 둘 다 확인하는 자리이기도 하다. */
+    const gapNode = page.getByRole('button', { name: /^민준/ });
+    if (await gapNode.count()) {
+      await gapNode.first().click();
+      await page.waitForTimeout(700);
+      await shoot('n6-detail', true);
+    }
+    // 공유 시트
+    const share = page.getByRole('button', { name: '결과 공유하기' });
+    if (await share.count()) {
+      await share.first().click();
+      await page.waitForTimeout(800);
+      await shoot('n6-share');
+      await page.getByRole('button', { name: '닫기' }).first().click();
+      await page.waitForTimeout(500);
     }
   }
   await ctx.close();
