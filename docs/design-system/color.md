@@ -282,6 +282,33 @@
 - `<html data-theme>` 는 `layout.tsx` 의 부트 스크립트가 `?theme=` 또는 `localStorage.sortify_theme` 으로 붙인다. 값이 없으면 아무것도 붙지 않아 legacy 그대로다.
 - 스크린샷: `node scripts/theme-shots.mjs <폴더>` (dev 서버 3300). Spotify 를 부르지 않는 화면만 찍는다.
 
+## 8-1. 채택 스위치 — 기본 테마를 sky-tint 로 (준비만, 아직 켜지 않음)
+
+바꾸는 줄은 **6줄**, 되돌리기는 그 커밋 하나를 `git revert` 하면 된다.
+
+| 파일 | 줄 | 바꿀 것 |
+|---|---|---|
+| `src/app/globals.css` :95-96 | `:root,
+[data-theme="legacy"] {` → `[data-theme="legacy"] {` | legacy 값을 기본에서 뺀다 |
+| `src/app/globals.css` :133 | `[data-theme="sky-tint"] {` → `:root,
+[data-theme="sky-tint"] {` | sky-tint 값을 기본으로. (:151 워드마크 블록도 같게) |
+| `src/app/globals.css` :89 | `@custom-variant newtone (&:where([data-theme="toss-white"] *, [data-theme="sky-tint"] *))` → `(&:where(:root:not([data-theme="legacy"]) *))` | 속성이 없을 때(=기본)도 newtone 이 먹게 |
+| `src/app/layout.tsx` :34 | `v!=="legacy"` 조건 제거 → legacy 를 골라도 `data-theme="legacy"` 를 붙인다 | 저장된 legacy 선택이 계속 동작하게 |
+| `toss/app/src/main.tsx` :17 | 같음 | 토스 빌드 |
+
+켠 뒤 해야 할 것: 기준 이미지 다시 찍기(아래), `theme-shots` 의 shots-prev 갱신, color.md 2장 표의 "legacy" 열을 "이전 톤"으로. 채택 뒤 한 달쯤 지나면 legacy 블록과 Playfair 로드를 지운다(그때 토큰 값을 직접 적어 color-mix 대체값 문제도 없앤다).
+
+### 채택 시 새 톤으로 다시 찍어야 할 기준 이미지
+
+| 세트 | 파일 | 만드는 법 |
+|---|---|---|
+| `toss/baseline/refs/` | 내보내기 7개(리스트 2 · 레코드 2 · 모자이크 · 포스터 · CSV) | refs 를 지우고 `node toss/baseline/capture.mjs` (NEXT_BASE 지정). CSV 는 그대로일 것 |
+| `toss/baseline/refs-auth/` | 로그인 상태 내보내기 6개 + 피라미드 | `capture-auth.mjs` |
+| `toss/store/out/` | 스토어 스크린샷 7장 | 이미 sky-tint 세트가 있다(저장소 밖) |
+| `scripts/theme-shots.mjs` 의 비교 기준 | 홈 스크린샷 | 채택 커밋 직후 한 번 찍어 기준으로 |
+
+글자·문구만 보는 검사(web-regression · share-check · flow-check · router-check · layout-check)는 색과 무관해 그대로다. 이미 공유된 취향표 이미지는 옛 톤으로 남는다.
+
 ## 9. 결정이 필요한 것
 
 1. ~~바탕 A / B~~ → **B(sky-tint)** 로 진행 (2026-09-22 사용자). A 와 legacy 는 비교용으로 남긴다.
