@@ -31,6 +31,7 @@ export default function NicknameDialog({
   /** 참여자는 이름이 필수다 — 건너뛰기를 주지 않는다. */
   skipLabel,
   confirmLabel,
+  title,
   desc,
 }: {
   open: boolean;
@@ -39,6 +40,11 @@ export default function NicknameDialog({
   onDone: (nickname: string | null) => void | Promise<void>;
   skipLabel?: string;
   confirmLabel: string;
+  /*
+   * 제목과 설명은 부르는 쪽이 준다. 방을 만드는 사람과 초대받은 사람은 이 이름이
+   * 어디에 어떻게 쓰일지가 달라서, 같은 말로 물으면 둘 중 한쪽에는 거짓이 된다.
+   */
+  title?: string;
   desc?: string;
 }) {
   const { user } = useAuth();
@@ -92,7 +98,7 @@ export default function NicknameDialog({
         animate={{ y: 0, opacity: 1, scale: 1 }}
         className="bg-cream w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 border border-navy/10 flex flex-col p-6 gap-3"
       >
-        <h3 className="type-title-1 text-navy">어떤 이름으로 할까요?</h3>
+        <h3 className="type-title-1 text-navy break-keep">{title ?? "어떤 이름으로 할까요?"}</h3>
         <p className="type-sub text-navy/70 break-keep">
           {desc ?? "일치율 화면에서 서로를 이 이름으로 봐요."}
           {user ? " 처음 한 번만 확인해요. 프로필 닉네임도 이 이름으로 바뀌어요." : ""}

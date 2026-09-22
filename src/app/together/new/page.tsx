@@ -7,7 +7,7 @@ import { SafeImage } from "@/components/SafeImage";
 import { AlbumCard, useAlbumAccordion, useAlbumPaging } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
 import FeedbackModal from "@/components/FeedbackModal";
-import LoadingScreen from "@/components/LoadingScreen";
+import LoadingScreen, { useSlowEnough } from "@/components/LoadingScreen";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
@@ -55,16 +55,17 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
 
 /** 카탈로그가 흘려보내는 진행 상황 한 줄. 라우트의 Progress 와 짝이다. */
 type CatalogLine =
-  | { t: "albums"; got: number; total: number }
-  | { t: "tracks"; done: number; total: number }
+  | { t: "work"; done: number; total: number }
   | { t: "done"; tracks: CatalogTrack[]; notReady: boolean };
 
 /**
  * 곡을 받으면서 진행률을 알려 준다.
  *
- * 일의 총량은 "앨범 수 x 2" 다 — 앨범 목록에 오르는 일과 그 앨범의 곡을 받는 일.
- * 두 루프가 모두 앨범 단위라 실제로 끝난 만큼만 센다. 전체 앨범 수를 모르는
- * 첫 구간은 null(불확정)로 둔다.
+ * 세는 단위는 요청 한 번이다(라우트의 Progress 주석). 실제로 끝난 일만 세고,
+ * 시간이 흐른다고 늘리지 않는다. 전체 장수를 모르는 첫 구간은 null(불확정)이다.
+ *
+ * 값은 뒤로 가지 않는다. 앨범 목록 구간에서 어림잡은 총량과 곡 구간에서 확정된
+ * 총량이 조금 다를 수 있는데, 그 때문에 바가 되돌아가면 고장으로 보인다.
  *
  * 스트림을 못 읽는 환경(오래된 WebView, 중간에서 모아 보내는 프록시)이면 본문을
  * 통째로 받아 마지막 줄만 쓴다 — 진행률만 못 보고 결과는 같다.
@@ -75,6 +76,7 @@ async function streamCatalog(
 ): Promise<{ tracks: CatalogTrack[]; notReady: boolean }> {
   const empty = { tracks: [] as CatalogTrack[], notReady: true };
   let result = empty;
+  let highest = 0;
 
   const take = (line: string) => {
     if (!line.trim()) return;
@@ -84,9 +86,13 @@ async function streamCatalog(
     } catch {
       return; // 잘린 줄. 다음 조각에서 이어 붙는다.
     }
-    if (msg.t === "albums") onProgress(msg.total ? msg.got / (msg.total * 2) : null);
-    else if (msg.t === "tracks") onProgress(msg.total ? 0.5 + msg.done / (msg.total * 2) : null);
-    else result = { tracks: msg.tracks ?? [], notReady: !!msg.notReady };
+    if (msg.t === "done") {
+      result = { tracks: msg.tracks ?? [], notReady: !!msg.notReady };
+      return;
+    }
+    if (!msg.total) return onProgress(null);
+    highest = Math.max(highest, Math.min(1, msg.done / msg.total));
+    onProgress(highest);
   };
 
   try {
@@ -113,6 +119,15 @@ async function streamCatalog(
   }
   return result;
 }
+
+/*
+ * 들어오자마자 기다리는 동안 번갈아 보여 줄 문구. 이 목록은 한 번만 만들어져야
+ * 한다 — 렌더마다 새 배열이면 번갈이가 계속 처음으로 돌아간다.
+ */
+const ENTRY_LINES = [
+  "함께 소트할 준비를 하고 있어요",
+  "이번주 추천 아티스트를 불러오고 있어요",
+] as const;
 
 /** 한 번에 보여 줄 앨범 수. 2열 그리드라 5줄이다. */
 const ALBUM_PAGE = 10;
@@ -188,6 +203,8 @@ export default function TogetherNewPage() {
   const [progress, setProgress] = useState<number | null>(null);
   /** 어떤 검색어로 받아 온 목록인지. 지금 입력과 다르면 아직 찾는 중이다. */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  /** "다시 시도" 를 누르면 올린다. 검색어가 그대로여도 목록을 다시 받게 하는 열쇠다. */
+  const [reload, setReload] = useState(0);
   const [artistSource, setArtistSource] = useState<Source | null>(null);
   /** 공개 취향표에서 "이 곡들로 같이 소트하기"로 넘어온 경우(?from=<취향표 id>) */
   const [sharedSource, setSharedSource] = useState<Source | null>(null);
@@ -347,17 +364,23 @@ export default function TogetherNewPage() {
     const q = artistQuery.trim();
     let alive = true;
     const timer = setTimeout(async () => {
-      const res = await fetch(`/api/together/catalog${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-      const json = (await res.json()) as { artists?: CatalogArtist[] };
+      let list: CatalogArtist[] = [];
+      try {
+        const res = await fetch(`/api/together/catalog${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+        list = ((await res.json()) as { artists?: CatalogArtist[] }).artists ?? [];
+      } catch (err) {
+        // 빈 목록으로 끝낸다. null 로 두면 기다리는 화면에 영영 갇힌다.
+        console.error("[together] 아티스트 목록을 받지 못했습니다:", err);
+      }
       if (!alive) return;
-      setArtists(json.artists ?? []);
+      setArtists(list);
       setLoadedFor(q);
     }, q ? 400 : 0);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [artistQuery]);
+  }, [artistQuery, reload]);
 
   /** 1단계: 누르면 고르기만 한다. 곡은 아직 받지 않는다. */
   const pickArtist = (artist: CatalogArtist) => {
@@ -518,14 +541,24 @@ export default function TogetherNewPage() {
       return;
     }
     setMadeCode(made.code);
+    // 다음에 할 일을 한 줄로 알려 준다 — 만들고 나면 화면에 코드와 버튼만 남는다.
+    showToast("링크를 만들었어요. 보내면 바로 시작돼요.");
   };
 
-  if (isLoading || picked === null || (user && cards === null)) {
-    return (
-      <main className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center">
-        <p className="type-sub text-navy/70">불러오고 있어요</p>
-      </main>
-    );
+  /*
+   * 들어오자마자 기다리는 시간. 저장해 둔 곡·취향표를 읽고, 추천 아티스트 목록을
+   * 받아 온다. 전에는 그동안 화면이 다 그려진 채 검색창 안에서 작은 스피너만
+   * 돌아서, 목록이 늦게 나타나는 것이 고장처럼 보였다. 화면을 덮고 무엇을 하는지
+   * 말한다.
+   *
+   * 곡 모으기 화면과 같은 규칙으로 짧으면 띄우지 않는다(useSlowEnough).
+   */
+  const booting = isLoading || picked === null || (user && cards === null) || artists === null;
+  const showBoot = useSlowEnough(booting);
+  // 곡을 모으는 동안도 같은 규칙.
+  const showLoader = useSlowEnough(artistBusy && !artistSource);
+  if (booting) {
+    return showBoot ? <LoadingScreen lines={ENTRY_LINES} /> : <main className="min-h-screen bg-[var(--app-bg)]" />;
   }
 
   if (madeCode) {
@@ -657,6 +690,21 @@ export default function TogetherNewPage() {
             — 다음에 와서 얼굴이 바뀌어 있는 게 의도된 것임을 알린다. 교체 규칙은
             /api/together/catalog 의 PICK_COVERAGE·PICK_SIZE·weekIndex 에 있다. */}
         <SectionTitle title="이번주 소트 추천 아티스트" className="mt-8 mb-1" />
+        {/* 목록이 비어서 왔다. 기다리는 화면에 갇히지 않게 여기서 끝을 내고 길을 준다. */}
+        {artists?.length === 0 && (
+          <div className="mt-5 py-10 px-6 text-center border border-dashed border-navy/10 rounded-3xl flex flex-col items-center gap-3">
+            <p className="type-caption text-navy/60 break-keep">추천 목록을 불러오지 못했어요.</p>
+            <button
+              onClick={() => {
+                setArtists(null);
+                setReload((n) => n + 1);
+              }}
+              className="h-9 px-4 rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
         <ul className="grid grid-cols-3 gap-x-3 gap-y-6 mt-5">
           {(artists ?? []).map((artist) => {
             const isOn = pendingArtist?.id === artist.id;
@@ -733,7 +781,7 @@ export default function TogetherNewPage() {
         * 2단계인데 곡이 아직 없다 = 지금 모으는 중이다. 화면은 이미 넘어와 있고
         * 제목에 아티스트 이름이 떠 있으므로, 여기서는 진행 상황만 보여 준다.
         */}
-      {step === 2 && !source && artistBusy && (
+      {step === 2 && !source && artistBusy && showLoader && (
         <LoadingScreen inline artist={pendingArtist?.name ?? title} progress={progress} />
       )}
 
@@ -917,7 +965,8 @@ export default function TogetherNewPage() {
         onClose={() => setAskName(false)}
         confirmLabel="이 이름으로 만들기"
         skipLabel="이름 없이 만들기"
-        desc="초대 화면과 일치율 화면에 이 이름으로 나와요."
+        title="링크에 어떤 이름으로 보일까요?"
+        desc="초대받은 사람이 이 이름을 봐요."
         onDone={async (name) => {
           setAskName(false);
           await create(name);

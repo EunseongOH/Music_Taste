@@ -36,7 +36,16 @@ interface SpotifyImage {
   width?: number;
 }
 
-/** 확보 현황 뷰(`artist_coverage`, 정의 B). 목록 순서와 "전곡" 판정을 여기서만 가져온다. */
+/*
+ * 확보 현황(정의 B). 목록 순서와 "전곡" 판정을 여기서만 가져온다.
+ *
+ * 읽는 것은 뷰가 아니라 그 결과를 담아 둔 `artist_coverage_cached` 다. 원본 뷰의
+ * count(DISTINCT unnest(...)) 가 7.3초라 이 화면에 처음 들어올 때 6~9초를 기다려야
+ * 했다. matview 는 매시 27분에 CONCURRENTLY 로 다시 채워지고 읽기를 막지 않는다.
+ *
+ * 대신 "전곡 확보" 가 최대 한 시간 낡는다. 수집 직후를 확인해야 할 때만 원본
+ * `artist_coverage` 를 직접 읽는다(docs/canonical-db/coverage-definition.md §5-1).
+ */
 interface CoverageRow {
   spotify_id: string;
   name: string;
@@ -59,7 +68,7 @@ const PICK_SIZE = 12;
 
 /**
  * 한글로 쳐도 영문으로 등록된 아티스트가 잡히게 한다.
- * `artist_coverage` 에 `name_ko` 가 있어 대부분 그것으로 잡히지만, 아직 비어 있는
+ * `artist_coverage_cached` 에 `name_ko` 가 있어 대부분 그것으로 잡히지만, 아직 비어 있는
  * 아티스트가 있어 본 검색(`utils/spotify.ts`)과 같은 맵을 함께 쓴다.
  */
 function altNames(q: string): string[] {
@@ -106,7 +115,7 @@ async function withImages(rows: CoverageRow[]) {
 /** 담긴 아티스트가 앞에 오도록 정렬한 기본 쿼리. */
 function coverageQuery() {
   return createAdminClient()
-    .from("artist_coverage")
+    .from("artist_coverage_cached")
     .select("spotify_id,name,name_ko,distinct_tracks,is_full,coverage")
     .gte("distinct_tracks", MIN_TRACKS)
     .order("is_full", { ascending: false })
@@ -114,12 +123,15 @@ function coverageQuery() {
     .order("distinct_tracks", { ascending: false });
 }
 
-/** 진행 상황 한 줄. 화면이 프로그레스 바를 채우는 데 쓴다. */
-type Progress =
-  /** 앨범 목록을 받는 중 — got/total. total 은 첫 페이지 뒤에야 안다 */
-  | { t: "albums"; got: number; total: number }
-  /** 앨범별 곡을 받는 중 — done/total */
-  | { t: "tracks"; done: number; total: number };
+/**
+ * 진행 상황 한 줄. 화면이 프로그레스 바를 채우는 데 쓴다.
+ *
+ * 세는 단위는 **요청 한 번**이다. 앨범 목록은 10장에 한 번, 곡은 앨범 한 장에
+ * 한 번 나가므로 13장짜리 아티스트의 일은 2 + 13 = 15 번이다. 두 구간을 반반으로
+ * 잡던 예전 방식은 몇 번 안 되는 앨범 목록 구간이 바의 절반을 먹어서, 정작 오래
+ * 걸리는 곡 구간이 뒤쪽 절반에 몰려 계단처럼 보였다.
+ */
+type Progress = { t: "work"; done: number; total: number };
 
 /**
  * 한 아티스트의 곡을 모은다.
@@ -136,6 +148,8 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
    */
   const albums: { id: string; name: string; cover: string; releaseDate: string }[] = [];
   let total = Infinity;
+  /** 끝난 요청 수. 앨범 목록 한 페이지도, 앨범 한 장의 곡도 각각 한 번이다. */
+  let unitsDone = 0;
   for (let offset = 0; offset < Math.min(total, MAX_ALBUMS); offset += ALBUM_PAGE) {
     const page = await getArtistAlbums(artistId, offset, ALBUM_PAGE);
     total = page.total || page.items.length;
@@ -150,7 +164,9 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
       });
     }
     // 총 장수는 첫 페이지를 받고 나서야 안다. 그 전까지 화면은 불확정 바를 보여 준다.
-    emit({ t: "albums", got: albums.length, total: Math.min(total, MAX_ALBUMS) });
+    unitsDone++;
+    const expected = Math.min(total, MAX_ALBUMS);
+    emit({ t: "work", done: unitsDone, total: Math.ceil(expected / ALBUM_PAGE) + expected });
   }
 
   type Row = {
@@ -165,9 +181,19 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
   const rows: Row[] = [];
 
   // 앨범별 곡 목록. 몇 개씩 묶어 받는다 — 한 번에 다 던지면 예산을 순식간에 쓴다.
+  // 남은 일은 앨범 한 장당 한 번. 여기서부터는 장수를 정확히 안다.
+  const totalUnits = unitsDone + albums.length;
   for (let i = 0; i < albums.length; i += TRACK_BATCH) {
     const batch = albums.slice(i, i + TRACK_BATCH);
-    const results = await Promise.all(batch.map((album) => getAlbumTracks(album.id)));
+    // 묶음이 다 끝날 때가 아니라 **한 장이 끝날 때마다** 알린다. 동시에 받는 건 그대로다.
+    const results = await Promise.all(
+      batch.map((album) =>
+        getAlbumTracks(album.id).then((tracks) => {
+          emit({ t: "work", done: ++unitsDone, total: totalUnits });
+          return tracks;
+        })
+      )
+    );
     results.forEach((tracks, n) => {
       const album = batch[n];
       for (const track of (tracks ?? []) as { id: string; name: string; artists?: { name: string }[] }[]) {
@@ -182,7 +208,6 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
         });
       }
     });
-    emit({ t: "tracks", done: Math.min(i + TRACK_BATCH, albums.length), total: albums.length });
   }
 
   /*
@@ -253,13 +278,13 @@ export async function GET(request: Request) {
 
   /*
    * `?servable=1` — 지금 곡을 낼 수 있는 아티스트 id 목록.
-   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 정의 B(`artist_coverage`)를 그대로
+   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 정의 B(`artist_coverage_cached`)를 그대로
    * 따르므로, 예전에 임시로 두었던 확보율 하한(0.8)은 없앴다.
    */
   if (searchParams.get("servable") === "1") {
     const supabase = createAdminClient();
     const [view, cache] = await Promise.all([
-      supabase.from("artist_coverage").select("spotify_id").gte("distinct_tracks", MIN_TRACKS).limit(4000),
+      supabase.from("artist_coverage_cached").select("spotify_id").gte("distinct_tracks", MIN_TRACKS).limit(4000),
       // 뷰에 없지만 곡은 이미 담긴 아티스트도 있다(아래 주석 참고).
       supabase.from("together_artist_catalog").select("id").gte("track_count", MIN_TRACKS).limit(4000),
     ]);
