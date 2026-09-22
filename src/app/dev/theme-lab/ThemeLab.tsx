@@ -28,9 +28,9 @@ import type { GlowLevel } from "@/components/home/ModeCard";
 import HomePreview from "./HomePreview";
 
 const THEMES = [
-  { id: "legacy", label: "지금 (cream · navy)" },
-  { id: "toss-white", label: "A. 흰 바탕 + 회색 면" },
-  { id: "sky-tint", label: "B. 옅은 하늘빛 바탕" },
+  { id: "sky-tint", label: "지금 (옅은 하늘빛 · 2026-09-23 채택)" },
+  { id: "legacy", label: "예전 (cream · navy) — 되돌림 확인용" },
+  { id: "toss-white", label: "A. 흰 바탕 + 회색 면 (미채택)" },
 ] as const;
 
 /** 역할 → CSS 변수. 대비는 항상 "바탕(cream) 위 글자" 기준. */
@@ -138,15 +138,20 @@ export default function ThemeLab() {
 
   useEffect(() => {
     const d = document.documentElement;
-    setTheme(d.getAttribute("data-theme") ?? "legacy");
+    // 속성이 없으면 채택된 기본값(sky-tint)이다. legacy 가 아니다.
+    setTheme(d.getAttribute("data-theme") ?? "sky-tint");
     readVars();
   }, [readVars]);
 
   const apply = (kind: "theme", value: string) => {
     const d = document.documentElement;
-    const isDefault = value === "legacy";
-    if (isDefault) d.removeAttribute(`data-${kind}`);
-    else d.setAttribute(`data-${kind}`, value);
+    /*
+     * 속성을 **항상** 붙인다. 예전에는 legacy 일 때 속성을 지웠는데, 그때는 바탕
+     * `:root` 가 legacy 였기 때문이다. 2026-09-23 에 sky-tint 를 채택하면서 `:root` 가
+     * 새 톤이 되었고, 그 뒤로 "지금" 을 눌러도 새 톤이 나왔다 — 비교하려고 만든
+     * 실험실에서 두 안이 같아 보였다.
+     */
+    d.setAttribute(`data-${kind}`, value);
     try {
       localStorage.setItem(`sortify_${kind}`, value);
     } catch {}

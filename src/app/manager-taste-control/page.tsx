@@ -439,7 +439,7 @@ export default function AdminPage() {
       <div className={`w-full flex flex-col gap-2 mt-1 ${!isMobileDevice ? "max-w-[480px]" : ""}`}>
         <div className="flex items-center justify-between font-sans text-xs font-semibold text-navy/70 ml-1">
           <span className="flex items-center gap-1">
-            <Video size={13} className="text-red-500" />
+            <Video size={13} className="text-red-500 newtone:text-navy/70" />
             {t.previewLabel}
           </span>
           <a href={video_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-point hover:underline">
@@ -533,7 +533,7 @@ export default function AdminPage() {
                 <div className="flex gap-2.5 border-t border-navy/6 pt-4">
                   <button
                     onClick={() => handleReject(track.id, track.title)}
-                    className="flex-1 py-2.5 bg-red-50 hover:bg-red-100/70 text-red-600 border border-red-200/50 font-sans font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                    className="flex-1 py-2.5 bg-red-50 newtone:bg-danger/5 hover:bg-red-100/70 newtone:hover:bg-danger/10 text-red-600 newtone:text-danger border border-red-200/50 newtone:border-danger/25 font-sans font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                   >
                     <X size={15} strokeWidth={2.5} />
                     {t.rejectBtn}
@@ -625,7 +625,7 @@ export default function AdminPage() {
                   <div className="flex gap-2.5 border-t border-navy/6 pt-4">
                     <button
                       onClick={() => handleRejectLyric(suggestion)}
-                      className="flex-1 py-2.5 bg-red-50 hover:bg-red-100/70 text-red-600 border border-red-200/50 font-sans font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                      className="flex-1 py-2.5 bg-red-50 newtone:bg-danger/5 hover:bg-red-100/70 newtone:hover:bg-danger/10 text-red-600 newtone:text-danger border border-red-200/50 newtone:border-danger/25 font-sans font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
                     >
                       <X size={15} strokeWidth={2.5} />
                       {t.rejectBtn}
@@ -894,12 +894,12 @@ export default function AdminPage() {
               className={`px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 max-w-sm w-full pointer-events-auto border ${
                 notification.type === "success"
                   ? "bg-navy text-cream border-white/10"
-                  : "bg-red-950 text-red-200 border-red-800"
+                  : "bg-red-950 newtone:bg-danger text-red-200 newtone:text-cream border-red-800 newtone:border-cream/15"
               }`}
             >
               {notification.type === "success"
                 ? <Check size={16} className="text-point shrink-0" strokeWidth={3} />
-                : <AlertCircle size={16} className="text-red-400 shrink-0" />
+                : <AlertCircle size={16} className="text-red-400 newtone:text-cream shrink-0" />
               }
               <p className="font-sans text-sm leading-snug">{notification.text}</p>
             </motion.div>
@@ -1064,7 +1064,7 @@ export default function AdminPage() {
           </div>
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl font-sans text-sm flex items-center gap-3">
+            <div className="p-4 bg-red-50 newtone:bg-danger/5 border border-red-200 newtone:border-danger/25 text-red-700 newtone:text-danger rounded-2xl font-sans text-sm flex items-center gap-3">
               <AlertCircle size={17} className="shrink-0" />
               {error}
             </div>

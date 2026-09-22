@@ -517,7 +517,7 @@ function Turntable1Refine() {
               { cap: "어두운 재킷 · 월드컵용(normal)", src: JACKETS.dark },
             ].map((st) => (
               <div key={st.cap}>
-                <p className="type-caption text-navy/40 mb-1.5">{st.cap}</p>
+                <p className="type-caption text-navy/70 mb-1.5">{st.cap}</p>
                 <Turntable1 emphasis="normal" jacket={st.src} jacketMode={m.id} spinning={spinning} />
               </div>
             ))}
