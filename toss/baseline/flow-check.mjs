@@ -137,9 +137,11 @@ const check = (ok, label, detail = '') => {
 };
 
 /** 페이지를 열고 화면 텍스트·API 호출·오류를 모은다. */
-async function visit(ctx, base, route, seed, act) {
+async function visit(ctx, base, route, seed, act, wantImages = false) {
   const page = await ctx.newPage();
   const errors = [];
+  /** 못 불러온 그림. 실패로 세지는 않고 끝에 몇 장인지만 알린다. */
+  const missedImages = [];
   const api = [];
 
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -148,11 +150,20 @@ async function visit(ctx, base, route, seed, act) {
     // GA 는 헤드리스에서 차단된다. 토스 빌드에는 아예 없다.
     if (r.url().includes('google-analytics')) return;
     /*
-     * 구글 프로필 사진 주소는 시간이 지나면 죽는다(지금도 400 을 준다).
-     * 화면에는 대체 이미지가 뜨므로 우리 오류가 아니다. 남의 서버 사정으로
-     * 검사가 흔들리지 않게 거른다.
+     * 남의 서버에 있는 **그림** 한 장을 못 받은 것은 우리 오류가 아니다.
+     * 화면에는 SafeImage 가 대체 그림을 띄우도록 이미 만들어져 있다 — 그게 설계다.
+     *
+     * 이걸 실패로 세면 검사가 흔들린다. /explore 는 한 번에 50장 넘게 받는데,
+     * 헤드리스 브라우저가 그중 한두 건을 놓치는 날이 있다(그 주소들을 따로
+     * 받아 보면 200 으로 멀쩡하다). 다섯 번에 세 번꼴로 빨개졌고, 그런 실패가
+     * 섞이면 진짜 회귀가 그 사이에 묻힌다.
+     *
+     * 스크립트·스타일·API 가 실패하는 것은 그대로 잡는다 — 그건 대체가 없다.
      */
-    if (r.url().includes('googleusercontent.com')) return;
+    if (r.resourceType() === 'image') {
+      missedImages.push(r.url());
+      return;
+    }
     errors.push(`요청 실패 ${r.url().slice(0, 70)}`);
   });
   page.on('request', (r) => {
@@ -188,6 +199,27 @@ async function visit(ctx, base, route, seed, act) {
   // 장르 기반 검색은 여러 번 왕복하므로 넉넉히 기다린다.
   await page.waitForTimeout(5000);
 
+  /*
+   * 목록이 붙기를 기다린다.
+   *
+   * 고정 5초만 기다리면 어쩌다 한 번 느린 쪽이 빈 화면인 채로 찍힌다 — 실제로
+   * /explore 에서 "토스 51 / 웹 0" 으로 열 번에 한 번쯤 빨개졌다. 코드가 바뀐 게
+   * 아니라 그날 장르 검색이 5초를 넘긴 것뿐인데, 그런 실패가 섞이면 진짜 회귀가
+   * 묻힌다. 시간이 아니라 "그림이 붙었는가" 를 기다린다.
+   *
+   * 끝내 안 붙으면 그대로 진행한다 — 여기서 던지면 무엇이 비었는지 못 보고
+   * 스크립트가 죽는다. 아래 "양쪽 다 이미지 로드됨" 이 사실대로 빨개진다.
+   */
+  if (wantImages) {
+    await page
+      .waitForFunction(
+        () => (document.querySelector('main') ?? document.getElementById('root') ?? document.body).querySelectorAll('img').length > 0,
+        null,
+        { timeout: 20000 }
+      )
+      .catch(() => {});
+  }
+
   if (act) await act(page);
 
   const view = await page.evaluate(() => {
@@ -198,7 +230,7 @@ async function visit(ctx, base, route, seed, act) {
     };
   });
 
-  return { page, errors: [...new Set(errors)], api, view, url: new URL(page.url()).pathname };
+  return { page, errors: [...new Set(errors)], missedImages: [...new Set(missedImages)], api, view, url: new URL(page.url()).pathname };
 }
 
 const browser = await chromium.launch();
@@ -214,8 +246,10 @@ try {
   for (const { route, tossRoute, seed, act, expect = [], expectUrl = [], text = 'exact', contains = [] } of CASES) {
     console.log(`\n${route}`);
     const [vc, nc] = [await freshCtx(), await freshCtx()];
-    const v = await visit(vc, VITE, tossRoute ?? route, seed, act);
-    const n = await visit(nc, NEXT, route, seed, act);
+    // 목록 화면(text: 'skip')은 아래에서 "이미지가 붙었는가" 를 보므로 붙을 때까지 기다린다.
+    const wantImages = text !== 'exact';
+    const v = await visit(vc, VITE, tossRoute ?? route, seed, act, wantImages);
+    const n = await visit(nc, NEXT, route, seed, act, wantImages);
 
     console.log(`      토스: ${v.url} / 이미지 ${v.view.imgs} / "${v.view.text.slice(0, 60)}"`);
     console.log(`      웹  : ${n.url} / 이미지 ${n.view.imgs}`);
@@ -265,6 +299,9 @@ try {
     check(leaked.length === 0, `API 가 ${NEXT} 로 나감`, leaked.length ? `${leaked.length}건 샘` : `${v.api.length}건`);
 
     check(v.errors.length === 0, '토스 콘솔/네트워크 오류 없음', v.errors.slice(0, 3).join(' | '));
+    // 실패로 세지는 않지만 조용히 넘기지도 않는다. 자꾸 같은 주소가 나오면 그건 진짜 죽은 것이다.
+    const missed = [...new Set([...v.missedImages, ...n.missedImages])];
+    if (missed.length) console.log(`      (그림 ${missed.length}장을 못 받음 — 대체 그림으로 대신함: ${missed[0].slice(0, 60)})`);
 
     await vc.close();
     await nc.close();
