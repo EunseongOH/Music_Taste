@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { ARTIST_TRANSLATION_MAP } from "@/utils/artistNames";
 import { corsHeaders, preflight } from "../../toss/cors";
+import { songKey } from "@/utils/songKey";
 
 /**
  * 같이 소트하기 — 아티스트·곡 목록(실험). 문서: docs/together-sort.md
@@ -41,6 +42,9 @@ interface CatalogRow {
 
 /** 이보다 적으면 소트할 거리가 안 된다(중복 제거 전 기준). */
 const MIN_TRACKS = 8;
+
+/** 목록에서 앞자리에 둘 기준. 앨범 대부분에 곡이 있으면 눌러도 기다릴 일이 거의 없다. */
+const SERVABLE_COVERAGE = 0.8;
 
 /**
  * 한글로 쳐도 영문으로 등록된 아티스트가 잡히게 한다.
@@ -85,15 +89,6 @@ function weekIndex(now: number = Date.now()): number {
   return Math.floor((now + 9 * 3_600_000 + 3 * DAY) / (7 * DAY));
 }
 
-/** 같은 곡이 앨범마다 다시 담기므로(정규판·리패키지) 제목으로 한 번만 남긴다. */
-const titleKey = (title: string) =>
-  title
-    .toLowerCase()
-    .replace(/\(.*?\)|\[.*?\]/g, "")
-    .replace(/\s*-\s*(inst\.?|instrumental|remaster(ed)?.*|live|feat\..*)$/i, "")
-    .replace(/[^0-9a-z가-힣]/g, "")
-    .trim();
-
 /** 토스 미니앱(별도 origin)에서도 부른다 — 같은 CORS 규칙을 쓴다. */
 export async function OPTIONS(request: Request) {
   return preflight(request);
@@ -110,10 +105,18 @@ export async function GET(request: Request) {
    * DB 에 곡이 있어 Spotify 를 부르지 않고 바로 뜬다. 지금 67명이라 통째로 보내도 가볍다.
    */
   if (searchParams.get("servable") === "1") {
+    /*
+     * 곡 수만 보면 "곡 있음" 묶음에 반쪽짜리가 올라온다 — BIG Naughty 는 55곡 중
+     * 13곡(coverage 0.151), wave to earth 는 0.188 인데도 통과했다. 눌러 보면
+     * 4분의 1만 있는 아티스트를 앞에 세우는 셈이다. 확보율 하한을 함께 건다.
+     * "이번주 추천"(PICK_COVERAGE = 1)보다는 느슨하게 둔다 — 여기는 "눌러도
+     * 기다릴 일이 거의 없다" 정도면 된다.
+     */
     const { data } = await createAdminClient()
       .from("together_artist_catalog")
       .select("id")
       .gte("track_count", MIN_TRACKS)
+      .gte("coverage", SERVABLE_COVERAGE)
       .limit(500);
     return NextResponse.json({ ids: (data ?? []).map((r) => (r as { id: string }).id) }, { headers: cors });
   }
@@ -151,7 +154,18 @@ export async function GET(request: Request) {
         if (!track?.id || !track.name) continue;
         // 이 아티스트가 참여한 곡만
         if (!(track.artists ?? []).some((a) => a?.name)) continue;
-        const key = titleKey(track.name);
+        /*
+         * 같은 곡이 앨범마다 다시 담긴다(정규판·리패키지·일본어판). 한 번만 남기되
+         * **화면 전체가 쓰는 같은 규칙**으로 센다 — utils/songKey. /tracks 와 월드컵이
+         * 이미 이 키로 세므로, 여기서만 다른 규칙을 쓰면 곡 수가 서로 어긋난다.
+         *
+         * 예전에는 이 파일 안에 자체 정규식이 있었는데 라틴·한글 외 글자를 전부 지워서,
+         * 일본어·중국어 제목이 빈 키가 되고 첫 곡을 뺀 전부가 중복으로 버려졌다.
+         *
+         * 아티스트 자리에는 artistId 를 넣는다 — 이 요청은 한 아티스트의 곡만 다루므로
+         * 상수면 되고, 피처링 표기("SURL, 라쿠나")가 섞여 키가 갈리는 것을 막는다.
+         */
+        const key = songKey(artistId, track.name);
         if (!key || seen.has(key)) continue;
         seen.add(key);
         tracks.push({
