@@ -36,7 +36,16 @@ interface SpotifyImage {
   width?: number;
 }
 
-/** 확보 현황 뷰(`artist_coverage`, 정의 B). 목록 순서와 "전곡" 판정을 여기서만 가져온다. */
+/*
+ * 확보 현황(정의 B). 목록 순서와 "전곡" 판정을 여기서만 가져온다.
+ *
+ * 읽는 것은 뷰가 아니라 그 결과를 담아 둔 `artist_coverage_cached` 다. 원본 뷰의
+ * count(DISTINCT unnest(...)) 가 7.3초라 이 화면에 처음 들어올 때 6~9초를 기다려야
+ * 했다. matview 는 매시 27분에 CONCURRENTLY 로 다시 채워지고 읽기를 막지 않는다.
+ *
+ * 대신 "전곡 확보" 가 최대 한 시간 낡는다. 수집 직후를 확인해야 할 때만 원본
+ * `artist_coverage` 를 직접 읽는다(docs/canonical-db/coverage-definition.md §5-1).
+ */
 interface CoverageRow {
   spotify_id: string;
   name: string;
@@ -59,7 +68,7 @@ const PICK_SIZE = 12;
 
 /**
  * 한글로 쳐도 영문으로 등록된 아티스트가 잡히게 한다.
- * `artist_coverage` 에 `name_ko` 가 있어 대부분 그것으로 잡히지만, 아직 비어 있는
+ * `artist_coverage_cached` 에 `name_ko` 가 있어 대부분 그것으로 잡히지만, 아직 비어 있는
  * 아티스트가 있어 본 검색(`utils/spotify.ts`)과 같은 맵을 함께 쓴다.
  */
 function altNames(q: string): string[] {
@@ -106,7 +115,7 @@ async function withImages(rows: CoverageRow[]) {
 /** 담긴 아티스트가 앞에 오도록 정렬한 기본 쿼리. */
 function coverageQuery() {
   return createAdminClient()
-    .from("artist_coverage")
+    .from("artist_coverage_cached")
     .select("spotify_id,name,name_ko,distinct_tracks,is_full,coverage")
     .gte("distinct_tracks", MIN_TRACKS)
     .order("is_full", { ascending: false })
@@ -269,13 +278,13 @@ export async function GET(request: Request) {
 
   /*
    * `?servable=1` — 지금 곡을 낼 수 있는 아티스트 id 목록.
-   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 정의 B(`artist_coverage`)를 그대로
+   * 아티스트 고르기 화면이 목록 순서를 정할 때 쓴다. 정의 B(`artist_coverage_cached`)를 그대로
    * 따르므로, 예전에 임시로 두었던 확보율 하한(0.8)은 없앴다.
    */
   if (searchParams.get("servable") === "1") {
     const supabase = createAdminClient();
     const [view, cache] = await Promise.all([
-      supabase.from("artist_coverage").select("spotify_id").gte("distinct_tracks", MIN_TRACKS).limit(4000),
+      supabase.from("artist_coverage_cached").select("spotify_id").gte("distinct_tracks", MIN_TRACKS).limit(4000),
       // 뷰에 없지만 곡은 이미 담긴 아티스트도 있다(아래 주석 참고).
       supabase.from("together_artist_catalog").select("id").gte("track_count", MIN_TRACKS).limit(4000),
     ]);
