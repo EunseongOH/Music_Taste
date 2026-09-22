@@ -55,16 +55,17 @@ function ArtistAvatar({ src, name, size, on }: { src: string; name: string; size
 
 /** 카탈로그가 흘려보내는 진행 상황 한 줄. 라우트의 Progress 와 짝이다. */
 type CatalogLine =
-  | { t: "albums"; got: number; total: number }
-  | { t: "tracks"; done: number; total: number }
+  | { t: "work"; done: number; total: number }
   | { t: "done"; tracks: CatalogTrack[]; notReady: boolean };
 
 /**
  * 곡을 받으면서 진행률을 알려 준다.
  *
- * 일의 총량은 "앨범 수 x 2" 다 — 앨범 목록에 오르는 일과 그 앨범의 곡을 받는 일.
- * 두 루프가 모두 앨범 단위라 실제로 끝난 만큼만 센다. 전체 앨범 수를 모르는
- * 첫 구간은 null(불확정)로 둔다.
+ * 세는 단위는 요청 한 번이다(라우트의 Progress 주석). 실제로 끝난 일만 세고,
+ * 시간이 흐른다고 늘리지 않는다. 전체 장수를 모르는 첫 구간은 null(불확정)이다.
+ *
+ * 값은 뒤로 가지 않는다. 앨범 목록 구간에서 어림잡은 총량과 곡 구간에서 확정된
+ * 총량이 조금 다를 수 있는데, 그 때문에 바가 되돌아가면 고장으로 보인다.
  *
  * 스트림을 못 읽는 환경(오래된 WebView, 중간에서 모아 보내는 프록시)이면 본문을
  * 통째로 받아 마지막 줄만 쓴다 — 진행률만 못 보고 결과는 같다.
@@ -75,6 +76,7 @@ async function streamCatalog(
 ): Promise<{ tracks: CatalogTrack[]; notReady: boolean }> {
   const empty = { tracks: [] as CatalogTrack[], notReady: true };
   let result = empty;
+  let highest = 0;
 
   const take = (line: string) => {
     if (!line.trim()) return;
@@ -84,9 +86,13 @@ async function streamCatalog(
     } catch {
       return; // 잘린 줄. 다음 조각에서 이어 붙는다.
     }
-    if (msg.t === "albums") onProgress(msg.total ? msg.got / (msg.total * 2) : null);
-    else if (msg.t === "tracks") onProgress(msg.total ? 0.5 + msg.done / (msg.total * 2) : null);
-    else result = { tracks: msg.tracks ?? [], notReady: !!msg.notReady };
+    if (msg.t === "done") {
+      result = { tracks: msg.tracks ?? [], notReady: !!msg.notReady };
+      return;
+    }
+    if (!msg.total) return onProgress(null);
+    highest = Math.max(highest, Math.min(1, msg.done / msg.total));
+    onProgress(highest);
   };
 
   try {
@@ -186,6 +192,12 @@ export default function TogetherNewPage() {
   const [artistBusy, setArtistBusy] = useState(false);
   /** 곡을 모으는 진행률 0~1. 전체 앨범 수를 모르는 구간은 null 이다. */
   const [progress, setProgress] = useState<number | null>(null);
+  /*
+   * 기다리는 화면을 띄울지. 캐시에 다 있는 아티스트는 눈 깜짝할 새에 끝나는데,
+   * 그때 로고와 바가 한 번 번쩍이면 뭔가 잘못된 것처럼 보인다. 0.25초 안에
+   * 끝나면 아예 띄우지 않는다 — 실제로 기다린 적이 없으니 기다리라고 하지 않는다.
+   */
+  const [showLoader, setShowLoader] = useState(false);
   /** 어떤 검색어로 받아 온 목록인지. 지금 입력과 다르면 아직 찾는 중이다. */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [artistSource, setArtistSource] = useState<Source | null>(null);
@@ -379,6 +391,8 @@ export default function TogetherNewPage() {
   const openTracks = async (artist: CatalogArtist) => {
     setArtistBusy(true);
     setProgress(null);
+    setShowLoader(false);
+    const loaderTimer = window.setTimeout(() => setShowLoader(true), 250);
     setArtistSource(null);
     setSourceKey(`artist:${artist.id}`);
     setOpenAlbum(null);
@@ -387,6 +401,8 @@ export default function TogetherNewPage() {
     setStep(2);
 
     const done = await streamCatalog(artist.id, setProgress);
+    window.clearTimeout(loaderTimer);
+    setShowLoader(false);
     setArtistBusy(false);
 
     /*
@@ -735,7 +751,7 @@ export default function TogetherNewPage() {
         * 2단계인데 곡이 아직 없다 = 지금 모으는 중이다. 화면은 이미 넘어와 있고
         * 제목에 아티스트 이름이 떠 있으므로, 여기서는 진행 상황만 보여 준다.
         */}
-      {step === 2 && !source && artistBusy && (
+      {step === 2 && !source && artistBusy && showLoader && (
         <LoadingScreen inline artist={pendingArtist?.name ?? title} progress={progress} />
       )}
 

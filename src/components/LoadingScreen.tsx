@@ -86,11 +86,16 @@ export default function LoadingScreen({ artist, locale = "ko", progress = null, 
             transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
           />
         ) : (
+          /*
+           * 값은 띄엄띄엄 온다(요청이 끝날 때마다 한 번). 다음 값까지의 사이를
+           * 이 전환이 메워서 계단이 아니라 흐름으로 보이게 한다. 값을 앞질러
+           * 채우지는 않는다 — 늘 방금 받은 값까지만 간다.
+           */
           <motion.span
             className="block h-full rounded-full bg-point"
             animate={{ width: `${pct}%` }}
             initial={false}
-            transition={{ type: "tween", ease: "circOut", duration: 0.3 }}
+            transition={{ type: "tween", ease: "easeOut", duration: 0.4 }}
           />
         )}
       </div>

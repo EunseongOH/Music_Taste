@@ -114,12 +114,15 @@ function coverageQuery() {
     .order("distinct_tracks", { ascending: false });
 }
 
-/** 진행 상황 한 줄. 화면이 프로그레스 바를 채우는 데 쓴다. */
-type Progress =
-  /** 앨범 목록을 받는 중 — got/total. total 은 첫 페이지 뒤에야 안다 */
-  | { t: "albums"; got: number; total: number }
-  /** 앨범별 곡을 받는 중 — done/total */
-  | { t: "tracks"; done: number; total: number };
+/**
+ * 진행 상황 한 줄. 화면이 프로그레스 바를 채우는 데 쓴다.
+ *
+ * 세는 단위는 **요청 한 번**이다. 앨범 목록은 10장에 한 번, 곡은 앨범 한 장에
+ * 한 번 나가므로 13장짜리 아티스트의 일은 2 + 13 = 15 번이다. 두 구간을 반반으로
+ * 잡던 예전 방식은 몇 번 안 되는 앨범 목록 구간이 바의 절반을 먹어서, 정작 오래
+ * 걸리는 곡 구간이 뒤쪽 절반에 몰려 계단처럼 보였다.
+ */
+type Progress = { t: "work"; done: number; total: number };
 
 /**
  * 한 아티스트의 곡을 모은다.
@@ -136,6 +139,8 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
    */
   const albums: { id: string; name: string; cover: string; releaseDate: string }[] = [];
   let total = Infinity;
+  /** 끝난 요청 수. 앨범 목록 한 페이지도, 앨범 한 장의 곡도 각각 한 번이다. */
+  let unitsDone = 0;
   for (let offset = 0; offset < Math.min(total, MAX_ALBUMS); offset += ALBUM_PAGE) {
     const page = await getArtistAlbums(artistId, offset, ALBUM_PAGE);
     total = page.total || page.items.length;
@@ -150,7 +155,9 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
       });
     }
     // 총 장수는 첫 페이지를 받고 나서야 안다. 그 전까지 화면은 불확정 바를 보여 준다.
-    emit({ t: "albums", got: albums.length, total: Math.min(total, MAX_ALBUMS) });
+    unitsDone++;
+    const expected = Math.min(total, MAX_ALBUMS);
+    emit({ t: "work", done: unitsDone, total: Math.ceil(expected / ALBUM_PAGE) + expected });
   }
 
   type Row = {
@@ -165,9 +172,19 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
   const rows: Row[] = [];
 
   // 앨범별 곡 목록. 몇 개씩 묶어 받는다 — 한 번에 다 던지면 예산을 순식간에 쓴다.
+  // 남은 일은 앨범 한 장당 한 번. 여기서부터는 장수를 정확히 안다.
+  const totalUnits = unitsDone + albums.length;
   for (let i = 0; i < albums.length; i += TRACK_BATCH) {
     const batch = albums.slice(i, i + TRACK_BATCH);
-    const results = await Promise.all(batch.map((album) => getAlbumTracks(album.id)));
+    // 묶음이 다 끝날 때가 아니라 **한 장이 끝날 때마다** 알린다. 동시에 받는 건 그대로다.
+    const results = await Promise.all(
+      batch.map((album) =>
+        getAlbumTracks(album.id).then((tracks) => {
+          emit({ t: "work", done: ++unitsDone, total: totalUnits });
+          return tracks;
+        })
+      )
+    );
     results.forEach((tracks, n) => {
       const album = batch[n];
       for (const track of (tracks ?? []) as { id: string; name: string; artists?: { name: string }[] }[]) {
@@ -182,7 +199,6 @@ async function buildCatalog(artistId: string, emit: (p: Progress) => void) {
         });
       }
     });
-    emit({ t: "tracks", done: Math.min(i + TRACK_BATCH, albums.length), total: albums.length });
   }
 
   /*
