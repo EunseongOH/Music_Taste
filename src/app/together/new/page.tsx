@@ -294,9 +294,17 @@ export default function TogetherNewPage() {
   const openTracks = async (artist: CatalogArtist) => {
     setArtistBusy(true);
     const res = await fetch(`/api/together/catalog?artistId=${encodeURIComponent(artist.id)}`);
-    const json = (await res.json()) as { tracks?: CatalogTrack[] };
+    const json = (await res.json()) as { tracks?: CatalogTrack[]; notReady?: boolean };
     const tracks = json.tracks ?? [];
     setArtistBusy(false);
+    /*
+     * 빈손으로 왔다 = 아직 담기지 않았거나 그날 적재 예산이 끝났다는 뜻이다.
+     * "곡이 없는 아티스트"로 읽히지 않게 말을 갈라 준다(라우트의 notReady).
+     */
+    if (json.notReady || tracks.length === 0) {
+      showToast("이 아티스트는 아직 준비 중이에요. 잠시 뒤에 다시 찾아 주세요.", "error");
+      return;
+    }
     if (tracks.length < 4) {
       showToast("이 아티스트는 아직 담긴 곡이 적어요. 다른 아티스트를 찾아 주세요.", "error");
       return;
