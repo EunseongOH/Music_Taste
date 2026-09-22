@@ -645,7 +645,7 @@ export default function TogetherNewPage() {
                       <button
                         onClick={() => pickTracks(ids, picked !== ids.length)}
                         className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
-                          picked === ids.length ? "bg-navy text-cream" : "bg-navy/5 text-navy"
+                          picked === ids.length ? "bg-brand text-cream" : "bg-navy/5 text-navy"
                         }`}
                       >
                         {picked === ids.length ? "이 앨범 전체 해제" : "이 앨범 전체 선택"}
@@ -663,7 +663,7 @@ export default function TogetherNewPage() {
                             <button
                               onClick={() => pickTracks([track.id], !on)}
                               className={`h-8 px-3 rounded-full type-caption cursor-pointer shrink-0 ${
-                                on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
+                                on ? "bg-brand text-cream" : "bg-navy/5 text-navy/70"
                               }`}
                             >
                               {on ? "선택" : "선택 안 함"}
@@ -690,7 +690,7 @@ export default function TogetherNewPage() {
                     <button
                       onClick={() => pickTracks([track.id], !on)}
                       className={`h-8 px-3 rounded-full type-caption cursor-pointer ${
-                        on ? "bg-navy text-cream" : "bg-navy/5 text-navy/70"
+                        on ? "bg-brand text-cream" : "bg-navy/5 text-navy/70"
                       }`}
                     >
                       {on ? "선택" : "선택 안 함"}

@@ -12,6 +12,10 @@
  * 배경만 남는다.
  *
  * 사용: node toss/store/capture-screenshots.mjs
+ *   BASE=http://localhost:5174 THEME=sky-tint node toss/store/capture-screenshots.mjs
+ *   THEME 은 legacy(기본) | toss-white | sky-tint. 출력은 out/<THEME>/ 로 나뉜다(legacy 세트는 out/legacy/).
+ *   토스 dev 빌드: VITE_DEV_API_BASE=http://localhost:3300 npx vite --config toss/app/vite.config.mts --port 5174 --strictPort
+ *   (API 는 SPOTIFY_CACHE_ONLY 가 켜진 Next 서버로 — Spotify 를 부르지 않는다)
  */
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -19,10 +23,19 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = join(HERE, 'out');
+const THEME = process.env.THEME ?? 'legacy';
+const OUT = join(HERE, 'out', THEME);
 mkdirSync(OUT, { recursive: true });
 
-const BASE = 'http://localhost:5173';
+const BASE = process.env.BASE ?? process.argv[2] ?? 'http://localhost:5173';
+console.log(`대상 ${BASE} · 테마 ${THEME} · 출력 ${OUT}`);
+
+/* 새 톤(docs/design-system/color.md)의 프레임 색. legacy 는 지금까지의 크림. */
+const TONE =
+  THEME === 'legacy'
+    ? { bg: '#EAE2D6', ink: '26,42,108', title: '#1A2A6C', body: '#2D3436', dot: '#E67E22', font: "'Playfair Display',Georgia,serif", fontUrl: 'Playfair+Display:wght@700', weight: 700 }
+    : { bg: THEME === 'sky-tint' ? '#E6F1FD' : '#F2F4F6', ink: '24,33,59', title: '#18213B', body: '#333D4B', dot: '#FD7E3E', font: "'Nunito',system-ui,sans-serif", fontUrl: 'Nunito:wght@800', weight: 800 };
+const LOGO = readFileSync(join(HERE, '..', '..', 'public', 'logo-mark.png')).toString('base64');
 // 여러 아티스트가 섞인 픽스처를 쓴다. 기준선용(카더가든 전용)은 회귀 비교의
 // 고정 입력이라 건드리지 않는다.
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture-mix.json'), 'utf8'));
@@ -40,25 +53,35 @@ const LANDSCAPE = { w: 1504, h: 741 };
 const FRAME_H = PORTRAIT.h - 48;
 const FRAME_W = Math.round(FRAME_H * (PHONE.w / PHONE.h));
 
+/* 곡 고르기 화면용 아티스트 — 전곡이 캐시에 있어(coverage 1.0) Spotify 를 부르지 않는다. */
+const TRACKS_ARTIST = { id: '6HvZYsbFfjnjFrWF950C9d', name: 'NewJeans', image: 'https://i.scdn.co/image/ab6761610000e5eb841bdcf28a956f3a384ffcf4' };
+/* 같이 소트하기 초대 화면 — 실제 방 코드 하나(읽기 전용). INVITE_CODE 로 바꿀 수 있다. */
+const INVITE_CODE = process.env.INVITE_CODE ?? '9vtwkaq';
+
 const SCREENS = [
-  { name: '1-home', route: '/', seed: {}, wait: 3000 },
-  { name: '2-genres', route: '/genres', seed: {}, wait: 3000 },
+  { name: '1-home', route: '/', seed: {}, wait: 3000, logo: true },
+  { name: '2-explore', route: '/explore?mode=single', seed: { worldcup_is_single_artist: 'true' }, wait: 7000 },
   {
-    name: '3-explore',
-    route: '/explore',
-    seed: { selected_genres: JSON.stringify(['k-pop', 'korean indie', 'jazz']) },
-    wait: 7000,
+    name: '3-tracks',
+    route: '/tracks?mode=single',
+    seed: { worldcup_is_single_artist: 'true', selectedArtists: JSON.stringify([TRACKS_ARTIST]) },
+    wait: 8000,
+    // 첫 앨범을 펼쳐 수록곡과 LP 연출이 보이게 한다.
+    act: async (page) => {
+      const card = page.locator('button', { hasText: /곡$/ }).first();
+      if (await card.count()) { await card.click(); await page.waitForTimeout(2500); }
+    },
   },
   {
     name: '4-worldcup',
-    route: '/worldcup',
-    seed: { worldcup_tracks: JSON.stringify(RANKING) },
+    route: '/worldcup?mode=single',
+    seed: { worldcup_is_single_artist: 'true', worldcup_tracks: JSON.stringify(RANKING) },
     wait: 5000,
   },
   {
     name: '5-taste',
-    route: '/taste',
-    seed: { worldcup_ranking: JSON.stringify(RANKING) },
+    route: '/taste?mode=single',
+    seed: { worldcup_is_single_artist: 'true', worldcup_ranking: JSON.stringify(RANKING) },
     wait: 3000,
     // 결과 화면은 순위를 하나씩 공개하는 연출로 시작한다. 최종 취향표를
     // 보여 줘야 하므로 '스킵' 을 눌러 끝으로 보낸다.
@@ -68,19 +91,23 @@ const SCREENS = [
       await page.waitForTimeout(4000);
     },
   },
+  { name: '6-invite', route: `/together/${INVITE_CODE}`, seed: {}, wait: 6000 },
 ];
 
-/** 기기 화면을 크림 배경 위에 둥근 모서리로 얹어 콘솔 규격에 맞춘다. */
-async function frame(page, buf) {
+/** 기기 화면을 톤의 바깥 바탕 위에 둥근 모서리로 얹어 콘솔 규격에 맞춘다. 첫 장에만 로고 마크를 작게. */
+async function frame(page, buf, logo = false) {
   await page.setContent(`
     <style>
       html,body{margin:0;width:${PORTRAIT.w}px;height:${PORTRAIT.h}px;overflow:hidden}
-      body{background:#EAE2D6;display:grid;place-items:center}
-      img{width:${FRAME_W}px;height:${FRAME_H}px;display:block;
-          border-radius:30px;border:1px solid rgba(26,42,108,.14);
-          box-shadow:0 18px 44px rgba(26,42,108,.18)}
+      body{background:${TONE.bg};display:grid;place-items:center;position:relative}
+      img.shot{width:${FRAME_W}px;height:${FRAME_H}px;display:block;
+          border-radius:30px;border:1px solid rgba(${TONE.ink},.14);
+          box-shadow:0 18px 44px rgba(${TONE.ink},.18)}
+      img.logo{position:absolute;right:18px;bottom:14px;width:44px;height:44px;border-radius:12px;
+          box-shadow:0 4px 12px rgba(${TONE.ink},.18)}
     </style>
-    <img src="data:image/png;base64,${buf.toString('base64')}"/>
+    <img class="shot" src="data:image/png;base64,${buf.toString('base64')}"/>
+    ${logo ? `<img class="logo" src="data:image/png;base64,${LOGO}"/>` : ''}
   `);
   await page.waitForTimeout(400);
   return page.screenshot();
@@ -134,7 +161,8 @@ try {
     });
     const page = await ctx.newPage();
 
-    await page.addInitScript((seed) => {
+    await page.addInitScript(([seed, theme]) => {
+      try { if (theme === 'legacy') localStorage.removeItem('sortify_theme'); else localStorage.setItem('sortify_theme', theme); } catch {}
       sessionStorage.setItem('locale', 'ko');
       for (const [k, v] of Object.entries(seed)) {
         try {
@@ -142,7 +170,7 @@ try {
           localStorage.setItem(k, v);
         } catch {}
       }
-    }, s.seed);
+    }, [s.seed, THEME]);
 
     await page.goto(`${BASE}${s.route}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForTimeout(s.wait);
@@ -167,7 +195,7 @@ try {
     await page.waitForTimeout(500);
 
     const raw = await page.screenshot();
-    const out = await frame(helper, raw);
+    const out = await frame(helper, raw, !!s.logo);
     const file = join(OUT, `portrait-${s.name}.png`);
     writeFileSync(file, out);
     portraits.push({ name: s.name, data: out.toString('base64') });
@@ -179,6 +207,9 @@ try {
 
   // 가로형: 브랜드 배경 위에 세로 화면 3장을 올린다.
   const pick = phoneShots.filter((p) => ['1-home', '4-worldcup', '5-taste'].includes(p.name));
+  const [titleL, bodyL] = THEME === 'legacy'
+    ? ['Sortify', '최애곡 월드컵으로 완성하는<br/>나만의 음악 취향표']
+    : ['Sortify', '좋아하는 곡 중에서도,<br/>더 마음이 가는 곡을 찾는 곳'];
   const land = await browser.newContext({
     viewport: { width: LANDSCAPE.w, height: LANDSCAPE.h },
     deviceScaleFactor: 1,
@@ -186,30 +217,30 @@ try {
   const lp = await land.newPage();
   await lp.setContent(`
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=${TONE.fontUrl}&display=swap');
       html,body{margin:0;width:${LANDSCAPE.w}px;height:${LANDSCAPE.h}px;overflow:hidden}
       body{
-        background:#EAE2D6;
+        background:${TONE.bg};
         display:flex;align-items:center;justify-content:center;gap:52px;
         padding:0 72px;box-sizing:border-box;
-        font-family:'Playfair Display',Georgia,serif;
+        font-family:${TONE.font};
       }
       .copy{width:400px;flex:none}
-      h1{font-size:72px;line-height:1;margin:0 0 22px;color:#1A2A6C;letter-spacing:-.02em}
+      h1{font-size:72px;line-height:1;margin:0 0 22px;color:${TONE.title};letter-spacing:-.02em;font-weight:${TONE.weight}}
       p{font-family:system-ui,-apple-system,sans-serif;font-size:23px;line-height:1.6;
-        margin:0;color:#2D3436;opacity:.78;font-weight:500}
+        margin:0;color:${TONE.body};opacity:.78;font-weight:500}
       .dot{display:inline-block;width:12px;height:12px;border-radius:50%;
-      background:#E67E22;margin-right:12px;vertical-align:middle}
+      background:${TONE.dot};margin-right:12px;vertical-align:middle}
       .shots{display:flex;gap:28px;align-items:center}
       .shots img{width:246px;height:533px;object-fit:cover;border-radius:26px;
-        border:1px solid rgba(26,42,108,.16);
-        box-shadow:0 26px 60px rgba(26,42,108,.20)}
+        border:1px solid rgba(${TONE.ink},.16);
+        box-shadow:0 26px 60px rgba(${TONE.ink},.20)}
       .shots img:nth-child(2){width:278px;height:603px;
-        box-shadow:0 32px 72px rgba(26,42,108,.26)}
+        box-shadow:0 32px 72px rgba(${TONE.ink},.26)}
     </style>
     <div class="copy">
-      <h1>Sortify</h1>
-      <p>최애곡 월드컵으로 완성하는<br/>나만의 음악 취향표</p>
+      <h1>${titleL}</h1>
+      <p>${bodyL}</p>
     </div>
     <div class="shots">
       ${pick.map((p) => `<img src="data:image/png;base64,${p.data}"/>`).join('')}

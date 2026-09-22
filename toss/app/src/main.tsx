@@ -3,6 +3,19 @@ import { createRoot } from 'react-dom/client';
 // 어떤 페이지가 요청을 보내기 전에 적용돼야 하므로 맨 위에 둔다.
 import './apiBase';
 import './toss.css';
+
+/*
+ * 테마 부트 — Next 의 layout.tsx(THEME_BOOT)와 같은 규칙. 첫 페인트 전에 <html data-theme> 를 붙인다.
+ * ?theme= 가 오면 localStorage 에 저장하고, 없으면 저장된 값을 쓴다. 값이 없으면 아무것도 붙이지 않는다 = legacy.
+ * 스토어 스크린샷(toss/store/capture-screenshots.mjs)이 THEME 로 이 값을 심는다.
+ */
+try {
+  const ok = ['legacy', 'toss-white', 'sky-tint'];
+  const q = new URLSearchParams(location.search).get('theme');
+  if (q && ok.includes(q)) localStorage.setItem('sortify_theme', q);
+  const v = localStorage.getItem('sortify_theme');
+  if (v && ok.includes(v) && v !== 'legacy') document.documentElement.setAttribute('data-theme', v);
+} catch {}
 import Bootstrap from './Bootstrap';
 
 /**
