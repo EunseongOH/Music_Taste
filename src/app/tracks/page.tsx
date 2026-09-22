@@ -21,6 +21,7 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { coverPlaceholder } from "@/utils/coverPlaceholder";
 import { songKey, betterTitle } from "@/utils/songKey";
 import SpotifyLink from "@/components/SpotifyLink";
+import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
 
 const translations = {
   ko: {
@@ -203,7 +204,11 @@ export default function TracksPage() {
   const router = useRouter();
   const [artistData, setArtistData] = useState<ArtistGroup[]>([]);
   const [expandedArtistId, setExpandedArtistId] = useState<string | null>(null);
-  const [expandedAlbumId, setExpandedAlbumId] = useState<string | null>(null);
+  /*
+   * 앨범 펼침(하나만 열림·자동 스크롤·동작 줄이기)은 같이 소트하기와 공용이다.
+   * src/components/album/AlbumCard.tsx
+   */
+  const { openId: expandedAlbumId, setOpenId: setExpandedAlbumId, toggle: toggleAlbum, cardRef, reduceMotion } = useAlbumAccordion();
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
   
   // Advanced Selection Metadata Cache & Debounced Search States
@@ -1047,14 +1052,14 @@ export default function TracksPage() {
     }
   };
 
-  const handleAlbumClick = async (albumId: string, artistId: string) => {
-    if (expandedAlbumId === albumId) {
-      setExpandedAlbumId(null);
-      return;
-    }
-    setExpandedAlbumId(albumId);
+  /** 앨범을 펼치거나 접는다. 펼칠 때 수록곡이 아직 없으면 그때 받아 온다. */
+  const handleAlbumClick = (albumId: string, artistId: string) => {
+    if (expandedAlbumId !== albumId) void loadAlbumTracks(albumId, artistId);
+    toggleAlbum(albumId);
+  };
 
-    // If it's a virtual unreleased album, it already has the track inside its properties
+  const loadAlbumTracks = async (albumId: string, artistId: string) => {
+    // 미발매곡은 가상 싱글이라 곡이 이미 안에 들어 있다
     if (albumId.startsWith("al_unreleased_")) return;
 
     // Check if we already have tracks for this album
@@ -1610,199 +1615,87 @@ export default function TracksPage() {
                              </div>
                            )}
 
-                           {/* Released Albums Grid */}
-                           <div className="grid grid-cols-2 gap-4 mt-6">
-                              {artist.albums.map(album => {
-                               const isExpanded = expandedAlbumId === album.id;
-                               const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
-                               
-                               // Calculate selected count dynamically
-                               const selectedCount = album.tracks.filter(t => selectedTrackIds.has(t.id)).length;
-
-                               return (
-                                 <motion.div
-                                   layout
-                                   transition={smoothTransition}
-                                   key={album.id}
-                                   className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
-                                   onClick={() => {
-                                     if (!isExpanded) {
-                                       handleAlbumClick(album.id, artist.id);
-                                     }
-                                   }}
-                                 >
-                                    {/* Cover & Info Row */}
-                                    <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
-                                       <div className={`relative flex justify-center items-center ${isExpanded ? "w-full mb-3 mt-4" : "w-full"}`}>
-
-                                         {/* LP Record (slides out when expanded) */}
-                                         <AnimatePresence>
-                                           {isExpanded && (
-                                             <motion.div
-                                               initial={{ x: 0, opacity: 0, rotate: -45 }}
-                                               animate={{ x: '40%', opacity: 1, rotate: 0 }}
-                                               exit={{ x: 0, opacity: 0, rotate: -45 }}
-                                               transition={{ type: "spring", stiffness: 100, damping: 20 }}
-                                               className="absolute top-0 bottom-0 my-auto w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-[#111] shadow-[0_4px_15px_rgba(0,0,0,0.4)] z-0 flex items-center justify-center pointer-events-none"
-                                               style={{
-                                                 background: 'radial-gradient(circle, #222 0%, #0a0a0a 100%)',
-                                                 boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)'
-                                               }}
-                                             >
-                                                {/* Grooves */}
-                                                <div className="absolute inset-[3px] sm:inset-[5px] border border-white/5 rounded-full" />
-                                                <div className="absolute inset-[7px] sm:inset-[11px] border border-white/5 rounded-full" />
-                                                <div className="absolute inset-[12px] sm:inset-[19px] border border-white/5 rounded-full" />
-                                                <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
-                                                {/* LP Label (Inner circle) */}
-                                                <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                  <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill fallbackType="track" className="object-cover" />
-                                                </div>
-                                                {/* Center hole */}
-                                                <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
-                                             </motion.div>
-                                           )}
-                                         </AnimatePresence>
-
-                                         {/* Album Cover */}
-                                         <motion.div
-                                           layout
-                                           transition={smoothTransition}
-                                           onClick={(e) => {
-                                             if (isExpanded) {
-                                               e.stopPropagation();
-                                               handleAlbumClick(album.id, artist.id);
-                                             }
-                                           }}
-                                           className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
-                                           style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
-                                         >
-                                           <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
-                                           {!isExpanded && (
-                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                                           )}
-                                           
-                                           {/* Dynamic spring-loaded selection count badge */}
-                                           <AnimatePresence>
-                                             {selectedCount > 0 && (
-                                               <motion.div
-                                                 initial={{ scale: 0, opacity: 0 }}
-                                                 animate={{ scale: 1, opacity: 1 }}
-                                                 exit={{ scale: 0, opacity: 0 }}
-                                                 transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                                                 onClick={(e) => {
-                                                   e.stopPropagation();
-                                                 }}
-                                                 className="absolute top-2 right-2 z-30 w-6 h-6 rounded-full bg-point text-white font-sans text-xs font-bold flex items-center justify-center shadow-md select-none pointer-events-auto"
-                                               >
-                                                 {selectedCount}
-                                               </motion.div>
-                                             )}
-                                           </AnimatePresence>
-                                         </motion.div>
-                                       </div>
-
-                                       {/* Info */}
-                                       <motion.div
-                                           layout
-                                           transition={smoothTransition}
-                                           onClick={(e) => {
-                                             if (isExpanded) {
-                                               e.stopPropagation();
-                                               handleAlbumClick(album.id, artist.id);
-                                             }
-                                           }}
-                                           className={`flex flex-col justify-center text-center ${isExpanded ? "w-full mt-2 cursor-pointer" : "px-2 mt-1 text-left"}`}
-                                        >
-                                          <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
-                                          <div className={`flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5 ${isExpanded ? "justify-center" : "justify-start"}`}>
-                                             {isExpanded && <Disc size={10} />}
-                                             <span className="line-clamp-1">{album.type} • {album.year}</span>
-                                          </div>
-                                       </motion.div>
-                                    </motion.div>
-
-                                    {/* Expandable Tracks List */}
-                                    <AnimatePresence>
-                                      {isExpanded && (
-                                         <motion.div
-                                           initial={{ opacity: 0, height: 0, y: -15 }}
-                                           animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                           exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
-                                           transition={smoothTransition}
-                                           onClick={(e) => e.stopPropagation()}
-                                           className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
-                                         >
-                                            <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
-
-                                            {loadingAlbums.has(album.id) ? (
-                                              <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
-                                                <Disc className="animate-spin text-point/70" size={20} />
-                                                <span>{t.loadingTracks}</span>
-                                              </div>
-                                            ) : album.tracks.length === 0 ? (
-                                              // 트랙리스트가 아직 없는 앨범. 빈 칸만 보이면 고장으로 읽힌다
-                                              <div className="py-6 px-4 text-center text-navy/50 font-sans text-sm">
-                                                {t.noTracks}
-                                              </div>
-                                            ) : (
-                                              album.tracks.map((track, idx) => {
-                                                const isSelected = selectedTrackIds.has(track.id);
-                                                return (
-                                                  <div
-                                                    key={track.id}
-                                                    onClick={(e) => { 
-                                                      e.stopPropagation(); 
-                                                      toggleTrack(track.id, {
-                                                        id: track.id,
-                                                        title: track.title,
-                                                        duration: track.duration,
-                                                        artistName: artist.name,
-                                                        albumTitle: album.title,
-                                                        albumImage: album.image,
-                                                        albumId: album.id
-                                                      }); 
-                                                    }}
-                                                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
-                                                  >
-                                                     <div className="flex items-center gap-3">
-                                                        <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
-                                                        <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
-                                                     </div>
-                                                     {isSelected ? (
-                                                        <Check size={18} className="text-point" strokeWidth={3} />
-                                                     ) : (
-                                                        <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
-                                                     )}
-                                                  </div>
-                                                )
-                                              })
-                                            )}
-
-                                            {/* 이 앨범의 Spotify 링크백 (약관 II.4). 우리 DB 로만 아는 앨범
-                                                (mb:/deezer:)은 재킷·곡이 Spotify 에서 온 게 아니라 링크를 걸지 않는다 */}
-                                            {!album.id.includes(":") && !album.id.startsWith("al_unreleased_") && (
-                                              <div className="flex justify-center mt-3">
-                                                <SpotifyLink
-                                                  href={`https://open.spotify.com/album/${album.id}`}
-                                                  label={locale === "ko" ? "Spotify에서 듣기" : "Play on Spotify"}
-                                                />
-                                              </div>
-                                            )}
-
-                                            <button
-                                              onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
-                                              className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
+                           {/* 발매 앨범 */}
+                           <ul className="grid grid-cols-2 gap-4 mt-6">
+                              {artist.albums.map(album => (
+                                  <AlbumCard
+                                    key={album.id}
+                                    id={album.id}
+                                    title={album.title}
+                                    cover={album.image}
+                                    coverFallback={album.image2}
+                                    meta={`${album.type} • ${album.year}`}
+                                    open={expandedAlbumId === album.id}
+                                    onToggle={() => handleAlbumClick(album.id, artist.id)}
+                                    badge={album.tracks.filter(tr => selectedTrackIds.has(tr.id)).length}
+                                    reduceMotion={reduceMotion}
+                                    cardRef={cardRef(album.id)}
+                                  >
+                                    <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
+                                    {loadingAlbums.has(album.id) ? (
+                                      <div className="py-6 flex flex-col items-center justify-center text-navy/50 font-sans text-sm gap-2">
+                                        <Disc className="animate-spin text-point/70" size={20} />
+                                        <span>{t.loadingTracks}</span>
+                                      </div>
+                                    ) : album.tracks.length === 0 ? (
+                                      // 트랙리스트가 아직 없는 앨범. 빈 칸만 보이면 고장으로 읽힌다
+                                      <div className="py-6 px-4 text-center text-navy/50 font-sans text-sm">
+                                        {t.noTracks}
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-col gap-1">
+                                        {album.tracks.map((track, idx) => {
+                                          const isSelected = selectedTrackIds.has(track.id);
+                                          return (
+                                            <div
+                                              key={track.id}
+                                              onClick={() =>
+                                                toggleTrack(track.id, {
+                                                  id: track.id,
+                                                  title: track.title,
+                                                  duration: track.duration,
+                                                  artistName: artist.name,
+                                                  albumTitle: album.title,
+                                                  albumImage: album.image,
+                                                  albumId: album.id,
+                                                })
+                                              }
+                                              className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                             >
-                                              {t.close}
-                                            </button>
-                                         </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                 </motion.div>
-                               );
-                              })}
-                           </div>
+                                              <div className="flex items-center gap-3">
+                                                <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
+                                              </div>
+                                              {isSelected ? (
+                                                <Check size={18} className="text-point" strokeWidth={3} />
+                                              ) : (
+                                                <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* 이 앨범의 Spotify 링크백 (약관 II.4). 우리 DB 로만 아는 앨범
+                                        (mb:/deezer:)은 재킷·곡이 Spotify 에서 온 게 아니라 링크를 걸지 않는다 */}
+                                    {!album.id.includes(":") && !album.id.startsWith("al_unreleased_") && (
+                                      <div className="flex justify-center mt-3">
+                                        <SpotifyLink
+                                          href={`https://open.spotify.com/album/${album.id}`}
+                                          label={locale === "ko" ? "Spotify에서 듣기" : "Play on Spotify"}
+                                        />
+                                      </div>
+                                    )}
+                                      <button
+                                        onClick={() => setExpandedAlbumId(null)}
+                                        className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
+                                      >
+                                        {t.close}
+                                      </button>
+                                  </AlbumCard>
+                              ))}
+                           </ul>
 
                            {/* Spotify Released Albums Pagination Bar */}
                            {artist.totalReleases && artist.totalReleases > 10 && (
@@ -1840,175 +1733,63 @@ export default function TracksPage() {
                                  <Compass size={18} className="text-point shrink-0" />
                                  {t.unreleased}
                                </h3>
-                               <div className="grid grid-cols-2 gap-4">
-                                  {artist.unreleasedAlbums.map(album => {
-                                    const isExpanded = expandedAlbumId === album.id;
-                                    const smoothTransition = { type: "tween" as const, ease: "circOut" as const, duration: 0.45 };
-                                    
-                                    // Calculate selected count inside virtual single album (always max 1 track)
-                                    const selectedCount = album.tracks.filter(t => selectedTrackIds.has(t.id)).length;
-
-                                    return (
-                                      <motion.div
-                                        layout
-                                        transition={smoothTransition}
-                                        key={album.id}
-                                        className={`flex flex-col relative ${isExpanded ? "col-span-2 bg-[#F1EADC] shadow-[0_4px_20px_rgba(26,42,108,0.08)] rounded-[2rem] p-4 border border-navy/5 z-10" : "col-span-1"}`}
-                                        onClick={() => {
-                                          if (!isExpanded) {
-                                            handleAlbumClick(album.id, artist.id);
-                                          }
-                                        }}
-                                      >
-                                         {/* Cover & Info Row */}
-                                         <motion.div layout transition={smoothTransition} className={`flex ${isExpanded ? "flex-col items-center mb-5 z-20 relative bg-[#F1EADC]" : "flex-col gap-2"}`}>
-                                            <div className={`relative flex justify-center items-center ${isExpanded ? "w-full mb-3 mt-4" : "w-full"}`}>
-
-                                              {/* LP Record (slides out when expanded) */}
-                                              <AnimatePresence>
-                                                {isExpanded && (
-                                                  <motion.div
-                                                    initial={{ x: 0, opacity: 0, rotate: -45 }}
-                                                    animate={{ x: '40%', opacity: 1, rotate: 0 }}
-                                                    exit={{ x: 0, opacity: 0, rotate: -45 }}
-                                                    transition={{ type: "spring", stiffness: 100, damping: 20 }}
-                                                    className="absolute top-0 bottom-0 my-auto w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-[#111] shadow-[0_4px_15px_rgba(0,0,0,0.4)] z-0 flex items-center justify-center pointer-events-none"
-                                                    style={{
-                                                      background: 'radial-gradient(circle, #222 0%, #0a0a0a 100%)',
-                                                      boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.3)'
-                                                    }}
-                                                  >
-                                                     {/* Grooves */}
-                                                     <div className="absolute inset-[3px] sm:inset-[5px] border border-white/5 rounded-full" />
-                                                     <div className="absolute inset-[7px] sm:inset-[11px] border border-white/5 rounded-full" />
-                                                     <div className="absolute inset-[12px] sm:inset-[19px] border border-white/5 rounded-full" />
-                                                     <div className="absolute inset-[18px] sm:inset-[29px] border border-white/5 rounded-full" />
-                                                     {/* LP Label */}
-                                                     <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full relative overflow-hidden border-2 border-[#111]">
-                                                       <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill fallbackType="track" className="object-cover" />
-                                                     </div>
-                                                     {/* Center hole */}
-                                                     <div className="absolute w-1.5 h-1.5 bg-[#F1EADC] rounded-full z-10" />
-                                                  </motion.div>
-                                                )}
-                                              </AnimatePresence>
-
-                                              {/* Album Cover */}
-                                              <motion.div
-                                                layout
-                                                transition={smoothTransition}
-                                                onClick={(e) => {
-                                                  if (isExpanded) {
-                                                    e.stopPropagation();
-                                                    handleAlbumClick(album.id, artist.id);
-                                                  }
-                                                }}
-                                                className={`relative aspect-square shrink-0 overflow-hidden z-10 ${isExpanded ? "w-20 sm:w-28 md:w-32 shadow-xl cursor-pointer" : "w-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] cursor-pointer group hover:shadow-[0_8px_16px_rgba(0,0,0,0.12)]"}`}
-                                                style={{ borderRadius: isExpanded ? '0.2rem' : '2rem' }}
-                                              >
-                                                <SafeImage src={album.image} fallbackSrc={album.image2} alt={album.title} fill sizes="(max-width: 768px) 50vw, 33vw" fallbackType="track" className="object-cover transition-transform duration-500 group-hover:scale-105" />
-                                                {!isExpanded && (
-                                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
-                                                )}
-                                                
-                                                {/* Selected count spring-badge */}
-                                                <AnimatePresence>
-                                                  {selectedCount > 0 && (
-                                                    <motion.div
-                                                      initial={{ scale: 0, opacity: 0 }}
-                                                      animate={{ scale: 1, opacity: 1 }}
-                                                      exit={{ scale: 0, opacity: 0 }}
-                                                      transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                      }}
-                                                      className="absolute top-2 right-2 z-30 w-6 h-6 rounded-full bg-point text-white font-sans text-xs font-bold flex items-center justify-center shadow-md select-none pointer-events-auto"
-                                                    >
-                                                      {selectedCount}
-                                                    </motion.div>
-                                                  )}
-                                                </AnimatePresence>
-                                              </motion.div>
+                               <ul className="grid grid-cols-2 gap-4">
+                                  {artist.unreleasedAlbums.map(album => (
+                                  <AlbumCard
+                                    key={album.id}
+                                    id={album.id}
+                                    title={album.title}
+                                    cover={album.image}
+                                    coverFallback={album.image2}
+                                    meta={`${album.type} • ${album.year}`}
+                                    open={expandedAlbumId === album.id}
+                                    onToggle={() => handleAlbumClick(album.id, artist.id)}
+                                    badge={album.tracks.filter(tr => selectedTrackIds.has(tr.id)).length}
+                                    reduceMotion={reduceMotion}
+                                    cardRef={cardRef(album.id)}
+                                  >
+                                    <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
+                                      <div className="flex flex-col gap-1">
+                                        {album.tracks.map((track, idx) => {
+                                          const isSelected = selectedTrackIds.has(track.id);
+                                          return (
+                                            <div
+                                              key={track.id}
+                                              onClick={() =>
+                                                toggleTrack(track.id, {
+                                                  id: track.id,
+                                                  title: track.title,
+                                                  duration: track.duration,
+                                                  artistName: artist.name,
+                                                  albumTitle: album.title,
+                                                  albumImage: album.image,
+                                                  albumId: album.id,
+                                                })
+                                              }
+                                              className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
+                                            >
+                                              <div className="flex items-center gap-3">
+                                                <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
+                                                <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
+                                              </div>
+                                              {isSelected ? (
+                                                <Check size={18} className="text-point" strokeWidth={3} />
+                                              ) : (
+                                                <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
+                                              )}
                                             </div>
-
-                                            {/* Info */}
-                                            <motion.div
-                                                layout
-                                                transition={smoothTransition}
-                                                onClick={(e) => {
-                                                  if (isExpanded) {
-                                                    e.stopPropagation();
-                                                    handleAlbumClick(album.id, artist.id);
-                                                  }
-                                                }}
-                                                className={`flex flex-col justify-center text-center ${isExpanded ? "w-full mt-2 cursor-pointer" : "px-2 mt-1 text-left"}`}
-                                             >
-                                               <p className="font-sans font-bold text-sm text-navy line-clamp-1">{album.title}</p>
-                                               <div className={`flex items-center gap-1 font-sans text-xs text-charcoal/60 mt-0.5 ${isExpanded ? "justify-center" : "justify-start"}`}>
-                                                  {isExpanded && <Disc size={10} />}
-                                                  <span className="line-clamp-1">{album.type} • {album.year}</span>
-                                               </div>
-                                            </motion.div>
-                                         </motion.div>
-
-                                         {/* Expandable Tracks List */}
-                                         <AnimatePresence>
-                                           {isExpanded && (
-                                              <motion.div
-                                                initial={{ opacity: 0, height: 0, y: -15 }}
-                                                animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                                exit={{ opacity: 0, height: 0, y: -15, transition: { duration: 0.3 } }}
-                                                transition={smoothTransition}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="flex flex-col gap-1 overflow-hidden relative pt-2 -mt-2 shadow-[inset_0_12px_12px_-12px_rgba(0,0,0,0.06)] rounded-b-[1.5rem]"
-                                              >
-                                                 <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
-
-                                                 {album.tracks.map((track, idx) => {
-                                                   const isSelected = selectedTrackIds.has(track.id);
-                                                   return (
-                                                     <div
-                                                       key={track.id}
-                                                       onClick={(e) => { 
-                                                         e.stopPropagation(); 
-                                                         toggleTrack(track.id, {
-                                                           id: track.id,
-                                                           title: track.title,
-                                                           duration: track.duration,
-                                                           artistName: artist.name,
-                                                           albumTitle: album.title, // identical to track title
-                                                           albumImage: album.image,
-                                                           albumId: album.id
-                                                         }); 
-                                                       }}
-                                                       className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
-                                                     >
-                                                        <div className="flex items-center gap-3">
-                                                           <span className="text-xs font-num tabular-nums text-navy/40 w-4 text-right">{idx + 1}</span>
-                                                           <span className={`font-sans text-sm line-clamp-1 ${isSelected ? "text-point font-bold" : "text-charcoal"}`}>{track.title}</span>
-                                                        </div>
-                                                        {isSelected ? (
-                                                           <Check size={18} className="text-point" strokeWidth={3} />
-                                                        ) : (
-                                                           <span className="text-xs text-charcoal/40 font-sans">{track.duration}</span>
-                                                        )}
-                                                     </div>
-                                                   )
-                                                 })}
-
-                                                 <button
-                                                   onClick={(e) => { e.stopPropagation(); setExpandedAlbumId(null); }}
-                                                   className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
-                                                 >
-                                                   {t.close}
-                                                 </button>
-                                              </motion.div>
-                                           )}
-                                         </AnimatePresence>
-                                      </motion.div>
-                                    );
-                                  })}
-                               </div>
+                                          );
+                                        })}
+                                      </div>
+                                      <button
+                                        onClick={() => setExpandedAlbumId(null)}
+                                        className="mt-4 py-3 w-full text-center text-sm font-sans font-medium text-navy/70 bg-navy/5 rounded-full hover:bg-navy/10 transition-colors"
+                                      >
+                                        {t.close}
+                                      </button>
+                                  </AlbumCard>
+                                  ))}
+                               </ul>
                              </div>
                            )}
                          </>
