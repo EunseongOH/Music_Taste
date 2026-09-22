@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, Check, Compass, Disc, Search, Plus, X, Info, RefreshCw } from "lucide-react";
+import { AlertCircle, Check, Compass, Disc, Search, Plus, X, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { SafeImage } from "@/components/SafeImage";
@@ -13,7 +13,7 @@ import { getArtistAlbums, getAlbumTracks } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
 import { trackEvent } from "@/utils/gtag";
 import { MIX_MATCH } from "@/config/modes";
-import { submitUnreleasedTrack, fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
+import { fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
 import FeedbackModal from "@/components/FeedbackModal";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
@@ -22,6 +22,7 @@ import { coverPlaceholder } from "@/utils/coverPlaceholder";
 import { songKey, betterTitle } from "@/utils/songKey";
 import SpotifyLink from "@/components/SpotifyLink";
 import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
+import UnreleasedDialog, { getYouTubeVideoId, type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
 
 const translations = {
   ko: {
@@ -145,12 +146,6 @@ interface ArtistGroup {
   backgroundProgress?: { loaded: number; total: number }; // Progress indicator values
 }
 
-const getYouTubeVideoId = (url: string) => {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-};
-
 /**
  * 머리말에 적는 "N Tracks". 월드컵에 실제로 올라가는 곡 수와 같아야 한다.
  *
@@ -228,7 +223,6 @@ export default function TracksPage() {
   const [modalArtistId, setModalArtistId] = useState<string | null>(null);
   // 오류 제보 모달. 아티스트 컨텍스트를 같이 들고 있어야 제보가 쓸모 있다.
   const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; name: string; albumId?: string; albumTitle?: string } | null>(null);
-  const [unreleasedForm, setUnreleasedForm] = useState({ title: '', videoUrl: '', date: '' });
   const [notification, setNotification] = useState<string | null>(null);
 
   const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
@@ -1171,88 +1165,38 @@ export default function TracksPage() {
     setSelectedTracksMetadata(newMetadata);
   };
 
-  const handleAddUnreleased = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!unreleasedForm.title.trim() || !modalArtistId) return;
-
-    const newTrackId = `t_unreleased_${Date.now()}`;
-    const youtubeId = getYouTubeVideoId(unreleasedForm.videoUrl);
-    const coverImage = youtubeId 
-      ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-      : coverPlaceholder(newTrackId);
-    
-    const trackYear = unreleasedForm.date 
-      ? unreleasedForm.date.substring(0, 4) 
-      : new Date().getFullYear().toString();
-
-    const targetArtist = artistData.find(a => a.id === modalArtistId);
-    const artistName = targetArtist ? targetArtist.name : "Unknown Artist";
-
-    // 1. Persist to DB if user is logged in
-    let persistSuccess = false;
-    if (user) {
-      try {
-        await submitUnreleasedTrack({
-          id: newTrackId,
-          title: unreleasedForm.title,
-          artistId: modalArtistId,
-          artistName: artistName,
-          videoUrl: unreleasedForm.videoUrl || undefined,
-          releaseDate: unreleasedForm.date || undefined
-        });
-        persistSuccess = true;
-      } catch (err) {
-        console.error("Failed to save unreleased track to Supabase:", err);
-      }
-    }
-
-    const newTrack: Track = { id: newTrackId, title: unreleasedForm.title, duration: "Live" };
-    const newUnreleasedAlbum: Album = {
-      id: `al_unreleased_${newTrackId}`,
-      title: unreleasedForm.title, // 곡명이랑 앨범명 완벽 매칭
+  /** 팝업이 등록을 마치면 화면에 앉힌다 — 가상 싱글 앨범 한 장으로 만들어 바로 고른 상태로 둔다. */
+  const handleAddUnreleased = (track: AddedUnreleasedTrack, notice: string) => {
+    const albumId = `al_unreleased_${track.id}`;
+    const newAlbum: Album = {
+      id: albumId,
+      title: track.title, // 곡명이랑 앨범명 완벽 매칭
       type: "Single" as const,
-      year: trackYear,
-      image: coverImage,
-      tracks: [newTrack],
-      totalTracks: 1
+      year: track.year,
+      image: track.cover,
+      tracks: [{ id: track.id, title: track.title, duration: "Live" }],
+      totalTracks: 1,
     };
 
-    // 2. Optimistic UI update - Add to local artistData state
-    setArtistData(prev => prev.map(artist => {
-      if (artist.id === modalArtistId) {
-        const currentUnreleased = artist.unreleasedAlbums || [];
-        return {
-          ...artist,
-          unreleasedAlbums: [newUnreleasedAlbum, ...currentUnreleased]
-        };
-      }
-      return artist;
-    }));
+    setArtistData(prev =>
+      prev.map(artist =>
+        artist.id === modalArtistId
+          ? { ...artist, unreleasedAlbums: [newAlbum, ...(artist.unreleasedAlbums || [])] }
+          : artist
+      )
+    );
 
-    // 3. Add to selection immediately with metadata
-    toggleTrack(newTrackId, {
-      id: newTrackId,
-      title: unreleasedForm.title,
+    toggleTrack(track.id, {
+      id: track.id,
+      title: track.title,
       duration: "Live",
-      artistName: artistName,
-      albumTitle: unreleasedForm.title,
-      albumImage: coverImage,
-      albumId: `al_unreleased_${newTrackId}`
+      artistName: track.artistName,
+      albumTitle: track.title,
+      albumImage: track.cover,
+      albumId,
     });
 
-    setIsModalOpen(false);
-    setUnreleasedForm({ title: '', videoUrl: '', date: '' });
-
-    // 4. Custom notification based on login state
-    if (user) {
-      if (persistSuccess) {
-        setNotification(locale === "en" ? translations.en.unreleasedSavedDb : translations.ko.unreleasedSavedDb);
-      } else {
-        setNotification(locale === "en" ? translations.en.unreleasedSavedTemp : translations.ko.unreleasedSavedTemp);
-      }
-    } else {
-      setNotification(locale === "en" ? translations.en.unreleasedGuest : translations.ko.unreleasedGuest);
-    }
+    setNotification(notice);
     setTimeout(() => setNotification(null), 5000);
   };
 
@@ -1845,7 +1789,7 @@ export default function TracksPage() {
                 isCurrentlyLoadingTracks
                   ? "bg-cream/95 backdrop-blur-xl border border-navy/15 shadow-[0_12px_40px_rgba(26,42,108,0.2)] rounded-[2.2rem] p-3.5 flex flex-col gap-3 select-none cursor-not-allowed"
                   : isReadyToStart
-                    ? "bg-brand text-cream border border-navy/20 shadow-[0_10px_30px_rgba(26,42,108,0.35)] rounded-full py-4 px-6 hover:bg-brand/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                    ? "bg-navy text-cream border border-navy/20 shadow-[0_10px_30px_rgba(26,42,108,0.35)] rounded-full py-4 px-6 hover:bg-navy/90 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
                     : "bg-cream/90 backdrop-blur-md border border-navy/20 shadow-[0_4px_15px_rgba(0,0,0,0.1)] rounded-full py-3 px-6 text-center text-navy font-bold text-sm"
               }`}
             >
@@ -1956,68 +1900,15 @@ export default function TracksPage() {
         );
       })()}
 
-      {/* Unreleased Track Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-navy/40 backdrop-blur-sm"
-              onClick={() => setIsModalOpen(false)}
-            />
-            <motion.div
-              initial={{ y: 50, opacity: 0, scale: 0.95 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 20, opacity: 0, scale: 0.95 }}
-              className="bg-[#F5F2ED] w-full max-w-sm rounded-[2rem] shadow-2xl relative z-10 overflow-hidden border border-navy/10 flex flex-col"
-            >
-              <div className="p-6 pb-4 border-b border-navy/5 flex items-center justify-between">
-                <h3 className="text-xl text-navy">{t.addUnreleasedModalTitle}</h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 -mr-2 text-navy/50 hover:text-navy hover:bg-navy/5 rounded-full transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-              <form onSubmit={handleAddUnreleased} className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[60vh]">
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">{t.trackTitleLabel} <span className="text-point">*</span></label>
-                  <input required value={unreleasedForm.title} onChange={e => setUnreleasedForm({...unreleasedForm, title: e.target.value})} type="text" placeholder={t.trackTitlePlaceholder} className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">{t.videoUrlLabel} <span className="text-point">*</span></label>
-                  <input required value={unreleasedForm.videoUrl} onChange={e => setUnreleasedForm({...unreleasedForm, videoUrl: e.target.value})} type="url" placeholder={t.videoUrlPlaceholder} className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy placeholder:text-navy/30" />
-                  {unreleasedForm.videoUrl && getYouTubeVideoId(unreleasedForm.videoUrl) && (
-                    <div className="mt-2 w-full rounded-xl overflow-hidden border border-navy/10 relative aspect-video bg-navy/5 flex items-center justify-center">
-                      <SafeImage
-                        src={`https://img.youtube.com/vi/${getYouTubeVideoId(unreleasedForm.videoUrl)}/hqdefault.jpg`}
-                        alt="YouTube Thumbnail Preview"
-                        fill
-                        fallbackType="track"
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-sans text-xs font-bold text-navy/70 ml-1">{t.dateLabel}</label>
-                  <input value={unreleasedForm.date} onChange={e => setUnreleasedForm({...unreleasedForm, date: e.target.value})} type="date" className="w-full px-4 py-3 rounded-xl bg-white/60 border border-navy/10 focus:border-point focus:outline-none font-sans text-sm text-navy" />
-                </div>
-                <div className="flex flex-col gap-1.5 mt-2">
-                  <div className="flex items-start gap-2 bg-navy/5 p-3 rounded-xl">
-                    <Info size={16} className="text-navy/60 shrink-0 mt-0.5" />
-                    <p className="font-sans text-[11px] leading-relaxed text-charcoal/70">
-                      {t.infoText1}<br/>
-                      {t.infoText2}<span className="font-bold text-point">{t.infoText3}</span>{t.infoText4}
-                    </p>
-                  </div>
-                </div>
-                <button type="submit" className="mt-2 w-full py-3.5 bg-brand text-cream font-sans font-medium rounded-xl shadow-md hover:bg-brand/90 active:scale-[0.98] transition-all">
-                  {t.submitAdd}
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* 미발매곡 등록. 같이 소트하기 만들기와 같은 팝업을 쓴다. */}
+      <UnreleasedDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        artistId={modalArtistId}
+        artistName={artistData.find(a => a.id === modalArtistId)?.name ?? "Unknown Artist"}
+        locale={locale === "en" ? "en" : "ko"}
+        onAdded={handleAddUnreleased}
+      />
 
       {/* 곡 정보 오류 제보 */}
       <FeedbackModal
@@ -2053,7 +1944,7 @@ export default function TracksPage() {
           <div className="fixed top-20 left-0 right-0 z-[100] px-4 flex justify-center pointer-events-none">
             <motion.div
               initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}
-              className="bg-ink text-cream px-5 py-3.5 rounded-2xl shadow-lg flex items-center gap-3 max-w-md w-full pointer-events-auto border border-white/10"
+              className="bg-navy text-cream px-5 py-3.5 rounded-2xl shadow-lg flex items-center gap-3 max-w-md w-full pointer-events-auto border border-white/10"
             >
               <Check size={18} className="text-point shrink-0" strokeWidth={3} />
               <p className="font-sans text-sm leading-snug">{notification}</p>

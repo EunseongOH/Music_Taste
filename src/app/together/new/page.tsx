@@ -2,9 +2,11 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Search, X } from "lucide-react";
+import { AlertCircle, Check, Loader2, Plus, Search, X } from "lucide-react";
 import { SafeImage } from "@/components/SafeImage";
 import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
+import UnreleasedDialog, { type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
+import FeedbackModal from "@/components/FeedbackModal";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
@@ -139,6 +141,45 @@ export default function TogetherNewPage() {
    * src/components/album/AlbumCard.tsx
    */
   const { openId: openAlbum, setOpenId: setOpenAlbum, toggle: toggleAlbum, cardRef, reduceMotion } = useAlbumAccordion();
+  /** 미발매곡 등록 팝업. 전곡 모드와 같은 것을 쓴다. */
+  const [addingUnreleased, setAddingUnreleased] = useState(false);
+  /** 곡 정보 오류 제보 창. 전곡 모드와 같은 것을 쓴다. */
+  const [reporting, setReporting] = useState(false);
+
+  /*
+   * 등록한 곡을 이 방의 곡 목록에 바로 넣는다(고른 상태로).
+   *
+   * 승인 전이라 카탈로그(/api/together/catalog)는 아직 이 곡을 주지 않는다.
+   * 그래도 방에는 곡 정보가 통째로 저장되므로(challenge.tracks) 초대받은
+   * 사람도 같은 곡을 본다 — 승인은 "다른 방에도 보일지"를 정하는 일이다.
+   */
+  const addUnreleased = (track: AddedUnreleasedTrack, notice: string) => {
+    setArtistSource((prev) =>
+      prev
+        ? {
+            ...prev,
+            tracks: [
+              {
+                id: track.id,
+                title: track.title,
+                artistName: track.artistName,
+                albumImage: track.cover,
+                albumName: track.title, // 곡명이랑 앨범명 완벽 매칭(전곡 모드와 같다)
+                // 날짜를 안 적으면 올해로 둔다 — 앨범은 최신순이라 방금 넣은 곡이 맨 뒤로 가면 안 보인다
+                releaseDate: track.date || `${track.year}-01-01`,
+              },
+              ...prev.tracks,
+            ],
+          }
+        : prev
+    );
+    setOff((prev) => {
+      const next = new Set(prev);
+      next.delete(track.id);
+      return next;
+    });
+    showToast(notice);
+  };
 
   /*
    * 링크 이름. 고치는 칸을 두지 않는다 — 닉네임 입력으로 오해된다.
@@ -701,6 +742,32 @@ export default function TogetherNewPage() {
             </ul>
           )}
 
+          {source.artistId && (
+            /* 발매되지 않은 곡 — 공연에서만 부른 곡 — 도 방에 넣을 수 있다. */
+            <button
+              onClick={() => setAddingUnreleased(true)}
+              className="w-full mt-6 py-3 rounded-2xl border border-dashed border-navy/30 text-navy/70 type-caption flex items-center justify-center gap-2 hover:bg-navy/5 hover:text-navy transition-colors cursor-pointer"
+            >
+              <Plus size={16} />
+              미발매곡 추가
+            </button>
+          )}
+
+          {source.artistId && (
+            /*
+             * 곡 정보가 틀렸을 때 나갈 길. 여기가 곡을 들여다보는 유일한 화면이라
+             * 틀린 걸 알아채는 것도 여기다 — 전곡 모드에만 두면 같이 소트하기로
+             * 들어온 사람은 말할 데가 없다.
+             */
+            <button
+              onClick={() => setReporting(true)}
+              className="w-full mt-2 py-2.5 rounded-2xl text-navy/70 type-caption flex items-center justify-center gap-1.5 hover:text-navy hover:bg-navy/5 transition-colors cursor-pointer"
+            >
+              <AlertCircle size={13} />
+              곡 정보가 잘못됐나요?
+            </button>
+          )}
+
           <div className="fixed bottom-0 left-0 right-0 z-[900] px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
             <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
               {chosen.length < 4 && <p className="type-caption text-point-ink text-center">최소 4곡이 필요해요</p>}
@@ -711,6 +778,30 @@ export default function TogetherNewPage() {
           </div>
         </>
       )}
+      {/* 곡 정보 오류 제보. 어느 화면에서 왔는지 남겨 둬야 확인할 때 갈린다. */}
+      <FeedbackModal
+        isOpen={reporting}
+        onClose={() => setReporting(false)}
+        locale="ko"
+        kind="data_error"
+        contextLabel={artistSource?.artistName ?? undefined}
+        context={
+          artistSource
+            ? { screen: "together", artist_id: artistSource.artistId, artist_name: artistSource.artistName }
+            : undefined
+        }
+        onSubmitted={(msg) => showToast(msg)}
+      />
+
+      <UnreleasedDialog
+        open={addingUnreleased}
+        onClose={() => setAddingUnreleased(false)}
+        artistId={artistSource?.artistId ?? null}
+        artistName={artistSource?.artistName ?? ""}
+        locale="ko"
+        onAdded={addUnreleased}
+      />
+
       {/* 이름을 묻는 창. 참여 화면과 같은 컴포넌트를 쓴다. */}
       <NicknameDialog
         open={askName}
