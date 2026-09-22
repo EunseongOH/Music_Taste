@@ -1,0 +1,1053 @@
+{
+ "me": "3ae056af-019c-4790-855b-f6b10418f4c3",
+ "mine": [
+  {
+   "id": "00000000-0000-4000-8000-000000000100",
+   "user_id": "3ae056af-019c-4790-855b-f6b10418f4c3",
+   "title": "멜로망스 sort_260921",
+   "winner_track_id": "d65001ee-ec1f-4257-a203-2a3aad55d5d3",
+   "winner_track_title": "아무 날의 서프라이즈",
+   "winner_track_artist": "멜로망스",
+   "winner_track_image": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500",
+   "user_nickname": "은은한레코드664",
+   "user_profile_image": null,
+   "created_at": "2026-09-21T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "멜로망스",
+   "ranking": [
+    {
+     "id": "d65001ee-ec1f-4257-a203-2a3aad55d5d3",
+     "title": "아무 날의 서프라이즈",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "af794f3d-674c-4bf1-bc92-ebdac9279312",
+     "title": "괜찮아 사랑해",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "75f6cc1a-adb8-4a9f-b7d8-aa33e5386c0c",
+     "title": "Blooming",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "17c9fd04-c3a0-4488-844e-839dde2dd64a",
+     "title": "꽃잎",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "15daa7d8-7c82-4c51-97d8-ade56cda0ba0",
+     "title": "우리의 축배",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "93ca067e-48ab-4bde-a732-6ff298e75450",
+     "title": "Your Way",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "7073b359-2fde-4bcd-a60e-ecdf97124f67",
+     "title": "Tomorrow",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/78128e09-a4c8-49ac-b8cc-84fb0ccc51b9/front-500"
+    },
+    {
+     "id": "19625c8c-35c3-40f1-a9d8-8932834f41aa",
+     "title": "둘만의 비밀로",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/9419e770-f41b-427d-b773-7ba5cc8962a5/front-500"
+    },
+    {
+     "id": "ef362882-4591-472f-acf8-d2beb2ec661b",
+     "title": "A Shining Day",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/90655580-5c88-4cc1-8ac9-cfe657dd8362/front-500"
+    },
+    {
+     "id": "9f5ee51c-de3f-45f8-a581-c36bbb8337dd",
+     "title": "Love you again",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/e8514adc-1e24-4e3f-b314-ccf6512fbeea/front-500"
+    },
+    {
+     "id": "ae190eae-04fa-418b-a44a-d6419c39e1ac",
+     "title": "새들처럼",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/b2f1873d-466b-456a-ac2b-f289bb4c23bf/front-500"
+    },
+    {
+     "id": "deezer:334042397:0",
+     "title": "Link",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/334042397/image?size=big"
+    },
+    {
+     "id": "deezer:318350897:0",
+     "title": "Happy Song",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "deezer:318350897:1",
+     "title": "Happy Song (lnst.)",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "c750bbbd-2fb1-4c83-964b-42dd5d124594",
+     "title": "Invitation",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    },
+    {
+     "id": "6c4a728f-2d4a-4b9d-a677-51ffead5dc6e",
+     "title": "What about you?",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000101",
+   "user_id": "3ae056af-019c-4790-855b-f6b10418f4c3",
+   "title": "김상우 sort_260918",
+   "winner_track_id": "b2e74f9c-4755-4d67-919b-a6ac6b51967a",
+   "winner_track_title": "앵콜요청금지",
+   "winner_track_artist": "김상우",
+   "winner_track_image": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500",
+   "user_nickname": "은은한레코드664",
+   "user_profile_image": null,
+   "created_at": "2026-09-18T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "김상우",
+   "ranking": [
+    {
+     "id": "b2e74f9c-4755-4d67-919b-a6ac6b51967a",
+     "title": "앵콜요청금지",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "09de4a98-4f4e-4309-82e7-00febe661e59",
+     "title": "스물다섯, 스물하나",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "8a6af90c-0d89-4dc7-9412-2e677876cf41",
+     "title": "Smile Boy",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "7e666d39-0b78-4511-91d3-37d0e9ce8f7a",
+     "title": "왜 그래",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "83039bc2-7965-4ab4-8508-abb2c97979d0",
+     "title": "한 사람을 위한 마음",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "123044d0-06a5-42e8-ab8e-05499e8ce4d4",
+     "title": "바람의 노래",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "222ceeb3-0b20-4464-b5ad-61f743d1368c",
+     "title": "The Moments",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/90064000-30ed-4385-9638-c52680c314f9/front-500"
+    },
+    {
+     "id": "f0496e79-777e-4867-b87e-95211cc878f2",
+     "title": "No Words Can Say",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/e64fba99-cd3d-4024-aac6-aef54f771d2b/front-500"
+    },
+    {
+     "id": "d3cb3d5e-e683-4b50-9d57-1d75157f84af",
+     "title": "있는 모습 그대로",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/a060e277-61e7-4c0e-9008-b391fb58d24f/front-500"
+    },
+    {
+     "id": "1d010dc9-7e7d-497f-b420-ca024f267f05",
+     "title": "If You Ask Me What Love Is",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/2850e0b4-4907-4d67-8985-251316bc920e/front-500"
+    },
+    {
+     "id": "d10cf9f4-311e-4297-9a31-3ba33494c666",
+     "title": "도망가자 (Run With Me)",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8dc88b56-d3c7-41dd-ab21-26ca5154258d/front-500"
+    },
+    {
+     "id": "5475e170-0a25-49a4-a4c8-ac7e454f7110",
+     "title": "봄이 와도",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/295a64d2-d58b-4b50-84a9-7a5719fc4fc7/front-500"
+    },
+    {
+     "id": "edc869df-34aa-4e5f-86f2-e056573c6159",
+     "title": "그대라는 꽃잎",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8361dda7-80c4-4920-8900-76d30fc100d6/front-500"
+    },
+    {
+     "id": "007ecc3c-b6da-4de4-9cdb-333b25b7d436",
+     "title": "미련하다",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/ec3ca3c9-256b-4e3c-95c6-6235821ffa15/front-500"
+    },
+    {
+     "id": "a8db6fb7-d88a-49e7-baf9-d902cb360da1",
+     "title": "Whenever, Wherever",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/41cc7ee3-e592-40f9-a414-ca699b1d7b23/front-500"
+    },
+    {
+     "id": "518e568e-70a1-4e59-b506-66beb1b6769b",
+     "title": "Sparkle",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/2e206be1-9a6b-4385-997f-3fc0e435ad11/front-500"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000102",
+   "user_id": "3ae056af-019c-4790-855b-f6b10418f4c3",
+   "title": "원슈타인 sort_260914",
+   "winner_track_id": "deezer:1064872671:0",
+   "winner_track_title": "4real",
+   "winner_track_artist": "원슈타인",
+   "winner_track_image": "https://api.deezer.com/album/1064872671/image?size=big",
+   "user_nickname": "은은한레코드664",
+   "user_profile_image": null,
+   "created_at": "2026-09-14T12:00:00+09:00",
+   "is_public": false,
+   "is_single_artist": true,
+   "artist_name": "원슈타인",
+   "ranking": [
+    {
+     "id": "deezer:1064872671:0",
+     "title": "4real",
+     "artistName": "원슈타인",
+     "albumImage": "https://api.deezer.com/album/1064872671/image?size=big"
+    },
+    {
+     "id": "deezer:1041808512:0",
+     "title": "Difference",
+     "artistName": "원슈타인",
+     "albumImage": "https://api.deezer.com/album/1041808512/image?size=big"
+    },
+    {
+     "id": "deezer:975234851:0",
+     "title": "echo",
+     "artistName": "원슈타인",
+     "albumImage": "https://api.deezer.com/album/975234851/image?size=big"
+    },
+    {
+     "id": "deezer:975234851:1",
+     "title": "dark k-pop",
+     "artistName": "원슈타인",
+     "albumImage": "https://api.deezer.com/album/975234851/image?size=big"
+    },
+    {
+     "id": "deezer:943125741:0",
+     "title": "everybody dies",
+     "artistName": "원슈타인",
+     "albumImage": "https://api.deezer.com/album/943125741/image?size=big"
+    },
+    {
+     "id": "d6b2259a-9d4b-44ee-ba93-bf5f3581c73e",
+     "title": "사르르 스르르",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/255f442c-f41b-490a-b0a1-32c758bd677d/front-500"
+    },
+    {
+     "id": "9fc8c499-dcef-46ff-aab3-0e432d3b8706",
+     "title": "I Don’t Speak English",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "2bd0b1f8-1d82-40b9-af3c-55269e0223cb",
+     "title": "Fiancé",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "11e4d5e9-3164-4d76-bacd-4dad0cb7dbdc",
+     "title": "You Look So Good",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "c5578359-5dc7-43a9-9701-48feb44c1215",
+     "title": "Used",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "103673ba-7b49-4a45-a190-829f23ae56c6",
+     "title": "Ms. Ha Hee‐ra & Mr. Choi Su‐jong",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "0bb6f0dc-ab34-4f67-ba33-9061cae3b41b",
+     "title": "Vision",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "26e34d1c-baab-41f2-9fdd-5745f92570fe",
+     "title": "FLEX",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "afbbd947-2ed0-4d16-b652-9a7eef9ada22",
+     "title": "Sandwiches",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "f5e47fa7-99ba-4349-b8ba-bf4031a2ddd8",
+     "title": "A Little Snail 2",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    },
+    {
+     "id": "c8a808c5-1963-4aad-9311-1646079e2f43",
+     "title": "Memo..! - Original Pitch",
+     "artistName": "원슈타인",
+     "albumImage": "https://coverartarchive.org/release-group/07318de7-d310-4fad-ad97-650ec1fa21cd/front-500"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000103",
+   "user_id": "3ae056af-019c-4790-855b-f6b10418f4c3",
+   "title": "글렌체크 sort_260909",
+   "winner_track_id": "02015911-880d-428b-8112-fa9137aca3ec",
+   "winner_track_title": "Good Times",
+   "winner_track_artist": "글렌체크",
+   "winner_track_image": "https://coverartarchive.org/release-group/35009050-c5d2-4a19-8871-a103349ff943/front-500",
+   "user_nickname": "은은한레코드664",
+   "user_profile_image": null,
+   "created_at": "2026-09-09T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "글렌체크",
+   "ranking": [
+    {
+     "id": "02015911-880d-428b-8112-fa9137aca3ec",
+     "title": "Good Times",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/35009050-c5d2-4a19-8871-a103349ff943/front-500"
+    },
+    {
+     "id": "a1873c57-ce42-45d3-bcef-c0699a9cec83",
+     "title": "Head in the Sun",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/35009050-c5d2-4a19-8871-a103349ff943/front-500"
+    },
+    {
+     "id": "fe78c5ec-3775-4ee9-91ac-e7bd983ef714",
+     "title": "In the Air",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/35009050-c5d2-4a19-8871-a103349ff943/front-500"
+    },
+    {
+     "id": "82d9325d-315e-45e7-9739-40393c59dae3",
+     "title": "Sunkissed",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/35009050-c5d2-4a19-8871-a103349ff943/front-500"
+    },
+    {
+     "id": "5f6f88c2-e876-46b4-b165-76cd7cdcb7bc",
+     "title": "Odd Girl",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/35009050-c5d2-4a19-8871-a103349ff943/front-500"
+    },
+    {
+     "id": "72d28cc8-12f2-4aab-9797-1e1fee37eba2",
+     "title": "All I ever wanted",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/b047fa52-a41d-4b16-a04c-11968b30fa1f/front-500"
+    },
+    {
+     "id": "09181aaa-2405-405f-9cdc-3bd396f84e53",
+     "title": "Retrospecto",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/b047fa52-a41d-4b16-a04c-11968b30fa1f/front-500"
+    },
+    {
+     "id": "f45bce5f-54a8-4153-af92-4554a761ff01",
+     "title": "Nevada",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/85810d88-fc06-46c4-950a-1cc57d8be07a/front-500"
+    },
+    {
+     "id": "43b34f00-3376-42f5-9874-f7dd8f6b7a17",
+     "title": "Sunbathe",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/f2ba311d-ecea-452b-8e1d-0cd8f2dbed28/front-500"
+    },
+    {
+     "id": "9b822399-27c3-47f1-9409-7c76c4916807",
+     "title": "Psychoboy Jack (Original Mix)",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/466e9152-50f8-40e6-9d1b-897101a9f93e/front-500"
+    },
+    {
+     "id": "e9ca07ae-61c9-4d8e-a871-ce38ee011c89",
+     "title": "Bloodbath Club Scene (Original Mix)",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/466e9152-50f8-40e6-9d1b-897101a9f93e/front-500"
+    },
+    {
+     "id": "8d23fe3b-d005-494e-b6c6-5e1c19351bd2",
+     "title": "Pretty Psycho",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/8f389b20-ea74-46bf-a56b-50c2913c2b56/front-500"
+    },
+    {
+     "id": "56eab5a7-6508-44f3-a2d5-a23d5aec233f",
+     "title": "Teen Dream",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/8f389b20-ea74-46bf-a56b-50c2913c2b56/front-500"
+    },
+    {
+     "id": "9fe3b6e5-e9ce-43f7-8bd8-df55e2a2a902",
+     "title": "Cactus, Cactus",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/8f389b20-ea74-46bf-a56b-50c2913c2b56/front-500"
+    },
+    {
+     "id": "deezer:884847812:0",
+     "title": "Bloom (from the Netflix Series \"The Boyfriend 2\")",
+     "artistName": "글렌체크",
+     "albumImage": "https://api.deezer.com/album/884847812/image?size=big"
+    },
+    {
+     "id": "a7eb2d33-1cf7-4d54-96d2-d6e9b54f3067",
+     "title": "After Hours",
+     "artistName": "글렌체크",
+     "albumImage": "https://coverartarchive.org/release-group/07f88f89-0bae-4259-9f53-1bdd0edd2f29/front-500"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000104",
+   "user_id": "3ae056af-019c-4790-855b-f6b10418f4c3",
+   "title": "유라 sort_260903",
+   "winner_track_id": "cee3c262-5e64-4208-a9db-a2e645bcbbe6",
+   "winner_track_title": "HELP",
+   "winner_track_artist": "유라",
+   "winner_track_image": "https://coverartarchive.org/release-group/8142dce3-0876-4c64-a68a-eb448b289068/front-500",
+   "user_nickname": "은은한레코드664",
+   "user_profile_image": null,
+   "created_at": "2026-09-03T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "유라",
+   "ranking": [
+    {
+     "id": "cee3c262-5e64-4208-a9db-a2e645bcbbe6",
+     "title": "HELP",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8142dce3-0876-4c64-a68a-eb448b289068/front-500"
+    },
+    {
+     "id": "e6f1471e-ae9b-4301-82fb-490b4bf524b1",
+     "title": "EMPTY SEAT",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8142dce3-0876-4c64-a68a-eb448b289068/front-500"
+    },
+    {
+     "id": "595fd3d4-5984-434d-8297-23bbbd3dfcbc",
+     "title": "BATHTUB",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8142dce3-0876-4c64-a68a-eb448b289068/front-500"
+    },
+    {
+     "id": "730d96e9-48a5-48e5-bc18-1c9e02ea884d",
+     "title": "MELASMA",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8142dce3-0876-4c64-a68a-eb448b289068/front-500"
+    },
+    {
+     "id": "900ff9d9-8964-41a8-ad5c-927fba316f77",
+     "title": "A GOOD NIGHT’S SLEEP FOR CATS: NOCTURNE, OP. 1 NO. 1",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8142dce3-0876-4c64-a68a-eb448b289068/front-500"
+    },
+    {
+     "id": "deezer:947035301:0",
+     "title": "Tak Kembali",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/947035301/image?size=big"
+    },
+    {
+     "id": "deezer:914514551:0",
+     "title": "Kesadaran Kebangkitan",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/914514551/image?size=big"
+    },
+    {
+     "id": "deezer:892392452:0",
+     "title": "If I Heard It Again",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/892392452/image?size=big"
+    },
+    {
+     "id": "deezer:883256142:0",
+     "title": "1993",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/883256142/image?size=big"
+    },
+    {
+     "id": "deezer:882892192:0",
+     "title": "Lost of Love",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/882892192/image?size=big"
+    },
+    {
+     "id": "deezer:853116162:0",
+     "title": "Song of Love",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/853116162/image?size=big"
+    },
+    {
+     "id": "deezer:796429791:0",
+     "title": "I want to know",
+     "artistName": "유라",
+     "albumImage": "https://api.deezer.com/album/796429791/image?size=big"
+    },
+    {
+     "id": "6a7ac767-4af9-4b45-92aa-eb0248875eb9",
+     "title": "15 Years Old",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8007c823-10e2-429e-9c7b-3c6a4331180d/front-500"
+    },
+    {
+     "id": "b03424d4-5d77-490e-8aaf-f252cf45f508",
+     "title": "Poetry Book",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8007c823-10e2-429e-9c7b-3c6a4331180d/front-500"
+    },
+    {
+     "id": "01a1c191-47e2-43c2-a23f-918369b33ea4",
+     "title": "Schröding‐ding Cat",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8007c823-10e2-429e-9c7b-3c6a4331180d/front-500"
+    },
+    {
+     "id": "e2ac4ab8-d7e7-44ad-9f00-1e398d9574ff",
+     "title": "That Love Ballad",
+     "artistName": "유라",
+     "albumImage": "https://coverartarchive.org/release-group/8007c823-10e2-429e-9c7b-3c6a4331180d/front-500"
+    }
+   ]
+  }
+ ],
+ "others": [
+  {
+   "id": "00000000-0000-4000-8000-000000000200",
+   "user_id": "00000000-0000-4000-8000-000000000900",
+   "title": "멜로망스 sort_260922",
+   "winner_track_id": "d65001ee-ec1f-4257-a203-2a3aad55d5d3",
+   "winner_track_title": "아무 날의 서프라이즈",
+   "winner_track_artist": "멜로망스",
+   "winner_track_image": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500",
+   "user_nickname": "새벽라디오",
+   "user_profile_image": null,
+   "created_at": "2026-09-22T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "멜로망스",
+   "ranking": [
+    {
+     "id": "d65001ee-ec1f-4257-a203-2a3aad55d5d3",
+     "title": "아무 날의 서프라이즈",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "af794f3d-674c-4bf1-bc92-ebdac9279312",
+     "title": "괜찮아 사랑해",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "75f6cc1a-adb8-4a9f-b7d8-aa33e5386c0c",
+     "title": "Blooming",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "17c9fd04-c3a0-4488-844e-839dde2dd64a",
+     "title": "꽃잎",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "15daa7d8-7c82-4c51-97d8-ade56cda0ba0",
+     "title": "우리의 축배",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "93ca067e-48ab-4bde-a732-6ff298e75450",
+     "title": "Your Way",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "7073b359-2fde-4bcd-a60e-ecdf97124f67",
+     "title": "Tomorrow",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/78128e09-a4c8-49ac-b8cc-84fb0ccc51b9/front-500"
+    },
+    {
+     "id": "19625c8c-35c3-40f1-a9d8-8932834f41aa",
+     "title": "둘만의 비밀로",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/9419e770-f41b-427d-b773-7ba5cc8962a5/front-500"
+    },
+    {
+     "id": "ef362882-4591-472f-acf8-d2beb2ec661b",
+     "title": "A Shining Day",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/90655580-5c88-4cc1-8ac9-cfe657dd8362/front-500"
+    },
+    {
+     "id": "9f5ee51c-de3f-45f8-a581-c36bbb8337dd",
+     "title": "Love you again",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/e8514adc-1e24-4e3f-b314-ccf6512fbeea/front-500"
+    },
+    {
+     "id": "ae190eae-04fa-418b-a44a-d6419c39e1ac",
+     "title": "새들처럼",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/b2f1873d-466b-456a-ac2b-f289bb4c23bf/front-500"
+    },
+    {
+     "id": "deezer:334042397:0",
+     "title": "Link",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/334042397/image?size=big"
+    },
+    {
+     "id": "deezer:318350897:0",
+     "title": "Happy Song",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "deezer:318350897:1",
+     "title": "Happy Song (lnst.)",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "c750bbbd-2fb1-4c83-964b-42dd5d124594",
+     "title": "Invitation",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    },
+    {
+     "id": "6c4a728f-2d4a-4b9d-a677-51ffead5dc6e",
+     "title": "What about you?",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000201",
+   "user_id": "00000000-0000-4000-8000-000000000901",
+   "title": "멜로망스 sort_260920",
+   "winner_track_id": "d65001ee-ec1f-4257-a203-2a3aad55d5d3",
+   "winner_track_title": "아무 날의 서프라이즈",
+   "winner_track_artist": "멜로망스",
+   "winner_track_image": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500",
+   "user_nickname": "리스너_하루",
+   "user_profile_image": null,
+   "created_at": "2026-09-20T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "멜로망스",
+   "ranking": [
+    {
+     "id": "d65001ee-ec1f-4257-a203-2a3aad55d5d3",
+     "title": "아무 날의 서프라이즈",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "17c9fd04-c3a0-4488-844e-839dde2dd64a",
+     "title": "꽃잎",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "7073b359-2fde-4bcd-a60e-ecdf97124f67",
+     "title": "Tomorrow",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/78128e09-a4c8-49ac-b8cc-84fb0ccc51b9/front-500"
+    },
+    {
+     "id": "9f5ee51c-de3f-45f8-a581-c36bbb8337dd",
+     "title": "Love you again",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/e8514adc-1e24-4e3f-b314-ccf6512fbeea/front-500"
+    },
+    {
+     "id": "deezer:318350897:0",
+     "title": "Happy Song",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "6c4a728f-2d4a-4b9d-a677-51ffead5dc6e",
+     "title": "What about you?",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    },
+    {
+     "id": "75f6cc1a-adb8-4a9f-b7d8-aa33e5386c0c",
+     "title": "Blooming",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "93ca067e-48ab-4bde-a732-6ff298e75450",
+     "title": "Your Way",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "ef362882-4591-472f-acf8-d2beb2ec661b",
+     "title": "A Shining Day",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/90655580-5c88-4cc1-8ac9-cfe657dd8362/front-500"
+    },
+    {
+     "id": "deezer:334042397:0",
+     "title": "Link",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/334042397/image?size=big"
+    },
+    {
+     "id": "c750bbbd-2fb1-4c83-964b-42dd5d124594",
+     "title": "Invitation",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    },
+    {
+     "id": "af794f3d-674c-4bf1-bc92-ebdac9279312",
+     "title": "괜찮아 사랑해",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "15daa7d8-7c82-4c51-97d8-ade56cda0ba0",
+     "title": "우리의 축배",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "19625c8c-35c3-40f1-a9d8-8932834f41aa",
+     "title": "둘만의 비밀로",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/9419e770-f41b-427d-b773-7ba5cc8962a5/front-500"
+    },
+    {
+     "id": "ae190eae-04fa-418b-a44a-d6419c39e1ac",
+     "title": "새들처럼",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/b2f1873d-466b-456a-ac2b-f289bb4c23bf/front-500"
+    },
+    {
+     "id": "deezer:318350897:1",
+     "title": "Happy Song (lnst.)",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000202",
+   "user_id": "00000000-0000-4000-8000-000000000902",
+   "title": "멜로망스 sort_260919",
+   "winner_track_id": "17c9fd04-c3a0-4488-844e-839dde2dd64a",
+   "winner_track_title": "꽃잎",
+   "winner_track_artist": "멜로망스",
+   "winner_track_image": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500",
+   "user_nickname": "무드등",
+   "user_profile_image": null,
+   "created_at": "2026-09-19T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "멜로망스",
+   "ranking": [
+    {
+     "id": "17c9fd04-c3a0-4488-844e-839dde2dd64a",
+     "title": "꽃잎",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "93ca067e-48ab-4bde-a732-6ff298e75450",
+     "title": "Your Way",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "19625c8c-35c3-40f1-a9d8-8932834f41aa",
+     "title": "둘만의 비밀로",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/9419e770-f41b-427d-b773-7ba5cc8962a5/front-500"
+    },
+    {
+     "id": "9f5ee51c-de3f-45f8-a581-c36bbb8337dd",
+     "title": "Love you again",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/e8514adc-1e24-4e3f-b314-ccf6512fbeea/front-500"
+    },
+    {
+     "id": "deezer:334042397:0",
+     "title": "Link",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/334042397/image?size=big"
+    },
+    {
+     "id": "deezer:318350897:1",
+     "title": "Happy Song (lnst.)",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "6c4a728f-2d4a-4b9d-a677-51ffead5dc6e",
+     "title": "What about you?",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    },
+    {
+     "id": "af794f3d-674c-4bf1-bc92-ebdac9279312",
+     "title": "괜찮아 사랑해",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "17c9fd04-c3a0-4488-844e-839dde2dd64a",
+     "title": "꽃잎",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "93ca067e-48ab-4bde-a732-6ff298e75450",
+     "title": "Your Way",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    },
+    {
+     "id": "19625c8c-35c3-40f1-a9d8-8932834f41aa",
+     "title": "둘만의 비밀로",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/9419e770-f41b-427d-b773-7ba5cc8962a5/front-500"
+    },
+    {
+     "id": "9f5ee51c-de3f-45f8-a581-c36bbb8337dd",
+     "title": "Love you again",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/e8514adc-1e24-4e3f-b314-ccf6512fbeea/front-500"
+    },
+    {
+     "id": "deezer:334042397:0",
+     "title": "Link",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/334042397/image?size=big"
+    },
+    {
+     "id": "deezer:318350897:1",
+     "title": "Happy Song (lnst.)",
+     "artistName": "멜로망스",
+     "albumImage": "https://api.deezer.com/album/318350897/image?size=big"
+    },
+    {
+     "id": "6c4a728f-2d4a-4b9d-a677-51ffead5dc6e",
+     "title": "What about you?",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/bfa1e773-9322-467e-80af-69ee50b06d2d/front-500"
+    },
+    {
+     "id": "af794f3d-674c-4bf1-bc92-ebdac9279312",
+     "title": "괜찮아 사랑해",
+     "artistName": "멜로망스",
+     "albumImage": "https://coverartarchive.org/release-group/86bc4db2-b85c-4816-a978-859cccb7ffdb/front-500"
+    }
+   ]
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000203",
+   "user_id": "00000000-0000-4000-8000-000000000903",
+   "title": "김상우 sort_260917",
+   "winner_track_id": "b2e74f9c-4755-4d67-919b-a6ac6b51967a",
+   "winner_track_title": "앵콜요청금지",
+   "winner_track_artist": "김상우",
+   "winner_track_image": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500",
+   "user_nickname": "창가자리",
+   "user_profile_image": null,
+   "created_at": "2026-09-17T12:00:00+09:00",
+   "is_public": true,
+   "is_single_artist": true,
+   "artist_name": "김상우",
+   "ranking": [
+    {
+     "id": "b2e74f9c-4755-4d67-919b-a6ac6b51967a",
+     "title": "앵콜요청금지",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "09de4a98-4f4e-4309-82e7-00febe661e59",
+     "title": "스물다섯, 스물하나",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "8a6af90c-0d89-4dc7-9412-2e677876cf41",
+     "title": "Smile Boy",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "7e666d39-0b78-4511-91d3-37d0e9ce8f7a",
+     "title": "왜 그래",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "83039bc2-7965-4ab4-8508-abb2c97979d0",
+     "title": "한 사람을 위한 마음",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "123044d0-06a5-42e8-ab8e-05499e8ce4d4",
+     "title": "바람의 노래",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8c5cc4cb-bde6-49c5-a345-7c885fda0cba/front-500"
+    },
+    {
+     "id": "222ceeb3-0b20-4464-b5ad-61f743d1368c",
+     "title": "The Moments",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/90064000-30ed-4385-9638-c52680c314f9/front-500"
+    },
+    {
+     "id": "f0496e79-777e-4867-b87e-95211cc878f2",
+     "title": "No Words Can Say",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/e64fba99-cd3d-4024-aac6-aef54f771d2b/front-500"
+    },
+    {
+     "id": "d3cb3d5e-e683-4b50-9d57-1d75157f84af",
+     "title": "있는 모습 그대로",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/a060e277-61e7-4c0e-9008-b391fb58d24f/front-500"
+    },
+    {
+     "id": "1d010dc9-7e7d-497f-b420-ca024f267f05",
+     "title": "If You Ask Me What Love Is",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/2850e0b4-4907-4d67-8985-251316bc920e/front-500"
+    },
+    {
+     "id": "d10cf9f4-311e-4297-9a31-3ba33494c666",
+     "title": "도망가자 (Run With Me)",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8dc88b56-d3c7-41dd-ab21-26ca5154258d/front-500"
+    },
+    {
+     "id": "5475e170-0a25-49a4-a4c8-ac7e454f7110",
+     "title": "봄이 와도",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/295a64d2-d58b-4b50-84a9-7a5719fc4fc7/front-500"
+    },
+    {
+     "id": "edc869df-34aa-4e5f-86f2-e056573c6159",
+     "title": "그대라는 꽃잎",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/8361dda7-80c4-4920-8900-76d30fc100d6/front-500"
+    },
+    {
+     "id": "007ecc3c-b6da-4de4-9cdb-333b25b7d436",
+     "title": "미련하다",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/ec3ca3c9-256b-4e3c-95c6-6235821ffa15/front-500"
+    },
+    {
+     "id": "a8db6fb7-d88a-49e7-baf9-d902cb360da1",
+     "title": "Whenever, Wherever",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/41cc7ee3-e592-40f9-a414-ca699b1d7b23/front-500"
+    },
+    {
+     "id": "518e568e-70a1-4e59-b506-66beb1b6769b",
+     "title": "Sparkle",
+     "artistName": "김상우",
+     "albumImage": "https://coverartarchive.org/release-group/2e206be1-9a6b-4385-997f-3fc0e435ad11/front-500"
+    }
+   ]
+  }
+ ],
+ "entries": [
+  {
+   "id": "00000000-0000-4000-8000-000000000300",
+   "challenge_id": null,
+   "participant_key": "00000000-0000-4000-8000-000000000950",
+   "nickname": "다다다",
+   "ranking": [],
+   "skipped_count": 0,
+   "created_at": "2026-09-20T10:00:00+09:00"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000301",
+   "challenge_id": null,
+   "participant_key": "00000000-0000-4000-8000-000000000951",
+   "nickname": "새벽라디오",
+   "ranking": [],
+   "skipped_count": 0,
+   "created_at": "2026-09-21T10:00:00+09:00"
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000302",
+   "challenge_id": null,
+   "participant_key": "00000000-0000-4000-8000-000000000952",
+   "nickname": "무드등",
+   "ranking": [],
+   "skipped_count": 0,
+   "created_at": "2026-09-22T10:00:00+09:00"
+  }
+ ]
+}
