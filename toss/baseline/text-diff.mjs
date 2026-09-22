@@ -5,6 +5,7 @@
  * 사용: MSYS_NO_PATHCONV=1 node toss/baseline/text-diff.mjs /
  */
 import { chromium } from 'playwright';
+import { nextBase, vite } from './base.mjs';
 
 const ROUTE = process.argv[2] ?? '/';
 
@@ -41,9 +42,9 @@ const ctx = await browser.newContext({
 });
 
 try {
-  const a = await read(`http://localhost:3000${ROUTE}`);
+  const a = await read(`${nextBase()}${ROUTE}`);
   // Vite dev 는 SPA 폴백이 있어 같은 경로를 그대로 쓸 수 있다.
-  const b = await read(`http://localhost:5173${ROUTE}`);
+  const b = await read(`${vite()}${ROUTE}`);
 
   const setB = new Set(b.nodes.map((s) => s.split('\t')[1]));
   const setA = new Set(a.nodes.map((s) => s.split('\t')[1]));

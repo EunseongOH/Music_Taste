@@ -15,13 +15,15 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { announce, nextBase, vite } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 
 const TOSS = process.env.TARGET === 'toss';
 // BASE 로 포트를 바꿀 수 있다 — 다른 작업이 기본 포트를 쓰고 있을 때.
-const BASE = process.env.BASE ?? (TOSS ? 'http://localhost:5173' : 'http://localhost:3000');
+const BASE = TOSS ? vite() : nextBase();
+announce(['기준 서버:', BASE]);
 
 /**
  * 웹에서 보여야 할 공유 수단.

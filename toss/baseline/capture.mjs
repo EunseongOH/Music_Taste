@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { announce, nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -33,8 +34,8 @@ const arg = (name, dflt) => {
  * 쓰고 있으면 엉뚱한 화면을 기준선으로 삼게 된다(실제로 세 세션이 여기 걸렸다).
  * 다른 검사들과 같은 NEXT_BASE 를 읽고, 무엇을 보고 있는지 첫 줄에 찍는다.
  */
-const BASE = arg('--base', process.env.NEXT_BASE ?? 'http://localhost:3000');
-console.log(`기준 서버: ${BASE}`);
+const BASE = nextBase();
+announce(['기준 서버:', BASE]);
 const OUT = join(HERE, arg('--out', 'refs'));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
 

@@ -17,10 +17,12 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { announce, nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RANKING = JSON.parse(readFileSync(join(HERE, 'fixture.json'), 'utf8'));
-const WEB = process.env.NEXT_BASE ?? 'http://localhost:3000';
+const WEB = nextBase();
+announce(['기준 서버:', WEB]);
 /*
  * 앨범·곡까지 DB 에 담긴 아티스트를 쓴다(together_artist_catalog 기준 전곡 확보).
  * 개발·검사는 캐시 전용 모드라 Spotify 를 부르지 않으므로, 캐시에 없는 아티스트를

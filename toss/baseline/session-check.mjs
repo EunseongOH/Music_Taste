@@ -15,6 +15,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
+import { nextBase } from './base.mjs';
 
 const env = readFileSync('.env.local', 'utf8');
 const envGet = (k) => (env.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1]?.trim();
@@ -22,7 +23,7 @@ const envGet = (k) => (env.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1]?.trim
 const URL = envGet('NEXT_PUBLIC_SUPABASE_URL');
 const ANON = envGet('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 const SERVICE = envGet('SUPABASE_SERVICE_ROLE_KEY');
-const API = 'http://localhost:3000/api/toss/session';
+const API = `${nextBase()}/api/toss/session`;
 
 // 테스트용 익명키. 사람 것과 겹치지 않도록 접두사를 붙인다.
 const KEY_A = 'sessioncheck-AAAA-1111-2222-3333';

@@ -13,12 +13,13 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { nextBase } from './base.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROFILE = join(HERE, '.profile');
 const BASE = process.argv.includes('--base')
   ? process.argv[process.argv.indexOf('--base') + 1]
-  : 'http://localhost:3000';
+  : nextBase();
 
 const TIMEOUT_MS = 15 * 60 * 1000;
 
