@@ -119,10 +119,15 @@ async function main() {
     save: async (a: any) => {
       const exp = new Date();
       exp.setDate(exp.getDate() + TTL_DAYS);
-      // genres 는 건드리지 않는다 — 우리가 고른 16종 라벨이 들어 있다
+      // genres 는 건드리지 않는다 — 우리가 고른 16종 라벨이 들어 있다.
+      // cached_at 은 반드시 같이 쓴다. 기본값 now() 는 INSERT 때만 먹어서, 갱신만 하면
+      // "마지막으로 받아 온 시각"이 첫 수집 때에 멈춰 있다. 2026-09-22 실행에서 실제로
+      // expires_at 은 +90일로 갱신됐는데 cached_at 은 하루 전 그대로였다 — 그 값으로
+      // "작업이 돌았나"를 확인하면 성공을 실패로 읽는다.
       const { error: e2 } = await sb.from("spotify_cache_artists").upsert({
         id: a.id, locale: "ko", name: a.name, images: a.images ?? [],
-        popularity: a.popularity ?? 0, expires_at: exp.toISOString(),
+        popularity: a.popularity ?? 0,
+        cached_at: new Date().toISOString(), expires_at: exp.toISOString(),
       }, { onConflict: "id,locale" });
       if (e2) throw new Error(e2.message);
     },
