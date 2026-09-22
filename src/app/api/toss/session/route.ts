@@ -123,7 +123,9 @@ export async function POST(request: NextRequest) {
       );
       if (mode !== 'log') {
         const status = verified.reason === 'invalid_key' ? 403 : 503;
-        return NextResponse.json({ error: verified.reason }, { status, headers });
+        // detail 은 토스 검증 API 의 오류 이름·이유(errorCode 4010 '인증 정보를 찾을 수 없어요' 등)다.
+        // 식별키·인증서 값은 들어 있지 않다. 실기기에서 원인을 가르려고 함께 내보낸다 (2026-09-22).
+        return NextResponse.json({ error: verified.reason, detail: verified.detail ?? null }, { status, headers });
       }
     }
   }
