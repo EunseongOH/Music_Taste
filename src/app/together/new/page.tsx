@@ -7,6 +7,7 @@ import { SafeImage } from "@/components/SafeImage";
 import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
 import FeedbackModal from "@/components/FeedbackModal";
+import LoadingScreen from "@/components/LoadingScreen";
 import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
@@ -485,6 +486,15 @@ export default function TogetherNewPage() {
     );
   }
 
+  /*
+   * 곡을 모으는 동안은 화면을 넘긴다 — 전곡 모드와 같은 화면이다.
+   * 버튼 글자만 바꾸면 눌렀는데 아무 일도 안 일어난 것처럼 보이고, 그 사이에
+   * 다른 아티스트를 또 누를 수도 있다.
+   */
+  if (artistBusy && pendingArtist) {
+    return <LoadingScreen artist={pendingArtist.name} />;
+  }
+
   return (
     <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
       <BackButton
@@ -628,7 +638,7 @@ export default function TogetherNewPage() {
               disabled={artistBusy}
               className={`${primaryButton} w-full`}
             >
-              {artistBusy ? "곡을 불러오는 중" : `${pendingArtist.name} 곡 고르기`}
+              {`${pendingArtist.name} 곡 고르기`}
             </button>
           </div>
         </div>
