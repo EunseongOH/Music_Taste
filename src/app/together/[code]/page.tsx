@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
@@ -16,7 +16,7 @@ import {
 import { personName } from "@/utils/togetherName";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
-import { ConfirmSheet, Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { ConfirmSheet, Cover, RankList, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import { SafeImage } from "@/components/SafeImage";
 import * as platform from "@/utils/platform";
@@ -47,12 +47,10 @@ export default function TogetherInvitePage() {
   const [askName, setAskName] = useState(false);
   /** 이미 소트한 사람이 [다시 소트하기] 를 눌렀을 때의 확인창 */
   const [askResort, setAskResort] = useState(false);
-  /*
-   * 이 화면을 보고 있는 동안 새로 끝낸 사람. "방금"이라고 말해도 되는 건 이때뿐이다.
-   * 시계로 재지 않는다 — 며칠 전 기록을 두고 방금이라고 하면 새로 들어온 줄 안다.
-   */
-  const [justFinished, setJustFinished] = useState<string | null>(null);
-  const lastSeen = useRef<string | null>(null);
+  /** 소트 대상 곡 목록을 다 펼쳤는가. 처음에는 3곡만 보여 준다. */
+  const [showAllTracks, setShowAllTracks] = useState(false);
+  /** 내 순위를 다 펼쳤는가. */
+  const [showAllMine, setShowAllMine] = useState(false);
   /** 불러온 취향표를 원래 소트한 날("6월 3일"). 그 취향표를 지웠으면 null. */
   const [importedOn, setImportedOn] = useState<string | null>(null);
 
@@ -73,15 +71,9 @@ export default function TogetherInvitePage() {
       const first = await fetchEntries(found.id);
       if (!alive) return;
       setEntries(first);
-      // 들어올 때 이미 있던 사람은 "방금"이 아니다.
-      lastSeen.current = first[first.length - 1]?.id ?? null;
       timer = setInterval(async () => {
         const list = await fetchEntries(found.id);
-        if (!alive) return;
-        setEntries(list);
-        const newest = list[list.length - 1]?.id ?? null;
-        if (newest && newest !== lastSeen.current) setJustFinished(newest);
-        lastSeen.current = newest;
+        if (alive) setEntries(list);
       }, 8000);
     })();
     return () => {
@@ -184,15 +176,14 @@ export default function TogetherInvitePage() {
    * 둘 다 없으면 배경 없이 간다 — 무관한 사진을 끌어오지 않는다.
    */
   /*
-   * 가장 최근에 끝낸 **남**. fetchEntries 는 오래된 순이라 뒤에서부터 찾는다.
+   * 내가 이 방에서 매긴 순위. 곡 id 배열이라 이 방의 곡 목록에서 찾아 온다.
    *
-   * 내가 끝낸 것은 여기서 말하지 않는다 — 방금 내가 한 일을 알려 줄 이유가 없다.
-   * 이 줄이 있는 이유는 링크를 보내 놓고 기다리는 사람에게 **누가 들어왔는지**
-   * 알려 주는 것이다. 내가 마지막에 다시 소트했다고 해서 먼저 들어온 사람의
-   * 소식이 사라져서도 안 되니, 내 것만 건너뛰고 그 앞을 본다.
+   * 이걸 보여 주는 이유는 하나다 — **다시 소트할지 정하려면 지금 순위를 봐야 한다.**
+   * 불러온 순위든 직접 한 순위든 마찬가지라 둘을 가르지 않는다.
    */
-  const latest = [...entries].reverse().find((e) => e.participant_key !== myKey) ?? null;
-  const justNow = !!latest && justFinished === latest.id;
+  const myRanked = mine
+    ? mine.ranking.map((id) => challenge.tracks.find((t) => t.id === id)).filter((t) => !!t)
+    : [];
 
   const hero = challenge.artist_image || challenge.tracks[0]?.albumImage || "";
   const artist = challenge.artist_name;
@@ -254,14 +245,6 @@ export default function TogetherInvitePage() {
 
       <div className="mt-6 flex flex-col gap-2">
         {/*
-          * 방장에게는 숫자보다 "누가 방금 끝냈는지" 가 먼저다 — 링크를 보내 놓고
-          * 기다리는 사람이 보고 싶은 것은 그것이다. 이름표 줄이 아래에 이미 있지만
-          * 여럿이 되면 누가 새로 들어왔는지 한눈에 안 보인다.
-          *
-          * "방금" 은 실제로 방금일 때만 쓴다. 며칠 전 기록을 두고 방금이라고 하면
-          * 새로 들어온 줄 알고 다시 들여다보게 된다.
-          */}
-        {/*
           * 불러온 순위는 "끝냈어요" 가 아니다. 방장이 방금 소트를 한 적이 없는데
           * 끝냈다고 하면 누가 들어온 줄 알고 결과를 열어 보게 된다.
           *
@@ -275,11 +258,7 @@ export default function TogetherInvitePage() {
             {importedOn ? `${importedOn}에 ` : "이전에 "}했던 소트 내역을 불러왔어요
           </p>
         )}
-        {iAmCreator && latest && (
-          <p className="type-body-strong text-navy break-keep">
-            {personName(latest.nickname)}님이 {justNow ? "방금 " : ""}소트를 끝냈어요
-          </p>
-        )}
+        {/* 누가 끝냈는지는 아래 이름표가 이미 말한다. 사람 수만 세어 준다. */}
         <p className="type-caption text-navy/70">
           {iAmCreator && entries.length === 0
             ? "아직 아무도 소트하지 않았어요. 링크를 보내 보세요."
@@ -299,13 +278,33 @@ export default function TogetherInvitePage() {
         </button>
       </div>
 
+      {/*
+        내 순위를 곡 목록보다 먼저 둔다. 이 화면에서 정할 일은 "다시 소트할까"이고,
+        그걸 정하려면 지금 순위를 봐야 한다. 곡 목록은 그다음이다.
+      */}
+      {myRanked.length > 0 && (
+        <>
+          <SectionTitle title="내가 매긴 순위" count={myRanked.length} className="mt-8 mb-1" />
+          <RankList tracks={showAllMine ? myRanked : myRanked.slice(0, 3)} />
+          {myRanked.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setShowAllMine((v) => !v)}
+              className="mt-2 type-caption text-point-ink font-semibold cursor-pointer"
+            >
+              {showAllMine ? "접기" : `전체 ${myRanked.length}곡 보기`}
+            </button>
+          )}
+        </>
+      )}
+
       <SectionTitle
         title={artist ? `소트 대상 ${artist} 곡` : "소트 대상 곡"}
         count={challenge.tracks.length}
         className="mt-8 mb-1"
       />
       <ul className="flex flex-col divide-y divide-navy/10">
-        {challenge.tracks.map((track) => (
+        {(showAllTracks ? challenge.tracks : challenge.tracks.slice(0, 3)).map((track) => (
           <li key={track.id} className="flex items-center gap-3 py-2.5">
             <Cover src={track.albumImage} alt={track.title} size={40} />
             <span className="flex-1 min-w-0">
@@ -315,6 +314,15 @@ export default function TogetherInvitePage() {
           </li>
         ))}
       </ul>
+      {challenge.tracks.length > 3 && (
+        <button
+          type="button"
+          onClick={() => setShowAllTracks((v) => !v)}
+          className="mt-2 type-caption text-point-ink font-semibold cursor-pointer"
+        >
+          {showAllTracks ? "접기" : `전체 ${challenge.tracks.length}곡 보기`}
+        </button>
+      )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">

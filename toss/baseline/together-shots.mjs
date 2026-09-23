@@ -144,8 +144,9 @@ async function expectText(page, wanted, label) {
     rows: [me({ imported: true }), other(1, '지민'), other(2, '서연')],
     host: true,
   });
-  await expectText(page, '서연님이 소트를 끝냈어요', '남이 끝낸 소식');
-  await expectText(page, '나', '내 이름표는 "나"');
+  await expectText(page, '지금까지 3명이 소트했어요', '사람 수만 센다');
+  await expectText(page, '내가 매긴 순위', '내 순위를 이 화면에서 바로 본다');
+  await expectText(page, '전체 12곡 보기', '곡 목록은 3곡 + 더보기');
   await shoot(page, '3-방장-친구가끝냄', true);
   await ctx.close();
 }
