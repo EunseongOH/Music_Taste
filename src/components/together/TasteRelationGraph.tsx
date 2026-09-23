@@ -237,13 +237,10 @@ export default function TasteRelationGraph({
           >
             {/* 내 자리에는 닉네임 대신 "나". 자기 이름을 3인칭으로 읽으면 남처럼 보인다. */}
             <span className="truncate max-w-full">{me ? "나" : NAME(person)}</span>
-            {/* 둘째 줄은 일치율. 내 자리에는 없지만 높이는 그대로 둔다 — 없애면 내 노드만
-                납작해져서 관계도의 원이 어긋난다. */}
-            {me ? (
-              <span aria-hidden className="text-[10px] font-normal opacity-0">
-                나
-              </span>
-            ) : (
+            {/* 둘째 줄은 일치율. 내 자리에는 없다 — 나와 나의 일치율은 말이 안 된다.
+                높이는 min-h-[44px] 가 잡아 주므로 빈 줄을 끼워 넣지 않는다. 끼우면
+                "나" 만 위로 밀려 한 칸 높이 뜬다. */}
+            {me ? null : (
               rate && (
                 <span className={`font-num tabular-nums text-[10px] ${selected ? "text-point-ink" : "text-navy/50"}`}>
                   {rate}
