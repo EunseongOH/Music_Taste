@@ -215,7 +215,8 @@ export default function TogetherResultPage() {
       <header className="relative">
         {/* 사진이 없으면 사진 자리를 비워 두지 않는다 — 빈 280px 은 고장으로 읽힌다. */}
         {heroImage && (
-          <div className="relative h-[280px] overflow-hidden">
+          /* 바깥 감싸개(LayoutWrapper px-6)의 24px 밖으로 빼낸다 — 사진은 화면 끝까지 닿아야 한다. */
+          <div className="relative h-[280px] overflow-hidden -mx-6 w-[calc(100%+3rem)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={heroImage} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover" />
             {/* 아래로 갈수록 바탕색에 잠기게 — 사진과 글이 같은 면 위에 있어 보여야 한다. */}
@@ -223,7 +224,7 @@ export default function TogetherResultPage() {
           </div>
         )}
 
-        <div className={`relative px-6 ${heroImage ? "-mt-24" : "pt-10"}`}>
+        <div className={`relative ${heroImage ? "-mt-24" : "pt-10"}`}>
           <p className="type-caption text-navy/70">
             {artistLabel} · {challenge.tracks.length}곡
           </p>
@@ -244,7 +245,7 @@ export default function TogetherResultPage() {
         </div>
       </header>
 
-      <div className="px-6">
+      <div>
 
       {/* ── 관계도 ── */}
       {others.length === 0 ? (

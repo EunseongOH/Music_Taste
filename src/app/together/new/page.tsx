@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, Loader2, Plus, Search, X } from "lucide-react";
 import { SafeImage } from "@/components/SafeImage";
-import { AlbumCard, useAlbumAccordion, useAlbumPaging } from "@/components/album/AlbumCard";
+import { AlbumCard, AlbumPager, useAlbumAccordion, useAlbumPaging } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
 import FeedbackModal from "@/components/FeedbackModal";
 import LoadingScreen, { useSlowEnough } from "@/components/LoadingScreen";
@@ -653,9 +653,10 @@ export default function TogetherNewPage() {
          */}
         {step === 2 && spotifyHref && <SpotifyLink href={spotifyHref} />}
       </div>
-      <p className="type-body text-navy/70 mt-2 break-keep">
+      {/* 두 문장을 줄을 갈라 놓는다 — 한 줄로 이으면 첫 문장이 뒤에 묻힌다. */}
+      <p className="type-body text-navy/70 mt-2 break-keep whitespace-pre-line">
         {step !== 2
-          ? "곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요."
+          ? "아티스트만 정하면 돼요.\n소트를 끝내지 않아도 링크를 만들 수 있어요."
           : source
             ? "소트할 곡을 골라 주세요. 앨범을 눌러 펼치면 곡이 나와요."
             : "곡이 다 오면 앨범이 여기 펼쳐져요."}
@@ -847,7 +848,7 @@ export default function TogetherNewPage() {
              * 모양·모션은 src/components/album/AlbumCard.tsx 에서만 정한다.
              */
             <ul className="grid grid-cols-2 gap-4">
-              {albums.slice(0, paging.shown).map((album) => {
+              {albums.slice(paging.from, paging.to).map((album) => {
                 const ids = album.tracks.map((track) => track.id);
                 const picked = ids.filter((id) => !off.has(id)).length;
                 return (
@@ -927,13 +928,8 @@ export default function TogetherNewPage() {
             </ul>
           )}
 
-          {paging.hasMore && (
-            <div className="flex justify-center mt-6">
-              <button onClick={paging.more} className={secondaryButton}>
-                앨범 더 보기 ({albums.length - paging.shown}장 남음)
-              </button>
-            </div>
-          )}
+          {/* 이전·다음 막대. "더 보기"로 쌓으면 스크롤만 길어지고 어디까지 봤는지 알 수 없다. */}
+          <AlbumPager page={paging.page} pages={paging.pages} onGo={paging.go} className="mt-6" />
 
           {source.artistId && (
             /* 발매되지 않은 곡 — 공연에서만 부른 곡 — 도 방에 넣을 수 있다. */
