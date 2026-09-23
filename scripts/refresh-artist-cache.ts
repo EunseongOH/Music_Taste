@@ -97,12 +97,23 @@ async function main() {
 
   const sb = createAdminClient();
 
-  // 만료가 가까운 순서로 집는다
-  const { data: rows, error } = await sb.from("spotify_cache_artists")
-    .select("id, name, expires_at").eq("locale", "ko")
-    .order("expires_at", { ascending: true }).limit(limit);
+  /*
+   * 한국 아티스트를 먼저, 그 안에서 만료가 가까운 순서로 집는다.
+   *
+   * 예전에는 만료 임박 순으로만 집었다. Spotify 하루 예산 안에서만 도니까 하루 40명이
+   * 전부인데, 그 자리를 해외 팝·클래식·재즈가 차지하면 정작 이용자가 소트하는
+   * 국내 아티스트가 밀린다. 실제로 그랬다 — 만료순 상위 12명 중 10명이 해외 아티스트였다.
+   *
+   * 순위는 artist_refresh_queue 뷰가 정한다 (2 한국 / 1 그 밖 / 0 클래식·재즈).
+   */
+  const { data: rows, error } = await sb.from("artist_refresh_queue")
+    .select("id, name, expires_at, priority")
+    .order("priority", { ascending: false })
+    .order("expires_at", { ascending: true })
+    .limit(limit);
   if (error) throw new Error(error.message);
-  console.log(`갱신 대상 ${rows?.length ?? 0}명 (TTL ${TTL_DAYS}일)`);
+  const kr = (rows ?? []).filter((x) => x.priority === 2).length;
+  console.log(`갱신 대상 ${rows?.length ?? 0}명 (한국 ${kr}명 · TTL ${TTL_DAYS}일)`);
 
   const token = await getSpotifyAccessToken();
 

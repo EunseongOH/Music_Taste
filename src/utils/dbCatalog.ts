@@ -336,6 +336,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
 
     const out: DbAlbum[] = [];
     const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 녹음 ID (같은 곡 판정용)
+    const soundtrackIds = new Set<string>();          // OST 앨범 (모음집 판정에 쓴다)
     const titlesOfAlbum = new Map<string, AlbumTracks>();   // 앨범 ID -> 곡 제목 (같은 앨범 판정용)
     const durOfAlbum = new Map<string, number[]>();         // 앨범 ID -> 자리순 재생시간
     const seq = (rows?: { d: number; p: number; ms: number }[]) =>
@@ -364,6 +365,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       if (dupe(name, release_date.slice(0, 4), total)) continue;   // 같은 앨범의 다른 판 중복 제거
       remember(name, release_date.slice(0, 4), total);
       const type = (rg?.primary_type ?? "").toLowerCase();
+      if (Array.isArray(rg?.secondary_types) && rg.secondary_types.includes("Soundtrack")) soundtrackIds.add(albumId);
       out.push({
         id: albumId,
         name,
@@ -431,6 +433,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         if (dupe(g.title, release_date.slice(0, 4), total)) continue;
         remember(g.title, release_date.slice(0, 4), total);
         const type = String(g.primary_type ?? "").toLowerCase();
+        if (Array.isArray(g.secondary_types) && g.secondary_types.includes("Soundtrack")) soundtrackIds.add(`mb:${g.mbid}`);
         out.push({
           id: `mb:${g.mbid}`,
           name: g.title,
@@ -579,7 +582,36 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     out.length = 0;
     out.push(...deduped);
 
-    // 6) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
+    /*
+     * 6) 드라마 OST 모음집은 뺀다 — **그 아티스트의 참여 싱글이 따로 있을 때만.**
+     *
+     * 모음집에는 다른 가수의 곡이 대부분이라, 남겨 두면 그 아티스트를 고른 사람의 소트에
+     * 남의 곡이 섞인다. 정작 부른 곡은 싱글 쪽에 그대로 있으므로 잃는 것이 없다.
+     *
+     * 싱글이 없으면 빼지 않는다. 그때는 모음집이 그 곡을 담은 유일한 자리다.
+     *
+     * 아래 7)번(큰 앨범에 든 싱글 빼기)보다 **먼저** 돈다. 순서가 반대면 7)번이 싱글을
+     * 먼저 지워 버려서, 남는 것이 모음집 하나가 된다 — 고치려던 것과 정반대가 된다.
+     */
+    const ostDrop = new Set<string>();
+    for (const big of out) {
+      if (!soundtrackIds.has(big.id)) continue;
+      const bigSongs = songsOf.get(big.id);
+      if (!bigSongs || bigSongs.size < 4) continue;          // 모음집이라 할 만한 크기
+      for (const small of out) {
+        if (small.id === big.id || !soundtrackIds.has(small.id)) continue;
+        const s = songsOf.get(small.id);
+        if (!s?.size || s.size > 3 || s.size >= bigSongs.size) continue;  // 참여분은 보통 본곡+Inst
+        if ([...s].every((x) => bigSongs.has(x))) { ostDrop.add(big.id); break; }
+      }
+    }
+    if (ostDrop.size) {
+      const left = out.filter((a) => !ostDrop.has(a.id));
+      out.length = 0;
+      out.push(...left);
+    }
+
+    // 7) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
     //    같은 곡을 싱글로도 앨범으로도 내는 아티스트(요아소비 등)에서 같은 곡이 두세 번 뜨던 원인이다.
     //    곡이 같은지는 MusicBrainz 녹음 ID 로 가린다 — 제목이 일본어냐 로마자냐와 무관하게 같은 녹음이면 같다.
     const SMALL = 5;                               // 이 곡 수 이하만 뺀다 (정규 앨범은 절대 빼지 않는다)

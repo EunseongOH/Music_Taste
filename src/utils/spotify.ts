@@ -31,6 +31,46 @@ const daysFromNow = (n: number) => {
 // async 함수 말고는 export 할 수 없어서, 워커·API 라우트와 나눠 쓰려면 밖에 있어야 한다).
 
 const getCacheExpiresAt = () => daysFromNow(DB_CACHE_TTL_DAYS);
+
+/**
+ * 해외 아티스트의 앨범·수록곡 캐시는 오래 들고 있는다.
+ *
+ * 우리 이용자가 소트하는 건 대부분 국내 아티스트다. 해외 아티스트의 신곡이 며칠 늦게
+ * 보이는 것보다, 그 갱신에 Spotify 하루 예산을 쓰는 쪽이 더 아깝다 — 그 예산은
+ * 국내 아티스트를 채우는 데 쓴다.
+ *
+ * 국내 여부를 모르면 국내로 본다. 틀려도 짧은 TTL 이라 자주 갱신될 뿐, 잘못된 자료가
+ * 오래 남지는 않는다.
+ */
+const OVERSEAS_CACHE_TTL_DAYS = Number(process.env.SPOTIFY_OVERSEAS_TTL_DAYS ?? 90);
+
+const koreanArtistCache = new Map<string, boolean>();
+
+async function hasKoreanArtist(ids: (string | undefined)[]): Promise<boolean> {
+  const wanted = [...new Set(ids.filter((x): x is string => !!x))];
+  if (!wanted.length) return true;
+  const unknown = wanted.filter((id) => !koreanArtistCache.has(id));
+  if (unknown.length) {
+    try {
+      const sb = createAdminClient();
+      const [ca, sa] = await Promise.all([
+        sb.from("canonical_artist").select("spotify_id, country, name").in("spotify_id", unknown),
+        sb.from("spotify_cache_artists").select("id, name").in("id", unknown),
+      ]);
+      const kr = new Set<string>();
+      for (const r of ca.data ?? []) if (r.country === "KR" || /[가-힣]/.test(r.name ?? "")) kr.add(r.spotify_id);
+      for (const r of sa.data ?? []) if (/[가-힣]/.test(r.name ?? "")) kr.add(r.id);
+      for (const id of unknown) koreanArtistCache.set(id, kr.has(id));
+    } catch {
+      for (const id of unknown) koreanArtistCache.set(id, true);   // 모르면 국내로 (짧은 TTL)
+    }
+  }
+  return wanted.some((id) => koreanArtistCache.get(id) === true);
+}
+
+/** 이 아티스트들의 캐시 만료 시각. 국내 21일, 해외 90일. */
+const cacheExpiresFor = async (ids: (string | undefined)[]) =>
+  daysFromNow(await hasKoreanArtist(ids) ? DB_CACHE_TTL_DAYS : OVERSEAS_CACHE_TTL_DAYS);
 const getArtistCacheExpiresAt = () => daysFromNow(ARTIST_CACHE_TTL_DAYS);
 
 
@@ -932,7 +972,7 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
             limit,
             items: data.items || [],
             total: data.total || 0,
-            expires_at: getCacheExpiresAt(),
+            expires_at: await cacheExpiresFor([artistId]),
           }, { onConflict: 'artist_id,locale,offset,limit' });
       } catch (e) {
         console.error("[Spotify Cache DB] Failed to save albums to cache:", e);
@@ -1051,7 +1091,12 @@ export const getAlbumTracks = async (albumId: string) => {
   if (allTracks.length > 0) {
     try {
       const supabase = createAdminClient();
-      const expiresAt = getCacheExpiresAt();
+      // 이 함수는 앨범 ID 만 받는다. 국내 여부는 받아 온 곡의 아티스트로 가린다.
+      const expiresAt = await cacheExpiresFor(
+        (allTracks as { artists?: { id?: string }[] }[])
+          .flatMap((t) => (t.artists ?? []).map((a) => a.id))
+          .slice(0, 8)
+      );
       await supabase
         .from('spotify_cache_album_tracks')
         .upsert({
