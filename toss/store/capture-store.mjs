@@ -1,7 +1,7 @@
 /**
  * 토스 앱인토스 콘솔용 스토어 스크린샷 v2 — 세로형 여러 장.
  *
- * 한 장 = 위에 카피 두 줄(Level 1) + 아래 그 화면 목업(Level 2). 다섯 장 모두 같은 문법을 반복한다
+ * 한 장 = 위에 카피 두 줄(Level 1) + 아래 그 화면 목업(Level 2). 일곱 장 모두 같은 문법을 반복한다
  * (docs/design-system/ux-principles.md §8·§9). 카피는 앱 안의 문장과 글자까지 같다(§6, ux-writing).
  * 전부 단일 아티스트 모드·새 톤(기본 테마). 가로형은 만들지 않는다.
  *
@@ -11,7 +11,9 @@
  *   - 픽스처는 toss/baseline/fixture.json(카더가든 20곡, 커버 캐시 있음) + fixture-space.json(4·5장).
  *     옛 capture-screenshots.mjs(믹스 매치 픽스처·가로형)는 2026-09-23 에 지웠다 — 이 스크립트가 유일하다.
  *   - Spotify 를 부르지 않는다(SPOTIFY_CACHE_ONLY 서버).
- * 출력: toss/store/out/v3-sky/store-1~5.png (636×1048). 저장소에 커밋하지 않는다.
+ * 출력: toss/store/out/v3-sky/store-1~7.png (636×1048). 저장소에 커밋하지 않는다.
+ *   차례: 홈 → 월드컵 → 취향표 → 초대(입구) → 관계도(결과) → 취향 스페이스 → 미발매곡.
+ *   초대가 관계도 뒤에 오면 이야기가 거꾸로 흐른다.
  *   ONLY=4 로 한 장만 다시 찍는다. 화면이 바뀌면 폴더를 새로 파고(v4…) 옛 폴더는 비교용으로 남긴다.
  */
 import { chromium } from 'playwright';
@@ -31,6 +33,17 @@ const ARTIST = { id: '2vHhrJBTC4VNXUMrDe7whx', name: '카더가든', image: '' }
  * (make-fixture-space.mjs 가 만든다). 5장은 실제 로그인 계정에 기록이 한 장뿐이라 "한곳에 모여요"가 성립하지 않았다.
  */
 const SPACE = JSON.parse(readFileSync(join(HERE, 'fixture-space.json'), 'utf8'));
+
+/*
+ * 데모 방(demo7k9)에는 심어 둔 demo-0~3 말고 실제 계정으로 참여한 줄이 하나 있다(운영자 본인 계정 —
+ * 개인정보 문제는 아니다). 이름이 길어 관계도 노드에서 잘리고, 나머지 넷이 전부 한국어 한 낱말이라
+ * 혼자 결이 튄다. 그래서 **조회 응답에서 그 한 줄의 이름만** 바꾼다 — 운영 DB 는 건드리지 않고,
+ * 인원수·일치율·구조는 그대로다. 초대 화면과 관계도가 같은 방을 보므로 둘이 같이 쓴다.
+ */
+const maskDemoName = (url, body) => {
+  if (!url.includes('/rest/v1/sort_challenge_entries') || !Array.isArray(body)) return null;
+  return body.map((e) => (String(e.participant_key ?? '').startsWith('demo-') ? e : { ...e, nickname: '밤산책' }));
+};
 
 /* 콘솔 규격과 기기 화면비. 기기 화면을 통째로 넣고(잘리는 곳 없이) 위에 카피를 둔다. */
 const PORTRAIT = { w: 636, h: 1048 };
@@ -66,12 +79,29 @@ const PAGES = [
   },
   {
     /*
+     * 초대 화면 — 링크를 받은 사람이 보는 입구. 얻는 것(관계도)은 다음 장이 맡고 여기서는 시작만 말한다.
+     * 데모 방을 쓰면 참여자가 이미 다섯이라 "0명이 소트했어요"가 나오지 않는다(§20).
+     * 참여자 키를 심지 않는다 — 심으면 "결과 보기"로 바뀌어 입구가 아니게 된다.
+     */
+    n: 4,
+    copy: ['링크를 보내면 친구도', '같은 곡으로 소트해요'],
+    route: `/together/${process.env.DEMO_CODE ?? 'demo7k9'}`,
+    wait: 6000,
+    mock: maskDemoName,
+    act: async (page) => {
+      await page.waitForTimeout(1500);
+      // 초대 코드가 스토어 이미지에 박히지 않게 가린다. 자리는 남겨 레이아웃이 흔들리지 않게.
+      await page.evaluate(() => { for (const b of document.querySelectorAll('button')) if (/^코드 .* 링크 보내기$/.test(b.textContent?.trim() ?? '')) b.style.visibility = 'hidden'; });
+    },
+  },
+  {
+    /*
      * 같이 소트한 결과 — 종합 일치율 + 취향 관계도 + 공유 CTA 가 한 화면에 들어오게 170px 내린다.
      * 초대 화면(입구)이 아니라 이 모드로 **얻는 것**을 보여 준다(ux-principles §6). 카피 뒷줄
      * "취향이 얼마나 닮았는지 봐요"의 근거가 바로 관계도다.
      * 데모 방(demo7k9, 카더가든 12곡)의 실제 값이다 — 퍼센트·구조를 지어내지 않는다.
      */
-    n: 4,
+    n: 5,
     copy: ['같은 곡을 친구와 각자 소트하고,', '취향이 얼마나 닮았는지 봐요'],
     route: `/together/${process.env.DEMO_CODE ?? 'demo7k9'}/result`,
     participant: process.env.DEMO_ME ?? 'demo-1', // 무드등 시점
@@ -82,17 +112,11 @@ const PAGES = [
     // 큰 숫자로 34% 를 먼저 읽히게 두는 것보다 관계도와 72% 를 보여 주는 쪽이 낫다고 판단했다.
     scroll: Number(process.env.SCROLL4 ?? 315),
     /*
-     * 심어 둔 demo-0~3 말고 실제 계정으로 참여한 줄이 하나 있다(운영자 본인 계정 — 개인정보 문제는 아니다).
-     * 이름이 길어 노드에서 잘려 보이고(Crongcro…), 나머지 넷이 전부 한국어 한 낱말이라 혼자 결이 튄다.
-     * 그래서 **조회 응답에서 그 한 줄의 이름만** 바꾼다 — 운영 DB 는 건드리지 않고, 인원수·일치율·구조는 그대로다.
      */
-    mock: (url, body) => {
-      if (!url.includes('/rest/v1/sort_challenge_entries') || !Array.isArray(body)) return null;
-      return body.map((e) => (String(e.participant_key ?? '').startsWith('demo-') ? e : { ...e, nickname: '밤산책' }));
-    },
+    mock: maskDemoName,
   },
   {
-    n: 5,
+    n: 6,
     copy: ['내 취향표는 한곳에 모여요.', '취향이 닮은 리스너도 만나요'],
     route: '/explore-taste',
     auth: true,
@@ -105,10 +129,33 @@ const PAGES = [
       return null;
     },
     // 같은 데이터로 "취향 메이트" 탭을 연 장도 하나 더(5b) — 카피 뒷줄의 근거 확인용
-    extra: async (page, shoot) => {
-      await page.getByText(/^취향 메이트/).first().click();
-      await page.waitForTimeout(2500);
-      await shoot('5b');
+  },
+  {
+    /*
+     * 미발매곡 아카이브 — 음원 사이트에 없는 곡을 이용자가 등록하고, 가사와 떼창·응원법을 같이 남긴다.
+     * 떼창 부분은 대괄호로 적으면 강조색으로 보이는데, 이 곡은 그 부분이 가사 끝에 있다.
+     * 그래서 가사 상자를 끝까지 내려 **강조된 떼창 줄이 보이는 상태**로 찍는다 —
+     * 안 그러면 "떼창·응원법" 탭이 "일반 가사" 탭과 똑같아 보여 카피 뒷줄의 근거가 없다.
+     */
+    n: 7,
+    // 원안은 '좋아하는 아티스트의 미발매곡을 알려주세요.' 였지만 34px 에서 세 줄이 된다(다른 장은 전부 두 줄).
+    // 형용사 하나만 덜어 두 줄로 맞췄다 — 문장과 동사는 그대로다.
+    copy: ['아티스트의 미발매곡을 알려주세요.', '응원법도 함께 기록할 수 있어요'],
+    route: '/archive',
+    wait: 5000,
+    act: async (page) => {
+      await page.getByText('미발매곡', { exact: true }).first().click();
+      await page.waitForTimeout(3500);
+      const li = page.locator('li', { hasText: '서울에정전이났다' }).first();
+      await li.getByRole('button', { name: /가사 보기/ }).click();
+      await page.waitForTimeout(900);
+      await li.getByRole('button', { name: /떼창·응원법/ }).click();
+      await page.waitForTimeout(700);
+      await page.evaluate(() => {
+        const box = [...document.querySelectorAll('div')].find((e) => e.className.toString().includes('max-h-72'));
+        if (box) box.scrollTop = box.scrollHeight;
+      });
+      await page.waitForTimeout(400);
     },
   },
 ];
@@ -158,7 +205,9 @@ for (const p of PAGES) {
     let s = 7; Math.random = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
   }, [p.seed ?? null, p.participant ?? null]);
   if (p.mock) {
+    // 초대 화면은 8초마다 참여자를 다시 읽는다. 컨텍스트를 닫을 때 요청이 떠 있으면 콜백이 던지므로 전부 감싼다.
     await page.route((u) => u.href.includes('.supabase.co/rest/v1/'), async (route) => {
+     try {
       const url = route.request().url();
       if (route.request().method() !== 'GET') return route.continue();
       // 픽스처로 대신 답하거나(두 번째 인자 없음), 진짜 응답을 받아 일부만 고친다.
@@ -172,6 +221,7 @@ for (const p of PAGES) {
       }
       if (!fake) return route.continue();
       return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'content-range': `0-${fake.length - 1}/${fake.length}` }, body: JSON.stringify(fake) });
+     } catch { try { await route.continue(); } catch {} }
     });
   }
   await page.goto(`${BASE}${p.route}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
@@ -193,6 +243,7 @@ for (const p of PAGES) {
   };
   await shoot(String(p.n));
   if (p.extra) await p.extra(page, shoot);
+  try { await page.unrouteAll({ behavior: 'ignoreErrors' }); } catch {}
   await ctx.close();
 }
 await browser.close();
