@@ -542,8 +542,12 @@ export default function TogetherResultPage() {
         header={
           <>
             <h2 className="type-title-2 text-navy break-keep">소트 결과를 남겨 두고 싶다면?</h2>
+            {/*
+              "링크가 만료되면" 이라고 쓰지 않는다 — 방에는 수명이 없다(만료 칸도, 지우는
+              작업도 없다). 없는 만료를 말하면 곧 사라진다고 오해한다. 사실은 "이 링크로만"이다.
+            */}
             <p className="type-caption text-navy/70 mt-1 break-keep">
-              로그인하면 이 결과가 내 취향 스페이스에 남아요. 지금은 이 링크에만 있어서 링크를 잃으면 다시 볼 수 없어요.
+              로그인하면 이 결과가 내 취향 스페이스에 남아요. 지금은 이 링크로만 다시 볼 수 있어요.
             </p>
           </>
         }

@@ -12,6 +12,7 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
 import { MIX_MATCH, VISIBLE_MODES } from "@/config/modes";
+import DeleteAccountSheet from "@/components/account/DeleteAccountSheet";
 import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
 interface ProfileModalProps {
@@ -28,6 +29,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const [phone, setPhone] = useState("");
   const [updateError, setUpdateError] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"profile" | "archive">("profile");
   const [selectedArchive, setSelectedArchive] = useState<any | null>(null);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
@@ -314,6 +316,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       placeholderPhone: "010-0000-0000",
       changePhoto: "프로필 사진 변경",
       logoutBtn: "로그아웃",
+      deleteAccount: "탈퇴하기",
       saveBtn: "저장하기",
       savingBtn: "저장 중…",
       close: "닫기",
@@ -341,6 +344,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       placeholderPhone: "Phone number",
       changePhoto: "Change profile photo",
       logoutBtn: "Log out",
+      deleteAccount: "Delete account",
       saveBtn: "Save",
       savingBtn: "Saving…",
       close: "Close",
@@ -472,6 +476,20 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                     {isUpdating ? t.savingBtn : t.saveBtn}
                   </button>
                 </div>
+
+                {/*
+                  탈퇴는 로그아웃과 나란히 두지 않는다 — 누르려던 것과 다른 것을 누르면
+                  되돌릴 수 없다. 아래에 작게, 글자 링크로 둔다. 숨기지도 않는다:
+                  계정을 만드는 앱은 지우는 길도 분명히 보여야 한다.
+                */}
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={isUpdating}
+                  className="self-center mt-1 py-2 type-caption text-navy/70 underline underline-offset-4 hover:text-danger cursor-pointer"
+                >
+                  {t.deleteAccount}
+                </button>
               </form>
             )}
 
@@ -586,6 +604,17 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
           </motion.div>
         </div>
       </div>
+
+      <DeleteAccountSheet
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        nickname={nickname}
+        /* 계정이 사라졌으므로 로그아웃과 같은 정리를 하고 홈으로 보낸다. */
+        onDeleted={() => {
+          setDeleteOpen(false);
+          handleLogout();
+        }}
+      />
     </AnimatePresence>,
     document.body
   ) : null;
