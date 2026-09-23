@@ -370,6 +370,13 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
   return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
+      {/*
+        탈퇴 시트가 열리면 이 모달은 물러난다.
+        이 모달이 z-[9999] 라 시트(z-[999])가 뒤에 깔려 보이지 않았다. z 를 더
+        올려 겨루는 대신 비킨다 — 탈퇴를 묻는 동안 프로필 편집 화면이 함께 떠 있을
+        이유가 없다. [그만두기] 로 시트를 닫으면 다시 나타난다.
+      */}
+      {!deleteOpen && (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center">
         <motion.div
           className="absolute inset-0 bg-navy/40"
@@ -604,6 +611,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
           </motion.div>
         </div>
       </div>
+      )}
 
       <DeleteAccountSheet
         open={deleteOpen}
