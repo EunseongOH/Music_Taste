@@ -195,6 +195,8 @@ async function fillArtist(mbid: string, trusted: boolean) {
       artist_mbid: mbid,
       title: rg.title,
       primary_type: rg["primary-type"] ?? null,
+      // 라이브·베스트·OST 는 여기에만 있다. primary_type 은 셋 다 'Album' 으로 준다.
+      secondary_types: rg["secondary-types"] ?? [],
       first_release_date: normalizeDate(rg["first-release-date"]),
       updated_at: new Date().toISOString(),
     }));

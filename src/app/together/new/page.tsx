@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, Loader2, Plus, Search, X } from "lucide-react";
 import { SafeImage } from "@/components/SafeImage";
-import { AlbumCard, useAlbumAccordion, useAlbumPaging } from "@/components/album/AlbumCard";
+import { AlbumCard, AlbumPager, useAlbumAccordion, useAlbumPaging } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
 import FeedbackModal from "@/components/FeedbackModal";
 import LoadingScreen, { useSlowEnough } from "@/components/LoadingScreen";
@@ -17,7 +17,9 @@ import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
+import SpotifyLink from "@/components/SpotifyLink";
 import { rememberedNickname } from "@/utils/togetherDb";
+import { josaOf } from "@/utils/josa";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
@@ -270,6 +272,28 @@ export default function TogetherNewPage() {
    * 아티스트로 만든 방은 아티스트명, 그 밖에는 출처의 제목을 그대로 쓴다.
    */
   const [title, setTitle] = useState("");
+  /**
+   * 직접 적은 방 이름. `title` 과 따로 둔다 — `title` 은 아티스트를 고르면 그 이름으로
+   * 채워져서(로딩 화면·공유 문구가 쓴다) 입력칸에 그대로 물리면 "선택"이 아니게 된다.
+   * 비워 두면 지금까지처럼 아티스트명이 방 이름이 된다.
+   */
+  const [roomName, setRoomName] = useState("");
+  const [namingRoom, setNamingRoom] = useState(false);
+
+  /**
+   * 이 화면의 Spotify 링크백 주소 (Developer Policy II.4).
+   *
+   * 아티스트를 골라 들어왔으면 그 아티스트로. "지금 고른 곡"·"내 취향표"로 들어오면
+   * 아티스트 ID 가 없으니 곡 하나로 건다 — 재킷과 곡 정보가 Spotify 것인 건 같다.
+   * `mb:`·`deezer:` 만 있는 방은 Spotify 자료를 안 쓰므로 링크도 걸지 않는다.
+   */
+  const spotifyHref = useMemo(() => {
+    const artistId = artistSource?.artistId ?? pendingArtist?.id;
+    if (artistId) return `https://open.spotify.com/artist/${artistId}`;
+    const track = (sharedSource ?? artistSource)?.tracks.find((t) => t.id && !t.id.includes(":"))
+      ?? picked?.find((t) => t.id && !t.id.includes(":"));
+    return track ? `https://open.spotify.com/track/${track.id}` : null;
+  }, [artistSource, pendingArtist, sharedSource, picked]);
   /*
    * 이름을 묻는 창은 **만들기를 누른 뒤**에 뜬다. 이름이 이미 있는 사람에게는 뜨지 않는다.
    * "이름이 없다" = 비로그인이거나, 로그인했지만 닉네임을 아직 확인하지 않은 경우
@@ -531,7 +555,7 @@ export default function TogetherNewPage() {
       // 아티스트를 골라 만든 방이면 초대 화면 배경에 쓸 사진을 함께 남긴다.
       artistId: source.artistId ?? null,
       artistImage: source.artistImage ?? null,
-      title: title.trim() || source.title,
+      title: roomName.trim() || title.trim() || source.title,
       tracks: chosen,
       sourceResultId: source.resultId,
     });
@@ -564,7 +588,7 @@ export default function TogetherNewPage() {
   if (madeCode) {
     const link = `${window.location.origin}/together/${madeCode}`;
     return (
-      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-12">
+      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pt-10 pb-12">
         <h1 className="type-title-1 text-navy">같이 할 준비가 됐어요</h1>
         <p className="type-body text-navy/70 mt-2 break-keep">
           옆 사람에게 코드를 알려 주거나 링크를 보내세요.{"\n"}같은 곡으로 소트하면 서로의 일치율이 보여요.
@@ -608,7 +632,8 @@ export default function TogetherNewPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-32">
+    /* 양옆 여백은 LayoutWrapper 의 px-6(24px)에 맡긴다 — 여기서 또 주면 48px 이 된다 */
+    <main className={`min-h-screen bg-[var(--app-bg)] flex flex-col pt-10 ${step === 2 ? "pb-44" : "pb-32"}`}>
       <BackButton
         className="w-9 h-9"
         onClick={() => {
@@ -618,12 +643,20 @@ export default function TogetherNewPage() {
         }}
       />
       {/* 곡을 모으는 동안에도 누구의 화면인지는 이미 보여야 한다 — 곡보다 이름이 먼저 온다. */}
-      <h1 className="type-title-1 text-navy mt-2">
-        {step === 2 ? source?.label ?? pendingArtist?.name ?? "곡 고르기" : "같이 소트하기 만들기"}
-      </h1>
-      <p className="type-body text-navy/70 mt-2 break-keep">
+      <div className="flex items-start justify-between gap-3 mt-2">
+        <h1 className="type-title-1 text-navy min-w-0">
+          {step === 2 ? source?.label ?? pendingArtist?.name ?? "곡 고르기" : "같이 소트하기 만들기"}
+        </h1>
+        {/*
+         * 이 화면에도 Spotify 링크백이 있어야 한다(Developer Policy II.4). 앨범 재킷과 곡 정보가
+         * Spotify 에서 온 자리인데 전곡 모드에만 붙어 있었다. 카드마다가 아니라 묶음에 하나다.
+         */}
+        {step === 2 && spotifyHref && <SpotifyLink href={spotifyHref} />}
+      </div>
+      {/* 두 문장을 줄을 갈라 놓는다 — 한 줄로 이으면 첫 문장이 뒤에 묻힌다. */}
+      <p className="type-body text-navy/70 mt-2 break-keep whitespace-pre-line">
         {step !== 2
-          ? "곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요."
+          ? "아티스트만 정하면 돼요.\n소트를 끝내지 않아도 링크를 만들 수 있어요."
           : source
             ? "소트할 곡을 골라 주세요. 앨범을 눌러 펼치면 곡이 나와요."
             : "곡이 다 오면 앨범이 여기 펼쳐져요."}
@@ -798,11 +831,15 @@ export default function TogetherNewPage() {
             </button>
             <button
               onClick={() => pickTracks(source.tracks.map((track) => track.id), false)}
-              className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
+              className="h-8 px-3 shrink-0 whitespace-nowrap rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
             >
               전체 해제
             </button>
-            {chosen.length > 48 && <span className="type-caption text-point-ink">곡이 많으면 소트하는 데 오래 걸려요</span>}
+            {/*
+             * "곡이 많으면 오래 걸려요" 경고는 뺐다. 많이 고르는 건 잘못이 아니라 그냥 선택이고,
+             * 고르자마자 경고가 뜨면 방금 한 일이 실수처럼 읽힌다. 게다가 이 줄에 글이 끼어들면
+             * 옆 버튼이 두 줄로 접혔다 — 버튼은 shrink-0·whitespace-nowrap 으로 고정한다.
+             */}
           </div>
 
           {source.artistId ? (
@@ -811,7 +848,7 @@ export default function TogetherNewPage() {
              * 모양·모션은 src/components/album/AlbumCard.tsx 에서만 정한다.
              */
             <ul className="grid grid-cols-2 gap-4">
-              {albums.slice(0, paging.shown).map((album) => {
+              {albums.slice(paging.from, paging.to).map((album) => {
                 const ids = album.tracks.map((track) => track.id);
                 const picked = ids.filter((id) => !off.has(id)).length;
                 return (
@@ -891,13 +928,8 @@ export default function TogetherNewPage() {
             </ul>
           )}
 
-          {paging.hasMore && (
-            <div className="flex justify-center mt-6">
-              <button onClick={paging.more} className={secondaryButton}>
-                앨범 더 보기 ({albums.length - paging.shown}장 남음)
-              </button>
-            </div>
-          )}
+          {/* 이전·다음 막대. "더 보기"로 쌓으면 스크롤만 길어지고 어디까지 봤는지 알 수 없다. */}
+          <AlbumPager page={paging.page} pages={paging.pages} onGo={paging.go} className="mt-6" />
 
           {source.artistId && (
             /* 발매되지 않은 곡 — 공연에서만 부른 곡 — 도 방에 넣을 수 있다. */
@@ -922,6 +954,40 @@ export default function TogetherNewPage() {
             >
               <AlertCircle size={13} />
               곡 정보가 잘못됐나요?
+            </button>
+          )}
+
+          {/*
+           * 방 이름은 선택이다. 대부분은 아티스트 이름 그대로 두면 되므로 입력칸을 늘 열어 두지
+           * 않는다 — 빈 칸이 보이면 채워야 할 것 같아진다. 누른 사람에게만 연다.
+           * 비워 두면 `title.trim() || source.title` 이 아티스트명을 그대로 쓴다.
+           */}
+          {namingRoom ? (
+            <div className="mt-6">
+              <label htmlFor="room-name" className="type-caption text-navy/70">
+                방 이름 (선택)
+              </label>
+              <input
+                id="room-name"
+                autoFocus
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                maxLength={40}
+                placeholder={source.title}
+                className="w-full mt-1.5 h-12 px-4 rounded-2xl bg-cream border border-navy/15 text-navy type-body placeholder:text-navy/50 focus:outline-2 focus:outline-offset-0 focus:outline-[var(--t-point-ink)]"
+              />
+              {/* 조사는 이름에 받침이 있느냐로 갈린다 — "'카더가든'로 보여요"가 나갔었다. */}
+              <p className="type-caption text-navy/70 mt-1.5">
+                비워 두면 &apos;{source.title}&apos;{josaOf(source.title, "로")} 보여요.
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setNamingRoom(true)}
+              className="w-full mt-6 py-2.5 rounded-2xl text-navy/70 type-caption flex items-center justify-center gap-1.5 hover:text-navy hover:bg-navy/5 transition-colors cursor-pointer"
+            >
+              <Plus size={13} />
+              방 이름 추가 (선택)
             </button>
           )}
 

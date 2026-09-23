@@ -129,6 +129,28 @@ function albumType(given: string, distinctSongs: number): string {
 }
 
 /**
+ * 목록에서 빼는 발매그룹 — **보조 종류로만 알 수 있는 것들**이다.
+ *
+ * primary_type 은 라이브 앨범도 베스트 앨범도 그냥 'Album' 으로 준다. 엔믹스
+ * "VERY NICE"(방송 무대)가 primary=Broadcast, secondary=["Live"] 였던 것처럼
+ * 이 판단은 secondary_types 에만 있다.
+ *
+ *  - Live        같은 곡의 공연판. 스튜디오판과 나란히 나오면 소트가 같은 곡 대결이 된다
+ *  - Compilation 베스트·히트 모음. 수록곡이 정규 앨범과 통째로 겹친다
+ *  - Spokenword  인터뷰·오디오 라이너. 음악이 아니다
+ *                (뉴진스 "This Is NewJeans audio liners" 가 "album 8곡" 으로 잡혀 있었다)
+ *
+ * Soundtrack 은 빼지 않는다. 그 아티스트가 부른 OST 곡은 그 사람의 곡이 맞다 —
+ * 모음집에 한 곡만 참여한 경우와 구분이 필요해서 따로 정할 일로 남겼다.
+ *
+ * `null` 은 "아직 안 받아옴" 이다(백필 중). 그때는 아무것도 빼지 않는다 —
+ * 정보가 없다고 지우면 채워지기 전까지 멀쩡한 앨범이 사라진다.
+ */
+const OFF_SHELF = new Set(["Live", "Compilation", "Spokenword"]);
+const isOffShelf = (secondary?: string[] | null): boolean =>
+  Array.isArray(secondary) && secondary.some((t) => OFF_SHELF.has(t));
+
+/**
  * 앨범 요약을 읽는다. 트랙 행을 통째로 읽지 않으려고 미리 만들어 둔 것이다
  * (앨범이 수백 장인 아티스트에서 앨범 목록 한 번에 1.6MB 가 오가던 것을 줄인다).
  * 아직 요약이 없는 발매판만 예전처럼 트랙을 읽어 그 자리에서 만든다.
@@ -287,7 +309,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     const rgIds = [...new Set([...rgOf.values()].filter(Boolean))] as string[];
     const rgInfo = new Map<string, any>();
     for (let i = 0; i < rgIds.length; i += 200) {
-      const { data } = await supabase.from("mb_release_group").select("mbid, title, primary_type, first_release_date").in("mbid", rgIds.slice(i, i + 200));
+      const { data } = await supabase.from("mb_release_group").select("mbid, title, primary_type, secondary_types, first_release_date").in("mbid", rgIds.slice(i, i + 200));
       for (const g of data ?? []) rgInfo.set(g.mbid, g);
     }
     // Discogs 쪽 메타데이터
@@ -314,6 +336,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
 
     const out: DbAlbum[] = [];
     const songsOf = new Map<string, Set<string>>();   // 앨범 ID -> 녹음 ID (같은 곡 판정용)
+    const soundtrackIds = new Set<string>();          // OST 앨범 (모음집 판정에 쓴다)
     const titlesOfAlbum = new Map<string, AlbumTracks>();   // 앨범 ID -> 곡 제목 (같은 앨범 판정용)
     const durOfAlbum = new Map<string, number[]>();         // 앨범 ID -> 자리순 재생시간
     const seq = (rows?: { d: number; p: number; ms: number }[]) =>
@@ -331,6 +354,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     for (const [albumId, src] of byAlbum) {
       if (skip.has(albumId)) continue;
       const rg = rgOf.get(albumId) ? rgInfo.get(rgOf.get(albumId)!) : null;
+      // 라이브·베스트·낭독은 뺀다. 이 판단은 보조 종류에만 있다(OFF_SHELF 주석 참고).
+      if (isOffShelf(rg?.secondary_types)) continue;
       const d = src.discogs ? dInfo.get(src.discogs) : null;
       const name = rg?.title ?? d?.title;
       if (!name) continue;
@@ -340,6 +365,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
       if (dupe(name, release_date.slice(0, 4), total)) continue;   // 같은 앨범의 다른 판 중복 제거
       remember(name, release_date.slice(0, 4), total);
       const type = (rg?.primary_type ?? "").toLowerCase();
+      if (Array.isArray(rg?.secondary_types) && rg.secondary_types.includes("Soundtrack")) soundtrackIds.add(albumId);
       out.push({
         id: albumId,
         name,
@@ -366,8 +392,23 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     //    같은 아티스트의 같은 발매판에서 온 트랙리스트라 출처 대조가 필요 없다. 재킷도 발매그룹 ID 로 정해진다.
     const servedRg = new Set([...rgOf.values()]);
     const { data: allRg } = await supabase.from("mb_release_group")
-      .select("mbid, title, primary_type, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
-    const restRg = (allRg ?? []).filter((g) => !servedRg.has(g.mbid));
+      .select("mbid, title, primary_type, secondary_types, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
+    /*
+     * Other·Broadcast 는 내보내지 않는다. MusicBrainz 에서 Other 는 대개 뮤직비디오·프로모션 음원이고
+     * Broadcast 는 방송 무대다 — 시상식에서 남의 곡을 부른 것까지 그 아티스트의 곡으로 들어온다
+     * (엔믹스 "VERY NICE", 원곡 세븐틴). 커버리지 뷰는 같은 것을 이미 빼고 세는데
+     * (20260922120000_artist_coverage_view.sql) 화면에 내보내는 쪽에만 그 판단이 없었다.
+     *
+     * **여기는 Spotify 앨범 ID 가 없는 발매그룹만 다룬다.** Spotify 에 있는 앨범에까지 이 조건을
+     * 걸면 안 된다 — MusicBrainz 가 뮤직비디오 발매그룹으로 잡아 둔 진짜 싱글이 함께 사라진다
+     * (BLACKPINK "Shut Down", aespa "Whiplash", 뉴진스 "Attention" 이 전부 Other 다).
+     *
+     * primary_type 이 비어 있는 것은 남긴다. "잡동사니"가 아니라 "분류가 안 됐다"는 뜻이고,
+     * 빼면 그것만 가진 아티스트 넷이 목록을 통째로 잃는다.
+     */
+    const OFF_CATALOG = new Set(["Other", "Broadcast"]);
+    const restRg = (allRg ?? []).filter((g) =>
+      !servedRg.has(g.mbid) && !OFF_CATALOG.has(String(g.primary_type ?? "")) && !isOffShelf(g.secondary_types));
     if (restRg.length) {
       // 부트레그·회수·취소된 판은 내보내지 않는다. 그 아티스트가 낸 앨범이 아니거나 유통되지 않은 판이다.
       const BAD_STATUS = new Set(["Bootleg", "Withdrawn", "Cancelled", "Pseudo-Release", "Expunged"]);
@@ -392,6 +433,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
         if (dupe(g.title, release_date.slice(0, 4), total)) continue;
         remember(g.title, release_date.slice(0, 4), total);
         const type = String(g.primary_type ?? "").toLowerCase();
+        if (Array.isArray(g.secondary_types) && g.secondary_types.includes("Soundtrack")) soundtrackIds.add(`mb:${g.mbid}`);
         out.push({
           id: `mb:${g.mbid}`,
           name: g.title,
@@ -540,7 +582,36 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     out.length = 0;
     out.push(...deduped);
 
-    // 6) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
+    /*
+     * 6) 드라마 OST 모음집은 뺀다 — **그 아티스트의 참여 싱글이 따로 있을 때만.**
+     *
+     * 모음집에는 다른 가수의 곡이 대부분이라, 남겨 두면 그 아티스트를 고른 사람의 소트에
+     * 남의 곡이 섞인다. 정작 부른 곡은 싱글 쪽에 그대로 있으므로 잃는 것이 없다.
+     *
+     * 싱글이 없으면 빼지 않는다. 그때는 모음집이 그 곡을 담은 유일한 자리다.
+     *
+     * 아래 7)번(큰 앨범에 든 싱글 빼기)보다 **먼저** 돈다. 순서가 반대면 7)번이 싱글을
+     * 먼저 지워 버려서, 남는 것이 모음집 하나가 된다 — 고치려던 것과 정반대가 된다.
+     */
+    const ostDrop = new Set<string>();
+    for (const big of out) {
+      if (!soundtrackIds.has(big.id)) continue;
+      const bigSongs = songsOf.get(big.id);
+      if (!bigSongs || bigSongs.size < 4) continue;          // 모음집이라 할 만한 크기
+      for (const small of out) {
+        if (small.id === big.id || !soundtrackIds.has(small.id)) continue;
+        const s = songsOf.get(small.id);
+        if (!s?.size || s.size > 3 || s.size >= bigSongs.size) continue;  // 참여분은 보통 본곡+Inst
+        if ([...s].every((x) => bigSongs.has(x))) { ostDrop.add(big.id); break; }
+      }
+    }
+    if (ostDrop.size) {
+      const left = out.filter((a) => !ostDrop.has(a.id));
+      out.length = 0;
+      out.push(...left);
+    }
+
+    // 7) 큰 앨범에 이미 다 들어 있는 싱글·EP 는 뺀다.
     //    같은 곡을 싱글로도 앨범으로도 내는 아티스트(요아소비 등)에서 같은 곡이 두세 번 뜨던 원인이다.
     //    곡이 같은지는 MusicBrainz 녹음 ID 로 가린다 — 제목이 일본어냐 로마자냐와 무관하게 같은 녹음이면 같다.
     const SMALL = 5;                               // 이 곡 수 이하만 뺀다 (정규 앨범은 절대 빼지 않는다)

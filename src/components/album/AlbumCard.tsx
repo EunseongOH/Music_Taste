@@ -65,16 +65,60 @@ export function useAlbumAccordion(onOpen?: (id: string) => void) {
  * @param resetKey 이게 바뀌면 처음 한 묶음으로 돌아간다(보통 아티스트 id).
  */
 export function useAlbumPaging(total: number, pageSize?: number, resetKey?: string | null) {
-  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(0);
   // 되돌리기는 effect 가 아니라 렌더 중에 한다 — effect 로 하면 한 번 옛 묶음을 그린 뒤
   // 다시 그려서 화면이 깜빡인다(React 가 권하는 "prop 이 바뀌면 state 조정" 꼴).
   const [lastKey, setLastKey] = useState(resetKey);
   if (resetKey !== lastKey) {
     setLastKey(resetKey);
-    setPages(1);
+    setPage(0);
   }
-  const shown = pageSize ? Math.min(total, pages * pageSize) : total;
-  return { shown, hasMore: shown < total, more: () => setPages((n) => n + 1) };
+  /*
+   * 쌓지 않고 **한 쪽씩 갈아 끼운다.** 예전에는 "더 보기"로 아래에 계속 이어 붙였는데,
+   * 앨범이 많은 아티스트에서는 스크롤만 길어지고 어디까지 봤는지 알 수 없었다.
+   * 전곡 모드(/tracks)가 쓰는 이전·다음 막대와 같은 방식이다.
+   */
+  const pages = pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+  const current = Math.min(page, pages - 1);
+  const from = pageSize ? current * pageSize : 0;
+  const to = pageSize ? Math.min(total, from + pageSize) : total;
+  return {
+    from,
+    to,
+    page: current,
+    pages,
+    go: (n: number) => setPage(Math.max(0, Math.min(pages - 1, n))),
+  };
+}
+
+/** 이전 · n / m · 다음. 전곡 모드와 같은 모양을 두 화면이 나눠 쓴다. */
+export function AlbumPager({
+  page,
+  pages,
+  onGo,
+  className = "",
+}: {
+  page: number;
+  pages: number;
+  onGo: (n: number) => void;
+  className?: string;
+}) {
+  if (pages <= 1) return null;
+  const btn =
+    "px-3 py-1.5 rounded-lg border border-navy/10 text-xs font-medium text-navy hover:bg-navy/5 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer";
+  return (
+    <div className={`flex items-center justify-center gap-4 py-2 border-t border-b border-navy/5 font-sans ${className}`}>
+      <button type="button" disabled={page === 0} onClick={() => onGo(page - 1)} className={btn}>
+        이전
+      </button>
+      <span className="text-xs font-medium text-navy/70 font-num tabular-nums">
+        {page + 1} / {pages}
+      </span>
+      <button type="button" disabled={page >= pages - 1} onClick={() => onGo(page + 1)} className={btn}>
+        다음
+      </button>
+    </div>
+  );
 }
 
 interface AlbumCardProps {

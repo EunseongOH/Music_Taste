@@ -200,7 +200,8 @@ export default function TogetherInvitePage() {
           <p className="type-caption text-navy/70">내가 만든 링크</p>
           <h1 className="type-title-1 text-navy mt-1 break-keep">{challenge.title}</h1>
           <p className="type-body text-navy/70 mt-2 break-keep">
-            고른 {challenge.tracks.length}곡이에요.{"\n"}링크를 보내면 상대가 같은 곡으로 소트하고, 서로 얼마나 비슷한지 볼 수 있어요.
+            {/* 곡 수는 아래 목록이 이미 말한다. 여기서 또 세면 보낼 사람이 읽을 한 줄이 길어진다. */}
+            링크를 보내면 상대가 같은 곡으로 소트하고, 서로 얼마나 비슷한지 볼 수 있어요.
           </p>
         </>
       ) : !hero ? (

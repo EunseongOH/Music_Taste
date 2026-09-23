@@ -1426,15 +1426,25 @@ export default function TracksPage() {
           )}
         </div>
       ) : (
-        /* Standard Accordion Content */
-        <div className="py-6 pb-32 flex flex-col gap-4 px-3">
+        /*
+         * 양옆 여백을 따로 주지 않는다. LayoutWrapper 가 이미 px-6(24px)을 준다.
+         * 전에는 그 위에 px-3 과 카드 p-5 를 더해 56px 이었고, 같은 화면의 검색창(24px)과
+         * 다른 선에서 시작했다. 이제 머리글·검색창·앨범이 모두 24px 한 선이다.
+         */
+        <div className="py-6 pb-32 flex flex-col gap-10">
           {artistData.map((artist, idx) => {
             const isArtistExpanded = expandedArtistId === artist.id;
             return (
-              <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40 flex flex-col border border-navy/10 rounded-[2rem] bg-white/60 p-5 shadow-sm transition-all hover:border-navy/20">
+              /*
+               * 흰 카드로 감싸지 않는다. 카드 안에 앨범 카드가 또 들어가 상자 속 상자가 됐고,
+               * 화면의 주인공인 재킷이 한 겹 뒤로 밀렸다. 묶음은 테두리가 아니라
+               * 아티스트 줄 아래의 가는 선과 묶음 사이 여백(gap-10)으로 보여 준다.
+               */
+              <section id={`artist-section-${artist.id}`} key={artist.id} className="scroll-m-40 flex flex-col">
                  {/* Artist Header (Accordion Toggle) */}
                  <div
-                    className="flex items-center justify-between cursor-pointer w-full group"
+                    /* 아티스트 줄이 묶음의 머리다. 아래 선이 "여기부터 이 사람의 앨범"을 말한다. */
+                    className="flex items-center justify-between cursor-pointer w-full group pb-4 border-b border-navy/10"
                     onClick={() => toggleArtistAccordion(artist.id)}
                  >
                     <div className="flex items-center gap-4">
