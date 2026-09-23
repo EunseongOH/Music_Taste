@@ -1,6 +1,6 @@
 /**
- * 스토어 5장(내 취향 스페이스)·4장(초대) 목업용 픽스처를 만든다. **운영 DB 에는 아무것도 쓰지 않는다** —
- * capture-v2.mjs 가 브라우저의 Supabase 요청을 가로채 이 JSON 으로 응답한다.
+ * 스토어 5장(내 취향 스페이스) 목업용 픽스처를 만든다. **운영 DB 에는 아무것도 쓰지 않는다** —
+ * capture-store.mjs 가 브라우저의 Supabase 요청을 가로채 이 JSON 으로 응답한다.
  *
  * 곡·커버는 우리 카탈로그(/api/together/catalog, DB 캐시 · Spotify 호출 없음)에서 가져온다.
  * 전부 단일 아티스트 모드(is_single_artist true). 서로 다른 아티스트 5명이라 "여러 번 하게 되는 앱"으로 읽힌다.
@@ -72,12 +72,6 @@ const others = OTHERS.map((o, i) => {
     ranking: tracks.map((t) => ({ id: t.id, title: t.title, artistName: a.name, albumImage: t.albumImage })),
   };
 });
-/* 초대 방(9vtwkaq)에 소트를 끝낸 사람 셋 — 초대 화면의 "지금까지 n명" */
-const entries = ['다다다', '새벽라디오', '무드등'].map((nick, i) => ({
-  id: uuid(300 + i), challenge_id: null, participant_key: uuid(950 + i), nickname: nick, ranking: [], skipped_count: 0,
-  created_at: `2026-09-2${i}T10:00:00+09:00`,
-}));
-
-writeFileSync(OUT, JSON.stringify({ me: ME, mine: results, others, entries }, null, 1));
-console.log(`내 취향표 ${results.length} · 다른 리스너 ${others.length} · 초대 참여 ${entries.length} → ${OUT}`);
+writeFileSync(OUT, JSON.stringify({ me: ME, mine: results, others }, null, 1));
+console.log(`내 취향표 ${results.length} · 다른 리스너 ${others.length} → ${OUT}`);
 console.log(results.map((r) => `${r.title} — 1위 ${r.winner_track_title} (${r.ranking.length}곡)`).join('\n'));

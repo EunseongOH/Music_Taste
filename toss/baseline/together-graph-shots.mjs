@@ -4,7 +4,7 @@
  *   NEXT_BASE=http://localhost:3300 node toss/baseline/together-graph-shots.mjs
  *
  * 운영 DB 에는 아무것도 쓰지 않는다. 브라우저가 Supabase 로 보내는 조회를 가로채
- * 지어낸 참여자로 답한다(capture-v2.mjs 와 같은 방식). 닉네임 길이도 섞어 둔다 —
+ * 지어낸 참여자로 답한다(capture-store.mjs 와 같은 방식). 닉네임 길이도 섞어 둔다 —
  * 긴 이름에서 노드가 어떻게 깨지는지가 이 캡처의 목적 중 하나다.
  *
  * 출력: toss/baseline/out/graph/ (저장소에 커밋하지 않는다)
