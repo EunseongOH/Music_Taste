@@ -803,24 +803,48 @@ function mergeAlbums(spotifyItems: any[], db: any[]) {
   // 같은 해에 곡 수가 같은 앨범이 양쪽에 하나씩만 있고 글자 체계가 다르면 같은 앨범으로 본다.
   // 자체 DB 쪽을 남긴다 — 트랙리스트를 갖고 있어서 눌러도 Spotify 를 부르지 않는다.
   const cjk = (s: string) => /[가-힣぀-ヿ一-鿿]/.test(s || "");
-  const groups = new Map<string, any[]>();
-  for (const a of kept) {
-    const y = albumYear(a), n = albumTracks(a);
-    if (!y || !n) continue;
-    const k = `${y}|${n}`;
-    groups.set(k, [...(groups.get(k) ?? []), a]);
-  }
   const drop = new Set<string>();
-  for (const list of groups.values()) {
-    if (list.length !== 2) continue;                       // 셋 이상이면 어느 쪽이 짝인지 알 수 없다
-    const [a, b] = list;
-    if (albumTitleKey(a) === albumTitleKey(b)) continue;    // 제목이 같으면 위에서 이미 처리됐다
-    if (cjk(a.name) === cjk(b.name)) continue;             // 글자 체계가 같으면 진짜 다른 앨범일 수 있다
-    const fromDb = dbIds.has(a.id) ? a : dbIds.has(b.id) ? b : null;
-    const fromSpotify = dbIds.has(a.id) ? b : dbIds.has(b.id) ? a : null;
-    if (!fromDb || !fromSpotify || fromDb === fromSpotify) continue;
-    drop.add(fromSpotify.id);
-  }
+
+  /*
+   * 묶는 열쇠를 두 번 돌린다 — **발매일 먼저, 그다음 연도.**
+   *
+   * 연도만으로 묶으면 같은 해에 곡 수가 같은 앨범이 셋 이상일 때 통째로 건너뛴다.
+   * 뉴진스 마이데몬이 그랬다: `2023|2곡` 묶음에 한국어판·영어판과 'Super Shy' 까지
+   * 셋이 들어가 "정확히 둘일 때만" 조건에 걸렸다. 발매일로 좁히면 2023-11-24 에
+   * 둘만 남아 잡힌다.
+   *
+   * 그렇다고 발매일로 **바꾸지는** 않는다. Spotify 는 옛 앨범의 발매일을 연도까지만
+   * 주기도 해서(release_date_precision), 발매일로만 묶으면 지금 잡히던 짝이 빠진다.
+   * 두 번 돌리면 새로 잡히는 것만 늘고 잃는 것이 없다.
+   */
+  const pass = (keyOf: (a: any) => string | null) => {
+    const groups = new Map<string, any[]>();
+    for (const a of kept) {
+      if (drop.has(a.id)) continue;                        // 앞 회차에서 이미 합쳐진 것
+      const k = keyOf(a);
+      if (!k) continue;
+      groups.set(k, [...(groups.get(k) ?? []), a]);
+    }
+    for (const list of groups.values()) {
+      if (list.length !== 2) continue;                     // 셋 이상이면 어느 쪽이 짝인지 알 수 없다
+      const [a, b] = list;
+      if (albumTitleKey(a) === albumTitleKey(b)) continue;  // 제목이 같으면 위에서 이미 처리됐다
+      if (cjk(a.name) === cjk(b.name)) continue;           // 글자 체계가 같으면 진짜 다른 앨범일 수 있다
+      const fromDb = dbIds.has(a.id) ? a : dbIds.has(b.id) ? b : null;
+      const fromSpotify = dbIds.has(a.id) ? b : dbIds.has(b.id) ? a : null;
+      if (!fromDb || !fromSpotify || fromDb === fromSpotify) continue;
+      drop.add(fromSpotify.id);
+    }
+  };
+
+  pass((a) => {
+    const d = String(a?.release_date ?? "").slice(0, 10), n = albumTracks(a);
+    return d.length === 10 && n ? `${d}|${n}` : null;      // 날짜까지 아는 것만
+  });
+  pass((a) => {
+    const y = albumYear(a), n = albumTracks(a);
+    return y && n ? `${y}|${n}` : null;
+  });
 
   return kept.filter((a) => !drop.has(a.id))
     .map((a) => {
