@@ -33,6 +33,11 @@ export interface ChallengeEntry {
   /** 곡 id 배열(1위부터) */
   ranking: string[];
   skipped_count: number;
+  /**
+   * 직접 소트한 것이 아니라 **이전 취향표를 불러온** 기록인가.
+   * 방장이 내 취향표로 방을 만들 때만 true 다. 다시 소트하면 false 로 덮인다.
+   */
+  imported?: boolean;
   created_at: string;
 }
 
@@ -193,6 +198,8 @@ export async function saveEntry(input: {
   nickname: string | null;
   ranking: string[];
   skippedCount: number;
+  /** 이전 취향표를 불러온 것이면 true. 직접 소트한 저장은 반드시 false 로 덮어야 한다. */
+  imported?: boolean;
 }): Promise<boolean> {
   const { error } = await createClient()
     .from("sort_challenge_entries")
@@ -203,6 +210,8 @@ export async function saveEntry(input: {
         nickname: input.nickname,
         ranking: input.ranking,
         skipped_count: input.skippedCount,
+        // 빼먹으면 upsert 가 이전 값을 그대로 둔다 — 다시 소트해도 "불러왔어요" 가 남는다.
+        imported: input.imported ?? false,
       },
       { onConflict: "challenge_id,participant_key" }
     );
@@ -211,6 +220,21 @@ export async function saveEntry(input: {
     return false;
   }
   return true;
+}
+
+/**
+ * 불러온 취향표를 **원래 언제 소트했는지**. "6월 3일" 처럼 쓸 문자열로 돌려준다.
+ * 그 취향표를 지웠으면 null — 그때는 날짜 없이 "이전에 했던" 이라고만 말한다.
+ */
+export async function fetchResultDate(resultId: string): Promise<string | null> {
+  const { data } = await createClient()
+    .from("tournament_results")
+    .select("created_at")
+    .eq("id", resultId)
+    .maybeSingle();
+  const at = (data as { created_at?: string } | null)?.created_at;
+  if (!at) return null;
+  return new Date(at).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
 }
 
 /** 내 취향 스페이스에 보여 줄 한 줄. 방 하나와 내가 그 방에서 한 소트. */

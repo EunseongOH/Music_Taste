@@ -9,6 +9,7 @@ import {
   getTopK, getSharedTopTracks, buildRankComparison, commonOrders,
 } from '../../src/utils/togetherMatch.ts';
 import { withJosa, josaOf } from '../../src/utils/josa.ts';
+import { personName } from '../../src/utils/togetherName.ts';
 
 let failed = 0;
 const check = (ok, label, detail = '') => {
@@ -277,6 +278,14 @@ console.log('\n조사 (닉네임 뒤)');
   check(withJosa('', '와') === '와', '빈 이름에도 터지지 않는다');
   // 따옴표 밖에 조사만 찍는 자리("'카더가든'으로 보여요")
   check(josaOf('카더가든', '로') === '으로' && josaOf('유라', '로') === '로', "조사만 돌려주기 — '카더가든'으로 / '유라'로");
+}
+
+{
+  // 내 자리에는 늘 "나". 닉네임이 있든 없든, 공백만 적어 두었든 마찬가지다.
+  check(personName('Crongcrong', true) === '나', '내 닉네임은 "나"로 보인다');
+  check(personName(null, true) === '나', '이름이 없어도 내 자리는 "나"');
+  check(personName('Crongcrong') === 'Crongcrong', '남은 닉네임 그대로');
+  check(personName('  ') === '익명 리스너' && personName(null) === '익명 리스너', '이름이 없는 남은 익명 리스너');
 }
 
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);

@@ -219,7 +219,7 @@ export default function TasteRelationGraph({
             aria-pressed={me ? undefined : selected}
             aria-label={
               me
-                ? `나 · ${NAME(person)}`
+                ? "나"
                 : `${NAME(person)}${rate ? `, 나와 ${rate} 일치` : ", 비교할 공통 곡이 모자람"}${selected ? " (선택됨)" : ""}`
             }
             className={[
@@ -235,11 +235,14 @@ export default function TasteRelationGraph({
             ].join(" ")}
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, maxWidth: view.pill }}
           >
-            <span className="truncate max-w-full">{NAME(person)}</span>
-            {/* 둘째 줄은 나에게는 "나", 남에게는 일치율. 같은 자리에 같은 크기라 노드 모양이 흔들리지
-                않고, 닉네임이 겹쳐도(같은 이름을 쓰는 사람이 있다) 어느 쪽이 나인지 바로 보인다. */}
+            {/* 내 자리에는 닉네임 대신 "나". 자기 이름을 3인칭으로 읽으면 남처럼 보인다. */}
+            <span className="truncate max-w-full">{me ? "나" : NAME(person)}</span>
+            {/* 둘째 줄은 일치율. 내 자리에는 없지만 높이는 그대로 둔다 — 없애면 내 노드만
+                납작해져서 관계도의 원이 어긋난다. */}
             {me ? (
-              <span className="text-[10px] font-normal text-cream/70">나</span>
+              <span aria-hidden className="text-[10px] font-normal opacity-0">
+                나
+              </span>
             ) : (
               rate && (
                 <span className={`font-num tabular-nums text-[10px] ${selected ? "text-point-ink" : "text-navy/50"}`}>

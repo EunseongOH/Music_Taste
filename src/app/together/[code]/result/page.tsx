@@ -8,6 +8,7 @@ import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
 import { saveCompletedResult } from "@/utils/worldcupDb";
 import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
+import { personName } from "@/utils/togetherName";
 import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
@@ -361,7 +362,7 @@ export default function TogetherResultPage() {
             trackCount={challenge.tracks.length}
           />
           {/* 그림으로만 끝내지 않는다. 선이 무엇을 뜻하는지 글로도 적는다. */}
-          <GraphLegend pairs={pairs} participants={participants} trackCount={challenge.tracks.length} />
+          <GraphLegend pairs={pairs} participants={participants} myKey={key} trackCount={challenge.tracks.length} />
         </section>
       )}
 
@@ -372,7 +373,7 @@ export default function TogetherResultPage() {
           myKey={key}
           myRanking={mine.ranking}
           theirRanking={selectedEntry.ranking}
-          theirName={selectedEntry.nickname?.trim() || "익명 리스너"}
+          theirName={personName(selectedEntry.nickname)}
           byId={byId}
         />
       )}
@@ -611,17 +612,19 @@ function SheetAction({ label, onClick }: { label: string; onClick: () => void })
 function GraphLegend({
   pairs,
   participants,
+  myKey,
   trackCount,
 }: {
   pairs: ReturnType<typeof buildPairwiseMatches>;
   participants: { key: string; nickname: string | null }[];
+  myKey: string;
   trackCount: number;
 }) {
   const { highest, lowest } = useMemo(
     () => pickHighlightEdges(pairs, trackCount),
     [pairs, trackCount]
   );
-  const name = (k: string) => participants.find((p) => p.key === k)?.nickname?.trim() || "익명 리스너";
+  const name = (k: string) => personName(participants.find((p) => p.key === k)?.nickname, k === myKey);
   const single = pairs.filter((p) => p.comparable).length === 1;
   if (highest.length === 0) return null;
 

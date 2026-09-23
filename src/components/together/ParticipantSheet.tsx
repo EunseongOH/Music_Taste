@@ -4,6 +4,7 @@ import React from "react";
 import type { PairMatch } from "@/utils/togetherMatch";
 import { otherKey, partnersOf } from "@/utils/togetherMatch";
 import { Sheet } from "@/components/space/SpaceUI";
+import { personName } from "@/utils/togetherName";
 
 /**
  * 참여자가 많을 때 관계도에 다 세우지 않고, 묶음 노드(+N)에서 여기로 들어온다.
@@ -27,7 +28,7 @@ export default function ParticipantSheet({
   onPick: (key: string) => void;
 }) {
   const byKey = new Map(participants.map((p) => [p.key, p]));
-  const name = (k: string) => byKey.get(k)?.nickname?.trim() || "익명 리스너";
+  const name = (k: string) => personName(byKey.get(k)?.nickname, k === myKey);
   const rows = partnersOf(pairs, myKey).map((p: PairMatch) => ({ key: otherKey(p, myKey), pair: p }));
 
   return (

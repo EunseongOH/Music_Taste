@@ -592,6 +592,8 @@ export default function TogetherNewPage() {
         nickname: user?.user_metadata?.nickname ?? name ?? rememberedNickname() ?? null,
         ranking: chosen.map((t) => t.id),
         skippedCount: 0,
+        // 직접 소트한 게 아니라 불러온 것이다. 초대 화면이 이걸 보고 다르게 말한다.
+        imported: true,
       });
     }
 

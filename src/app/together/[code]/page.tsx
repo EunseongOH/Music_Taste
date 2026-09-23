@@ -7,11 +7,13 @@ import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import {
   fetchChallenge,
   fetchEntries,
+  fetchResultDate,
   isMine,
   participantKey,
   type ChallengeEntry,
   type SortChallenge,
 } from "@/utils/togetherDb";
+import { personName } from "@/utils/togetherName";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
 import { ConfirmSheet, Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
@@ -51,6 +53,8 @@ export default function TogetherInvitePage() {
    */
   const [justFinished, setJustFinished] = useState<string | null>(null);
   const lastSeen = useRef<string | null>(null);
+  /** 불러온 취향표를 원래 소트한 날("6월 3일"). 그 취향표를 지웠으면 null. */
+  const [importedOn, setImportedOn] = useState<string | null>(null);
 
   // 한자리에 모여 할 때 옆 사람이 끝나는 게 바로 보이도록 몇 초마다 다시 읽는다.
   useEffect(() => {
@@ -86,7 +90,21 @@ export default function TogetherInvitePage() {
     };
   }, [code, user?.id]);
 
-  const mine = entries?.find((e) => e.participant_key === participantKey(user?.id));
+  const myKey = participantKey(user?.id);
+  const mine = entries?.find((e) => e.participant_key === myKey);
+
+  // 불러온 방에서만, 방장에게만 필요한 날짜다. 그 밖에는 한 번도 읽지 않는다.
+  const sourceId = mine?.imported ? challenge?.source_result_id : null;
+  useEffect(() => {
+    if (!sourceId) return;
+    let alive = true;
+    fetchResultDate(sourceId).then((d) => {
+      if (alive) setImportedOn(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [sourceId]);
 
   /** 링크 보내기. 공유 창이 없으면 복사로 떨어진다(한자리에 모여 할 때는 코드를 부르는 쪽이 빠르다). */
   const sendLink = async () => {
@@ -233,9 +251,20 @@ export default function TogetherInvitePage() {
           * "방금" 은 실제로 방금일 때만 쓴다. 며칠 전 기록을 두고 방금이라고 하면
           * 새로 들어온 줄 알고 다시 들여다보게 된다.
           */}
-        {iAmCreator && latest && (
+        {/*
+          * 불러온 순위는 "끝냈어요" 가 아니다. 방장이 방금 소트를 한 적이 없는데
+          * 끝냈다고 하면 누가 들어온 줄 알고 결과를 열어 보게 된다.
+          */}
+        {iAmCreator && mine?.imported && (
           <p className="type-body-strong text-navy break-keep">
-            {latest.nickname || "익명 리스너"}님이 {justNow ? "방금 " : ""}소트를 끝냈어요
+            {importedOn ? `내가 ${importedOn}에 했던` : "내가 이전에 했던"} 소트 내역을 불러왔어요
+          </p>
+        )}
+        {iAmCreator && latest && !(latest.id === mine?.id && mine?.imported) && (
+          <p className="type-body-strong text-navy break-keep">
+            {latest.participant_key === myKey
+              ? `내가 ${justNow ? "방금 " : ""}소트를 끝냈어요`
+              : `${personName(latest.nickname)}님이 ${justNow ? "방금 " : ""}소트를 끝냈어요`}
           </p>
         )}
         <p className="type-caption text-navy/70">
@@ -247,7 +276,7 @@ export default function TogetherInvitePage() {
           <ul className="flex flex-wrap gap-1.5">
             {entries.map((e) => (
               <li key={e.id} className="h-7 px-3 rounded-full bg-navy/5 type-caption text-navy flex items-center">
-                {e.nickname || "익명 리스너"}
+                {personName(e.nickname, e.participant_key === myKey)}
               </li>
             ))}
           </ul>
