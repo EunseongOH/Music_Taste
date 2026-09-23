@@ -142,8 +142,15 @@ try {
     await page.getByRole('button', { name: '카카오톡으로 공유' }).click();
     await page.waitForTimeout(600);
     const k = (await acts()).find((a) => a.kind === 'share');
-    check(!!k, '카카오 — 시스템 공유 시트 호출', k ? `title="${k.data.title}"` : '동작 없음');
+    /*
+     * 카카오 키(NEXT_PUBLIC_KAKAO_JS_KEY)가 없는 환경에서는 Kakao SDK 대신
+     * 시스템 공유 시트로 떨어진다. 어느 쪽이든 **본문은 다른 채널과 같아야 한다** —
+     * 예전에는 카카오만 `"{아티스트} 취향표"` 한 줄을 보내 문구가 갈라져 있었다.
+     */
+    check(!!k, '카카오 — 공유 호출', k ? `title="${k.data.title}"` : '동작 없음');
     check(!!k && typeof k.data.url === 'string' && k.data.url.length > 0, '카카오 — 공유 링크 포함');
+    check(!!k && /취향표 TOP 10/.test(k.data.text ?? ''), '카카오 — 본문에 TOP 10 포함');
+    check(!!k && (k.data.text ?? '').includes(CTA), '카카오 — 본문에 참여 유도 문구 포함');
   }
 
   await page.getByRole('button', { name: '취향표 링크 복사하기' }).click();

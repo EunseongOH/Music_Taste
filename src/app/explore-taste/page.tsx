@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Disc, ChevronDown } from "lucide-react";
 import BackButton from "@/components/BackButton";
@@ -75,6 +75,18 @@ interface TournamentResult {
   created_at: string;
 }
 
+/**
+ * 내 취향표 탭의 한 줄. 두 가지가 한 목록에 섞인다.
+ *
+ * 같은 소트 경험이 둘 다로 남을 수 있다 — 같이 소트하기 결과 화면이 16곡 이상이면
+ * 각자의 순위를 `tournament_results` 에도 저장한다. **그렇다고 합치거나 지우지
+ * 않는다.** 여는 화면이 서로 다르고(개인 순위 / 종합 일치율·관계도), 둘을 잇는
+ * id 가 어디에도 없어 추측으로 묶으면 남의 기록을 지울 수 있다.
+ */
+type SpaceItem =
+  | { kind: "taste"; at: string; result: TournamentResult }
+  | { kind: "together"; at: string; room: MyChallenge };
+
 /** 월드컵에서 "모르는 곡"으로 뺀 곡 (listen_later_tracks). */
 interface ListenLaterTrack {
   id: string;
@@ -93,10 +105,10 @@ const translations = {
     tabArchive: "내 취향표",
     tabListen: "들어볼 곡",
     tabSocial: "취향 메이트",
-    tabTogether: "같이 소트한 방",
-    emptyTogetherTitle: "아직 같이 소트한 방이 없어요",
-    emptyTogetherDesc: "친구와 같은 곡을 각자 소트하면 취향이 얼마나 닮았는지 볼 수 있어요.",
-    togetherCta: "같이 소트하기",
+    /* 목록의 "날짜 · 모드명" 자리에 쓰는 이름. 탭 이름이 아니라 모드 이름이다. */
+    modeTogether: "같이 소트하기",
+    roomSummary: (tracks: number, people: number) => `${tracks}곡 · ${people}명이 함께`,
+    roomMine: "내가 만든 방",
     syncing: "불러오는 중이에요",
     moreBtn: "더 보기",
     close: "닫기",
@@ -147,10 +159,9 @@ const translations = {
     tabArchive: "My Cards",
     tabListen: "Listen Later",
     tabSocial: "Taste Mates",
-    tabTogether: "Sorted together",
-    emptyTogetherTitle: "No shared sorts yet",
-    emptyTogetherDesc: "Sort the same songs with a friend to see how close your tastes are.",
-    togetherCta: "Sort together",
+    modeTogether: "Sort together",
+    roomSummary: (tracks: number, people: number) => `${tracks} songs · ${people} people`,
+    roomMine: "My room",
     syncing: "Loading",
     moreBtn: "Show more",
     close: "Close",
@@ -202,7 +213,7 @@ export default function ExploreTastePage() {
   const { user, isLoading } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<"archive" | "social" | "listen" | "together">("archive");
+  const [activeTab, setActiveTab] = useState<"archive" | "social" | "listen">("archive");
   /** 내가 참여한 같이 소트하기 방. 링크를 잃어도 여기서 결과로 돌아갈 수 있다. */
   const [myRooms, setMyRooms] = useState<MyChallenge[] | null>(null);
   const [completedResults, setCompletedResults] = useState<TournamentResult[]>([]);
@@ -494,10 +505,31 @@ export default function ExploreTastePage() {
   const currentBaseResult = completedResults.find(r => r.id === selectedMatchBaseResultId);
   const t = locale === "en" ? translations.en : translations.ko;
 
+  /*
+   * 내 취향표 + 같이 소트한 방을 **한 목록으로** 본다.
+   *
+   * 탭을 따로 두면 좁은 화면에서 넷이 부딪히고, 무엇보다 사용자에게는 둘 다
+   * "내가 남긴 소트 기록" 이라 나눌 이유가 없다. 구분은 줄마다 붙는 모드명이 한다.
+   *
+   * 날짜 하나로 섞어 정렬한다. 취향표는 20건씩 늘고 방은 한 번에 다 오므로,
+   * [더 보기] 로 취향표가 붙을 때마다 전체가 다시 날짜순이 된다.
+   */
+  const spaceItems = useMemo(() => {
+    const items: SpaceItem[] = [
+      ...completedResults.map((r) => ({ kind: "taste" as const, at: r.created_at, result: r })),
+      ...(myRooms ?? []).map((room) => ({ kind: "together" as const, at: room.sortedAt, room })),
+    ];
+    return items.sort((a, b) => b.at.localeCompare(a.at));
+  }, [completedResults, myRooms]);
+
   const tabs = [
-    { id: "archive" as const, label: t.tabArchive, count: isLoadingData ? null : completedResults.length },
+    /*
+     * 숫자를 붙이지 않는다. completedResults.length 는 "지금까지 불러온 20의 배수"
+     * 라 전체 개수가 아니고, 방까지 합친 정확한 수를 따로 세자고 조회를 늘릴 값어치가
+     * 없다. 탭이 좁아지는 것을 푸는 게 이 작업의 목적이기도 하다.
+     */
+    { id: "archive" as const, label: t.tabArchive },
     { id: "listen" as const, label: t.tabListen, count: isLoadingData ? null : listenTracks.length },
-    { id: "together" as const, label: t.tabTogether, count: myRooms?.length ?? null },
     { id: "social" as const, label: t.tabSocial },
   ];
 
@@ -589,7 +621,8 @@ export default function ExploreTastePage() {
 
         {/* 내 취향표 */}
         {!isLoadingData && user && activeTab === "archive" && (
-          completedResults.length === 0 ? (
+          /* 빈 화면은 **둘 다 없을 때만.** 방이 있는데 "아직 취향표가 없어요"라고 하면 거짓말이다. */
+          spaceItems.length === 0 ? (
             <EmptyState
               title={t.emptyArchiveTitle}
               desc={t.emptyArchiveDesc}
@@ -601,8 +634,35 @@ export default function ExploreTastePage() {
             />
           ) : (
             <ul className="divide-y divide-navy/10">
-              {completedResults.map((result) => (
-                <li key={result.id} className="flex items-center gap-3 py-4">
+              {spaceItems.map((item) =>
+                /*
+                 * 같이 소트한 방은 **일반 취향표 상세 시트를 쓰지 않는다.**
+                 * 보여 줄 것이 다르다 — 종합 일치율·관계도·참가자 비교·내 순위.
+                 * 공개/비공개·삭제·불러와서 공유는 일반 취향표에만 있는 일이라
+                 * 방에는 붙이지 않는다.
+                 */
+                item.kind === "together" ? (
+                  <li key={`room-${item.room.code}`} className="py-4">
+                    <button
+                      onClick={() => router.push(`/together/${item.room.code}/result`)}
+                      className="w-full flex items-center gap-3 text-left cursor-pointer min-h-[44px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--t-point-ink)]"
+                    >
+                      <Cover src={item.room.artistImage} alt={item.room.artistName ?? item.room.title} size={56} />
+                      <div className="flex-1 min-w-0">
+                        <p className="type-body-strong text-navy truncate">{item.room.title}</p>
+                        <p className="type-sub text-navy/70 truncate">
+                          {t.roomSummary(item.room.trackCount, item.room.people)}
+                          {item.room.iCreated ? ` · ${t.roomMine}` : ""}
+                        </p>
+                        <p className="type-caption text-navy/70 truncate">
+                          {formatDate(item.room.sortedAt, locale)} · {t.modeTogether}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                ) : (
+                <li key={item.result.id} className="flex items-center gap-3 py-4">
+                  {(() => { const result = item.result; return (<>
                   <button
                     onClick={() => setSelectedArchiveDetail(result)}
                     className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
@@ -628,8 +688,10 @@ export default function ExploreTastePage() {
                       {result.is_public ? t.publicLabel : t.privateLabel}
                     </span>
                   </div>
+                  </>); })()}
                 </li>
-              ))}
+                )
+              )}
               {hasMoreMine && (
                 <li className="py-4 flex justify-center">
                   <button onClick={loadMoreMine} disabled={loadingMoreMine} className={secondaryButton}>
@@ -663,44 +725,6 @@ export default function ExploreTastePage() {
                     className="w-10 h-10 flex items-center justify-center rounded-full text-navy/70 hover:text-navy hover:bg-navy/5 cursor-pointer shrink-0"
                   >
                     <Trash2 size={18} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )
-        )}
-
-        {/*
-          같이 소트한 방. 링크나 코드를 잃어도 여기서 결과로 돌아갈 수 있다 —
-          전에는 어디에서도 목록을 보여 주지 않아 한 번 잃으면 끝이었다.
-        */}
-        {!isLoadingData && user && activeTab === "together" && (
-          !myRooms?.length ? (
-            <EmptyState
-              title={t.emptyTogetherTitle}
-              desc={t.emptyTogetherDesc}
-              action={
-                <button onClick={() => router.push("/together")} className={primaryButton}>
-                  {t.togetherCta}
-                </button>
-              }
-            />
-          ) : (
-            <ul className="flex flex-col divide-y divide-navy/10 pt-2">
-              {myRooms.map((room) => (
-                <li key={room.code}>
-                  <button
-                    onClick={() => router.push(`/together/${room.code}/result`)}
-                    className="w-full py-3 flex items-center gap-3 text-left min-h-[44px] cursor-pointer hover:bg-navy/5 -mx-6 px-6 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--t-point-ink)]"
-                  >
-                    <Cover src={room.artistImage} alt={room.artistName ?? room.title} size={48} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block type-body-strong text-navy truncate">{room.title}</span>
-                      <span className="block type-caption text-navy/70">
-                        {room.trackCount}곡 · {room.people}명이 함께{room.iCreated ? " · 내가 만든 방" : ""}
-                      </span>
-                      <span className="block type-caption text-navy/70">{formatDate(room.sortedAt, locale)}</span>
-                    </span>
                   </button>
                 </li>
               ))}

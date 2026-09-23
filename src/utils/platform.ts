@@ -63,7 +63,13 @@ export function onAppExit(_cb: () => void): () => void {
  */
 export async function shareUrl(savedId: string | null, ogImageUrl?: string): Promise<string> {
   void ogImageUrl;
-  return savedId ? `${window.location.origin}/taste/${savedId}` : window.location.href;
+  /*
+   * id 가 없으면 **현재 주소를 보내지 않는다.** `/taste` 는 보는 사람 자기 세션의
+   * 결과를 그리는 화면이라, 받은 사람에게는 빈 화면이거나 남의 것이 아닌 자기 것이
+   * 열린다. 그럴 바에는 첫 화면을 보내는 편이 정직하다.
+   * (id 가 없는 경우는 로그인하지 않은 사람뿐이다 — 저장 자체를 할 수 없다.)
+   */
+  return savedId ? `${window.location.origin}/taste/${savedId}` : window.location.origin;
 }
 
 /** 화면 요소를 PNG 로 만들어 사용자에게 저장시킨다. */

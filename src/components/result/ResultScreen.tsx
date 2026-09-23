@@ -16,6 +16,8 @@ import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/
 import { ConfirmSheet, Sheet, UnderlineTabs, primaryButton, dangerButton } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
+import { shareBody as buildShareBody, shareRanking, shareTitle } from "@/utils/shareText";
+import { shareToKakao } from "@/utils/kakaoShare";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
 import PyramidStage from "@/components/result/PyramidStage";
 import { normalizeRanking } from "@/utils/ranking";
@@ -59,9 +61,10 @@ const translations = {
     shareMainBtn: "공유하기",
     shareMenuTitle: "결과 공유하기",
     togetherOption: "이 곡들로 같이 소트하기",
-    togetherHint: "친구도 같은 곡을 소트하면 취향 일치율이 나와요",
     shareXOption: "X (트위터)로 공유",
     shareKakaoOption: "카카오톡으로 공유",
+    /** 카카오 카드 안의 버튼. 받는 사람이 누르는 말이다. */
+    shareCtaButton: "취향표 보기",
     shareInstagramOption: "인스타그램 스토리에 공유",
     instagramGuideTitle: "인스타그램 스토리 공유 가이드",
     instagramGuideDesc: "취향표 이미지가 다운로드되었어요!\n인스타그램 스토리에서 내려받은 이미지를 선택해 공유해 보세요.",
@@ -113,9 +116,9 @@ const translations = {
     shareMainBtn: "Share Results",
     shareMenuTitle: "Share Results",
     togetherOption: "Sort these songs together",
-    togetherHint: "When a friend sorts the same songs, you'll see how close your tastes are",
     shareXOption: "Share on X (Twitter)",
     shareKakaoOption: "Share on KakaoTalk",
+    shareCtaButton: "Open the taste card",
     shareInstagramOption: "Share on Instagram Story",
     instagramGuideTitle: "Instagram Story Share Guide",
     instagramGuideDesc: "The card image has been downloaded! Select it from your gallery on Instagram Story to share.",
@@ -138,34 +141,7 @@ interface Track {
   albumImage: string;
 }
 
-/**
- * 공유에 쓰는 TOP 10 텍스트.
- *
- * X 공유·링크 복사·공유 시트가 모두 이 함수를 쓴다. 같은 문구를 여러 곳에서
- * 따로 만들면 한쪽만 고쳐져 서서히 갈라진다.
- *
- * ⚠️ 여기에 sortify.kr 주소를 넣지 말 것. 앱인토스는 "공유하기 링크가 자사
- * 웹사이트로 랜딩되는 경우"를 제한한다 — 링크는 어댑터(`platform.shareUrl`)가
- * 플랫폼에 맞게 따로 만든다.
- */
-function buildShareText(winners: Track[], nickname?: string | null): string {
-  // 결과 화면의 isSingleArtistMode 는 선택 아티스트 유무로만 정해져 믹스 모드도
-  // true 가 되므로 쓰지 않는다. 실제 곡의 아티스트 수로 판단한다.
-  const mixed = new Set(winners.map((tr) => tr.artistName)).size > 1;
-  const topTracks = winners
-    .slice(0, 10)
-    .map((tr, i) => `${i + 1}. ${tr.title}${mixed ? ` - ${tr.artistName}` : ""}`)
-    .join("\n");
-  const subject = mixed ? "믹스 매치" : winners[0]?.artistName || "";
-  const owner = nickname ? `${nickname}님의 ` : "";
-  return `${owner}${subject} 취향표 TOP 10\n\n${topTracks}`;
-}
-
-/**
- * 링크 바로 위에 붙는 참여 유도 문구. 주소는 넣지 않는다(위 경고와 같은 이유).
- * 공유 본문은 항상 `본문 \n\n 유도 문구 \n 링크` 순서다.
- */
-const SHARE_CTA = "내 1위는 뭘까? 직접 골라 보기";
+/* 공유 문구는 src/utils/shareText.ts 한 곳에서 만든다(모든 채널이 같은 말을 쓰게). */
 
 /**
  * 결과 화면.
@@ -195,7 +171,6 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const [isSavingArchive, setIsSavingArchive] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [savedId, setSavedId] = useState<string | null>(null);
   /**
    * 진행 중인 자동 저장. 공유 직전에 이걸 기다린다.
    *
@@ -205,6 +180,18 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 상태가 아니라 ref 라서 리렌더를 유발하지 않는다.
    */
   const autoSaveRef = useRef<Promise<void> | null>(null);
+  /**
+   * 방금 저장된 결과의 id. **state 가 아니라 ref 다.**
+   *
+   * 공유 핸들러는 클릭 시점의 렌더를 닫아 두고 `await` 한다. state 였다면 그 사이에
+   * 저장이 끝나도 클로저 안의 값은 여전히 null 이다(stale closure). 그러면 남에게
+   * `/taste` — 받는 사람 자기 세션이 열리는 주소 — 가 나갔다.
+   * 화면에 그리는 값이 아니라 리렌더도 필요 없다.
+   */
+  const savedIdRef = useRef<string | null>(null);
+  const rememberSavedId = (id: string | null) => {
+    savedIdRef.current = id;
+  };
   /**
    * 결과 템플릿. 기본은 레코드형. 월드컵 직후에는 그 전에 피라미드 인트로(PyramidStage)를 재생한다 —
    * 피라미드는 인트로 모션으로만 쓰고 취향표 템플릿으로는 두지 않는다.
@@ -301,7 +288,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         setWinners(ranking);
         setSavedTitle(data.title || "");
         setIsSingleArtistMode(!!data.is_single_artist);
-        setSavedId(data.id);
+        rememberSavedId(data.id);
         setIsSaved(true);
         setSavedLoadState("ready");
       })();
@@ -415,11 +402,29 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     } catch {
       // 저장 실패는 자동 저장 쪽에서 이미 로그를 남긴다. 공유는 계속 진행한다.
     }
+    /*
+     * **공유하는 순간 링크에는 반드시 이 결과를 가리키는 id 가 있어야 한다.**
+     *
+     * 같은 아티스트 취향표가 이미 있으면 자동 저장이 덮어쓰기 확인창으로 빠지며
+     * 저장 없이 끝난다(id 가 아예 안 생긴다). 그 상태로 공유하면 남에게
+     * `/taste` — 받는 사람 자기 세션이 열리는 주소 — 가 나갔다.
+     *
+     * 여기서는 **덮어쓰지 않고 새로 저장한다.** 둘 중 되돌릴 수 없는 쪽을 말없이
+     * 고르지 않는다는 뜻이다. 기존 기록은 그대로 남고, 사용자는 확인창에서
+     * 언제든 덮어쓰기를 다시 고를 수 있다.
+     */
+    if (!savedIdRef.current && user && !isSavedView) {
+      try {
+        await executeSaveArchive(false, true);
+      } catch (e) {
+        console.error("[share] 공유 전 저장 실패", e);
+      }
+    }
     // 공유 링크의 미리보기 이미지로 1위 곡 앨범아트를 쓴다(토스 전용).
     // 웹은 taste/[id]/layout.tsx 의 generateMetadata 가 같은 일을 한다.
     const cover = winners[0]?.albumImage;
     const ogImageUrl = cover?.startsWith("https://") ? cover : undefined;
-    return platform.shareUrl(savedId, ogImageUrl);
+    return platform.shareUrl(savedIdRef.current, ogImageUrl);
   };
 
   /**
@@ -447,7 +452,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   };
 
   /** 공유 본문(유도 문구까지). 링크는 호출부가 붙이거나 어댑터가 붙인다. */
-  const shareBody = (nickname: string | null) => `${buildShareText(winners, nickname)}\n\n${SHARE_CTA}`;
+  const shareBody = (nickname: string | null) => buildShareBody(winners, nickname, locale);
 
   const handleCopyLink = async () => {
     const nickname = await ensureShareName();
@@ -513,17 +518,33 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     }
   };
 
+  /**
+   * 카카오톡 공유.
+   *
+   * 예전에는 `navigator.share()` 를 불렀다 — 그건 OS 공유 시트라 카카오톡이
+   * 지정되지 않았고, 본문도 `"{아티스트} 취향표"` 한 줄뿐이라 다른 채널과 달랐다.
+   * 이제 Kakao SDK 로 카드를 보내고, 본문은 다른 채널과 같은 곳에서 만든다.
+   *
+   * 키(NEXT_PUBLIC_KAKAO_JS_KEY)가 없거나 SDK 가 안 뜨면 예전 경로로 떨어진다.
+   */
   const handleShareKakao = async () => {
+    const nickname = await ensureShareName();
+    if (nickname === false) return;
     const url = await resolveShareUrl();
-    const shared = await platform.share({
-      title: t.title,
-      text: `${winners[0]?.artistName || ""} 취향표`,
-      url: url,
+    const cover = winners[0]?.albumImage;
+    const sent = await shareToKakao({
+      title: shareTitle(winners, nickname, locale),
+      description: shareRanking(winners),
+      imageUrl: cover?.startsWith("https://") ? cover : undefined,
+      url,
+      buttonLabel: t.shareCtaButton,
     });
-    if (!shared) {
-      handleCopyLink();
+    if (!sent) {
+      // SDK 가 없을 때. 여기서도 본문은 같은 것을 쓴다.
+      const shared = await platform.share({ title: t.title, text: shareBody(nickname), url });
+      if (!shared) handleCopyLink();
     }
-    trackEvent("funnel_share_kakao", {});
+    trackEvent("funnel_share_kakao", { sdk: sent });
   };
 
   /** 지금 템플릿이 몇 장의 카드로 저장되는지. 오프스크린 카드 id 는 export-card-0.. */
@@ -620,7 +641,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
 
       setIsSaved(true);
       if (saveRes && saveRes.id) {
-        setSavedId(saveRes.id);
+        rememberSavedId(saveRes.id);
       }
       trackEvent("funnel_archive_save", { is_public: isPublic });
 
@@ -1100,16 +1121,6 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                 </button>
                 )}
 
-                {/* 0. 같이 소트하기 — 공유 중에서 가장 되돌아오는 길이라 맨 위에 둔다.
-                     곡 세트는 이미 저장소에 있어서 만들기 화면이 그대로 집어 든다. */}
-                <button
-                  onClick={() => router.push("/together/new")}
-                  className="w-full px-5 py-3 bg-point text-white rounded-xl transition-all active:scale-[0.98] cursor-pointer flex flex-col items-center justify-center shadow-sm"
-                >
-                  <span className="font-sans font-bold text-sm">{t.togetherOption}</span>
-                  <span className="font-sans text-[11px] opacity-90 mt-0.5">{t.togetherHint}</span>
-                </button>
-
                 {/* 2. KakaoTalk */}
                 {platform.shareTargets.includes("kakao") && (
                 <button
@@ -1155,6 +1166,21 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                 >
                   <span>{t.copyLinkOption}</span>
                 </button>
+
+                {/*
+                  같이 소트하기는 **공유 수단이 아니라 다음에 할 일**이다. SNS 브랜드
+                  버튼 사이에 끼워 두면 "어디로 보낼까" 를 고르는 줄에 엉뚱한 것이 섞인다.
+                  선 하나로 끊고 아래에 따로 둔다. 색도 포인트색(주황)을 쓰지 않는다 —
+                  같은 무게로 보이면 안 된다.
+                */}
+                <div className="pt-3 mt-1 border-t border-navy/10">
+                  <button
+                    onClick={() => router.push("/together/new")}
+                    className="w-full h-[52px] px-5 bg-navy/5 text-navy font-sans font-bold text-sm rounded-xl hover:bg-navy/10 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center"
+                  >
+                    {t.togetherOption}
+                  </button>
+                </div>
               </div>
 
               <button

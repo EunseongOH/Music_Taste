@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useRef, useState } from "react";
 import * as platform from "@/utils/platform";
 
 /**
@@ -39,20 +40,43 @@ export default function SpotifyLink({
   label?: string;
   className?: string;
 }) {
+  /*
+   * 열지 못했으면 **말한다.** 전에는 openExternal 을 await 도 catch 도 하지 않아,
+   * 실패해도 화면에 아무 표시가 없었다 — 누르는 사람에게는 버튼이 죽은 것으로 보인다.
+   * 이 컴포넌트는 화면마다 하나씩 떠 있고 토스트가 없는 자리도 있어서, 제 라벨을
+   * 잠깐 바꾸는 것으로 알린다.
+   */
+  const [failed, setFailed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const open = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await platform.openExternal(href);
+      setFailed(false);
+    } catch (err) {
+      console.error("[spotify] 링크를 열지 못했어요", err);
+      setFailed(true);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setFailed(false), 4000);
+    }
+  };
+
   return (
     <button
       type="button"
-      aria-label={label ?? "Spotify에서 보기"}
-      onClick={(e) => {
-        e.stopPropagation();
-        platform.openExternal(href);
-      }}
+      aria-label={failed ? "Spotify를 열지 못했어요" : (label ?? "Spotify에서 보기")}
+      onClick={open}
       // p-[11px] 가 아이콘 높이(21px)의 절반 여백이다
       className={`inline-flex items-center gap-2 shrink-0 cursor-pointer rounded-full hover:bg-navy/5 active:scale-95 transition-all ${label ? "px-3 py-1.5" : "p-[11px]"} ${className}`}
     >
       {/* 공식 에셋을 그대로 쓴다. 색·비율을 바꾸지 않는다 */}
       <img src="/spotify-icon-black.svg" alt="Spotify" width={21} height={21} className="shrink-0" />
-      {label && <span className="font-sans text-xs font-bold text-navy/70">{label}</span>}
+      {(label || failed) && (
+        <span className={`font-sans text-xs font-bold ${failed ? "text-danger" : "text-navy/70"}`}>
+          {failed ? "열지 못했어요" : label}
+        </span>
+      )}
     </button>
   );
 }
