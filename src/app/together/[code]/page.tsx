@@ -93,6 +93,9 @@ export default function TogetherInvitePage() {
   const myKey = participantKey(user?.id);
   const mine = entries?.find((e) => e.participant_key === myKey);
 
+  /* 이름이 아예 없으면 "익명 리스너님이" 라고 부르지 않는다 — 이름 없이 말한다. */
+  const importedName = mine?.nickname?.trim() || challenge?.creator_nickname?.trim() || "";
+
   // 불러온 방에서만, 방장에게만 필요한 날짜다. 그 밖에는 한 번도 읽지 않는다.
   const sourceId = mine?.imported ? challenge?.source_result_id : null;
   useEffect(() => {
@@ -261,10 +264,15 @@ export default function TogetherInvitePage() {
         {/*
           * 불러온 순위는 "끝냈어요" 가 아니다. 방장이 방금 소트를 한 적이 없는데
           * 끝냈다고 하면 누가 들어온 줄 알고 결과를 열어 보게 된다.
+          *
+          * 여기서만 내 이름을 그대로 쓴다. **서비스가 나에게 알려 주는 문장**이라
+          * 그렇다 — 꺼내 온 쪽이 우리고, 그 기록이 누구 것인지 말해 주는 말이다.
+          * "내가 불러왔어요" 로 적으면 내가 한 일이 된다.
           */}
         {iAmCreator && mine?.imported && (
           <p className="type-body-strong text-navy break-keep">
-            {importedOn ? `내가 ${importedOn}에 했던` : "내가 이전에 했던"} 소트 내역을 불러왔어요
+            {importedName ? `${importedName}님이 ` : ""}
+            {importedOn ? `${importedOn}에 ` : "이전에 "}했던 소트 내역을 불러왔어요
           </p>
         )}
         {iAmCreator && latest && (
