@@ -129,6 +129,28 @@ function albumType(given: string, distinctSongs: number): string {
 }
 
 /**
+ * 목록에서 빼는 발매그룹 — **보조 종류로만 알 수 있는 것들**이다.
+ *
+ * primary_type 은 라이브 앨범도 베스트 앨범도 그냥 'Album' 으로 준다. 엔믹스
+ * "VERY NICE"(방송 무대)가 primary=Broadcast, secondary=["Live"] 였던 것처럼
+ * 이 판단은 secondary_types 에만 있다.
+ *
+ *  - Live        같은 곡의 공연판. 스튜디오판과 나란히 나오면 소트가 같은 곡 대결이 된다
+ *  - Compilation 베스트·히트 모음. 수록곡이 정규 앨범과 통째로 겹친다
+ *  - Spokenword  인터뷰·오디오 라이너. 음악이 아니다
+ *                (뉴진스 "This Is NewJeans audio liners" 가 "album 8곡" 으로 잡혀 있었다)
+ *
+ * Soundtrack 은 빼지 않는다. 그 아티스트가 부른 OST 곡은 그 사람의 곡이 맞다 —
+ * 모음집에 한 곡만 참여한 경우와 구분이 필요해서 따로 정할 일로 남겼다.
+ *
+ * `null` 은 "아직 안 받아옴" 이다(백필 중). 그때는 아무것도 빼지 않는다 —
+ * 정보가 없다고 지우면 채워지기 전까지 멀쩡한 앨범이 사라진다.
+ */
+const OFF_SHELF = new Set(["Live", "Compilation", "Spokenword"]);
+const isOffShelf = (secondary?: string[] | null): boolean =>
+  Array.isArray(secondary) && secondary.some((t) => OFF_SHELF.has(t));
+
+/**
  * 앨범 요약을 읽는다. 트랙 행을 통째로 읽지 않으려고 미리 만들어 둔 것이다
  * (앨범이 수백 장인 아티스트에서 앨범 목록 한 번에 1.6MB 가 오가던 것을 줄인다).
  * 아직 요약이 없는 발매판만 예전처럼 트랙을 읽어 그 자리에서 만든다.
@@ -287,7 +309,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     const rgIds = [...new Set([...rgOf.values()].filter(Boolean))] as string[];
     const rgInfo = new Map<string, any>();
     for (let i = 0; i < rgIds.length; i += 200) {
-      const { data } = await supabase.from("mb_release_group").select("mbid, title, primary_type, first_release_date").in("mbid", rgIds.slice(i, i + 200));
+      const { data } = await supabase.from("mb_release_group").select("mbid, title, primary_type, secondary_types, first_release_date").in("mbid", rgIds.slice(i, i + 200));
       for (const g of data ?? []) rgInfo.set(g.mbid, g);
     }
     // Discogs 쪽 메타데이터
@@ -331,6 +353,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     for (const [albumId, src] of byAlbum) {
       if (skip.has(albumId)) continue;
       const rg = rgOf.get(albumId) ? rgInfo.get(rgOf.get(albumId)!) : null;
+      // 라이브·베스트·낭독은 뺀다. 이 판단은 보조 종류에만 있다(OFF_SHELF 주석 참고).
+      if (isOffShelf(rg?.secondary_types)) continue;
       const d = src.discogs ? dInfo.get(src.discogs) : null;
       const name = rg?.title ?? d?.title;
       if (!name) continue;
@@ -366,7 +390,7 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     //    같은 아티스트의 같은 발매판에서 온 트랙리스트라 출처 대조가 필요 없다. 재킷도 발매그룹 ID 로 정해진다.
     const servedRg = new Set([...rgOf.values()]);
     const { data: allRg } = await supabase.from("mb_release_group")
-      .select("mbid, title, primary_type, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
+      .select("mbid, title, primary_type, secondary_types, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
     /*
      * Other·Broadcast 는 내보내지 않는다. MusicBrainz 에서 Other 는 대개 뮤직비디오·프로모션 음원이고
      * Broadcast 는 방송 무대다 — 시상식에서 남의 곡을 부른 것까지 그 아티스트의 곡으로 들어온다
@@ -381,7 +405,8 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
      * 빼면 그것만 가진 아티스트 넷이 목록을 통째로 잃는다.
      */
     const OFF_CATALOG = new Set(["Other", "Broadcast"]);
-    const restRg = (allRg ?? []).filter((g) => !servedRg.has(g.mbid) && !OFF_CATALOG.has(String(g.primary_type ?? "")));
+    const restRg = (allRg ?? []).filter((g) =>
+      !servedRg.has(g.mbid) && !OFF_CATALOG.has(String(g.primary_type ?? "")) && !isOffShelf(g.secondary_types));
     if (restRg.length) {
       // 부트레그·회수·취소된 판은 내보내지 않는다. 그 아티스트가 낸 앨범이 아니거나 유통되지 않은 판이다.
       const BAD_STATUS = new Set(["Bootleg", "Withdrawn", "Cancelled", "Pseudo-Release", "Expunged"]);
