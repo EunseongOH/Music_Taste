@@ -17,6 +17,7 @@ import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
+import SpotifyLink from "@/components/SpotifyLink";
 import { rememberedNickname } from "@/utils/togetherDb";
 import { josaOf } from "@/utils/josa";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
@@ -278,6 +279,21 @@ export default function TogetherNewPage() {
    */
   const [roomName, setRoomName] = useState("");
   const [namingRoom, setNamingRoom] = useState(false);
+
+  /**
+   * 이 화면의 Spotify 링크백 주소 (Developer Policy II.4).
+   *
+   * 아티스트를 골라 들어왔으면 그 아티스트로. "지금 고른 곡"·"내 취향표"로 들어오면
+   * 아티스트 ID 가 없으니 곡 하나로 건다 — 재킷과 곡 정보가 Spotify 것인 건 같다.
+   * `mb:`·`deezer:` 만 있는 방은 Spotify 자료를 안 쓰므로 링크도 걸지 않는다.
+   */
+  const spotifyHref = useMemo(() => {
+    const artistId = artistSource?.artistId ?? pendingArtist?.id;
+    if (artistId) return `https://open.spotify.com/artist/${artistId}`;
+    const track = (sharedSource ?? artistSource)?.tracks.find((t) => t.id && !t.id.includes(":"))
+      ?? picked?.find((t) => t.id && !t.id.includes(":"));
+    return track ? `https://open.spotify.com/track/${track.id}` : null;
+  }, [artistSource, pendingArtist, sharedSource, picked]);
   /*
    * 이름을 묻는 창은 **만들기를 누른 뒤**에 뜬다. 이름이 이미 있는 사람에게는 뜨지 않는다.
    * "이름이 없다" = 비로그인이거나, 로그인했지만 닉네임을 아직 확인하지 않은 경우
@@ -572,7 +588,7 @@ export default function TogetherNewPage() {
   if (madeCode) {
     const link = `${window.location.origin}/together/${madeCode}`;
     return (
-      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 pb-12">
+      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pt-10 pb-12">
         <h1 className="type-title-1 text-navy">같이 할 준비가 됐어요</h1>
         <p className="type-body text-navy/70 mt-2 break-keep">
           옆 사람에게 코드를 알려 주거나 링크를 보내세요.{"\n"}같은 곡으로 소트하면 서로의 일치율이 보여요.
@@ -616,7 +632,8 @@ export default function TogetherNewPage() {
   }
 
   return (
-    <main className={`min-h-screen bg-[var(--app-bg)] flex flex-col px-6 pt-10 ${step === 2 ? "pb-44" : "pb-32"}`}>
+    /* 양옆 여백은 LayoutWrapper 의 px-6(24px)에 맡긴다 — 여기서 또 주면 48px 이 된다 */
+    <main className={`min-h-screen bg-[var(--app-bg)] flex flex-col pt-10 ${step === 2 ? "pb-44" : "pb-32"}`}>
       <BackButton
         className="w-9 h-9"
         onClick={() => {
@@ -626,9 +643,16 @@ export default function TogetherNewPage() {
         }}
       />
       {/* 곡을 모으는 동안에도 누구의 화면인지는 이미 보여야 한다 — 곡보다 이름이 먼저 온다. */}
-      <h1 className="type-title-1 text-navy mt-2">
-        {step === 2 ? source?.label ?? pendingArtist?.name ?? "곡 고르기" : "같이 소트하기 만들기"}
-      </h1>
+      <div className="flex items-start justify-between gap-3 mt-2">
+        <h1 className="type-title-1 text-navy min-w-0">
+          {step === 2 ? source?.label ?? pendingArtist?.name ?? "곡 고르기" : "같이 소트하기 만들기"}
+        </h1>
+        {/*
+         * 이 화면에도 Spotify 링크백이 있어야 한다(Developer Policy II.4). 앨범 재킷과 곡 정보가
+         * Spotify 에서 온 자리인데 전곡 모드에만 붙어 있었다. 카드마다가 아니라 묶음에 하나다.
+         */}
+        {step === 2 && spotifyHref && <SpotifyLink href={spotifyHref} />}
+      </div>
       <p className="type-body text-navy/70 mt-2 break-keep">
         {step !== 2
           ? "곡만 정하면 돼요. 소트를 끝내지 않아도 링크를 만들 수 있어요."
@@ -806,11 +830,15 @@ export default function TogetherNewPage() {
             </button>
             <button
               onClick={() => pickTracks(source.tracks.map((track) => track.id), false)}
-              className="h-8 px-3 rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
+              className="h-8 px-3 shrink-0 whitespace-nowrap rounded-full bg-navy/5 text-navy type-caption cursor-pointer"
             >
               전체 해제
             </button>
-            {chosen.length > 48 && <span className="type-caption text-point-ink">곡이 많으면 소트하는 데 오래 걸려요</span>}
+            {/*
+             * "곡이 많으면 오래 걸려요" 경고는 뺐다. 많이 고르는 건 잘못이 아니라 그냥 선택이고,
+             * 고르자마자 경고가 뜨면 방금 한 일이 실수처럼 읽힌다. 게다가 이 줄에 글이 끼어들면
+             * 옆 버튼이 두 줄로 접혔다 — 버튼은 shrink-0·whitespace-nowrap 으로 고정한다.
+             */}
           </div>
 
           {source.artistId ? (
