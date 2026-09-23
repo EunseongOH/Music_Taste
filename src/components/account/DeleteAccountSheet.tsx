@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Sheet, dangerButton, secondaryButton } from "@/components/space/SpaceUI";
+import { createClient } from "@/utils/supabase/client";
 
 /**
  * 회원 탈퇴 — 세 단계.
@@ -55,9 +56,14 @@ export default function DeleteAccountSheet({
     setBusy(true);
     setError("");
     try {
+      // 토스 빌드는 다른 출처로 부르느라 쿠키가 실리지 않는다. 토큰을 직접 얹는다.
+      const { data: { session } } = await createClient().auth.getSession();
       const res = await fetch("/api/account/delete", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ reason, detail }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };

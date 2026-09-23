@@ -32,12 +32,19 @@ export async function POST(req: Request) {
   }
 
   const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const admin = createAdminClient();
+
+  let { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // 토스 미니앱은 쿠키가 아니라 localStorage 에 세션을 두고, 다른 출처(sortify.kr)로
+    // 부른다 — 쿠키가 실려 오지 않는다. 그래서 토큰을 헤더로 받는다.
+    // **여전히 본문이 아니다**: 서명을 서버가 검증하므로 남의 id 를 적어 보낼 수 없다.
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    if (token) user = (await admin.auth.getUser(token)).data.user;
+  }
   if (!user) {
     return NextResponse.json({ error: "로그인이 필요해요." }, { status: 401 });
   }
-
-  const admin = createAdminClient();
 
   // 1) 참여 기록은 남기고 이름만 지운다.
   const { error: anonErr } = await admin
