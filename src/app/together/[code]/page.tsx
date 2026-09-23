@@ -16,7 +16,7 @@ import {
 import { personName } from "@/utils/togetherName";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
-import { ConfirmSheet, Cover, RankList, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { ConfirmSheet, Cover, RankList, SectionTitle, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import { SafeImage } from "@/components/SafeImage";
 import * as platform from "@/utils/platform";
@@ -262,7 +262,7 @@ export default function TogetherInvitePage() {
         <p className="type-caption text-navy/70">
           {iAmCreator && entries.length === 0
             ? "아직 아무도 소트하지 않았어요. 링크를 보내 보세요."
-            : `지금까지 ${entries.length}명이 소트했어요${entries.length > 0 ? " · 몇 초마다 새로 확인해요" : ""}`}
+            : `지금까지 ${entries.length}명이 소트했어요`}
         </p>
         {entries.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
@@ -290,7 +290,7 @@ export default function TogetherInvitePage() {
             <button
               type="button"
               onClick={() => setShowAllMine((v) => !v)}
-              className="mt-2 type-caption text-point-ink font-semibold cursor-pointer"
+              className={`${textLink} mt-3`}
             >
               {showAllMine ? "접기" : `전체 ${myRanked.length}곡 보기`}
             </button>
@@ -318,7 +318,7 @@ export default function TogetherInvitePage() {
         <button
           type="button"
           onClick={() => setShowAllTracks((v) => !v)}
-          className="mt-2 type-caption text-point-ink font-semibold cursor-pointer"
+          className={`${textLink} mt-3`}
         >
           {showAllTracks ? "접기" : `전체 ${challenge.tracks.length}곡 보기`}
         </button>
