@@ -913,6 +913,16 @@ export const getArtistAlbums = async (artistId: string, offset = 0, limit = 10) 
     if ((data.total || 0) > 0 && fresh.length) {
       try {
         const supabase = createAdminClient();
+        /*
+         * 쪽 크기(limit)가 PK 에 들어 있다. 그래서 그 값을 바꾸면 옛 쪽이 지워지지 않고 남아
+         * 같은 앨범이 여러 줄에 걸쳐 쌓인다(8 → 10 으로 바꿨을 때 실제로 그랬다. 읽는 쪽이
+         * 앨범 id 로 걸러 화면은 무사했지만, 스포티파이에서 빠진 앨범이 만료까지 남는다).
+         * 같은 자리(offset)의 다른 크기 줄은 지우고 쓴다 — PK 를 바꾸는 것보다 안전하다.
+         */
+        await supabase
+          .from('spotify_cache_artist_albums')
+          .delete()
+          .eq('artist_id', artistId).eq('locale', lang).eq('offset', from).neq('limit', limit);
         await supabase
           .from('spotify_cache_artist_albums')
           .upsert({

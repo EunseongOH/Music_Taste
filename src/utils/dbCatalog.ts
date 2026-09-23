@@ -367,7 +367,21 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
     const servedRg = new Set([...rgOf.values()]);
     const { data: allRg } = await supabase.from("mb_release_group")
       .select("mbid, title, primary_type, first_release_date").eq("artist_mbid", map.mbid).limit(1000);
-    const restRg = (allRg ?? []).filter((g) => !servedRg.has(g.mbid));
+    /*
+     * Other·Broadcast 는 내보내지 않는다. MusicBrainz 에서 Other 는 대개 뮤직비디오·프로모션 음원이고
+     * Broadcast 는 방송 무대다 — 시상식에서 남의 곡을 부른 것까지 그 아티스트의 곡으로 들어온다
+     * (엔믹스 "VERY NICE", 원곡 세븐틴). 커버리지 뷰는 같은 것을 이미 빼고 세는데
+     * (20260922120000_artist_coverage_view.sql) 화면에 내보내는 쪽에만 그 판단이 없었다.
+     *
+     * **여기는 Spotify 앨범 ID 가 없는 발매그룹만 다룬다.** Spotify 에 있는 앨범에까지 이 조건을
+     * 걸면 안 된다 — MusicBrainz 가 뮤직비디오 발매그룹으로 잡아 둔 진짜 싱글이 함께 사라진다
+     * (BLACKPINK "Shut Down", aespa "Whiplash", 뉴진스 "Attention" 이 전부 Other 다).
+     *
+     * primary_type 이 비어 있는 것은 남긴다. "잡동사니"가 아니라 "분류가 안 됐다"는 뜻이고,
+     * 빼면 그것만 가진 아티스트 넷이 목록을 통째로 잃는다.
+     */
+    const OFF_CATALOG = new Set(["Other", "Broadcast"]);
+    const restRg = (allRg ?? []).filter((g) => !servedRg.has(g.mbid) && !OFF_CATALOG.has(String(g.primary_type ?? "")));
     if (restRg.length) {
       // 부트레그·회수·취소된 판은 내보내지 않는다. 그 아티스트가 낸 앨범이 아니거나 유통되지 않은 판이다.
       const BAD_STATUS = new Set(["Bootleg", "Withdrawn", "Cancelled", "Pseudo-Release", "Expunged"]);
