@@ -180,8 +180,15 @@ export default function TogetherInvitePage() {
    * 초대 화면 배경. 방을 만들 때 적어 둔 아티스트 사진을 쓰고, 없으면 첫 곡의 앨범 재킷.
    * 둘 다 없으면 배경 없이 간다 — 무관한 사진을 끌어오지 않는다.
    */
-  /* 가장 최근에 끝낸 사람. fetchEntries 는 오래된 순이라 마지막이 최신이다. */
-  const latest = entries.length > 0 ? entries[entries.length - 1] : null;
+  /*
+   * 가장 최근에 끝낸 **남**. fetchEntries 는 오래된 순이라 뒤에서부터 찾는다.
+   *
+   * 내가 끝낸 것은 여기서 말하지 않는다 — 방금 내가 한 일을 알려 줄 이유가 없다.
+   * 이 줄이 있는 이유는 링크를 보내 놓고 기다리는 사람에게 **누가 들어왔는지**
+   * 알려 주는 것이다. 내가 마지막에 다시 소트했다고 해서 먼저 들어온 사람의
+   * 소식이 사라져서도 안 되니, 내 것만 건너뛰고 그 앞을 본다.
+   */
+  const latest = [...entries].reverse().find((e) => e.participant_key !== myKey) ?? null;
   const justNow = !!latest && justFinished === latest.id;
 
   const hero = challenge.artist_image || challenge.tracks[0]?.albumImage || "";
@@ -260,11 +267,9 @@ export default function TogetherInvitePage() {
             {importedOn ? `내가 ${importedOn}에 했던` : "내가 이전에 했던"} 소트 내역을 불러왔어요
           </p>
         )}
-        {iAmCreator && latest && !(latest.id === mine?.id && mine?.imported) && (
+        {iAmCreator && latest && (
           <p className="type-body-strong text-navy break-keep">
-            {latest.participant_key === myKey
-              ? `내가 ${justNow ? "방금 " : ""}소트를 끝냈어요`
-              : `${personName(latest.nickname)}님이 ${justNow ? "방금 " : ""}소트를 끝냈어요`}
+            {personName(latest.nickname)}님이 {justNow ? "방금 " : ""}소트를 끝냈어요
           </p>
         )}
         <p className="type-caption text-navy/70">
