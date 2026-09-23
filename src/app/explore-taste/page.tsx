@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2, Disc, ChevronDown } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
+import { fetchMyChallenges, participantKey, type MyChallenge } from "@/utils/togetherDb";
 import { createClient } from "@/utils/supabase/client";
 import { getSafeLocale } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
@@ -92,6 +93,10 @@ const translations = {
     tabArchive: "내 취향표",
     tabListen: "들어볼 곡",
     tabSocial: "취향 메이트",
+    tabTogether: "같이 소트한 방",
+    emptyTogetherTitle: "아직 같이 소트한 방이 없어요",
+    emptyTogetherDesc: "친구와 같은 곡을 각자 소트하면 취향이 얼마나 닮았는지 볼 수 있어요.",
+    togetherCta: "같이 소트하기",
     syncing: "불러오는 중이에요",
     moreBtn: "더 보기",
     close: "닫기",
@@ -142,6 +147,10 @@ const translations = {
     tabArchive: "My Cards",
     tabListen: "Listen Later",
     tabSocial: "Taste Mates",
+    tabTogether: "Sorted together",
+    emptyTogetherTitle: "No shared sorts yet",
+    emptyTogetherDesc: "Sort the same songs with a friend to see how close your tastes are.",
+    togetherCta: "Sort together",
     syncing: "Loading",
     moreBtn: "Show more",
     close: "Close",
@@ -193,7 +202,9 @@ export default function ExploreTastePage() {
   const { user, isLoading } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<"archive" | "social" | "listen">("archive");
+  const [activeTab, setActiveTab] = useState<"archive" | "social" | "listen" | "together">("archive");
+  /** 내가 참여한 같이 소트하기 방. 링크를 잃어도 여기서 결과로 돌아갈 수 있다. */
+  const [myRooms, setMyRooms] = useState<MyChallenge[] | null>(null);
   const [completedResults, setCompletedResults] = useState<TournamentResult[]>([]);
   const [listenTracks, setListenTracks] = useState<ListenLaterTrack[]>([]);
   const [otherUsersResults, setOtherUsersResults] = useState<TournamentResult[]>([]);
@@ -291,6 +302,9 @@ export default function ExploreTastePage() {
         .order("created_at", { ascending: false });
       if (listenError) console.error("[ExploreTaste] Error fetching listen later:", listenError.message);
       setListenTracks(listenData || []);
+
+      // 4. 같이 소트한 방. 참여키로 찾는다(로그인하면 계정 id 가 참여키다).
+      setMyRooms(await fetchMyChallenges(participantKey(user.id)));
     } catch (err) {
       console.error("[ExploreTaste] Error fetching data:", err);
     } finally {
@@ -483,6 +497,7 @@ export default function ExploreTastePage() {
   const tabs = [
     { id: "archive" as const, label: t.tabArchive, count: isLoadingData ? null : completedResults.length },
     { id: "listen" as const, label: t.tabListen, count: isLoadingData ? null : listenTracks.length },
+    { id: "together" as const, label: t.tabTogether, count: myRooms?.length ?? null },
     { id: "social" as const, label: t.tabSocial },
   ];
 
@@ -648,6 +663,44 @@ export default function ExploreTastePage() {
                     className="w-10 h-10 flex items-center justify-center rounded-full text-navy/70 hover:text-navy hover:bg-navy/5 cursor-pointer shrink-0"
                   >
                     <Trash2 size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+
+        {/*
+          같이 소트한 방. 링크나 코드를 잃어도 여기서 결과로 돌아갈 수 있다 —
+          전에는 어디에서도 목록을 보여 주지 않아 한 번 잃으면 끝이었다.
+        */}
+        {!isLoadingData && user && activeTab === "together" && (
+          !myRooms?.length ? (
+            <EmptyState
+              title={t.emptyTogetherTitle}
+              desc={t.emptyTogetherDesc}
+              action={
+                <button onClick={() => router.push("/together")} className={primaryButton}>
+                  {t.togetherCta}
+                </button>
+              }
+            />
+          ) : (
+            <ul className="flex flex-col divide-y divide-navy/10 pt-2">
+              {myRooms.map((room) => (
+                <li key={room.code}>
+                  <button
+                    onClick={() => router.push(`/together/${room.code}/result`)}
+                    className="w-full py-3 flex items-center gap-3 text-left min-h-[44px] cursor-pointer hover:bg-navy/5 -mx-6 px-6 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--t-point-ink)]"
+                  >
+                    <Cover src={room.artistImage} alt={room.artistName ?? room.title} size={48} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block type-body-strong text-navy truncate">{room.title}</span>
+                      <span className="block type-caption text-navy/70">
+                        {room.trackCount}곡 · {room.people}명이 함께{room.iCreated ? " · 내가 만든 방" : ""}
+                      </span>
+                      <span className="block type-caption text-navy/70">{formatDate(room.sortedAt, locale)}</span>
+                    </span>
                   </button>
                 </li>
               ))}

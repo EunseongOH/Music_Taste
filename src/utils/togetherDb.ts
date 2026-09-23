@@ -212,3 +212,76 @@ export async function saveEntry(input: {
   }
   return true;
 }
+
+/** 내 취향 스페이스에 보여 줄 한 줄. 방 하나와 내가 그 방에서 한 소트. */
+export interface MyChallenge {
+  code: string;
+  title: string;
+  artistName: string | null;
+  artistImage: string | null;
+  trackCount: number;
+  /** 지금까지 이 방에서 소트를 끝낸 사람 수 */
+  people: number;
+  /** 내가 이 방에서 소트한 시각 */
+  sortedAt: string;
+  iCreated: boolean;
+}
+
+/**
+ * 내가 참여한 방 목록.
+ *
+ * 링크나 코드를 잃으면 결과를 다시 볼 길이 없었다 — 어디에서도 목록을 보여 주지
+ * 않았다. 참여 기록은 참여키로 찾을 수 있으니 화면만 있으면 된다.
+ *
+ * 로그인했으면 계정 id 가, 아니면 기기에 남은 uuid 가 참여키다. 그래서
+ * 로그인하지 않은 사람도 **같은 기기에서는** 자기가 한 방을 찾을 수 있다.
+ */
+export async function fetchMyChallenges(key: string): Promise<MyChallenge[]> {
+  const supabase = createClient();
+  const { data: mineRows, error } = await supabase
+    .from("sort_challenge_entries")
+    .select("challenge_id, created_at")
+    .eq("participant_key", key)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error || !mineRows?.length) {
+    if (error) console.error("[together] 참여한 방을 불러오지 못했어요:", error.message);
+    return [];
+  }
+
+  const rows = mineRows as { challenge_id: string; created_at: string }[];
+  const ids = [...new Set(rows.map((r) => r.challenge_id))];
+  const { data: rooms } = await supabase
+    .from("sort_challenges")
+    .select("id, code, title, artist_name, artist_image, tracks, creator_id")
+    .in("id", ids);
+  // 방마다 몇 명이 끝냈는지. 한 번에 읽어 방 수만큼 조회하지 않는다.
+  const { data: all } = await supabase
+    .from("sort_challenge_entries")
+    .select("challenge_id")
+    .in("challenge_id", ids);
+  const people = new Map<string, number>();
+  for (const r of (all ?? []) as { challenge_id: string }[]) {
+    people.set(r.challenge_id, (people.get(r.challenge_id) ?? 0) + 1);
+  }
+
+  type Room = { id: string; code: string; title: string; artist_name: string | null;
+                artist_image: string | null; tracks: unknown[] | null; creator_id: string | null };
+  const roomOf = new Map(((rooms ?? []) as Room[]).map((r) => [r.id, r]));
+  return rows
+    .map((r) => {
+      const room = roomOf.get(r.challenge_id);
+      if (!room) return null;                       // 방이 지워졌으면 목록에서 뺀다
+      return {
+        code: room.code,
+        title: room.title,
+        artistName: room.artist_name,
+        artistImage: room.artist_image,
+        trackCount: (room.tracks ?? []).length,
+        people: people.get(r.challenge_id) ?? 1,
+        sortedAt: r.created_at,
+        iCreated: !!room.creator_id && room.creator_id === key,
+      } satisfies MyChallenge;
+    })
+    .filter((x): x is MyChallenge => x !== null);
+}

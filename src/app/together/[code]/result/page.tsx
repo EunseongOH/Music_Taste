@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
@@ -15,6 +16,7 @@ import { RankList, Sheet, Toast, primaryButton, secondaryButton, textLink, useTo
 import TogetherPairDetail from "@/components/together/TogetherPairDetail";
 import TogetherResultShareCard from "@/components/together/TogetherResultShareCard";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
+import LoginModal from "@/components/LoginModal";
 
 interface StoredTrack {
   id?: string;
@@ -160,6 +162,17 @@ export default function TogetherResultPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [showAllMine, setShowAllMine] = useState(false);
   const [saving, setSaving] = useState(false);
+  /**
+   * 나가려는 사람에게 한 번만 띄우는 로그인 안내.
+   *
+   * 로그인하지 않으면 이 결과는 이 기기의 링크에만 남는다 — 링크를 잃으면 끝이다.
+   * 나가기 직전이 그 사실이 가장 와닿는 순간이라 여기서 한 번 말한다.
+   * 로그인한 사람에게는 띄우지 않는다(이미 취향표로 남아 있다).
+   */
+  const [askLogin, setAskLogin] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  /** 안내를 이미 봤거나 나가기로 정했다 — 두 번 막지 않는다. */
+  const leaving = useRef(false);
   /** 공유 카드 안의 아티스트 사진. 저장 시점에 다시 내려받으면 빈 칸으로 찍힐 수 있다. */
   const heroForCard = challenge?.artist_image || null;
   const inlined = useInlinedCovers(heroForCard ? [heroForCard] : []);
@@ -184,6 +197,35 @@ export default function TogetherResultPage() {
     () => (selectedKey ? entries?.find((e) => e.participant_key === selectedKey) ?? null : null),
     [entries, selectedKey]
   );
+
+  /** 나가기. 안내를 한 번 띄우고, 두 번째부터는 그냥 나간다. */
+  const leave = () => {
+    if (user || leaving.current) return goHome();
+    leaving.current = true;
+    setAskLogin(true);
+  };
+  const goHome = () => {
+    leaving.current = true;
+    if (window.history.length > 1) router.back();
+    else router.push("/");
+  };
+
+  /*
+   * 브라우저·기기 뒤로가기도 같은 안내를 지난다. 월드컵 나가기 가드와 같은 방식이다
+   * (history 에 한 칸을 밀어 두고 popstate 를 받으면 되돌린다).
+   */
+  useEffect(() => {
+    if (user) return;                       // 로그인했으면 막을 이유가 없다
+    history.pushState(null, "", location.href);
+    const onPop = () => {
+      if (leaving.current) return;
+      history.pushState(null, "", location.href);
+      leaving.current = true;
+      setAskLogin(true);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [user]);
 
   /* 옆 사람이 끝나면 화면이 저절로 바뀐다. 무엇이 바뀌었는지 한 줄로 알려 준다. */
   const seenCount = useRef<number | null>(null);
@@ -251,6 +293,16 @@ export default function TogetherResultPage() {
             <div className="absolute inset-0 bg-gradient-to-b from-[var(--app-bg)]/30 via-[var(--app-bg)]/80 to-[var(--app-bg)]" />
           </div>
         )}
+
+        {/* 닫기. 사진 위에 올라가므로 바탕을 깔아 밝은 사진에서도 보이게 한다. */}
+        <button
+          type="button"
+          onClick={leave}
+          aria-label="닫기"
+          className="absolute right-0 top-4 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--app-bg)]/70 backdrop-blur-sm text-navy hover:bg-[var(--app-bg)] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-point-ink)]"
+        >
+          <X size={20} strokeWidth={2.25} />
+        </button>
 
         <div className={`relative ${heroImage ? "-mt-24" : "pt-10"}`}>
           <p className="type-caption text-navy/70">
@@ -478,6 +530,50 @@ export default function TogetherResultPage() {
           roomName={challenge.title && challenge.title !== challenge.artist_name ? challenge.title : null}
         />
       </div>
+
+      {/*
+        나가기 직전의 로그인 안내. 막는 게 아니라 알려 주는 것이라 [그냥 나가기] 를 함께 둔다 —
+        닫을 길이 없는 안내는 안내가 아니라 덫이다.
+      */}
+      <Sheet
+        open={askLogin}
+        onClose={() => setAskLogin(false)}
+        closeLabel="닫기"
+        header={
+          <>
+            <h2 className="type-title-2 text-navy break-keep">소트 결과를 남겨 두고 싶다면?</h2>
+            <p className="type-caption text-navy/70 mt-1 break-keep">
+              로그인하면 이 결과가 내 취향 스페이스에 남아요. 지금은 이 링크에만 있어서 링크를 잃으면 다시 볼 수 없어요.
+            </p>
+          </>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => {
+                setAskLogin(false);
+                setLoginOpen(true);
+              }}
+              className={`${primaryButton} w-full`}
+            >
+              로그인하기
+            </button>
+            <button onClick={goHome} className={`${secondaryButton} w-full`}>
+              그냥 나가기
+            </button>
+          </div>
+        }
+      />
+
+      {/*
+        로그인창은 이 화면 위에서 연다. 다른 화면으로 보내면 방금 본 결과를 잃는다 —
+        로그인하고 돌아오면 그대로 이 결과이고, 그때부터 취향표로도 남는다.
+      */}
+      <LoginModal
+        isOpen={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        onSuccess={() => setLoginOpen(false)}
+      />
 
       <Toast toast={toast} />
     </main>
