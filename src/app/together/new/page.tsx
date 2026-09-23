@@ -12,7 +12,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
-import { createChallenge } from "@/utils/togetherDb";
+import { createChallenge, participantKey, saveEntry } from "@/utils/togetherDb";
 import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
@@ -181,6 +181,12 @@ interface Source {
   tracks: CatalogTrack[];
   /** 저장된 취향표에서 온 경우 그 id */
   resultId: string | null;
+  /**
+   * **내가 직접 소트한 순위**인가. `이미 한 소트에서 가져오기` 목록(내 취향표)만 true 다.
+   * 남의 공개 취향표에서 `?from=` 으로 온 것은 곡만 빌린 것이라 false — 그 순위를
+   * 내 기록으로 저장하면 내가 정한 적 없는 순위가 내 것으로 남는다.
+   */
+  mine?: boolean;
 }
 
 /**
@@ -497,6 +503,7 @@ export default function TogetherNewPage() {
         artistName: row.artist_name || tracks[0]?.artistName || null,
         tracks,
         resultId: row.id,
+        mine: true,
       });
     }
     return list;
@@ -564,6 +571,30 @@ export default function TogetherNewPage() {
       showToast("링크를 만들지 못했어요. 다시 시도해 주세요.", "error");
       return;
     }
+    /*
+     * 내 취향표로 만든 방이면 **그 순위를 내 참여 기록으로 바로 남긴다.**
+     *
+     * 이미 정해 둔 순위가 있는데 방을 만들자마자 "같은 곡으로 소트하기"가 뜨면,
+     * 방장은 자기가 방금 고른 곡을 처음부터 다시 줄 세워야 했다. 이제 다른 사람이
+     * 들어오는 즉시 비교가 되고, 다시 하고 싶으면 [다시 소트하기]로 덮어쓴다.
+     *
+     * 남의 공개 취향표에서 온 방(`?from=`)은 하지 않는다 — 곡만 빌린 것이라
+     * 그 순위를 내 기록으로 남기면 내가 정한 적 없는 순위가 내 것이 된다.
+     * "지금 고른 곡"·"아티스트에서 고르기"도 순위 자체가 없어 해당이 없다.
+     *
+     * 저장에 실패해도 방 만들기는 성공으로 둔다. 링크는 이미 나왔고, 방장은
+     * [나도 소트하기]로 직접 하면 된다.
+     */
+    if (source.mine && chosen.length > 1) {
+      await saveEntry({
+        challengeId: made.id,
+        participantKey: participantKey(user?.id),
+        nickname: user?.user_metadata?.nickname ?? name ?? rememberedNickname() ?? null,
+        ranking: chosen.map((t) => t.id),
+        skippedCount: 0,
+      });
+    }
+
     setMadeCode(made.code);
     // 다음에 할 일을 한 줄로 알려 준다 — 만들고 나면 화면에 코드와 버튼만 남는다.
     showToast("링크를 만들었어요. 보내면 바로 시작돼요.");

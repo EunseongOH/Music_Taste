@@ -14,7 +14,7 @@ import {
 } from "@/utils/togetherDb";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
-import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
+import { ConfirmSheet, Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import { SafeImage } from "@/components/SafeImage";
 import * as platform from "@/utils/platform";
@@ -43,6 +43,8 @@ export default function TogetherInvitePage() {
   const [iAmCreator, setIAmCreator] = useState(false);
   /** 소트를 시작하기 전에 이름을 묻는다 — 일치율 화면에서 누가 누구인지 알아야 한다. */
   const [askName, setAskName] = useState(false);
+  /** 이미 소트한 사람이 [다시 소트하기] 를 눌렀을 때의 확인창 */
+  const [askResort, setAskResort] = useState(false);
   /*
    * 이 화면을 보고 있는 동안 새로 끝낸 사람. "방금"이라고 말해도 되는 건 이때뿐이다.
    * 시계로 재지 않는다 — 며칠 전 기록을 두고 방금이라고 하면 새로 들어온 줄 안다.
@@ -107,8 +109,17 @@ export default function TogetherInvitePage() {
 
   const start = () => {
     if (!challenge) return;
-    // 처음 참여하는 사람에게만 묻는다. 다시 소트하는 사람은 이미 이름이 있다.
-    if (!mine && needsNickname(user)) {
+    /*
+     * 이미 기록이 있는 사람이 다시 하면 **이전 순위가 지워진다**(같은 참여키로 덮어쓴다).
+     * 되돌릴 수 없으니 한 번 묻는다. 방장이든 참여자든 결과는 같으므로 둘 다 묻는다 —
+     * 같은 일을 하는 버튼이 누구에게는 경고 없이 동작하면 그게 더 이상하다.
+     */
+    if (mine) {
+      setAskResort(true);
+      return;
+    }
+    // 처음 참여하는 사람에게만 이름을 묻는다. 다시 소트하는 사람은 이미 이름이 있다.
+    if (needsNickname(user)) {
       setAskName(true);
       return;
     }
@@ -299,6 +310,23 @@ export default function TogetherInvitePage() {
           setAskName(false);
           go();
         }}
+      />
+
+      {/*
+        다시 소트하면 이전 순위가 사라진다. 되돌릴 수 없는 일이라 한 번 묻는다.
+        특히 내 취향표로 방을 만든 사람은 이미 순위가 들어가 있는 줄 모를 수 있다.
+      */}
+      <ConfirmSheet
+        open={askResort}
+        title="다시 소트할까요?"
+        desc="지금 남아 있는 순위는 지워지고, 새로 소트한 순위로 바뀌어요."
+        confirmLabel="다시 소트하기"
+        cancelLabel="그대로 둘게요"
+        onConfirm={() => {
+          setAskResort(false);
+          go();
+        }}
+        onClose={() => setAskResort(false)}
       />
 
       <Toast toast={toast} />

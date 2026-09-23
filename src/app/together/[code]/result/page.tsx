@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
+import { saveCompletedResult } from "@/utils/worldcupDb";
 import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
@@ -82,6 +83,33 @@ export default function TogetherResultPage() {
             skippedCount: fresh.skipped,
           });
           safeSessionStorage.removeItem("together_code");
+
+          /*
+           * 같이 소트한 것도 **내 취향표로 남긴다.** 참여한 사람마다 각자의 취향표가 생긴다.
+           *
+           * 예전에는 남기지 않았다(월드컵이 `?challenge=1` 이면 저장을 건너뛴다). 그래서
+           * 같이 소트하기로 한 소트는 아무리 해도 내 취향 스페이스에 안 쌓였다.
+           *
+           * 기준은 혼자 할 때와 같은 16곡이다 — 방은 4곡부터 만들 수 있어서, 조건 없이
+           * 남기면 4곡짜리 취향표가 계속 쌓인다. "모르는 곡"으로 뺀 곡도 더해서 센다.
+           *
+           * 제목에 시각까지 적는다. 같은 방을 하루에 두 번 하면 날짜만으로는 구분이 안 되고,
+           * 가져온 원본 취향표와도 같은 이름이 된다. 덮어쓰지 않고 **늘 새로 남긴다** —
+           * 다시 소트한 결과는 이전 것과 별개다.
+           */
+          const byTrackId = new Map(found.tracks.map((t) => [t.id, t]));
+          const ranked = ids.map((id) => byTrackId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
+          if (user && ranked.length + fresh.skipped >= 16) {
+            const d = new Date();
+            const p = (n: number) => String(n).padStart(2, "0");
+            const stamp = `${String(d.getFullYear()).slice(-2)}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+            const artist = found.artist_name || ranked[0]?.artistName || found.title;
+            await saveCompletedResult(ranked, ranked.slice(1), `${artist} sort_${stamp}`, {
+              isSingleArtist: true,
+              artistId: found.artist_id ?? null,
+              artistName: found.artist_name ?? null,
+            });
+          }
         }
       }
 

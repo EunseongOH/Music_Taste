@@ -30,7 +30,7 @@
 
     <!--
       Next 빌드는 next/font 로 폰트를 주입하지만 Vite 빌드에는 그 런타임이 없다.
-      Pretendard·원티드산스(숫자 전용)는 번들에 포함하고, Playfair(홈 워드마크 전용)는 Google Fonts 에서 받는다.
+      Pretendard·원티드산스(숫자 전용)는 번들에 포함하고, 홈 워드마크용 Playfair(legacy)·Nunito(새 톤)는 Google Fonts 에서 받는다.
       (자체 호스팅 전환은 후속 과제 — 네트워크 의존을 없애는 편이 낫다.)
     -->
     <style>
@@ -88,12 +88,19 @@
         --font-pretendard: 'pretendard', 'pretendard Fallback';
         --font-playfair: 'Playfair Display', 'Playfair Display Fallback';
         --font-wanted: 'wantedSans', 'wantedSans Fallback';
+        /*
+          새 톤(sky-tint)의 홈 워드마크는 Nunito ExtraBold 다(typography.md 6장).
+          이 변수가 없으면 워드마크가 시스템 글꼴로 떨어진다 — 새 톤으로 바꿀 때
+          웹(next/font)만 고치고 여기를 빠뜨려서 미니앱에서만 서체가 달랐다.
+          한글은 Nunito 에 없으므로 Pretendard 로 떨어진다(워드마크는 영문 전용이라 문제없다).
+        */
+        --font-nunito: 'Nunito', 'pretendard', 'pretendard Fallback';
       }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Nunito:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
   </head>
