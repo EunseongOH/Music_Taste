@@ -456,16 +456,17 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   };
 
   /**
-   * 공유 미리보기에 쓸 그림. **앨범 재킷은 쓰지 않는다.**
+   * 공유 미리보기에 쓸 그림 — **1위 곡 재킷 → 아티스트 사진 → Sortify 로고**.
    *
-   * 재킷을 쓰면 카카오톡에서 이 링크가 "누구의 취향표"가 아니라 "어느 앨범"으로
-   * 보인다 — 받는 사람이 무엇을 여는지 알 수 없다. 단일 아티스트면 아티스트 사진,
-   * 그 밖에는 Sortify 로고다. `/taste/[id]` 의 OG 와 같은 규칙이다(layout.tsx).
+   * `/taste/[id]` 의 OG 와 같은 사다리다(layout.tsx). 링크를 받는 쪽은 그 그림으로
+   * "무엇에 대한 취향표"인지 알아본다.
    *
-   * 주소는 항상 절대 주소다. 토스 미니앱은 출처가 tossmini.com 이라 상대 경로로는
+   * 로고는 항상 절대 주소다. 토스 미니앱은 출처가 tossmini.com 이라 상대 경로로는
    * 아무것도 못 받는다.
    */
   const previewImage = (): string => {
+    const cover = winners[0]?.albumImage;
+    if (cover?.startsWith("https://")) return cover;
     try {
       const raw = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
       const first = raw ? (JSON.parse(raw) as { image?: string }[])[0] : null;

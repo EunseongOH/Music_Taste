@@ -12,14 +12,14 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://sortify.kr";
 const FALLBACK_OG = `${SITE}/og-sortify-v2.png`;
 
 /**
- * 단일 아티스트 취향표의 OG 이미지로 쓸 **아티스트 사진**.
+ * 앨범 재킷이 없을 때 쓸 **아티스트 사진**.
  *
  * `tournament_results` 에는 아티스트 사진이 없고 `artist_id` 만 있다. 사진은
- * `spotify_cache_artists` 에 이미 들어 있으므로 새 칸을 만들지 않고 그걸 읽는다
- * (운영 확인: 단일 아티스트 결과 중 artist_id 가 있는 건 전부 이 표에서 사진이 나온다).
- *
- * 그 표는 RLS 가 켜져 있고 정책이 없어 anon 으로는 못 읽는다. 이 함수는 서버에서만
+ * `spotify_cache_artists` 에 이미 들어 있으므로 새 칸을 만들지 않고 그걸 읽는다.
+ * 그 표는 RLS 가 켜져 있고 정책이 없어 anon 으로는 못 읽는다 — 이 함수는 서버에서만
  * 돌고 읽는 값도 사진 주소 한 줄이라 service_role 로 읽는다.
+ *
+ * 지금은 전건이 재킷을 갖고 있어 거의 돌지 않는다(재킷이 빈 옛 기록을 위한 자리다).
  */
 async function artistImage(artistId: string | null): Promise<string | null> {
   if (!artistId) return null;
@@ -60,12 +60,16 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
       const description = `${nickname}님의 음악 취향표 결과! 1위 곡: ${winnerName} - ${artistName}. 토너먼트 월드컵으로 완성한 최애 명곡 리스트를 확인해보세요.`;
 
       /*
-       * 미리보기 이미지는 **아티스트 사진, 없으면 Sortify 이미지**다.
-       * 1위 곡 앨범 재킷을 쓰면 카카오톡에서 이 링크가 "누구의 취향표"가 아니라
-       * "어느 앨범"으로 보인다 — 받는 사람이 무엇을 여는지 알 수 없다.
-       * 믹스 매치는 아티스트가 여럿이라 애초에 대표 사진이 없다 → Sortify 이미지.
+       * 미리보기 이미지 — **1위 곡 재킷 → 아티스트 사진 → Sortify 로고**.
+       *
+       * 취향표에서 가장 먼저 눈에 들어오는 것이 1위 곡이고, 링크를 받는 쪽도
+       * 그 그림으로 "무엇에 대한 취향표"인지 알아본다. 재킷이 비었을 때만 아래로
+       * 내려간다(운영 확인: 지금은 전건이 https 재킷을 갖고 있다).
        */
-      const og = (result.is_single_artist ? await artistImage(result.artist_id) : null) ?? FALLBACK_OG;
+      const cover = result.winner_track_image as string | null;
+      const og = cover?.startsWith("https://")
+        ? cover
+        : (await artistImage(result.artist_id)) ?? FALLBACK_OG;
 
       return {
         metadataBase: new URL(SITE),
