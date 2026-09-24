@@ -144,6 +144,14 @@ interface Track {
 /* 공유 문구는 src/utils/shareText.ts 한 곳에서 만든다(모든 채널이 같은 말을 쓰게). */
 
 /**
+ * 미리보기 그림의 절대 주소를 만들 기준.
+ *
+ * 토스 빌드에서는 `process.env` 가 고정 객체로 치환되어 이 키가 없다 — 그때도
+ * sortify.kr 로 떨어져야 한다(미니앱 출처에는 이 파일이 없다).
+ */
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://sortify.kr";
+
+/**
  * 결과 화면.
  *
  * - `fresh` (`/taste`): 월드컵을 막 끝낸 결과. 세션의 순위를 쓰고, 1위 공개 연출·
@@ -420,11 +428,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         console.error("[share] 공유 전 저장 실패", e);
       }
     }
-    // 공유 링크의 미리보기 이미지로 1위 곡 앨범아트를 쓴다(토스 전용).
-    // 웹은 taste/[id]/layout.tsx 의 generateMetadata 가 같은 일을 한다.
-    const cover = winners[0]?.albumImage;
-    const ogImageUrl = cover?.startsWith("https://") ? cover : undefined;
-    return platform.shareUrl(savedIdRef.current, ogImageUrl);
+    return platform.shareUrl(savedIdRef.current, previewImage());
   };
 
   /**
@@ -449,6 +453,27 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     }
     trackEvent("nickname_confirmed_on_share", { changed: shareName.trim() !== current });
     return shareName.trim();
+  };
+
+  /**
+   * 공유 미리보기에 쓸 그림. **앨범 재킷은 쓰지 않는다.**
+   *
+   * 재킷을 쓰면 카카오톡에서 이 링크가 "누구의 취향표"가 아니라 "어느 앨범"으로
+   * 보인다 — 받는 사람이 무엇을 여는지 알 수 없다. 단일 아티스트면 아티스트 사진,
+   * 그 밖에는 Sortify 로고다. `/taste/[id]` 의 OG 와 같은 규칙이다(layout.tsx).
+   *
+   * 주소는 항상 절대 주소다. 토스 미니앱은 출처가 tossmini.com 이라 상대 경로로는
+   * 아무것도 못 받는다.
+   */
+  const previewImage = (): string => {
+    try {
+      const raw = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
+      const first = raw ? (JSON.parse(raw) as { image?: string }[])[0] : null;
+      if (first?.image?.startsWith("https://")) return first.image;
+    } catch {
+      /* 저장소를 못 읽으면 로고로 간다 */
+    }
+    return `${SITE_URL}/og-sortify-v2.png`;
   };
 
   /** 공유 본문(유도 문구까지). 링크는 호출부가 붙이거나 어댑터가 붙인다. */
@@ -553,11 +578,10 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     const nickname = await ensureShareName();
     if (nickname === false) return;
     const url = await resolveShareUrl();
-    const cover = winners[0]?.albumImage;
     const sent = await shareToKakao({
       title: shareTitle(winners, nickname, locale),
       description: shareRanking(winners),
-      imageUrl: cover?.startsWith("https://") ? cover : undefined,
+      imageUrl: previewImage(),
       url,
       buttonLabel: t.shareCtaButton,
     });

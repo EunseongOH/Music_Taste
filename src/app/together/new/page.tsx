@@ -379,10 +379,17 @@ export default function TogetherNewPage() {
       setSourceKey(next.key);
       setOff(new Set());
       setTitle(next.title);
-      // 누르고 온 곡이 화면 한참 아래에 있으면 안 보인다. 그 자리로 데려간다.
-      requestAnimationFrame(() => {
-        document.getElementById("together-tracks")?.scrollIntoView({ block: "start" });
-      });
+      /*
+       * **곡 고르기 화면에서 시작한다.**
+       *
+       * 전에는 아티스트 검색 화면(step 1)이 먼저 떴다 — 남의 취향표에서 "이 곡들로
+       * 같이 소트하기" 를 누르고 왔는데 아티스트를 다시 고르라는 말이 된다.
+       * 받은 사람은 방장이 아니라 **자기 방을 새로 만드는 사람**이므로, 받은 곡을
+       * 그대로 두고 바로 링크를 만들 수 있어야 한다.
+       *
+       * URL 은 `?from=` 그대로 둔다. 새로고침하면 이 효과가 다시 돌아 같은 자리로 온다.
+       */
+      setStep(2);
     })();
     return () => {
       alive = false;

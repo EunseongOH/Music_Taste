@@ -9,7 +9,7 @@ interface LayoutProps {
 
 /** 카카오·슬랙·디스코드 크롤러는 상대 경로를 못 읽는다. 절대 주소로 만든다. */
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://sortify.kr";
-const FALLBACK_OG = `${SITE}/og-image.png`;
+const FALLBACK_OG = `${SITE}/og-sortify-v2.png`;
 
 /**
  * 단일 아티스트 취향표의 OG 이미지로 쓸 **아티스트 사진**.

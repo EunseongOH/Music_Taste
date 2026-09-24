@@ -9,13 +9,13 @@ import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
  * 색인되면 남의 모임 코드가 검색 결과에 뜬다. 입구(`/together`)만 열어 둔다.
  *
  * 미리보기(카카오톡·슬랙 등)는 방마다 다르게 만든다. 예전에는 사이트 기본
- * `/og-image.png`(어두운 영문 목업)가 떠서 링크 내용과도 브랜드와도 맞지 않았다.
+ * `/og-sortify-v2.png`(어두운 영문 목업)가 떠서 링크 내용과도 브랜드와도 맞지 않았다.
  *  - 그림: 그 방에서 소트하는 **아티스트 사진**. 없으면 **Sortify 로고**.
  *    (화면 배경은 사진이 없을 때 첫 곡 재킷으로 가지만, 미리보기는 로고로 간다 —
  *     작은 썸네일에서 앨범 재킷은 무슨 링크인지 알려 주지 못한다.)
  *  - 글: 초대 화면과 같은 문구.
  */
-const LOGO = "/og-sortify.png";
+const LOGO = "/og-sortify-v2.png";
 
 interface LayoutProps {
   children: React.ReactNode;

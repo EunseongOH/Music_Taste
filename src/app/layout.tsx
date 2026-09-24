@@ -42,6 +42,15 @@ const wantedSans = localFont({
   variable: "--font-wanted",
 });
 
+/**
+ * ⚠️ 미리보기 그림을 바꿀 때는 **파일 이름도 같이 바꾼다.**
+ *
+ * 카카오톡·슬랙 같은 크롤러는 그림을 **주소로** 캐시한다. 주소를 그대로 두고 내용만
+ * 갈면 이미 긁어간 곳은 옛 그림을 계속 보여 준다 — `/og-image.png` 를 로고로
+ * 바꿨는데 카카오톡에는 몇 달 전 목업이 계속 떴다(2026-09-24). 그래서 `-v2` 를
+ * 붙인 새 주소로 옮겼다. 다음에 바꿀 때도 `-v3` 로 새 이름을 쓴다.
+ * 옛 파일은 지우지 않는다(이미 나간 링크가 404 가 되지 않게).
+ */
 export async function generateMetadata(): Promise<Metadata> {
   const cookieStore = await cookies();
   const lang = cookieStore.get("locale")?.value || "ko";
@@ -56,7 +65,7 @@ export async function generateMetadata(): Promise<Metadata> {
       openGraph: {
         title: "Sortify | 최애곡 순위 매기기, 나만의 음악 취향표 소트(Sort)",
         description: "좋아하는 아티스트와 곡들을 직접 나열하고 소트(Sort)해 보세요! 월드컵 토너먼트를 거쳐 나만의 세밀한 음악 취향표와 전체 트랙 순위 리스트를 완성하고, 나와 비슷한 곡을 좋아하는 사람들이 또 어떤 곡들을 좋아하는지 함께 살펴볼 수 있습니다.",
-        images: ["/og-image.png"],
+        images: ["/og-sortify-v2.png"],
         type: "website",
       }
     };
@@ -70,7 +79,7 @@ export async function generateMetadata(): Promise<Metadata> {
       openGraph: {
         title: "Sortify | Rank Your Favorite Songs & Build Your Music Tier List",
         description: "Select your favorite artists and tracks to sort them into your ultimate music tier list. Complete your precise track rankings through song tournaments, and explore what other music fans with similar tastes love listening to.",
-        images: ["/og-image.png"],
+        images: ["/og-sortify-v2.png"],
         type: "website",
       }
     };
