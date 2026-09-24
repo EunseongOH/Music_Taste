@@ -1,5 +1,14 @@
-import { Clipboard, Device, File, Share, graniteEvent } from '@apps-in-toss/web-framework';
+import { Clipboard, Device, File, Share, getAppsInTossGlobals, graniteEvent } from '@apps-in-toss/web-framework';
 import * as htmlToImage from 'html-to-image';
+
+/** 토스 앱 안에서 열렸는가. 밖에서는 SDK 브리지가 아예 없다(tossSession.ts 와 같은 판정). */
+function inTossApp(): boolean {
+  try {
+    return !!getAppsInTossGlobals();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * `@/utils/platform` 대체 — **앱인토스 구현**.
@@ -198,9 +207,25 @@ export async function share(params: {
  * 그대로 두면 처리되지 않은 오류가 되므로, 그럴 때는 평범한 새 창으로 떨어진다.
  */
 export async function openExternal(url: string): Promise<void> {
+  /*
+   * 토스 앱 안에서는 **`window.open` 으로 떨어지지 않는다.**
+   *
+   * WebView 의 `window.open` 은 보통 아무 일도 하지 않는다. 그걸 폴백으로 두면
+   * 실패가 "눌러도 아무것도 안 열림" 으로 보인다 — 앱인토스 검수가 바로 이
+   * 문구("외부 링크가 정상적으로 열리지 않아요")로 반려한 증상이다.
+   * 실패하면 실패라고 말하고, 부른 쪽이 사용자에게 알리게 한다.
+   *
+   * 토스 **밖**(개발 서버·QR 미리보기·검사)에서는 브리지가 없어 던지는 게 정상이므로
+   * 그때만 평범한 새 창으로 연다.
+   */
+  if (!inTossApp()) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
   try {
     await Device.openURL(url);
-  } catch {
-    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (err) {
+    console.error('[toss] Device.openURL 실패', { url, err });
+    throw new PlatformError('링크를 열지 못했어요. 잠시 후 다시 시도해 주세요.');
   }
 }
