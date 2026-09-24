@@ -13,10 +13,12 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedResult } from "@/utils/worldcupDb";
 import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
 import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/exportLayout";
-import { ConfirmSheet, Sheet, UnderlineTabs, primaryButton, dangerButton } from "@/components/space/SpaceUI";
+import { Chip, ConfirmSheet, Sheet, UnderlineTabs, primaryButton, dangerButton } from "@/components/space/SpaceUI";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { shareBody as buildShareBody, shareRanking, shareTitle } from "@/utils/shareText";
+import PalettePicker from "@/components/result/PalettePicker";
+import { DEFAULT_PALETTE, type CardPalette } from "@/components/result/cardPalette";
 import { shareToKakao } from "@/utils/kakaoShare";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
 import PyramidStage from "@/components/result/PyramidStage";
@@ -43,6 +45,7 @@ const translations = {
     unsavedExitDesc: "나가면 이 취향표는 다시 볼 수 없어요.",
     unsavedExitConfirm: "나가기",
     saveBtn: "저장하기",
+    paletteLabel: "카드 색 바꾸기",
     savedBtn: "저장됨",
     saveSheetTitle: "저장하기",
     saveToSpaceOption: "내 취향 스페이스에 저장",
@@ -98,6 +101,7 @@ const translations = {
     unsavedExitDesc: "You won't be able to see this taste card again.",
     unsavedExitConfirm: "Leave",
     saveBtn: "Save",
+    paletteLabel: "Change card colors",
     savedBtn: "Saved",
     saveSheetTitle: "Save",
     saveToSpaceOption: "Save to My Taste Space",
@@ -209,6 +213,12 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const [introDone, setIntroDone] = useState(isSavedView);
   const reduceMotion = useReducedMotion();
   const [shape, setShape] = useState<Shape>("heart");
+  /**
+   * 카드 색 조합. **앱 테마가 아니라 카드 한 장의 무드다.**
+   * 미리보기와 저장 이미지가 같은 컴포넌트를 쓰므로 이 state 하나가 둘을 함께 정한다.
+   */
+  const [palette, setPalette] = useState<CardPalette>(DEFAULT_PALETTE);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   /** 여러 장 저장 확인 시트에 띄울 장 수(null 이면 닫힘) */
   const [pendingPages, setPendingPages] = useState<number | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -798,6 +808,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       date: testDate,
       total: winners.length,
       locale,
+      palette,
     };
   })();
 
@@ -884,20 +895,16 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         {template === "mosaic" && (
           <div role="radiogroup" aria-label={t.templateMosaic} className="flex gap-2 mt-4">
             {SHAPES.map((sh) => (
-              <button
+              <Chip
                 key={sh}
-                role="radio"
-                aria-checked={shape === sh}
+                selected={shape === sh}
                 onClick={() => {
                   setShape(sh);
                   trackEvent("change_shape", { shape: sh });
                 }}
-                className={`h-9 px-4 rounded-full type-sub cursor-pointer transition-colors ${
-                  shape === sh ? "bg-brand text-cream" : "bg-navy/5 text-navy/70 hover:text-navy"
-                }`}
               >
                 {t.shapeLabel[sh]}
-              </button>
+              </Chip>
             ))}
           </div>
         )}
@@ -908,7 +915,11 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               // 월드컵 직후 인트로: 예전 피라미드 모션 그대로. 끝나면 기본 템플릿(레코드형) 카드로.
               <PyramidStage tracks={winners} playing onDone={() => setIntroDone(true)} skipLabel={t.skipIntro} />
             ) : (
-              renderCards(winners).map((card, i) => <ScaledCard key={`${template}-${i}`}>{card}</ScaledCard>)
+              renderCards(winners).map((card, i) => (
+                <ScaledCard key={`${template}-${i}`} halo={palette.previewHalo}>
+                  {card}
+                </ScaledCard>
+              ))
             ))}
         </div>
       </div>
@@ -921,10 +932,21 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
             animate={{ opacity: 1, y: 0 }}
             className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 flex justify-center items-center z-50 pointer-events-none"
           >
-            <div className="w-full max-w-[380px] flex gap-3 pointer-events-auto">
+            <div className="w-full max-w-[380px] flex flex-col gap-2 pointer-events-auto">
+              {/* 색 고르기는 저장 버튼 위, 왼쪽 끝. 카드 밖이라 저장 이미지에는 안 들어간다. */}
+              <div className="self-start">
+                <PalettePicker value={palette} onChange={setPalette} open={paletteOpen} onOpenChange={setPaletteOpen} label={t.paletteLabel} />
+              </div>
+
+              <div className="flex gap-3">
               <button
                 onClick={() => setShowSaveSheet(true)}
-                className="flex-1 h-[48px] bg-white border-2 border-navy text-navy hover:bg-navy/5 rounded-2xl font-sans font-bold text-sm newtone:bg-navy/5 newtone:border-0 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                /*
+                 * 불투명한 크림 면 + 옅은 테두리. 전에는 흰 바탕이라 크림색 화면에서
+                 * 테두리만 떠 보였고, 카드가 뒤에 비쳤다. 공유하기가 주 버튼이라
+                 * 저장하기는 보조 위계를 지키되 또렷하게 보이게 한다.
+                 */
+                className="flex-1 h-[48px] bg-cream border border-navy/15 text-navy hover:bg-navy/5 active:bg-navy/10 rounded-2xl font-sans font-bold text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Archive size={18} />
                 <span>{t.saveBtn}</span>
@@ -941,6 +963,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                 <Share2 size={18} />
                 <span>{t.shareMainBtn}</span>
               </button>
+              </div>
             </div>
           </motion.div>
         )}

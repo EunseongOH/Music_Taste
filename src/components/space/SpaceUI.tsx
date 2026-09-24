@@ -29,6 +29,82 @@ export const secondaryButton =
 export const dangerButton =
   "inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full bg-danger/10 text-danger type-body-strong active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50";
 
+/**
+ * 알약 칩. 고르는 것(모자이크 모양·탈퇴 이유)에 쓴다.
+ *
+ * 버튼과 다른 점은 **여러 개가 한 줄에 놓이고, 고른 상태가 남는다**는 것이다.
+ * 고른 칩은 면을 채우고, 안 고른 칩은 옅은 면으로 둔다.
+ */
+export function Chip({
+  selected,
+  onClick,
+  children,
+  role = "radio",
+  className = "",
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  /** 하나만 고르면 radio, 여럿이면 checkbox, 누르는 순간 끝나면 undefined. */
+  role?: "radio" | "checkbox";
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role={role}
+      aria-checked={selected}
+      onClick={onClick}
+      className={`min-h-[36px] px-4 rounded-full type-sub cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-point-ink)] ${
+        selected ? "bg-brand text-cream" : "bg-navy/5 text-navy/70 hover:text-navy"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 한 줄 입력칸.
+ *
+ * 화면마다 따로 적던 클래스를 한곳에 모은 것이다(닉네임·방 이름·탈퇴 확인 …).
+ * 오류는 **글자로** 말한다 — 테두리 색만 바꾸면 색을 못 가르는 사람에게 아무것도
+ * 전해지지 않는다. `error` 가 있으면 helper 자리에 그 말이 대신 들어간다.
+ */
+export function Input({
+  value,
+  onChange,
+  error,
+  helper,
+  className = "",
+  ...rest
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  helper?: string;
+  className?: string;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "className">) {
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      <input
+        {...rest}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={!!error || undefined}
+        className={`w-full h-12 px-4 rounded-2xl bg-cream text-navy type-body placeholder:text-navy/50 border transition-colors focus:outline-2 focus:outline-[var(--t-point-ink)] disabled:opacity-50 disabled:cursor-not-allowed ${
+          error ? "border-danger" : "border-navy/15"
+        }`}
+      />
+      {(error || helper) && (
+        <p role={error ? "alert" : undefined} className={`type-caption ${error ? "text-danger" : "text-navy/70"}`}>
+          {error || helper}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** 글자 링크. */
 export const textLink =
   "inline-flex items-center gap-1 type-sub text-navy border-b border-navy/20 pb-0.5 cursor-pointer hover:border-navy transition-colors";

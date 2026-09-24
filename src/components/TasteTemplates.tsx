@@ -15,6 +15,7 @@ import {
   type RecordPage,
   type Shape,
 } from "@/components/result/exportLayout";
+import { DEFAULT_PALETTE, paletteVars, type CardPalette } from "@/components/result/cardPalette";
 
 /**
  * 9:16 취향표 카드(450×800).
@@ -42,6 +43,8 @@ export interface CardMeta {
   date: string;
   total: number;
   locale: "ko" | "en";
+  /** 카드 색 조합. 없으면 기본(Sortify Classic). */
+  palette?: CardPalette;
 }
 
 const text = {
@@ -49,28 +52,18 @@ const text = {
     single: "최애 곡 소트하기",
     multi: "믹스 매치 월드컵",
     count: (n: number) => `${n}곡`,
-    side: (k: number, from: number, to: number) => `${"ABCDEFGH"[k]}면 · ${from}–${to}위`,
-    range: (from: number, to: number) => `${from}–${to}위`,
     winner: "1위",
     more: (n: number) => `외 ${n}곡`,
-    lineup: "취향 라인업",
     // 페스티벌의 "헤드라이너" 자리. 서비스에서 이미 쓰는 말(최애 곡 소트하기)로 부른다.
     headliner: "최애 곡",
-    fine: (label: string, total: number, shown: number) =>
-      `${label} · 전체 ${total}곡${shown < total ? ` 중 TOP ${shown}` : ""}`,
   },
   en: {
     single: "My favorites",
     multi: "Mix match world cup",
     count: (n: number) => `${n} songs`,
-    side: (k: number, from: number, to: number) => `Side ${"ABCDEFGH"[k]} · ${from}–${to}`,
-    range: (from: number, to: number) => `${from}–${to}`,
     winner: "No. 1",
     more: (n: number) => `+${n} more`,
-    lineup: "Taste lineup",
     headliner: "Top pick",
-    fine: (label: string, total: number, shown: number) =>
-      `${label} · ${shown < total ? `Top ${shown} of ` : ""}${total} songs`,
   },
 };
 
@@ -86,39 +79,67 @@ export function cardHeading(tracks: CardTrack[], locale: "ko" | "en"): { heading
 // 공통 틀
 // ---------------------------------------------------------------------------
 
+/**
+ * 네 템플릿이 공통으로 쓰는 카드 바탕.
+ *
+ * 팔레트 변수는 **여기 한 곳**에서만 얹는다. 미리보기와 저장 이미지가 같은
+ * 컴포넌트를 쓰므로(ResultScreen 의 renderCards), 이 한 자리가 둘의 색을 함께 정한다.
+ */
+export function CardSurface({
+  palette,
+  className = "",
+  children,
+}: {
+  palette?: CardPalette;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={paletteVars(palette ?? DEFAULT_PALETTE)}
+      className={`w-[450px] h-[800px] bg-[var(--card-bg)] text-[var(--card-ink)] flex flex-col px-8 pt-9 pb-[26px] overflow-hidden ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function CardFrame({
   meta,
-  sub,
   page,
   pages,
   children,
 }: {
   meta: CardMeta;
-  sub?: string;
   page?: number;
   pages?: number;
   children: React.ReactNode;
 }) {
   const t = text[meta.locale];
+  /*
+   * 머리에는 날짜·모드·곡 수만 둔다.
+   *
+   * 여러 장일 때 "11–20위"·"A면 · 1–10위" 를 주황으로 한 줄 더 얹고 있었다 —
+   * 같은 사실을 아래 페이지 표시(1/2)가 이미 말한다. 한 장에 두 번 말하지 않는다.
+   */
   return (
-    <div className="w-[450px] h-[800px] bg-cream text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden">
+    <CardSurface palette={meta.palette}>
       <header className="flex flex-col gap-1 mb-5">
-        <p className="text-[12px] leading-[18px] text-navy/70">
+        <p className="text-[12px] leading-[18px] text-[var(--card-muted)]">
           {meta.date} · {meta.single ? t.single : t.multi} · {t.count(meta.total)}
         </p>
         <h2 className="text-[26px] leading-[31px] font-extrabold tracking-[-0.03em] truncate">{meta.heading}</h2>
-        {sub && <p className="text-[13px] leading-[18px] font-semibold text-point-ink">{sub}</p>}
       </header>
       <div className="flex-1 min-h-0 relative">{children}</div>
       <CardFooter page={page} pages={pages} />
-    </div>
+    </CardSurface>
   );
 }
 
 function CardFooter({ page, pages }: { page?: number; pages?: number }) {
   return (
-    <footer className="flex items-baseline gap-2 mt-4 text-[12px] leading-[18px] text-navy/70">
-      <span className="text-[15px] font-extrabold tracking-[-0.04em] text-navy newtone:font-wordmark">Sortify</span>
+    <footer className="flex items-baseline gap-2 mt-4 text-[12px] leading-[18px] text-[var(--card-muted)]">
+      <span className="text-[15px] font-extrabold tracking-[-0.04em] text-[var(--card-ink)] newtone:font-wordmark">Sortify</span>
       <span>sortify.kr</span>
       {pages && pages > 1 && (
         <span className="ml-auto font-num tabular-nums text-[13px] font-semibold">
@@ -141,7 +162,7 @@ function Cover({ src, size, round = false, className = "" }: { src: string; size
   );
 }
 
-const rankColor = (rank: number) => (rank <= 3 ? "text-point-ink" : "text-navy/70");
+const rankColor = (rank: number) => (rank <= 3 ? "text-[var(--card-accent)]" : "text-[var(--card-muted)]");
 
 // ---------------------------------------------------------------------------
 // 리스트형 — 모든 행에 앨범 재킷
@@ -176,7 +197,7 @@ function ListRow({ track, rank, height, single }: { track: CardTrack; rank: numb
           {track.title}
         </b>
         {!single && (
-          <i className="not-italic truncate text-navy/70 shrink-[2]" style={{ fontSize: s.artist, lineHeight: 1.3 }}>
+          <i className="not-italic truncate text-[var(--card-muted)] shrink-[2]" style={{ fontSize: s.artist, lineHeight: 1.3 }}>
             {track.artistName}
           </i>
         )}
@@ -198,13 +219,12 @@ export function ListCard({
   index: number;
   count: number;
 }) {
-  const t = text[meta.locale];
   const part = tracks.slice(page.from, page.to);
   const row = (track: CardTrack, i: number, height: number) => (
     <ListRow key={`${track.id}-${page.from + i}`} track={track} rank={page.from + i + 1} height={height} single={meta.single} />
   );
   return (
-    <CardFrame meta={meta} sub={count > 1 ? t.side(index, page.from + 1, page.to) : undefined} page={index + 1} pages={count}>
+    <CardFrame meta={meta} page={index + 1} pages={count}>
       <ol className="flex flex-col">
         {page.hasFeature ? (
           <>
@@ -232,7 +252,7 @@ function MiniRecord({ src, size }: { src: string; size: number }) {
   return (
     <span className="relative shrink-0 rounded-full overflow-hidden" style={{ width: size, height: size }}>
       <Cover src={src} size={size} round />
-      <span className="absolute inset-0 m-auto w-[5px] h-[5px] rounded-full bg-cream" />
+      <span className="absolute inset-0 m-auto w-[5px] h-[5px] rounded-full bg-[var(--card-bg)]" />
     </span>
   );
 }
@@ -251,7 +271,7 @@ function RecordRow({ track, rank, height, single }: { track: CardTrack; rank: nu
           {track.title}
         </b>
         {!single && (
-          <i className="not-italic truncate text-navy/70 shrink-[2]" style={{ fontSize: s.artist, lineHeight: 1.3 }}>
+          <i className="not-italic truncate text-[var(--card-muted)] shrink-[2]" style={{ fontSize: s.artist, lineHeight: 1.3 }}>
             {track.artistName}
           </i>
         )}
@@ -281,7 +301,7 @@ export function RecordCard({
   // LP 는 슬리브보다 조금 작게, 슬리브 오른쪽으로 반쯤 나오게.
   const disc = Math.round(sleeve * 0.93);
   return (
-    <CardFrame meta={meta} sub={page.hero ? undefined : t.range(page.from + 1, page.to)} page={index + 1} pages={count}>
+    <CardFrame meta={meta} page={index + 1} pages={count}>
       {page.hero && top && (
         <>
           {/* 슬리브와 빠져나온 LP 를 한 묶음으로 가운데 둔다. */}
@@ -291,7 +311,7 @@ export function RecordCard({
               style={{ left: Math.round(sleeve * 0.51), top: Math.round((sleeve - disc) / 2), width: disc, height: disc, background: DISC_BACKGROUND }}
             >
               <Cover src={top.albumImage} size={Math.round(disc * 0.35)} round className="absolute inset-0 m-auto" />
-              <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-cream" />
+              <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-[var(--card-bg)]" />
             </div>
             <Cover
               src={top.albumImage}
@@ -300,9 +320,9 @@ export function RecordCard({
             />
           </div>
           <div className="mb-4 flex flex-col justify-end items-center text-center gap-1" style={{ height: RECORD_INFO_H }}>
-            <span className="text-[13px] leading-[18px] font-bold text-point-ink">{t.winner}</span>
+            <span className="text-[13px] leading-[18px] font-bold text-[var(--card-accent)]">{t.winner}</span>
             <h3 className="text-[26px] leading-[31px] font-extrabold tracking-[-0.03em] line-clamp-2 break-keep">{top.title}</h3>
-            <p className="text-[14px] leading-[20px] text-navy/70 truncate max-w-full">{top.artistName}</p>
+            <p className="text-[14px] leading-[20px] text-[var(--card-muted)] truncate max-w-full">{top.artistName}</p>
           </div>
         </>
       )}
@@ -329,7 +349,7 @@ function RankTitleList({ tracks, count, rows, locale, className = "", style }: {
         ))}
       </ol>
       {count < tracks.length && (
-        <p className="text-navy/70" style={{ fontSize: 12, lineHeight: `${MOSAIC_LIST_ROW_H}px` }}>
+        <p className="text-[var(--card-muted)]" style={{ fontSize: 12, lineHeight: `${MOSAIC_LIST_ROW_H}px` }}>
           {t.more(tracks.length - count)}
         </p>
       )}
@@ -373,7 +393,7 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
               // 순위 표시가 없으니 곡으로 읽히지 않는다.
               const filler = tracks.length ? tracks[i % Math.min(tracks.length, layout.shown || 1)] : null;
               return (
-                <div key={i} className="absolute overflow-hidden bg-[#E9E3D9] newtone:bg-navy/[0.06]" style={box}>
+                <div key={i} className="absolute overflow-hidden bg-[color-mix(in_srgb,var(--card-ink)_8%,var(--card-bg))]" style={box}>
                   {filler && <img src={filler.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover opacity-30" />}
                 </div>
               );
@@ -384,11 +404,11 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
               <div key={i} className="absolute overflow-hidden" style={box}>
                 <img src={track.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover" />
                 {overlay ? (
-                  <div className="absolute inset-0 bg-navy/45 flex flex-col items-center justify-center text-center px-2 gap-0.5">
-                    <span className="font-num font-bold text-white" style={{ fontSize: rank === 1 ? 18 : 15, lineHeight: 1 }}>
+                  <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--card-ink)_55%,transparent)] flex flex-col items-center justify-center text-center px-2 gap-0.5">
+                    <span className="font-num font-bold text-[var(--card-bg)]" style={{ fontSize: rank === 1 ? 18 : 15, lineHeight: 1 }}>
                       {rank}
                     </span>
-                    <span className="font-bold text-white line-clamp-2 break-keep" style={{ fontSize: 13, lineHeight: 1.25 }}>
+                    <span className="font-bold text-[var(--card-bg)] line-clamp-2 break-keep" style={{ fontSize: 13, lineHeight: 1.25 }}>
                       {track.title}
                     </span>
                   </div>
@@ -398,7 +418,9 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
                   rank <= layout.badgeCount && (
                     <span
                       className={`absolute min-w-[16px] h-[13px] px-[3px] rounded-[3px] font-num tabular-nums font-bold flex items-center justify-center ${
-                        rank === 1 ? "bg-point text-white" : "bg-navy/75 text-white"
+                        rank === 1
+                          ? "bg-[var(--card-accent)] text-[var(--card-bg)]"
+                          : "bg-[color-mix(in_srgb,var(--card-ink)_75%,transparent)] text-[var(--card-bg)]"
                       } ${c.cornerSafe ? "left-[3px] bottom-[3px]" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"}`}
                       style={{ fontSize: 10, lineHeight: 1 }}
                     >
@@ -413,9 +435,9 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
 
         {overlay && top ? (
           <div className="mt-6 flex flex-col gap-1">
-            <span className="text-[13px] leading-[18px] font-bold text-point-ink">{t.winner}</span>
+            <span className="text-[13px] leading-[18px] font-bold text-[var(--card-accent)]">{t.winner}</span>
             <h3 className="text-[24px] leading-[30px] font-extrabold tracking-[-0.03em] line-clamp-2 break-keep">{top.title}</h3>
-            {!meta.single && <p className="text-[14px] leading-[20px] text-navy/70 truncate">{top.artistName}</p>}
+            {!meta.single && <p className="text-[14px] leading-[20px] text-[var(--card-muted)] truncate">{top.artistName}</p>}
           </div>
         ) : (
           <RankTitleList tracks={tracks} count={layout.listCount} rows={layout.listRows} locale={meta.locale} />
@@ -434,10 +456,10 @@ const POSTER_MIN_FONT = 11;
 
 function Band({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 text-point-ink font-num font-bold tracking-[0.1em]" style={{ fontSize: "calc(11px * var(--k))" }}>
-      <span className="flex-1 h-px bg-navy/20" />
+    <div className="flex items-center gap-2 text-[var(--card-accent)] font-num font-bold tracking-[0.1em]" style={{ fontSize: "calc(11px * var(--k))" }}>
+      <span className="flex-1 h-px bg-[var(--card-line)]" />
       {children}
-      <span className="flex-1 h-px bg-navy/20" />
+      <span className="flex-1 h-px bg-[var(--card-line)]" />
     </div>
   );
 }
@@ -452,7 +474,7 @@ function joined(list: CardTrack[]) {
       {i > 0 && (
         <>
           {" "}
-          <span className="text-point newtone:text-point-ink">•</span>{" "}
+          <span className="text-[var(--card-accent)]">•</span>{" "}
         </>
       )}
       <span className="inline-block max-w-full">{tr.title}</span>
@@ -498,12 +520,17 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
   const tier = (from: number, to: number) => shown.slice(from, Math.min(to, shown.length));
 
   return (
-    <div ref={rootRef} className="w-[450px] h-[800px] bg-cream text-navy flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center">
+    <div
+      ref={rootRef}
+      style={paletteVars(meta.palette ?? DEFAULT_PALETTE)}
+      className="w-[450px] h-[800px] bg-[var(--card-bg)] text-[var(--card-ink)] flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center"
+    >
       <div className="flex flex-col items-center gap-[3px] pb-2">
-        <p className="text-[11px] leading-[16px] font-semibold tracking-[0.18em] text-point-ink">Sortify {t.lineup}</p>
+        {/* 브랜드명은 위에서 되풀이하지 않는다. 출처는 아래 sortify.kr 한 줄이 맡는다. */}
+        <p className="text-[11px] leading-[16px] font-semibold tracking-[0.22em] text-[var(--card-accent)]">SORTED BY ME</p>
         <h2 className="text-[32px] leading-[1] font-extrabold tracking-[-0.05em] truncate max-w-full">{meta.heading}</h2>
-        <p className="font-num text-[11px] leading-[16px] font-semibold tracking-[0.12em] text-navy/70">{meta.date.replace(/\./g, " . ")}</p>
-        <div className="self-stretch h-[3px] border-y border-navy mt-2" />
+        <p className="font-num text-[11px] leading-[16px] font-semibold tracking-[0.12em] text-[var(--card-muted)]">{meta.date.replace(/\./g, " . ")}</p>
+        <div className="self-stretch h-[3px] border-y border-[var(--card-ink)] mt-2" />
       </div>
 
       <div
@@ -517,7 +544,7 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
             <div className="font-extrabold tracking-[-0.05em] break-keep text-balance" style={{ fontSize: "calc(50px * var(--k, 1))", lineHeight: 1 }}>
               {shown[0].title}
             </div>
-            {!meta.single && <div className="text-navy/70" style={{ fontSize: "calc(12px * var(--k, 1))" }}>{shown[0].artistName}</div>}
+            {!meta.single && <div className="text-[var(--card-muted)]" style={{ fontSize: "calc(12px * var(--k, 1))" }}>{shown[0].artistName}</div>}
           </div>
         )}
         {shown.length > 1 && (
@@ -547,15 +574,15 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
         {shown.length > 30 && (
           <div className="flex flex-col" style={{ gap: "calc(3px * var(--k, 1))" }}>
             <Band>31 — {shown.length}</Band>
-            <div className="font-medium text-navy/70 break-keep text-balance" style={{ fontSize: "calc(11.5px * var(--k, 1))", lineHeight: 1.35 }}>
+            <div className="font-medium text-[var(--card-muted)] break-keep text-balance" style={{ fontSize: "calc(11.5px * var(--k, 1))", lineHeight: 1.35 }}>
               {joined(tier(30, shown.length))}
             </div>
           </div>
         )}
       </div>
 
-      <p className="pt-2 border-t border-navy/20 text-[11px] leading-[16px] tracking-[0.06em] text-navy/70">
-        {t.fine(meta.single ? t.single : t.multi, tracks.length, shown.length)} · sortify.kr
+      <p className="pt-2 border-t border-[var(--card-line)] text-[11px] leading-[16px] tracking-[0.06em] text-[var(--card-muted)]">
+        sortify.kr
       </p>
     </div>
   );
@@ -566,7 +593,16 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
 // ---------------------------------------------------------------------------
 
 /** 450×800 카드를 부모 폭에 맞춰 줄여 보여준다(최대 원래 크기). */
-export function ScaledCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+export function ScaledCard({
+  children,
+  className = "",
+  halo,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  /** 카드 둘레에 깔리는 옅은 빛. **미리보기에서만** 쓴다 — 저장 이미지는 카드 안쪽만 찍는다. */
+  halo?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.85);
 
@@ -583,8 +619,14 @@ export function ScaledCard({ children, className = "" }: { children: React.React
   return (
     <div ref={ref} className={`w-full ${className}`}>
       <div
-        className="relative overflow-hidden rounded-[6px] shadow-[0_1px_2px_rgba(var(--t-ink-rgb),0.08),0_12px_32px_-12px_rgba(var(--t-ink-rgb),0.28)] mx-auto"
-        style={{ width: 450 * scale, height: 800 * scale }}
+        className="relative overflow-hidden rounded-[6px] mx-auto transition-shadow"
+        style={{
+          width: 450 * scale,
+          height: 800 * scale,
+          boxShadow: halo
+            ? `0 1px 2px rgba(var(--t-ink-rgb),0.08), 0 12px 32px -12px rgba(var(--t-ink-rgb),0.28), 0 0 0 1px ${halo}, 0 18px 48px -18px ${halo}`
+            : "0 1px 2px rgba(var(--t-ink-rgb),0.08), 0 12px 32px -12px rgba(var(--t-ink-rgb),0.28)",
+        }}
       >
         <div className="absolute left-0 top-0 origin-top-left" style={{ width: 450, height: 800, transform: `scale(${scale})` }}>
           {children}
