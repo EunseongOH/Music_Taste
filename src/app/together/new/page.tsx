@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, Loader2, Plus, Search, X } from "lucide-react";
 import { SafeImage } from "@/components/SafeImage";
@@ -539,9 +539,36 @@ export default function TogetherNewPage() {
     setSourceKey(next.key);
     setOff(new Set());
     setTitle(next.title);
-    window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?from=${next.key}`);
+    /*
+     * `?source=` 로 적는다. `?from=` 은 **남의 공개 취향표**를 집어 오는 길의 이름이라
+     * 여기에 쓰면 새로고침·뒤로가기에서 뜻이 달라진다(곡만 빌린 것으로 읽힌다).
+     */
+    window.history.pushState({ togetherStep: 2 }, "", `${window.location.pathname}?source=${next.key}`);
     setStep(2);
   };
+
+  /*
+   * 취향표 결과 화면에서 "이 곡들로 같이 소트하기" 로 넘어온 경우.
+   *
+   * 아티스트 검색 화면(step 1)이 먼저 뜨면, 방금 소트한 곡을 두고 아티스트를
+   * 다시 고르라는 말이 된다. `?source=` 가 가리키는 것을 바로 고른 상태로 연다.
+   *
+   * 기존 `?from=` 과 섞지 않는다 — 그건 **남의 공개 취향표**를 집어 오는 길이라
+   * 판정도 다르고(곡만 빌린 것, mine=false) 뜻도 다르다.
+   * 여기서는 내 것(`prevSources`)만 본다.
+   */
+  const autoPicked = useRef(false);
+  useEffect(() => {
+    if (autoPicked.current || sourceKey) return;
+    const want = new URLSearchParams(window.location.search).get("source");
+    if (!want) return;
+    const found = prevSources.find((s) => s.key === want);
+    // 취향표 목록은 나중에 도착한다. 올 때까지 이 효과가 다시 돈다.
+    if (!found) return;
+    autoPicked.current = true;
+    choose(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prevSources, sourceKey]);
 
   const make = async () => {
     if (!source || chosen.length < 4) return;

@@ -475,6 +475,28 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     }
   };
 
+  /**
+   * "이 곡들로 같이 소트하기".
+   *
+   * 그냥 `/together/new` 로 보내면 아티스트 검색 화면이 먼저 뜬다 — 방금 소트한
+   * 곡을 두고 아티스트를 다시 고르라는 말이 된다. 지금 이 취향표를 **고른 상태로**
+   * 연다(곡 고르기 화면부터 시작).
+   *
+   * 저장된 취향표가 있으면 그것을, 없으면(비로그인·저장 전) 저장소에 남은
+   * "지금 고른 곡" 을 가리킨다. 여기서 저장을 강제하지는 않는다 — 넘어가는 길일
+   * 뿐이고, 묻지 않고 기록을 남길 자리가 아니다.
+   */
+  const goTogether = async () => {
+    setShowShareModal(false);
+    try {
+      await autoSaveRef.current;
+    } catch {
+      /* 저장 실패는 자동 저장 쪽에서 이미 알린다 */
+    }
+    const id = savedIdRef.current;
+    router.push(`/together/new?source=${id ?? "picked"}`);
+  };
+
   const handleShareInstagram = async () => {
     setShowShareModal(false);
     await saveCards(1); // 스토리에는 첫 장 한 장이면 된다
@@ -1175,7 +1197,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                 */}
                 <div className="pt-3 mt-1 border-t border-navy/10">
                   <button
-                    onClick={() => router.push("/together/new")}
+                    onClick={goTogether}
                     className="w-full h-[52px] px-5 bg-navy/5 text-navy font-sans font-bold text-sm rounded-xl hover:bg-navy/10 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center"
                   >
                     {t.togetherOption}

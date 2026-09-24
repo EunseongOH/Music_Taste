@@ -42,6 +42,8 @@ let failed = 0;
   const page = await ctx.newPage();
   await page.addInitScript((r) => {
     sessionStorage.setItem('worldcup_ranking', JSON.stringify(r));
+    // "지금 고른 곡" 의 출처. 비로그인은 저장된 취향표가 없어 이쪽을 탄다.
+    sessionStorage.setItem('worldcup_tracks', JSON.stringify(r));
     sessionStorage.setItem('locale', 'ko');
   }, RANKING);
   await page.goto(`${BASE}/taste`, { waitUntil: 'domcontentloaded', timeout: 180_000 });
@@ -62,6 +64,25 @@ let failed = 0;
   const ok = iTogether > iCopy && iCopy >= 0;
   console.log(`  ${ok ? '[O]' : '[X]'} 같이 소트하기가 공유 수단 아래 — 복사 ${iCopy} / 같이 ${iTogether}`);
   if (!ok) failed++;
+
+  /*
+   * "이 곡들로 같이 소트하기" 는 아티스트 검색 화면이 아니라 **곡 고르기 화면**으로
+   * 가야 한다. 방금 소트한 곡을 두고 아티스트를 다시 고르라는 말이 되면 안 된다.
+   */
+  await page.getByRole('button', { name: '이 곡들로 같이 소트하기' }).click();
+  await page.waitForTimeout(2500);
+  const url = page.url();
+  const hasSource = /\/together\/new\?source=/.test(url);
+  console.log(`  ${hasSource ? '[O]' : '[X]'} 만들기 화면으로 source 를 들고 감 — ${url.replace(BASE, '')}`);
+  if (!hasSource) failed++;
+  const body = await page.locator('body').innerText();
+  const atStep2 = /고른 곡/.test(body) && /링크 만들기/.test(body);
+  console.log(`  ${atStep2 ? '[O]' : '[X]'} 곡 고르기 화면에서 시작 — ${atStep2 ? '"고른 곡" + "링크 만들기" 보임' : body.slice(0, 40)}`);
+  if (!atStep2) failed++;
+  await page.addStyleTag({ content: '*{animation:none!important;transition:none!important} nextjs-portal{display:none!important}' });
+  await page.waitForTimeout(300);
+  writeFileSync(join(OUT, '3-같이소트하기로.png'), await page.screenshot());
+  console.log('  3-같이소트하기로.png');
   await browser.close();
 }
 
