@@ -93,6 +93,43 @@ const seed = (p) => p.addInitScript(({ ranking }) => {
   navigator.share = async (data) => {
     window.__acts.push({ kind: 'share', data });
   };
+
+  /*
+   * Kakao SDK 는 진짜를 받고, **sendDefault 만** 가로챈다.
+   *
+   * 가짜 window.Kakao 를 미리 세워 두는 방법은 쓰지 못한다 — Next 하이드레이션이
+   * <head> 를 다시 써서 미리 넣어 둔 <script> 태그가 사라진다(확인함). 대신
+   * window.Kakao 에 setter 를 걸어, SDK 가 자기를 올리는 순간 바꿔치기한다.
+   * 그래야 진짜 카카오 창이 뜨지 않으면서 우리가 무엇을 넘기는지 그대로 볼 수 있다.
+   *
+   * 키(NEXT_PUBLIC_KAKAO_JS_KEY)가 없는 환경에서는 로더가 SDK 를 받지 않고
+   * 시스템 공유로 떨어진다. 그래서 아래 검사는 **둘 중 실제로 일어난 쪽**을 본다.
+   */
+  let _kakao;
+  Object.defineProperty(window, 'Kakao', {
+    configurable: true,
+    get: () => _kakao,
+    set: (v) => {
+      _kakao = v;
+      /*
+       * SDK 는 window.Kakao 를 먼저 올리고 `Share` 를 그 뒤에 붙인다 — setter 가
+       * 불리는 순간 v.Share 는 아직 undefined 다(확인함). 타이머로 기다리면 늦는다:
+       * 로더는 script 의 load 이벤트 직후 곧바로 sendDefault 를 부른다.
+       * 그래서 `Share` 에도 setter 를 걸어 **붙는 그 순간 동기적으로** 바꿔치기한다.
+       */
+      let _share;
+      Object.defineProperty(v, 'Share', {
+        configurable: true,
+        get: () => _share,
+        set: (sv) => {
+          _share = sv;
+          try {
+            sv.sendDefault = (data) => window.__acts.push({ kind: 'kakao', data });
+          } catch { /* 모양이 다르면 그냥 둔다 */ }
+        },
+      });
+    },
+  });
   const origClick = HTMLAnchorElement.prototype.click;
   HTMLAnchorElement.prototype.click = function () {
     if (this.download) {
@@ -140,17 +177,28 @@ try {
     check(!!x && decodeURIComponent(x.url).includes(CTA), 'X — 본문에 참여 유도 문구 포함');
 
     await page.getByRole('button', { name: '카카오톡으로 공유' }).click();
-    await page.waitForTimeout(600);
+    // SDK 로더가 Promise 를 한 번 더 거친다. 600ms 는 짧다.
+    await page.waitForTimeout(1500);
     const k = (await acts()).find((a) => a.kind === 'share');
     /*
-     * 카카오 키(NEXT_PUBLIC_KAKAO_JS_KEY)가 없는 환경에서는 Kakao SDK 대신
-     * 시스템 공유 시트로 떨어진다. 어느 쪽이든 **본문은 다른 채널과 같아야 한다** —
-     * 예전에는 카카오만 `"{아티스트} 취향표"` 한 줄을 보내 문구가 갈라져 있었다.
+     * 키가 있으면 Kakao SDK(`sendDefault`)로, 없으면 시스템 공유 시트로 간다.
+     * 어느 쪽이든 **본문은 다른 채널과 같아야 한다** — 예전에는 카카오만
+     * `"{아티스트} 취향표"` 한 줄을 보내 문구가 갈라져 있었다.
      */
-    check(!!k, '카카오 — 공유 호출', k ? `title="${k.data.title}"` : '동작 없음');
-    check(!!k && typeof k.data.url === 'string' && k.data.url.length > 0, '카카오 — 공유 링크 포함');
-    check(!!k && /취향표 TOP 10/.test(k.data.text ?? ''), '카카오 — 본문에 TOP 10 포함');
-    check(!!k && (k.data.text ?? '').includes(CTA), '카카오 — 본문에 참여 유도 문구 포함');
+    const kk = (await acts()).find((a) => a.kind === 'kakao');
+    if (kk) {
+      const c = kk.data.content ?? {};
+      check(true, '카카오 — Kakao SDK 로 보냄', `title="${c.title}"`);
+      check(typeof c.link?.webUrl === 'string' && c.link.webUrl.length > 0, '카카오 — 공유 링크 포함', c.link?.webUrl);
+      check(/취향표 TOP 10/.test(c.title ?? ''), '카카오 — 제목이 TOP 10 문구');
+      check(/^1\. /m.test(c.description ?? ''), '카카오 — 설명에 순위 목록');
+      check(Array.isArray(kk.data.buttons) && kk.data.buttons.length === 1, '카카오 — 카드 버튼 1개');
+    } else {
+      check(!!k, '카카오 — 시스템 공유로 떨어짐(키 없음)', k ? `title="${k.data.title}"` : '동작 없음');
+      check(!!k && typeof k.data.url === 'string' && k.data.url.length > 0, '카카오 — 공유 링크 포함');
+      check(!!k && /취향표 TOP 10/.test(k.data.text ?? ''), '카카오 — 본문에 TOP 10 포함');
+      check(!!k && (k.data.text ?? '').includes(CTA), '카카오 — 본문에 참여 유도 문구 포함');
+    }
   }
 
   await page.getByRole('button', { name: '취향표 링크 복사하기' }).click();
