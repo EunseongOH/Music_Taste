@@ -90,6 +90,74 @@ export function resolveMyEntry<T extends EntryIdentity>(
   return null;
 }
 
+/** 관계 계산에 필요한 최소한. 화면마다 타입이 조금씩 달라 좁게 받는다. */
+export interface EntryLike extends EntryIdentity {
+  nickname: string | null;
+  ranking: string[];
+}
+
+export interface SelfIdentity<T extends EntryIdentity> {
+  /** 관계도에서 "나" 를 대표하는 기록. 없으면 아직 소트하지 않았다. */
+  primary: T | null;
+  /** 관계 계산에서 쓸 내 키. **기기 키가 아니라 대표 기록의 키다.** */
+  primaryKey: string;
+  /** 같은 사람으로 확인된 다른 기록의 id. 화면 계산에서 접는다. */
+  aliasIds: Set<string>;
+}
+
+/**
+ * 이 화면을 보는 사람의 신원을 한 번에 정한다.
+ *
+ * 예전에는 `mine` 은 `resolveMyEntry` 로 고르고, 관계 계산의 `myKey` 는 기기 키를
+ * 그대로 썼다. 둘이 다른 기록을 가리키면 **내 기록이 "남" 쪽에 남아** 나와 내가
+ * 100% 로 이어졌다("나" 와 "강강강" 이 따로 서던 일).
+ *
+ * 같은 사람이라고 볼 근거는 **신원**뿐이다.
+ *   - 계정이 가진 기록
+ *   - 이 기기의 참여 키
+ *   - 참여 키가 내 계정 uuid 인 옛 기록
+ *
+ * 순위가 같다·닉네임이 같다·시각이 비슷하다는 **근거로 쓰지 않는다.** 서로 다른 두
+ * 사람이 같은 순위를 만들 수 있고, 그걸 합치면 남의 기록을 지우는 것과 같다.
+ */
+export function resolveSelfIdentity<T extends EntryIdentity>(
+  entries: T[] | null | undefined,
+  opts: { ownedEntryId?: string | null; userId?: string | null }
+): SelfIdentity<T> {
+  const device = deviceParticipantKey();
+  const list = entries ?? [];
+  const mine: T[] = [];
+  for (const e of list) {
+    const isSelf =
+      (opts.ownedEntryId && e.id === opts.ownedEntryId) ||
+      e.participant_key === device ||
+      (!!opts.userId && e.participant_key === opts.userId);
+    if (isSelf) mine.push(e);
+  }
+  if (mine.length === 0) return { primary: null, primaryKey: device, aliasIds: new Set() };
+
+  // 대표는 resolveMyEntry 와 같은 순서로 고른다(계정 → 기기 → 옛 방식).
+  const primary = resolveMyEntry(mine, opts) ?? mine[0];
+  const aliasIds = new Set(mine.filter((e) => e.id !== primary.id).map((e) => e.id));
+  return { primary, primaryKey: primary.participant_key, aliasIds };
+}
+
+/**
+ * 화면 계산에 넣을 목록. **같은 사람이 둘로 세어지지 않게** alias 를 걷어낸다.
+ *
+ * 노드만 숨기고 계산에는 남겨 두면 안 된다 — 참가자 수, 종합 일치율, 가장 닮은 조합이
+ * 전부 나와 나의 100% 에 끌려간다. 그래서 목록 자체를 여기서 한 번 고른다.
+ *
+ * 8초마다 다시 읽어도 늘 이 층을 지나므로, 지웠다가 다시 생기는 일이 없다.
+ */
+export function normalizeEntriesForViewer<T extends EntryIdentity>(
+  entries: T[] | null | undefined,
+  self: SelfIdentity<T>
+): T[] {
+  if (!entries?.length || self.aliasIds.size === 0) return entries ?? [];
+  return entries.filter((e) => !self.aliasIds.has(e.id));
+}
+
 /**
  * 로그인하면 붙여야 할 소유권을 적어 둔다.
  *

@@ -192,6 +192,121 @@ for (const loggedIn of [false, true]) {
   await ctx.close();
 }
 
+/*
+ * CASE A — 같은 사람의 기록이 둘 남아 있는 방(옛 버그가 만든 행).
+ *
+ * 운영에서 실제로 나온 모양 그대로다.
+ *   익명 행   participant_key = 이 기기 키     닉네임 강강강
+ *   옛 행     participant_key = 내 계정 uuid   닉네임 강강강, 순위 동일
+ *   친구 행   다른 순위
+ *
+ * 관계도에 "나" 와 "강강강" 이 따로 서고 둘이 100% 로 이어지던 자리다.
+ */
+{
+  const dupEntries = [
+    { id: 'e-anon', challenge_id: CHALLENGE_ID, participant_key: 'anon_device_fixed',
+      nickname: '강강강', ranking: IDS, skipped_count: 0, imported: false,
+      created_at: '2026-09-24T01:00:00.000Z' },
+    { id: 'e-legacy', challenge_id: CHALLENGE_ID, participant_key: USER_ID,
+      nickname: '강강강', ranking: IDS, skipped_count: 0, imported: false,
+      created_at: '2026-09-24T01:05:00.000Z' },
+    friend,
+  ];
+  const session = {
+    access_token: JWT, refresh_token: 'r', token_type: 'bearer',
+    expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user: { id: USER_ID, aud: 'authenticated', role: 'authenticated', email: 'x@example.com',
+            app_metadata: {}, user_metadata: { nickname: '강강강', nickname_confirmed: true },
+            created_at: '2026-01-01T00:00:00Z' },
+  };
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
+  await ctx.addCookies([{
+    name: `sb-${PROJECT_REF}-auth-token`,
+    value: `base64-${Buffer.from(JSON.stringify(session)).toString('base64')}`,
+    url: BASE,
+  }]);
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    localStorage.setItem('together_participant', 'anon_device_fixed');
+    localStorage.setItem('together_claim_secret', 'secret-device');
+    sessionStorage.setItem('locale', 'ko');
+  });
+  await page.route((u) => u.href.includes('.supabase.co/'), async (route) => {
+    const url = route.request().url();
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (url.includes('/auth/v1/')) return json({ user: session.user });
+    if (route.request().method() !== 'GET') return json(url.includes('/rpc/') ? null : []);
+    if (url.includes('/sort_challenges')) {
+      const single = (route.request().headers()['accept'] ?? '').includes('vnd.pgrst.object');
+      return json(single ? room : [room]);
+    }
+    if (url.includes('/sort_challenge_entries')) return json(dupEntries);
+    return json([]);
+  });
+  await page.goto(`${BASE}/together/idcheck/result`, { waitUntil: 'domcontentloaded', timeout: 180_000 });
+  await page.waitForTimeout(4500);
+
+  console.log('CASE A — 같은 사람의 기록이 둘 남은 방');
+  const body = await page.locator('body').innerText();
+  const countText = (body.match(/(\d+)명이 함께했어요/) ?? [])[0] ?? '없음';
+  check(/2명이 함께했어요/.test(body), '참가자 2명', countText);
+  const me = await page.evaluate(() => {
+    const card = document.getElementById('together-share-card');
+    return [...document.querySelectorAll('button[aria-label="나"]')].filter((el) => !card || !card.contains(el)).length;
+  });
+  check(me === 1, '"나" 노드 1개', `찾은 수 ${me}`);
+  const dupNode = await page.evaluate(() => {
+    const card = document.getElementById('together-share-card');
+    return [...document.querySelectorAll('button[aria-label^="강강강"]')].filter((el) => !card || !card.contains(el)).length;
+  });
+  check(dupNode === 0, '내 닉네임으로 된 두 번째 노드 없음', `찾은 수 ${dupNode}`);
+  check(!/100%/.test(body), '나와 나의 100% 쌍 없음');
+  await ctx.close();
+  console.log('');
+}
+
+/*
+ * CASE E — 서로 다른 두 사람이 우연히 같은 순위.
+ * 100% 라는 이유만으로 합치면 남의 기록을 지우는 것과 같다. 둘 다 남아야 한다.
+ */
+{
+  const twins = [
+    { id: 'e-mine', challenge_id: CHALLENGE_ID, participant_key: 'anon_device_fixed',
+      nickname: '나', ranking: IDS, skipped_count: 0, imported: false,
+      created_at: '2026-09-24T01:00:00.000Z' },
+    { id: 'e-twin', challenge_id: CHALLENGE_ID, participant_key: 'anon_someone_else',
+      nickname: '지민', ranking: IDS, skipped_count: 0, imported: false,
+      created_at: '2026-09-24T02:00:00.000Z' },
+  ];
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    localStorage.setItem('together_participant', 'anon_device_fixed');
+    sessionStorage.setItem('locale', 'ko');
+  });
+  await page.route((u) => u.href.includes('.supabase.co/'), async (route) => {
+    const url = route.request().url();
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (url.includes('/auth/v1/')) return json({ user: null });
+    if (route.request().method() !== 'GET') return json([]);
+    if (url.includes('/sort_challenges')) {
+      const single = (route.request().headers()['accept'] ?? '').includes('vnd.pgrst.object');
+      return json(single ? room : [room]);
+    }
+    if (url.includes('/sort_challenge_entries')) return json(twins);
+    return json([]);
+  });
+  await page.goto(`${BASE}/together/idcheck/result`, { waitUntil: 'domcontentloaded', timeout: 180_000 });
+  await page.waitForTimeout(4500);
+
+  console.log('CASE E — 다른 두 사람이 우연히 같은 순위');
+  const body = await page.locator('body').innerText();
+  check(/2명이 함께했어요/.test(body), '둘 다 남는다(합치지 않는다)');
+  check(/100%/.test(body), '진짜 100% 일치는 그대로 보여 준다');
+  await ctx.close();
+  console.log('');
+}
+
 await browser.close();
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);
 process.exitCode = failed === 0 ? 0 : 1;

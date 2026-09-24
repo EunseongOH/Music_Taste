@@ -10,7 +10,7 @@ import { saveCompletedResult } from "@/utils/worldcupDb";
 import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
-import { deviceParticipantKey, rememberPendingClaim, resolveMyEntry, takePendingClaim } from "@/utils/togetherIdentity";
+import { normalizeEntriesForViewer, rememberPendingClaim, resolveSelfIdentity, takePendingClaim } from "@/utils/togetherIdentity";
 import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
@@ -183,31 +183,43 @@ export default function TogetherResultPage() {
   const dockRef = useDockClearance();
 
   /*
-   * 내 기록을 찾는 순서: 계정이 가진 것 → 이 기기의 참여 키 → 옛 방식(키가 계정 uuid).
+   * 이 화면을 보는 사람의 신원.
    *
-   * 두 번째가 핵심이다. 로그인하고 소유권이 붙기까지 몇 백 ms 가 걸리는데, 그 사이
-   * 기기 키로 계속 찾히지 않으면 "아직 소트하지 않았어요" 가 깜빡인다.
+   * 예전에는 `mine` 은 계정 소유 기록을 고르면서 `key` 는 기기 키를 그대로 썼다.
+   * 둘이 다른 기록을 가리키면 **내 기록이 "남" 쪽에 남아** 나와 내가 100% 로 이어졌다.
+   * 이제 관계 계산의 내 키는 **대표 기록에서** 온다.
    */
-  const key = deviceParticipantKey();
-  const mine = resolveMyEntry(entries, { ownedEntryId: ownedId, userId: user?.id });
+  const self = useMemo(
+    () => resolveSelfIdentity(entries, { ownedEntryId: ownedId, userId: user?.id }),
+    [entries, ownedId, user?.id]
+  );
+  const mine = self.primary;
+  const key = self.primaryKey;
+
+  /*
+   * 같은 사람의 기록이 둘 이상 남아 있을 수 있다(옛 버그가 만든 행). 화면 계산은
+   * **전부 이 목록으로** 한다 — 노드만 숨기고 계산에 남겨 두면 참가자 수와 종합
+   * 일치율이 나와 나의 100% 에 끌려간다.
+   */
+  const shown = useMemo(() => normalizeEntriesForViewer(entries, self), [entries, self]);
 
   const others = useMemo(() => {
-    if (!entries || !mine) return [];
-    return entries
+    if (!mine) return [];
+    return shown
       .filter((e) => e.participant_key !== key)
       .map((e) => ({ entry: e, match: matchRate(mine.ranking, e.ranking) }))
       .sort((a, b) => b.match.rate - a.match.rate);
-  }, [entries, mine, key]);
+  }, [shown, mine, key]);
 
   /* ── 그룹 계산. 화면은 여기서 나온 값만 쓴다(utils/togetherMatch.ts) ── */
 
   const participants = useMemo(
-    () => (entries ?? []).map((e) => ({ key: e.participant_key, nickname: e.nickname })),
-    [entries]
+    () => shown.map((e) => ({ key: e.participant_key, nickname: e.nickname })),
+    [shown]
   );
   const pairs = useMemo(
-    () => buildPairwiseMatches((entries ?? []).map((e) => ({ key: e.participant_key, nickname: e.nickname, ranking: e.ranking }))),
-    [entries]
+    () => buildPairwiseMatches(shown.map((e) => ({ key: e.participant_key, nickname: e.nickname, ranking: e.ranking }))),
+    [shown]
   );
   const groupRate = useMemo(() => groupMatchRate(pairs), [pairs]);
   const myPartners = useMemo(() => partnersOf(pairs, key), [pairs, key]);
@@ -288,11 +300,11 @@ export default function TogetherResultPage() {
   useEffect(() => {
     if (!entries) return;
     const before = seenCount.current;
-    seenCount.current = entries.length;
-    if (before !== null && entries.length > before) {
-      showToast(`새 결과가 반영됐어요 · ${entries.length}명이 함께했어요`);
+    seenCount.current = shown.length;
+    if (before !== null && shown.length > before) {
+      showToast(`새 결과가 반영됐어요 · ${shown.length}명이 함께했어요`);
     }
-  }, [entries, showToast]);
+  }, [entries, shown.length, showToast]);
 
   if (entries === null) {
     return (
@@ -376,7 +388,7 @@ export default function TogetherResultPage() {
             </p>
           )}
           <p className="type-body text-navy/70 mt-2">
-            {entries.length}명이 함께했어요
+            {shown.length}명이 함께했어요
           </p>
         </div>
       </header>
@@ -577,7 +589,7 @@ export default function TogetherResultPage() {
           id={SHARE_CARD_ID}
           artistLabel={artistLabel}
           trackCount={challenge.tracks.length}
-          participantCount={entries.length}
+          participantCount={shown.length}
           groupRate={groupRate}
           participants={participants}
           pairs={pairs}

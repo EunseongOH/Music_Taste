@@ -15,7 +15,7 @@ import {
 } from "@/utils/togetherDb";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
-import { deviceParticipantKey, resolveMyEntry } from "@/utils/togetherIdentity";
+import { normalizeEntriesForViewer, resolveSelfIdentity } from "@/utils/togetherIdentity";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
 import { ConfirmSheet, Cover, RankList, SectionTitle, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
@@ -108,8 +108,14 @@ export default function TogetherInvitePage() {
    * 로그인해도 기기 키로 계속 찾히므로, 익명으로 매긴 순위가 "내가 매긴 순위" 로
    * 그대로 남고 버튼도 [다시 소트하기]·[일치율 보기] 를 유지한다.
    */
-  const myKey = deviceParticipantKey();
-  const mine = resolveMyEntry(entries, { ownedEntryId: ownedId, userId: user?.id }) ?? undefined;
+  /*
+   * 같은 사람의 기록이 둘 이상 남아 있으면(옛 버그가 만든 행) 이름표가 "나" 와
+   * 자기 닉네임으로 두 개 섰다. `shown` 으로 접어 하나로 만든다.
+   */
+  const self = resolveSelfIdentity(entries, { ownedEntryId: ownedId, userId: user?.id });
+  const myKey = self.primaryKey;
+  const mine = self.primary ?? undefined;
+  const shown = normalizeEntriesForViewer(entries, self);
 
   /* 이름이 아예 없으면 "익명 리스너님이" 라고 부르지 않는다 — 이름 없이 말한다. */
   const importedName = mine?.nickname?.trim() || challenge?.creator_nickname?.trim() || "";
@@ -286,13 +292,13 @@ export default function TogetherInvitePage() {
         )}
         {/* 누가 끝냈는지는 아래 이름표가 이미 말한다. 사람 수만 세어 준다. */}
         <p className="type-caption text-navy/70">
-          {iAmCreator && entries.length === 0
+          {iAmCreator && shown.length === 0
             ? "아직 아무도 소트하지 않았어요. 링크를 보내 보세요."
-            : `지금까지 ${entries.length}명이 소트했어요`}
+            : `지금까지 ${shown.length}명이 소트했어요`}
         </p>
-        {entries.length > 0 && (
+        {shown.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
-            {entries.map((e) => (
+            {shown.map((e) => (
               <li key={e.id} className="h-7 px-3 rounded-full bg-navy/5 type-caption text-navy flex items-center">
                 {personName(e.nickname, e.participant_key === myKey)}
               </li>
