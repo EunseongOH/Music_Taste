@@ -946,9 +946,8 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
                  * 테두리만 떠 보였고, 카드가 뒤에 비쳤다. 공유하기가 주 버튼이라
                  * 저장하기는 보조 위계를 지키되 또렷하게 보이게 한다.
                  */
-                className="flex-1 h-[48px] bg-cream border border-navy/15 text-navy hover:bg-navy/5 active:bg-navy/10 rounded-2xl font-sans font-bold text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 h-[48px] bg-cream border border-navy/15 text-navy hover:bg-navy/5 active:bg-navy/10 rounded-2xl font-sans font-bold text-sm transition-all active:scale-[0.98] shadow-md flex items-center justify-center cursor-pointer"
               >
-                <Archive size={18} />
                 <span>{t.saveBtn}</span>
               </button>
 
