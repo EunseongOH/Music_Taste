@@ -26,6 +26,13 @@ export interface CardPalette {
   cardLine: string;
   /** 카드 둘레에 깔리는 옅은 빛. 미리보기에서만 보이고 저장 이미지에는 없다. */
   previewHalo: string;
+  /**
+   * 레코드형 LP 원판의 밝기.
+   *
+   * 원판은 원래 새까맣다. 어두운 바탕에서는 배경에 묻혀 LP 인 줄 모른다 —
+   * 그때는 연한 회색으로 뒤집는다.
+   */
+  disc: "dark" | "light";
 }
 
 /**
@@ -42,6 +49,7 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#A65309",
     cardLine: "rgba(26,42,108,0.16)",
     previewHalo: "rgba(230,126,34,0.16)",
+    disc: "dark",
   },
   {
     id: "paper-blue",
@@ -52,6 +60,7 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#1D5FA8",
     cardLine: "rgba(22,38,61,0.16)",
     previewHalo: "rgba(29,95,168,0.16)",
+    disc: "dark",
   },
   {
     id: "forest-gold",
@@ -62,6 +71,7 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#8A5A13",
     cardLine: "rgba(35,48,31,0.18)",
     previewHalo: "rgba(138,90,19,0.18)",
+    disc: "dark",
   },
   {
     id: "plum-rose",
@@ -72,6 +82,7 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#9B2B63",
     cardLine: "rgba(46,26,43,0.16)",
     previewHalo: "rgba(155,43,99,0.16)",
+    disc: "dark",
   },
   {
     id: "bubblegum",
@@ -82,6 +93,7 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#C2185B",
     cardLine: "rgba(58,18,48,0.16)",
     previewHalo: "rgba(194,24,91,0.18)",
+    disc: "dark",
   },
   {
     id: "neon-lime",
@@ -92,6 +104,7 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#B8F135",
     cardLine: "rgba(242,245,236,0.20)",
     previewHalo: "rgba(184,241,53,0.22)",
+    disc: "light",
   },
   {
     id: "midnight-pop",
@@ -102,21 +115,42 @@ export const CARD_PALETTES: CardPalette[] = [
     cardAccent: "#FF8A3D",
     cardLine: "rgba(238,242,251,0.20)",
     previewHalo: "rgba(255,138,61,0.22)",
+    disc: "light",
   },
 ];
 
-export const DEFAULT_PALETTE = CARD_PALETTES[0];
+/**
+ * 아무것도 고르지 않았을 때 — **앱 테마 색을 그대로 쓴다.**
+ *
+ * 색을 바꾸기 전까지는 예전과 똑같이 보여야 한다. 프리셋은 "바꿨을 때" 나오는 것이지
+ * 기본값이 아니다. 그래서 고정 값이 아니라 앱 토큰(`var(--t-*)`)을 그대로 넘긴다 —
+ * 테마를 바꾸면 카드도 따라간다.
+ */
+export const THEME_CARD_VARS = {
+  "--card-bg": "var(--t-cream)",
+  "--card-ink": "var(--t-navy)",
+  "--card-muted": "color-mix(in oklab, var(--t-navy) 70%, transparent)",
+  "--card-accent": "var(--t-point-ink)",
+  "--card-line": "color-mix(in oklab, var(--t-navy) 20%, transparent)",
+  "--card-disc-a": "#161616",
+  "--card-disc-b": "#232323",
+} as React.CSSProperties;
 
-export const paletteById = (id: string): CardPalette =>
-  CARD_PALETTES.find((p) => p.id === id) ?? DEFAULT_PALETTE;
+export const paletteById = (id: string): CardPalette | null =>
+  CARD_PALETTES.find((p) => p.id === id) ?? null;
 
-/** 카드 뿌리에 얹을 CSS 변수. 템플릿은 이 이름만 읽는다. */
-export function paletteVars(p: CardPalette): React.CSSProperties {
+/** 카드 뿌리에 얹을 CSS 변수. 템플릿은 이 이름만 읽는다. null 이면 앱 테마 그대로. */
+export function paletteVars(p: CardPalette | null): React.CSSProperties {
+  if (!p) return THEME_CARD_VARS;
+  // 어두운 바탕에서는 LP 원판을 연한 회색으로 뒤집는다(까만 판이 배경에 묻힌다).
+  const [a, b] = p.disc === "light" ? ["#C9CCC6", "#E2E5DF"] : ["#161616", "#232323"];
   return {
     "--card-bg": p.cardBg,
     "--card-ink": p.cardInk,
     "--card-muted": p.cardMuted,
     "--card-accent": p.cardAccent,
     "--card-line": p.cardLine,
+    "--card-disc-a": a,
+    "--card-disc-b": b,
   } as React.CSSProperties;
 }

@@ -81,7 +81,8 @@ Sortify 화면에서 되풀이되는 요소를 모아 둔 문서다. 색·타이
 ```
 [트리거]  40px 원 · 바탕=cardBg · 가운데 점=cardAccent · border-navy/15 · shadow-md
    ↓ 누르면 위로
-[펼침]    캡슐 · bg-cream · border-navy/15 · shadow-lg · 안에 36px 칩 7개 가로 한 줄
+[펼침]    캡슐 · bg-cream · border-navy/15 · shadow-lg · 안에 36px 칩 8개 가로 한 줄
+          (첫 칸 = 기본으로 되돌리기, 그다음 프리셋 7개)
 ```
 
 | state | 표시 |
@@ -177,6 +178,11 @@ Sortify 화면에서 되풀이되는 요소를 모아 둔 문서다. 색·타이
 | `--card-accent` | 1·2·3위, 포스터 상단 레이블 |
 | `--card-line` | 구분선 |
 | `previewHalo` | 미리보기 카드 둘레의 옅은 빛 (저장 이미지에는 없다) |
+| `--card-disc-a/b` | 레코드형 LP 원판의 두 색. 어두운 프리셋은 연한 회색으로 뒤집는다 |
+
+**기본값은 프리셋이 아니라 앱 테마다.** 아무것도 고르지 않으면 `--card-*` 가 `var(--t-*)` 를
+가리켜 예전과 똑같이 보이고, 앱 테마를 바꾸면 카드도 따라간다. 프리셋은 "바꿨을 때" 나오는 것이다.
+그래서 피커 첫 칸은 **기본으로 되돌리기**다 — 없으면 한 번 고른 뒤 돌아갈 길이 없다.
 
 프리셋 7개: Sortify Classic · Paper Blue · Forest Gold · Plum Rose · Bubblegum Pop ·
 Neon Lime · Midnight Pop.

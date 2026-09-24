@@ -15,7 +15,7 @@ import {
   type RecordPage,
   type Shape,
 } from "@/components/result/exportLayout";
-import { DEFAULT_PALETTE, paletteVars, type CardPalette } from "@/components/result/cardPalette";
+import { paletteVars, type CardPalette } from "@/components/result/cardPalette";
 
 /**
  * 9:16 취향표 카드(450×800).
@@ -44,7 +44,7 @@ export interface CardMeta {
   total: number;
   locale: "ko" | "en";
   /** 카드 색 조합. 없으면 기본(Sortify Classic). */
-  palette?: CardPalette;
+  palette?: CardPalette | null;
 }
 
 const text = {
@@ -90,13 +90,13 @@ export function CardSurface({
   className = "",
   children,
 }: {
-  palette?: CardPalette;
+  palette?: CardPalette | null;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
     <div
-      style={paletteVars(palette ?? DEFAULT_PALETTE)}
+      style={paletteVars(palette ?? null)}
       className={`w-[450px] h-[800px] bg-[var(--card-bg)] text-[var(--card-ink)] flex flex-col px-8 pt-9 pb-[26px] overflow-hidden ${className}`}
     >
       {children}
@@ -244,9 +244,16 @@ export function ListCard({
 // 레코드형 — 1위는 슬리브에서 반쯤 나온 LP
 // ---------------------------------------------------------------------------
 
+/**
+ * LP 원판. 홈이 파인 듯한 반복 그라데이션.
+ *
+ * 두 색은 팔레트가 정한다(`--card-disc-a/b`). 어두운 프리셋에서는 연한 회색으로
+ * 뒤집힌다 — 새까만 판은 어두운 바탕에 묻혀 LP 인 줄 알 수 없다.
+ * 변수가 없는 곳(공유된 취향표 화면 등)에서는 원래의 검정으로 떨어진다.
+ */
 export const DISC_BACKGROUND =
   "radial-gradient(circle, transparent 0 19%, rgba(255,255,255,0.08) 19% 19.6%, transparent 19.6%), " +
-  "repeating-radial-gradient(circle, #161616 0 1.5px, #232323 1.5px 3px)";
+  "repeating-radial-gradient(circle, var(--card-disc-a, #161616) 0 1.5px, var(--card-disc-b, #232323) 1.5px 3px)";
 
 function MiniRecord({ src, size }: { src: string; size: number }) {
   return (
@@ -522,7 +529,7 @@ export function PosterCard({ tracks, meta }: { tracks: CardTrack[]; meta: CardMe
   return (
     <div
       ref={rootRef}
-      style={paletteVars(meta.palette ?? DEFAULT_PALETTE)}
+      style={paletteVars(meta.palette ?? null)}
       className="w-[450px] h-[800px] bg-[var(--card-bg)] text-[var(--card-ink)] flex flex-col px-8 pt-9 pb-[26px] overflow-hidden text-center"
     >
       <div className="flex flex-col items-center gap-[3px] pb-2">

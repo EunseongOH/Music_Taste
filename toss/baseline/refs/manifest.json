@@ -4,38 +4,38 @@
   "files": [
     {
       "name": "카더가든_Music_Taste_list_Part1.png",
-      "bytes": 399608,
-      "sha256": "3830b753417022447308e5274b4d98a55f61ba2c892d1b8aeb75d7cbf3b15dcd",
+      "bytes": 393775,
+      "sha256": "e2a5b769d22d3554f3a3e02ddc3e99b1534db3477af8731be1413e1516fc45be",
       "from": "list"
     },
     {
       "name": "카더가든_Music_Taste_list_Part2.png",
-      "bytes": 429946,
-      "sha256": "7550d16d263665f14a9e301b7be7dcc60f45c00c8112e703b98b97915557f812",
+      "bytes": 423473,
+      "sha256": "d303a877ba371aa7b2d2f50a548d8c56cd0af9e0bc15166f6d66e593dc30be94",
       "from": "list"
     },
     {
       "name": "카더가든_Music_Taste_retro_Part1.png",
-      "bytes": 491682,
-      "sha256": "fddeece79e3ec818f5ed51fce412d6cad861b4ab4b20f48d946410efc9e55020",
+      "bytes": 486801,
+      "sha256": "101df748af7a9f8bbb6a9b7ab6664c7b78c0a8463f72fb77ddfc1b82261292f6",
       "from": "retro"
     },
     {
       "name": "카더가든_Music_Taste_retro_Part2.png",
-      "bytes": 478246,
-      "sha256": "730b8325423f054d657e4f5a76d5f5fedf27293ff3329f04ddc3b1da95543af8",
+      "bytes": 471849,
+      "sha256": "6893ffadb89ced18d3099ec36893e93fcfaf0b9b137b136c48a8c5546a110646",
       "from": "retro"
     },
     {
       "name": "카더가든_Music_Taste_mosaic.png",
-      "bytes": 562448,
-      "sha256": "ff1e6935377167f5319fa29b4b373501413e184f448c7f2a0bccdf29c6546eb0",
+      "bytes": 555891,
+      "sha256": "3e01edcd86e71c6cfb1988ee1f17494819c49a9eb12e9b725c304e9d1c028fa5",
       "from": "mosaic"
     },
     {
       "name": "카더가든_Music_Taste_poster.png",
-      "bytes": 571284,
-      "sha256": "0475d698d5caff1f13799ed15943fb4855c1f829f6c9e46f2cc193daad0d76e4",
+      "bytes": 560859,
+      "sha256": "ed3bf8aadb495b47312b41906b0cfbc1c2d5f52381de46d1055fa9d6ae159ac3",
       "from": "poster"
     },
     {

@@ -102,11 +102,12 @@ await page.waitForTimeout(600);
 await page.getByRole('button', { name: '카드 색 바꾸기' }).click();
 await page.waitForTimeout(400);
 const chips = page.getByRole('radio');
-check((await chips.count()) === 7, `색칩 7개 — ${await chips.count()}개`);
+// 프리셋 7 + 기본으로 되돌리기 1
+check((await chips.count()) === 8, `색칩 8개(기본 + 프리셋 7) — ${await chips.count()}개`);
 writeFileSync(join(OUT, '2-팔레트펼침.png'), await page.screenshot());
 console.log('  2-팔레트펼침.png');
 
-for (const [i, name] of [[5, 'neon-lime'], [6, 'midnight-pop'], [3, 'plum-rose']]) {
+for (const [i, name] of [[6, 'neon-lime'], [7, 'midnight-pop'], [4, 'plum-rose'], [0, '기본으로']]) {
   await chips.nth(i).click();
   await page.waitForTimeout(500);
   check(await chips.first().isVisible(), `${name} 고른 뒤에도 팔레트가 열려 있음`);

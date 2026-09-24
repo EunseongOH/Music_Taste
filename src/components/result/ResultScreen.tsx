@@ -18,7 +18,7 @@ import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { shareBody as buildShareBody, shareRanking, shareTitle } from "@/utils/shareText";
 import PalettePicker from "@/components/result/PalettePicker";
-import { DEFAULT_PALETTE, type CardPalette } from "@/components/result/cardPalette";
+import { type CardPalette } from "@/components/result/cardPalette";
 import { shareToKakao } from "@/utils/kakaoShare";
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
 import PyramidStage from "@/components/result/PyramidStage";
@@ -217,7 +217,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 카드 색 조합. **앱 테마가 아니라 카드 한 장의 무드다.**
    * 미리보기와 저장 이미지가 같은 컴포넌트를 쓰므로 이 state 하나가 둘을 함께 정한다.
    */
-  const [palette, setPalette] = useState<CardPalette>(DEFAULT_PALETTE);
+  const [palette, setPalette] = useState<CardPalette | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /** 여러 장 저장 확인 시트에 띄울 장 수(null 이면 닫힘) */
   const [pendingPages, setPendingPages] = useState<number | null>(null);
@@ -916,7 +916,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               <PyramidStage tracks={winners} playing onDone={() => setIntroDone(true)} skipLabel={t.skipIntro} />
             ) : (
               renderCards(winners).map((card, i) => (
-                <ScaledCard key={`${template}-${i}`} halo={palette.previewHalo}>
+                <ScaledCard key={`${template}-${i}`} halo={palette?.previewHalo}>
                   {card}
                 </ScaledCard>
               ))
