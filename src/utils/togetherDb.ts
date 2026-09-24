@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage } from "@/utils/storage";
 import { makeCode } from "@/utils/togetherMatch";
+import { deviceClaimSecret, deviceParticipantKey } from "@/utils/togetherIdentity";
 import type { RankedTrack } from "@/utils/ranking";
 
 /**
@@ -41,15 +42,7 @@ export interface ChallengeEntry {
   created_at: string;
 }
 
-/** 이 기기의 참여자 키. 로그인했으면 그 사용자 id 를 그대로 쓴다. */
-export function participantKey(userId?: string | null): string {
-  if (userId) return userId;
-  const saved = safeLocalStorage.getItem("together_participant");
-  if (saved) return saved;
-  const made = `anon_${crypto.randomUUID()}`;
-  safeLocalStorage.setItem("together_participant", made);
-  return made;
-}
+/* 참여 신원은 utils/togetherIdentity.ts 가 맡는다 — 로그인해도 바뀌지 않는다. */
 
 /**
  * 내가 만든 링크인가.
@@ -91,9 +84,13 @@ export async function fetchChallenge(code: string): Promise<SortChallenge | null
 }
 
 export async function fetchEntries(challengeId: string): Promise<ChallengeEntry[]> {
+  /*
+   * **남의 계정 정보를 화면에 내려보내지 않는다.** 관계도·참가자 목록에 필요한 것만
+   * 고른다 — `user_id` 와 `claim_token_hash` 는 여기 실리면 안 된다.
+   */
   const { data, error } = await createClient()
     .from("sort_challenge_entries")
-    .select("*")
+    .select("id,challenge_id,participant_key,nickname,ranking,skipped_count,imported,created_at")
     .eq("challenge_id", challengeId)
     .order("created_at", { ascending: true });
   if (error) {
@@ -191,35 +188,66 @@ export function rememberNickname(name: string): void {
   }
 }
 
-/** 같은 사람이 다시 하면 덮어쓴다. */
+/**
+ * 참여 기록을 남긴다. 같은 사람이 다시 하면 덮어쓴다.
+ *
+ * 표에 직접 쓰지 않고 `save_sort_challenge_entry` 함수를 지난다. 그 함수가
+ *  - 고칠 자격을 확인하고(증명 · 계정 소유권 · 옛 기록)
+ *  - 로그인 상태면 `user_id` 를 **auth.uid() 에서** 채우고
+ *  - 이미 내 계정 기록이 있는 방이면 한 트랜잭션으로 하나로 합친다.
+ *
+ * 참여 키는 인자로 받지 않는다 — 이 기기의 키 하나뿐이고, 로그인해도 바뀌지 않는다.
+ */
 export async function saveEntry(input: {
   challengeId: string;
-  participantKey: string;
   nickname: string | null;
   ranking: string[];
   skippedCount: number;
   /** 이전 취향표를 불러온 것이면 true. 직접 소트한 저장은 반드시 false 로 덮어야 한다. */
   imported?: boolean;
-}): Promise<boolean> {
-  const { error } = await createClient()
-    .from("sort_challenge_entries")
-    .upsert(
-      {
-        challenge_id: input.challengeId,
-        participant_key: input.participantKey,
-        nickname: input.nickname,
-        ranking: input.ranking,
-        skipped_count: input.skippedCount,
-        // 빼먹으면 upsert 가 이전 값을 그대로 둔다 — 다시 소트해도 "불러왔어요" 가 남는다.
-        imported: input.imported ?? false,
-      },
-      { onConflict: "challenge_id,participant_key" }
-    );
+}): Promise<string | null> {
+  const { data, error } = await createClient().rpc("save_sort_challenge_entry", {
+    p_challenge_id: input.challengeId,
+    p_participant_key: deviceParticipantKey(),
+    p_claim_token: deviceClaimSecret(),
+    p_nickname: input.nickname,
+    p_ranking: input.ranking,
+    p_skipped_count: input.skippedCount,
+    p_imported: input.imported ?? false,
+  });
   if (error) {
     console.error("[together] 참여 기록을 저장하지 못했어요:", error.message);
-    return false;
+    return null;
   }
-  return true;
+  return (data as string | null) ?? null;
+}
+
+/**
+ * 익명으로 남긴 기록에 계정 소유권을 붙인다. 붙은 기록의 id 를 돌려준다.
+ *
+ * 증명이 맞을 때만 붙는다. 증명이 없는 옛 기록은 조용히 null 이다 — 근거 없이
+ * 붙이지 않는다. 그 기록은 화면에서 기기 신원으로 계속 "내 결과" 로 보인다.
+ */
+export async function claimEntry(challengeId: string): Promise<string | null> {
+  const { data, error } = await createClient().rpc("claim_sort_challenge_entry", {
+    p_challenge_id: challengeId,
+    p_participant_key: deviceParticipantKey(),
+    p_claim_token: deviceClaimSecret(),
+  });
+  if (error) {
+    console.error("[together] 소유권을 붙이지 못했어요:", error.message);
+    return null;
+  }
+  return (data as string | null) ?? null;
+}
+
+/** 이 방에서 **내 계정이 가진** 기록의 id. 목록 조회에서 user_id 를 빼는 대신 이걸 쓴다. */
+export async function fetchOwnedEntryId(challengeId: string): Promise<string | null> {
+  const { data, error } = await createClient().rpc("my_sort_challenge_entry", {
+    p_challenge_id: challengeId,
+  });
+  if (error) return null;
+  return (data as string | null) ?? null;
 }
 
 /**
@@ -254,26 +282,48 @@ export interface MyChallenge {
 /**
  * 내가 참여한 방 목록.
  *
- * 링크나 코드를 잃으면 결과를 다시 볼 길이 없었다 — 어디에서도 목록을 보여 주지
- * 않았다. 참여 기록은 참여키로 찾을 수 있으니 화면만 있으면 된다.
+ * 두 갈래로 찾아 합친다.
+ *   1) **계정이 가진 기록**(`user_id`) — 다른 기기에서 로그인해도 찾힌다
+ *   2) **이 기기의 참여 키** — 로그인하지 않은 사람, 그리고 증명이 없어 계정에 붙이지
+ *      못한 옛 익명 기록이 이쪽으로 걸린다
  *
- * 로그인했으면 계정 id 가, 아니면 기기에 남은 uuid 가 참여키다. 그래서
- * 로그인하지 않은 사람도 **같은 기기에서는** 자기가 한 방을 찾을 수 있다.
+ * 옛 로그인 기록은 참여 키가 계정 uuid 그 자체였다. 그건 마이그레이션에서
+ * `user_id` 로 옮겨 두었으므로 1번에 걸린다.
+ *
+ * 같은 방이 두 갈래에 다 있으면 한 번만 보여 준다.
  */
-export async function fetchMyChallenges(key: string): Promise<MyChallenge[]> {
+export async function fetchMyChallenges(userId?: string | null): Promise<MyChallenge[]> {
   const supabase = createClient();
-  const { data: mineRows, error } = await supabase
-    .from("sort_challenge_entries")
-    .select("challenge_id, created_at")
-    .eq("participant_key", key)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (error || !mineRows?.length) {
-    if (error) console.error("[together] 참여한 방을 불러오지 못했어요:", error.message);
-    return [];
-  }
+  const device = deviceParticipantKey();
 
-  const rows = mineRows as { challenge_id: string; created_at: string }[];
+  const [byDevice, byAccount] = await Promise.all([
+    supabase
+      .from("sort_challenge_entries")
+      .select("challenge_id, created_at")
+      .eq("participant_key", device)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    userId
+      ? supabase
+          .from("sort_challenge_entries")
+          .select("challenge_id, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(50)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (byDevice.error) console.error("[together] 참여한 방을 불러오지 못했어요:", byDevice.error.message);
+  if (byAccount.error) console.error("[together] 계정의 방을 불러오지 못했어요:", byAccount.error.message);
+
+  type Row = { challenge_id: string; created_at: string };
+  // 계정 기록을 앞에 둔다 — 같은 방이 둘 다 있으면 계정 쪽 시각을 쓴다.
+  const merged = [...((byAccount.data ?? []) as Row[]), ...((byDevice.data ?? []) as Row[])];
+  const seen = new Set<string>();
+  const rows = merged
+    .filter((r) => (seen.has(r.challenge_id) ? false : seen.add(r.challenge_id)))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.challenge_id))];
   const { data: rooms } = await supabase
     .from("sort_challenges")
@@ -304,7 +354,7 @@ export async function fetchMyChallenges(key: string): Promise<MyChallenge[]> {
         trackCount: (room.tracks ?? []).length,
         people: people.get(r.challenge_id) ?? 1,
         sortedAt: r.created_at,
-        iCreated: !!room.creator_id && room.creator_id === key,
+        iCreated: !!room.creator_id && !!userId && room.creator_id === userId,
       } satisfies MyChallenge;
     })
     .filter((x): x is MyChallenge => x !== null);

@@ -12,7 +12,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
-import { createChallenge, participantKey, saveEntry } from "@/utils/togetherDb";
+import { createChallenge, saveEntry } from "@/utils/togetherDb";
 import * as platform from "@/utils/platform";
 import { VISIBLE_MODES } from "@/config/modes";
 import { Cover, SectionTitle, Toast, primaryButton, secondaryButton, useToast } from "@/components/space/SpaceUI";
@@ -576,8 +576,9 @@ export default function TogetherNewPage() {
     // 취향표 목록은 나중에 도착한다. 올 때까지 이 효과가 다시 돈다.
     if (!found) return;
     autoPicked.current = true;
+    /* 목록이 도착한 뒤에야 고를 수 있다 — 렌더 중에는 아직 아무것도 없다. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     choose(found);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prevSources, sourceKey]);
 
   const make = async () => {
@@ -625,7 +626,6 @@ export default function TogetherNewPage() {
     if (source.mine && chosen.length > 1) {
       await saveEntry({
         challengeId: made.id,
-        participantKey: participantKey(user?.id),
         nickname: user?.user_metadata?.nickname ?? name ?? rememberedNickname() ?? null,
         ranking: chosen.map((t) => t.id),
         skippedCount: 0,

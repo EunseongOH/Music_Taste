@@ -56,16 +56,43 @@ maxDistance = floor(n² / 2)          // 완전히 뒤집힌 경우
 | 테이블 | 열 |
 |---|---|
 | `sort_challenges` | `id`, `code`(공유 링크용 짧은 문자열, unique), `creator_id`(nullable), `creator_nickname`, `artist_name`, `title`, `tracks jsonb`(id·title·artistName·albumImage), `source_result_id`, `created_at` |
-| `sort_challenge_entries` | `id`, `challenge_id`, `participant_key`(로그인 사용자는 uid, 아니면 기기별 uuid), `nickname`, `ranking jsonb`(곡 id 배열, 1위부터), `skipped_count`, `created_at`, `UNIQUE(challenge_id, participant_key)` |
+| `sort_challenge_entries` | `id`, `challenge_id`, `participant_key`, `user_id`(nullable), `claim_token_hash`(nullable), `nickname`, `ranking jsonb`(곡 id 배열, 1위부터), `skipped_count`, `imported`, `created_at`, `UNIQUE(challenge_id, participant_key)`, `UNIQUE(challenge_id, user_id) WHERE user_id IS NOT NULL` |
+
+### 신원과 소유권은 다른 것이다
+
+| | 무엇 | 로그인하면 |
+|---|---|---|
+| `participant_key` | **참여 신원 = 기기.** 관계도의 내 자리. | **바뀌지 않는다** |
+| `user_id` | **계정 소유권.** 비로그인 참여는 `null`. | `auth.uid()` 가 붙는다 |
+| claim token | 익명 기록이 내 것임을 보이는 증명. 원문은 브라우저에만, DB 에는 sha-256 만. | — |
+
+**로그인은 새 참여자가 되는 일이 아니다.** 이미 만든 기록에 계정을 붙이는 일이다.
+예전에는 `participantKey(userId)` 가 로그인하면 계정 uuid 를 돌려줘 신원이 갈렸고,
+익명으로 소트한 뒤 로그인하면 자기 기록을 못 찾아 "아직 소트하지 않았어요" 가 떴다.
+저장 effect 가 새 키로 한 번 더 돌아 참가자가 한 명 늘기까지 했다(2026-09-24 고침).
+
+`participant_key` 는 관계도 응답에 그대로 실린다. 그래서 **그 값만으로 소유권을 주장할 수
+없게** 증명을 따로 둔다. 증명이 없는 옛 기록은 자동으로 붙이지 않는다 — 근거가 없다.
+그 기록은 같은 기기에서는 계속 "내 결과" 로 보이지만, 다른 기기에서의 계정 조회는
+보장하지 않는다.
 
 RLS
 
 - `sort_challenges`: 누구나 읽기. 만들기는 로그인 사용자(본인 `creator_id`)와 **비로그인(`creator_id` 없음)** 모두 가능
   — `20260918000001_together_anon_create.sql`. 모여서 쓰는 자리에서 로그인을 요구하지 않기 위해서다.
-- `sort_challenge_entries`: 누구나 읽기(일치율을 보여줘야 한다), 누구나 쓰기(익명 참여 허용), 수정·삭제 없음.
-  같은 사람이 다시 하면 같은 `participant_key` 로 덮어쓴다(upsert).
+- `sort_challenge_entries`: 누구나 읽기(일치율을 보여줘야 한다), 누구나 쓰기(익명 참여 허용).
+  **수정은 내 계정이 가진 행과 증명이 없는 옛 행만** — 그 전에는 이름만 "their own" 이고
+  실제로는 `USING(true)` 라 아무나 아무 행이나 고칠 수 있었다(`20260924000001`).
+- 새 저장·소유권 연결은 `SECURITY DEFINER` 함수를 지난다. `user_id` 는 인자로 받지 않고
+  언제나 `auth.uid()` 에서 가져온다.
+  - `save_sort_challenge_entry` — 고칠 자격 확인 + 저장. 같은 계정 기록이 그 방에 이미
+    있으면 한 트랜잭션으로 합친다(참가자 수가 늘지 않는다).
+  - `claim_sort_challenge_entry` — 익명 기록에 소유권을 붙인다. 증명이 맞을 때만.
+  - `my_sort_challenge_entry` — 이 방에서 내 계정이 가진 기록의 id. 목록 조회에는
+    `user_id` 를 싣지 않으므로 이걸로 따로 묻는다.
 
 개인정보는 닉네임만 저장한다. 익명 참여자는 기기 localStorage 의 uuid 를 쓴다.
+탈퇴하면 `user_id` 만 `null` 이 되고 순위는 남는다 — 다른 참가자의 일치율이 바뀌면 안 된다.
 
 ## 화면 (모두 `/together` 아래, 어디에서도 링크하지 않는다)
 

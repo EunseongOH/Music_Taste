@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2, Disc, ChevronDown } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
-import { fetchMyChallenges, participantKey, type MyChallenge } from "@/utils/togetherDb";
+import { fetchMyChallenges, type MyChallenge } from "@/utils/togetherDb";
 import { createClient } from "@/utils/supabase/client";
 import { getSafeLocale } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
@@ -315,7 +315,7 @@ export default function ExploreTastePage() {
       setListenTracks(listenData || []);
 
       // 4. 같이 소트한 방. 참여키로 찾는다(로그인하면 계정 id 가 참여키다).
-      setMyRooms(await fetchMyChallenges(participantKey(user.id)));
+      setMyRooms(await fetchMyChallenges(user.id));
     } catch (err) {
       console.error("[ExploreTaste] Error fetching data:", err);
     } finally {

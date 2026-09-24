@@ -7,14 +7,15 @@ import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 import {
   fetchChallenge,
   fetchEntries,
+  fetchOwnedEntryId,
   fetchResultDate,
   isMine,
-  participantKey,
   type ChallengeEntry,
   type SortChallenge,
 } from "@/utils/togetherDb";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
+import { deviceParticipantKey, resolveMyEntry } from "@/utils/togetherIdentity";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
 import { ConfirmSheet, Cover, RankList, SectionTitle, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
@@ -54,6 +55,8 @@ export default function TogetherInvitePage() {
   const [showAllMine, setShowAllMine] = useState(false);
   /** 불러온 취향표를 원래 소트한 날("6월 3일"). 그 취향표를 지웠으면 null. */
   const [importedOn, setImportedOn] = useState<string | null>(null);
+  /** 이 방에서 내 계정이 가진 기록의 id. 목록에는 user_id 가 실리지 않으므로 따로 묻는다. */
+  const [ownedId, setOwnedId] = useState<string | null>(null);
 
   // 한자리에 모여 할 때 옆 사람이 끝나는 게 바로 보이도록 몇 초마다 다시 읽는다.
   useEffect(() => {
@@ -86,8 +89,27 @@ export default function TogetherInvitePage() {
   /* 고정 바의 실제 높이만큼 본문 끝을 비운다 — 버튼이 1~3개로 바뀐다. */
   const dockRef = useDockClearance();
 
-  const myKey = participantKey(user?.id);
-  const mine = entries?.find((e) => e.participant_key === myKey);
+  /* 로그인 상태면 이 방에서 내 계정이 가진 기록을 확인해 둔다(다른 기기에서도 찾히게). */
+  useEffect(() => {
+    if (!user || !challenge) return;
+    let alive = true;
+    fetchOwnedEntryId(challenge.id).then((id) => {
+      if (alive && id) setOwnedId(id);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, challenge?.id]);
+
+  /*
+   * 내 기록: 계정이 가진 것 → 이 기기의 참여 키 → 옛 방식(키가 계정 uuid).
+   *
+   * 로그인해도 기기 키로 계속 찾히므로, 익명으로 매긴 순위가 "내가 매긴 순위" 로
+   * 그대로 남고 버튼도 [다시 소트하기]·[일치율 보기] 를 유지한다.
+   */
+  const myKey = deviceParticipantKey();
+  const mine = resolveMyEntry(entries, { ownedEntryId: ownedId, userId: user?.id }) ?? undefined;
 
   /* 이름이 아예 없으면 "익명 리스너님이" 라고 부르지 않는다 — 이름 없이 말한다. */
   const importedName = mine?.nickname?.trim() || challenge?.creator_nickname?.trim() || "";

@@ -10,10 +10,12 @@ import { saveCompletedResult } from "@/utils/worldcupDb";
 import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
+import { deviceParticipantKey, rememberPendingClaim, resolveMyEntry, takePendingClaim } from "@/utils/togetherIdentity";
 import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
-  rememberedNickname, fetchChallenge, fetchEntries, participantKey, saveEntry, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
+  rememberedNickname, fetchChallenge, fetchEntries, saveEntry, claimEntry, fetchOwnedEntryId,
+  type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
 import { RankList, Sheet, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
 import TogetherPairDetail from "@/components/together/TogetherPairDetail";
 import TogetherResultShareCard from "@/components/together/TogetherResultShareCard";
@@ -54,6 +56,10 @@ export default function TogetherResultPage() {
 
   const [challenge, setChallenge] = useState<SortChallenge | null>(null);
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
+  /** 이 방에서 내 계정이 가진 기록의 id. 목록에는 user_id 가 실리지 않으므로 따로 묻는다. */
+  const [ownedId, setOwnedId] = useState<string | null>(null);
+  /** 이번 순위를 이미 저장했는가. effect 가 user 변화로 다시 돌아도 한 번만 저장한다. */
+  const savedOnce = useRef<string | null>(null);
 
   useEffect(() => {
     if (!code || isLoading) return;
@@ -69,23 +75,30 @@ export default function TogetherResultPage() {
         return;
       }
 
-      // 방금 끝낸 순위가 있으면 내 기록으로 저장한다(다시 했으면 덮어쓴다).
+      /*
+       * 방금 끝낸 순위가 있으면 내 기록으로 저장한다(다시 했으면 덮어쓴다).
+       *
+       * 이 effect 는 `user` 가 바뀔 때마다 다시 돈다. 로그인 한 번에 AuthProvider 가
+       * user 객체를 두세 번 갱신하므로, 표시를 두지 않으면 같은 순위를 여러 번 저장한다
+       * (개인 취향표가 두세 개 생겼다). 그래서 이번 순위를 한 번만 처리한다.
+       */
       const fresh = rankingFromSession();
-      const key = participantKey(user?.id);
-      if (fresh && fresh.ids.length > 1) {
+      const once = fresh ? `${found.id}:${fresh.ids.join(",")}` : null;
+      if (fresh && fresh.ids.length > 1 && savedOnce.current !== once) {
+        savedOnce.current = once;
         const trackIds = new Set(found.tracks.map((t) => t.id));
         const ids = fresh.ids.filter((id) => trackIds.has(id));
         // 이 챌린지의 곡으로 한 소트일 때만 저장한다(다른 월드컵 기록이 남아 있을 수 있다).
         if (ids.length > 1) {
-          await saveEntry({
+          const savedId = await saveEntry({
             challengeId: found.id,
-            participantKey: key,
             // 소트 시작 전에 받아 둔 이름. 로그인하지 않은 사람도 이름이 남는다
             // (예전에는 프로필 닉네임만 봐서 전부 "익명 리스너"로 나왔다).
             nickname: user?.user_metadata?.nickname ?? rememberedNickname() ?? null,
             ranking: ids,
             skippedCount: fresh.skipped,
           });
+          if (alive && savedId && user) setOwnedId(savedId);
           safeSessionStorage.removeItem("together_code");
 
           /*
@@ -134,11 +147,49 @@ export default function TogetherResultPage() {
     };
   }, [code, isLoading, user]);
 
+  /*
+   * 계정이 확인되면 **익명으로 남긴 기록에 소유권을 붙인다.**
+   *
+   * 로그인 성공 콜백이 아니라 여기서 한다 — OAuth 팝업이나 토큰 갱신은 콜백과 세션이
+   * 서는 시점이 다르다. 이메일·가입·구글·카카오가 전부 같은 길을 지난다.
+   *
+   * 증명이 맞지 않는 옛 기록은 서버가 조용히 null 을 돌려준다. 그때도 화면은
+   * 기기 키로 계속 내 결과를 찾으므로 아무것도 사라지지 않는다.
+   */
+  useEffect(() => {
+    if (isLoading || !user || !challenge) return;
+    let alive = true;
+    (async () => {
+      const pending = takePendingClaim();
+      if (pending === challenge.id) {
+        const claimed = await claimEntry(challenge.id);
+        if (alive && claimed) {
+          setOwnedId(claimed);
+          setEntries(await fetchEntries(challenge.id));
+          showToast("소트 결과를 내 계정에 저장했어요");
+          return;
+        }
+      }
+      const owned = await fetchOwnedEntryId(challenge.id);
+      if (alive && owned) setOwnedId(owned);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isLoading, challenge?.id]);
+
   /* 고정 바의 실제 높이만큼 본문 끝을 비운다. */
   const dockRef = useDockClearance();
 
-  const key = participantKey(user?.id);
-  const mine = entries?.find((e) => e.participant_key === key) ?? null;
+  /*
+   * 내 기록을 찾는 순서: 계정이 가진 것 → 이 기기의 참여 키 → 옛 방식(키가 계정 uuid).
+   *
+   * 두 번째가 핵심이다. 로그인하고 소유권이 붙기까지 몇 백 ms 가 걸리는데, 그 사이
+   * 기기 키로 계속 찾히지 않으면 "아직 소트하지 않았어요" 가 깜빡인다.
+   */
+  const key = deviceParticipantKey();
+  const mine = resolveMyEntry(entries, { ownedEntryId: ownedId, userId: user?.id });
 
   const others = useMemo(() => {
     if (!entries || !mine) return [];
@@ -562,6 +613,12 @@ export default function TogetherResultPage() {
             <button
               onClick={() => {
                 setAskLogin(false);
+                /*
+                 * 로그인 뒤에 붙일 기록을 적어 둔다. 로그인 방식마다(이메일·가입·
+                 * 구글·카카오) 콜백 시점이 달라서, "콜백이 불렸다" 가 아니라
+                 * **계정이 확인됐을 때** 붙이도록 위의 effect 가 이 쪽지를 읽는다.
+                 */
+                if (challenge) rememberPendingClaim(challenge.id);
                 setLoginOpen(true);
               }}
               className={`${primaryButton} w-full`}
