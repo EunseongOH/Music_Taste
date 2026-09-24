@@ -20,6 +20,7 @@ import BackButton from "@/components/BackButton";
 import SpotifyLink from "@/components/SpotifyLink";
 import { rememberedNickname } from "@/utils/togetherDb";
 import { josaOf } from "@/utils/josa";
+import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 
 /** tournament_results 에서 필요한 열만. 클라이언트에는 DB 타입이 없어 여기서 좁힌다. */
@@ -564,6 +565,8 @@ export default function TogetherNewPage() {
    * 판정도 다르고(곡만 빌린 것, mine=false) 뜻도 다르다.
    * 여기서는 내 것(`prevSources`)만 본다.
    */
+  /* 고정 바의 실제 높이만큼 본문 끝을 비운다(step 에 따라 버튼이 바뀐다). */
+  const dockRef = useDockClearance();
   const autoPicked = useRef(false);
   useEffect(() => {
     if (autoPicked.current || sourceKey) return;
@@ -700,7 +703,7 @@ export default function TogetherNewPage() {
 
   return (
     /* 양옆 여백은 LayoutWrapper 의 px-6(24px)에 맡긴다 — 여기서 또 주면 48px 이 된다 */
-    <main className={`min-h-screen bg-[var(--app-bg)] flex flex-col pt-10 ${step === 2 ? "pb-44" : "pb-32"}`}>
+    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pt-10">
       <BackButton
         className="w-9 h-9"
         onClick={() => {
@@ -853,6 +856,9 @@ export default function TogetherNewPage() {
         </>
       )}
 
+      {/* 고정 바가 있는 동안만 그만큼 비운다(바가 없으면 --dock-h 도 없다). */}
+      {pendingArtist && <DockSpacer />}
+
       {/*
         고른 아티스트로 넘어가는 자리. 눌러야 곡 목록을 받는다.
 
@@ -862,6 +868,7 @@ export default function TogetherNewPage() {
       */}
       {pendingArtist && (
         <div
+          ref={dockRef}
           className="fixed bottom-0 left-0 right-0 z-[900] px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
           <div className="w-full max-w-[382px] pointer-events-auto">
             <button
@@ -1058,7 +1065,9 @@ export default function TogetherNewPage() {
             </button>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 z-[900] px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+          <DockSpacer />
+
+          <div ref={dockRef} className="fixed bottom-0 left-0 right-0 z-[900] px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
             <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
               {chosen.length < 4 && <p className="type-caption text-point-ink text-center">최소 4곡이 필요해요</p>}
               <button onClick={make} disabled={busy || chosen.length < 4} className={`${primaryButton} w-full`}>

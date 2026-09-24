@@ -70,7 +70,12 @@ let failed = 0;
    * 가야 한다. 방금 소트한 곡을 두고 아티스트를 다시 고르라는 말이 되면 안 된다.
    */
   await page.getByRole('button', { name: '이 곡들로 같이 소트하기' }).click();
-  await page.waitForTimeout(2500);
+  /*
+   * 고정 시간으로 기다리지 않는다 — dev 서버가 이 화면을 처음 컴파일하면 로딩 화면이
+   * 몇 초씩 떠 있어, 아직 뜨지 않은 화면을 찍고 실패로 셌다(2026-09-24).
+   */
+  await page.getByRole('button', { name: /곡으로 링크 만들기/ }).waitFor({ state: 'visible', timeout: 180_000 });
+  await page.waitForTimeout(500);
   const url = page.url();
   const hasSource = /\/together\/new\?source=/.test(url);
   console.log(`  ${hasSource ? '[O]' : '[X]'} 만들기 화면으로 source 를 들고 감 — ${url.replace(BASE, '')}`);

@@ -9,6 +9,7 @@ import * as platform from "@/utils/platform";
 import { saveCompletedResult } from "@/utils/worldcupDb";
 import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import { personName } from "@/utils/togetherName";
+import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
@@ -132,6 +133,9 @@ export default function TogetherResultPage() {
       if (timer) clearInterval(timer);
     };
   }, [code, isLoading, user]);
+
+  /* 고정 바의 실제 높이만큼 본문 끝을 비운다. */
+  const dockRef = useDockClearance();
 
   const key = participantKey(user?.id);
   const mine = entries?.find((e) => e.participant_key === key) ?? null;
@@ -281,7 +285,7 @@ export default function TogetherResultPage() {
   const artistLabel = challenge.artist_name || challenge.title;
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pb-32">
+    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col">
       {/* ── Hero ── */}
       <header className="relative">
         {/* 사진이 없으면 사진 자리를 비워 두지 않는다 — 빈 280px 은 고장으로 읽힌다. */}
@@ -392,9 +396,10 @@ export default function TogetherResultPage() {
           </button>
         )}
       </section>
+      <DockSpacer />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+      <div ref={dockRef} className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
           <button onClick={() => setShareOpen(true)} className={`${primaryButton} w-full`}>
             결과 공유하기

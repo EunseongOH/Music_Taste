@@ -14,6 +14,7 @@ import {
   type SortChallenge,
 } from "@/utils/togetherDb";
 import { personName } from "@/utils/togetherName";
+import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
 import { inviteDesc, inviteTitle } from "@/utils/inviteCopy";
 import { ConfirmSheet, Cover, RankList, SectionTitle, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
@@ -81,6 +82,9 @@ export default function TogetherInvitePage() {
       if (timer) clearInterval(timer);
     };
   }, [code, user?.id]);
+
+  /* 고정 바의 실제 높이만큼 본문 끝을 비운다 — 버튼이 1~3개로 바뀐다. */
+  const dockRef = useDockClearance();
 
   const myKey = participantKey(user?.id);
   const mine = entries?.find((e) => e.participant_key === myKey);
@@ -189,7 +193,7 @@ export default function TogetherInvitePage() {
   const artist = challenge.artist_name;
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col pb-32">
+    <main className="min-h-screen bg-[var(--app-bg)] flex flex-col">
       {/*
         링크를 받은 사람에게만 보이는 인사. 사진이 위에 깔리고 아래로 갈수록 바탕색으로
         덮인다. 초대 문구는 **딤이 가장 짙어진 아래쪽**에 겹쳐 올린다 — 그 구간은 사실상
@@ -323,9 +327,10 @@ export default function TogetherInvitePage() {
           {showAllTracks ? "접기" : `전체 ${challenge.tracks.length}곡 보기`}
         </button>
       )}
+      <DockSpacer />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+      <div ref={dockRef} className="fixed bottom-0 left-0 right-0 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] pointer-events-auto flex flex-col gap-2">
           {iAmCreator ? (
             <>

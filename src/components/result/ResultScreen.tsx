@@ -14,6 +14,7 @@ import { saveCompletedResult, fetchCompletedResultByArtist, overwriteCompletedRe
 import { ListCard, RecordCard, MosaicCard, PosterCard, ScaledCard, cardHeading, type CardMeta } from "@/components/TasteTemplates";
 import { listPages, recordPages, SHAPES, type Shape } from "@/components/result/exportLayout";
 import { Chip, ConfirmSheet, Sheet, UnderlineTabs, primaryButton, dangerButton } from "@/components/space/SpaceUI";
+import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import { trackEvent } from "@/utils/gtag";
 import { NICKNAME_ERROR_TEXT, saveNickname } from "@/utils/nickname";
 import { shareBody as buildShareBody, shareRanking, shareTitle } from "@/utils/shareText";
@@ -219,6 +220,8 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    */
   const [palette, setPalette] = useState<CardPalette | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /* 고정 바의 실제 높이만큼 본문 끝을 비운다 — 팔레트 트리거가 얹혀 바가 높아졌다. */
+  const dockRef = useDockClearance();
   /** 여러 장 저장 확인 시트에 띄울 장 수(null 이면 닫힘) */
   const [pendingPages, setPendingPages] = useState<number | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -875,7 +878,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       </div>
 
       {/* 결과 카드 — 화면에 보이는 카드가 그대로 저장된다 */}
-      <div className="flex-1 w-full max-w-md mx-auto px-4 pt-2 pb-32">
+      <div className="flex-1 w-full max-w-md mx-auto px-4 pt-2">
         {!showIntro && (
         <UnderlineTabs
           tabs={[
@@ -922,6 +925,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               ))
             ))}
         </div>
+        <DockSpacer />
       </div>
 
       {/* Streamlined Bottom Floating Actions (2 Buttons: Save & Share) */}
@@ -930,6 +934,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
+            ref={dockRef}
             className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 flex justify-center items-center z-50 pointer-events-none"
           >
             <div className="w-full max-w-[380px] flex flex-col gap-2 pointer-events-auto">

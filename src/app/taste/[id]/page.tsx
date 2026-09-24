@@ -11,6 +11,7 @@ import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
 import { MIX_MATCH } from "@/config/modes";
 import { Avatar, RankList, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 import { DISC_BACKGROUND } from "@/components/TasteTemplates";
+import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 
 interface TournamentResult {
   id: string;
@@ -82,6 +83,8 @@ export default function TasteSharedPage() {
   const [ranking, setRanking] = useState<RankedTrack[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
+  /* 고정 바(버튼 3개)의 실제 높이만큼 본문 끝을 비운다. */
+  const dockRef = useDockClearance();
 
   useEffect(() => {
     setLocale(getSafeLocale());
@@ -170,7 +173,7 @@ export default function TasteSharedPage() {
     <main className="flex flex-col min-h-screen w-full bg-[var(--app-bg)]">
       {header}
 
-      <div className="flex-1 w-full pt-6 pb-40">
+      <div className="flex-1 w-full pt-6">
         {/* 날짜·모드 → 제목 → 만든 사람 */}
         <p className="type-caption text-navy/70">
           {date} · {result.is_single_artist ? t.single : t.multi}
@@ -217,10 +220,11 @@ export default function TasteSharedPage() {
             </div>
           </section>
         )}
+      <DockSpacer />
       </div>
 
-      {/* 하단 버튼: 두 버튼 모두 48px, 같은 너비 */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
+      {/* 하단 버튼: 세 버튼 모두 48px, 같은 너비 */}
+      <div ref={dockRef} className="fixed bottom-0 left-0 right-0 z-50 px-6 pb-6 pt-10 flex justify-center bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)] to-transparent pointer-events-none">
         <div className="w-full max-w-[382px] flex flex-col gap-2 pointer-events-auto">
           <button
             /*

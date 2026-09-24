@@ -8,6 +8,7 @@ import Image from "next/image";
 import { SafeImage } from "@/components/SafeImage";
 import BackButton from "@/components/BackButton";
 import { Sheet, Toast, primaryButton, secondaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
+import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks, getTrackBudgetLeft } from "@/utils/spotify";
 import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
@@ -212,6 +213,8 @@ export default function TracksPage() {
   // 화면에 적는 곡 수. 월드컵에 실제로 올라가는 수와 같아야 한다.
   const pickedIds = useMemo(() => distinctSongIds(selectedTrackIds, selectedTracksMetadata),
     [selectedTrackIds, selectedTracksMetadata]);
+  /* 고정 바의 실제 높이만큼 본문 끝을 비운다 — 바가 "불러오는 중"과 "시작하기"로 바뀐다. */
+  const dockRef = useDockClearance();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -1361,7 +1364,7 @@ export default function TracksPage() {
 
       {/* Main Content Area */}
       {searchQuery.trim() !== "" ? (
-        <div className="py-6 pb-32 px-3 flex flex-col gap-4">
+        <div className="py-6 px-3 flex flex-col gap-4">
           <div className="flex items-center justify-between px-2 mb-2">
             <h2 className="text-xl text-navy">{t.searchResults} ({searchResults.length})</h2>
           </div>
@@ -1424,6 +1427,7 @@ export default function TracksPage() {
               })}
             </div>
           )}
+          <DockSpacer />
         </div>
       ) : (
         /*
@@ -1431,7 +1435,7 @@ export default function TracksPage() {
          * 전에는 그 위에 px-3 과 카드 p-5 를 더해 56px 이었고, 같은 화면의 검색창(24px)과
          * 다른 선에서 시작했다. 이제 머리글·검색창·앨범이 모두 24px 한 선이다.
          */
-        <div className="py-6 pb-32 flex flex-col gap-10">
+        <div className="py-6 flex flex-col gap-10">
           {artistData.map((artist, idx) => {
             const isArtistExpanded = expandedArtistId === artist.id;
             return (
@@ -1802,6 +1806,7 @@ export default function TracksPage() {
               </section>
             )
           })}
+          <DockSpacer />
         </div>
       )}
 
@@ -1811,7 +1816,7 @@ export default function TracksPage() {
         const isReadyToStart = !isCurrentlyLoadingTracks && pickedIds.size >= 4;
 
         return (
-          <div className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
+          <div ref={dockRef} className="fixed bottom-0 left-0 right-0 z-50 p-6 flex flex-col items-center pointer-events-none">
             <motion.div
               layout
               transition={{ type: "spring", stiffness: 350, damping: 28 }}
