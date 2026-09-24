@@ -202,6 +202,16 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 화면에 그리는 값이 아니라 리렌더도 필요 없다.
    */
   const savedIdRef = useRef<string | null>(null);
+  /**
+   * 저장이 한 번에 하나만 돌게 하는 빗장.
+   *
+   * 로그인하면 `user` 가 바뀌어 자동 저장 effect 가 다시 도는데, 그때 로그인 전에
+   * 눌러 둔 [저장하기] 도 이어서 돈다. 빗장이 없으면 둘이 동시에 뛰어 취향표가 두 건
+   * 생긴다. 16곡 미만이면 자동 저장이 아예 없으므로 빗장은 그때 아무 일도 하지 않는다.
+   */
+  const saveInFlight = useRef(false);
+  /** 로그인 뒤 이어서 할 저장을 한 번만 처리한다. AuthProvider 는 user 를 여러 번 갱신한다. */
+  const pendingConsumed = useRef(false);
   const rememberSavedId = (id: string | null) => {
     savedIdRef.current = id;
   };
@@ -250,6 +260,28 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const t = locale === "en" ? translations.en : translations.ko;
+
+  /*
+   * 로그인 뒤에 이어서 할 일.
+   *
+   * 화면 상태가 아니라 sessionStorage 에 둔다 — 구글·카카오는 팝업에서 돌아오고,
+   * 그 사이 컴포넌트가 다시 그려질 수 있다. 저장이 끝나면 바로 지운다.
+   */
+  const armPendingSave = () => {
+    try {
+      sessionStorage.setItem("taste_pending_auth_action", "save-to-space");
+    } catch {
+      /* 못 적으면 이번 로그인에서는 못 이어간다. 화면은 그대로 남는다 */
+    }
+    pendingConsumed.current = false;
+  };
+  const clearPendingSave = () => {
+    try {
+      sessionStorage.removeItem("taste_pending_auth_action");
+    } catch {
+      /* 지우지 못해도 아래 once 빗장이 두 번 저장을 막는다 */
+    }
+  };
 
   const showToastMessage = (text: string, type: "success" | "error" = "success") => {
     setToast({ text, type });
@@ -341,6 +373,31 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     }
   }, []);
 
+  /*
+   * 로그인 전에 눌러 둔 [저장하기] 를 이어서 한다.
+   *
+   * LoginModal 의 콜백이 아니라 **계정이 실제로 확인됐을 때** 한다 — 이메일·가입·구글·
+   * 카카오는 콜백 시점과 세션이 서는 시점이 다르다. 로그인 방식마다 저장 코드를
+   * 복사하지 않고 이 한 자리를 지난다.
+   *
+   * AuthProvider 는 로그인 한 번에 user 객체를 여러 번 갱신한다(닉네임 자동 생성 등).
+   * 그래서 한 번만 집어 간다.
+   */
+  useEffect(() => {
+    if (!user || isSavedView || pendingConsumed.current) return;
+    let pending: string | null = null;
+    try {
+      pending = sessionStorage.getItem("taste_pending_auth_action");
+    } catch {
+      /* 못 읽으면 이어갈 것이 없다 */
+    }
+    if (pending !== "save-to-space") return;
+    pendingConsumed.current = true;
+    clearPendingSave();
+    void saveToSpace();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isSavedView]);
+
   // Auto-Save Effect: Triggered for logged-in users completing 16+ tracks
   useEffect(() => {
     // 16곡 기준은 월드컵을 시작한 곡 수다. "모르는 곡"으로 뺀 곡은 순위에 없으므로
@@ -354,30 +411,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       setIsAutoSaving(true);
       autoSaveRef.current = (async () => {
         try {
-          let artistId: string | null = null;
-          let artistName: string | null = null;
-          try {
-            const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
-            if (storedArtists) {
-              const parsed = JSON.parse(storedArtists);
-              if (parsed && parsed.length > 0) {
-                artistId = parsed[0].id;
-                artistName = parsed[0].name;
-              }
-            }
-          } catch (e) {}
-
-          if (isSingleArtistMode && artistId) {
-            const existing = await fetchCompletedResultByArtist(artistId);
-            if (existing) {
-              setExistingResult(existing);
-              setShowOverwriteModal(true);
-              setIsAutoSaving(false);
-              return;
-            }
-          }
-
-          await executeSaveArchive(false, true);
+          await saveToSpace(true);
         } catch (e) {
           console.error("Auto save failed:", e);
         } finally {
@@ -720,34 +754,58 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     }
   };
 
+  /**
+   * 내 취향 스페이스에 저장하는 **하나뿐인 길**.
+   *
+   * 전에는 자동 저장과 [저장하기] 가 같은 일을 각자 적어 두고 있었다. 로그인 직후에는
+   * 둘이 동시에 뛸 수 있어서(로그인하면 user 가 바뀌어 자동 저장 effect 가 다시 돈다)
+   * 취향표가 두 건 생기거나 덮어쓰기 창과 경쟁했다. 이제 한 함수를 지나고,
+   * `saveInFlight` 로 한 번에 하나만 돈다.
+   *
+   * 기존 기록이 있으면 **묻는다.** 로그인했다는 이유로 말없이 덮어쓰거나 새로 만들지 않는다.
+   */
+  const saveToSpace = async (isAuto = false): Promise<void> => {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    try {
+      let artistId: string | null = null;
+      try {
+        const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
+        if (storedArtists) {
+          const parsed = JSON.parse(storedArtists);
+          if (parsed && parsed.length > 0) artistId = parsed[0].id;
+        }
+      } catch {
+        /* 저장소를 못 읽으면 아티스트 없이 새로 저장한다 */
+      }
+
+      if (isSingleArtistMode && artistId) {
+        const existing = await fetchCompletedResultByArtist(artistId);
+        if (existing) {
+          setExistingResult(existing);
+          setShowOverwriteModal(true);
+          return;
+        }
+      }
+      await executeSaveArchive(false, isAuto);
+    } finally {
+      saveInFlight.current = false;
+    }
+  };
+
   const handleSaveToSpace = async () => {
     setShowSaveSheet(false);
     if (!user) {
+      /*
+       * 로그인하러 가기 전에 **하려던 일을 적어 둔다.** 전에는 로그인 창만 띄우고
+       * 끝이라, 로그인에 성공해도 이어갈 것이 없었다(게다가 LoginModal 의 기본 동작이
+       * /explore 로 보내 화면 자체를 잃었다).
+       */
+      armPendingSave();
       setShowLoginModal(true);
       return;
     }
-
-    let artistId = null;
-    try {
-      const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
-      if (storedArtists) {
-        const parsed = JSON.parse(storedArtists);
-        if (parsed && parsed.length > 0) {
-          artistId = parsed[0].id;
-        }
-      }
-    } catch (e) {}
-
-    if (isSingleArtistMode && artistId) {
-      const existing = await fetchCompletedResultByArtist(artistId);
-      if (existing) {
-        setExistingResult(existing);
-        setShowOverwriteModal(true);
-        return;
-      }
-    }
-
-    await executeSaveArchive(false);
+    await saveToSpace();
   };
 
   const executeExit = async () => {
@@ -1061,7 +1119,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         }
         footer={
           <div className="flex flex-col gap-2">
-            <button onClick={() => { setShowExitSaveModal(false); setShowLoginModal(true); }} className={`${primaryButton} w-full`}>{t.exitSaveLoginBtn}</button>
+            <button onClick={() => { setShowExitSaveModal(false); armPendingSave(); setShowLoginModal(true); }} className={`${primaryButton} w-full`}>{t.exitSaveLoginBtn}</button>
             <button onClick={async () => { setShowExitSaveModal(false); await executeExit(); }} className={`${dangerButton} w-full`}>{t.exitSaveLeaveBtn}</button>
           </div>
         }
@@ -1334,7 +1392,26 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       </AnimatePresence>
 
       {/* Login Modal Integration */}
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      {/*
+        `onSuccess` 를 주지 않으면 LoginModal 이 기본으로 /explore 로 보낸다(LoginModal.tsx
+        의 handleSuccess). 이 화면에서 로그인은 **하던 일을 계속하려는 것**이지 화면을
+        떠나려는 것이 아니다. 다른 사용처 7곳은 이미 콜백을 주고 있어, 여기만 주면 된다.
+
+        `onClose` 는 성공할 때도 불린다(handleSuccess 가 onClose 뒤에 onSuccess 를 부른다).
+        그래서 닫을 때 지우고 성공하면 다시 세운다 — 취소하고 나중에 다른 이유로 로그인해도
+        취향표가 저절로 저장되지 않는다.
+      */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => {
+          setShowLoginModal(false);
+          clearPendingSave();
+        }}
+        onSuccess={() => {
+          setShowLoginModal(false);
+          armPendingSave();
+        }}
+      />
 
       {/* Offscreen High-Fidelity 9:16 Instagram Story Export Cards */}
       {winners.length > 0 && (
