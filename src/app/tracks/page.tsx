@@ -21,6 +21,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { coverPlaceholder } from "@/utils/coverPlaceholder";
 import { songKey, betterTitle } from "@/utils/songKey";
+import { albumPickedCount, setAlbumSelected, type Selection, type TrackMeta } from "@/utils/trackSelection";
 import SpotifyLink from "@/components/SpotifyLink";
 import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { getYouTubeVideoId, type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
@@ -38,6 +39,9 @@ const translations = {
     openAlbums: "앨범 및 트랙 목록 열기",
     loadingFromSpotify: "스포티파이에서 앨범을 불러오고 있어요...",
     selectAll: "전체 선택",
+    selectAlbum: "이 앨범 전체 선택",
+    clearAlbum: "이 앨범 전체 해제",
+    albumPicked: (n: number) => `${n}곡 선택`,
     clearAll: "전체 해제",
     loadingTracks: "트랙을 불러오는 중...",
     noTracks: "이 앨범의 수록곡은 아직 준비 중이에요. 다른 앨범을 골라주세요.",
@@ -81,6 +85,9 @@ const translations = {
     openAlbums: "Open albums & tracks list",
     loadingFromSpotify: "Loading albums from Spotify...",
     selectAll: "Select All",
+    selectAlbum: "Select this album",
+    clearAlbum: "Clear this album",
+    albumPicked: (n: number) => `${n} selected`,
     clearAll: "Deselect All",
     loadingTracks: "Loading tracks...",
     noTracks: "We don't have this album's tracks yet. Try another album.",
@@ -174,6 +181,43 @@ function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<strin
     if (!prev || betterTitle(meta[prev]?.title ?? "", m?.title ?? "") > 0) best.set(key, id);
   }
   return new Set(best.values());
+}
+
+/**
+ * 앨범을 펼쳤을 때 곡 목록 위에 서는 줄. "3곡 선택 · [이 앨범 전체 선택]".
+ *
+ * 같이 소트하기 만들기 화면이 이미 쓰는 문법이다(`together/new`). 낯선 UI 를 새로
+ * 만들지 않는다. 수록곡을 아직 못 받은 앨범에는 아예 그리지 않는다 — 앨범이 말하는
+ * 곡 수만 보고 아직 없는 곡을 고른 척할 수는 없다.
+ */
+function AlbumSelectBar({
+  artistName, album, ids, meta, onChange, label, clearLabel, countLabel, dedupe = true,
+}: {
+  artistName: string;
+  album: { id: string; title: string; image: string; tracks: { id: string; title: string; duration?: number | string }[] };
+  ids: Set<string>;
+  meta: Record<string, TrackMeta>;
+  onChange: (next: Selection) => void;
+  label: string;
+  clearLabel: string;
+  countLabel: (n: number) => string;
+  dedupe?: boolean;
+}) {
+  if (!album.tracks.length) return null;
+  const picked = albumPickedCount({ ids, meta }, artistName, album);
+  const all = picked >= album.tracks.length;
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5 px-1">
+      <span className="font-sans text-xs font-bold text-navy/70 tabular-nums">{countLabel(picked)}</span>
+      <button
+        type="button"
+        onClick={() => onChange(setAlbumSelected({ ids, meta }, artistName, album, !all, { dedupe }))}
+        className="px-3 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0"
+      >
+        {all ? clearLabel : label}
+      </button>
+    </div>
+  );
 }
 
 function countDistinctTracks(artist: ArtistGroup, singleMode: boolean): number {
@@ -1622,6 +1666,20 @@ export default function TracksPage() {
                                             : t.noTracksError}
                                       </div>
                                     ) : (
+                                      <>
+                                      <AlbumSelectBar
+                                        artistName={artist.name}
+                                        album={album}
+                                        ids={selectedTrackIds}
+                                        meta={selectedTracksMetadata}
+                                        onChange={(next) => {
+                                          setSelectedTrackIds(next.ids);
+                                          setSelectedTracksMetadata(next.meta);
+                                        }}
+                                        label={t.selectAlbum}
+                                        clearLabel={t.clearAlbum}
+                                        countLabel={t.albumPicked}
+                                      />
                                       <div className="flex flex-col gap-1">
                                         {album.tracks.map((track, idx) => {
                                           const isSelected = selectedTrackIds.has(track.id);
@@ -1654,6 +1712,7 @@ export default function TracksPage() {
                                           );
                                         })}
                                       </div>
+                                      </>
                                     )}
 
                                     {/* 이 앨범의 Spotify 링크백 (약관 II.4). 우리 DB 로만 아는 앨범
@@ -1728,6 +1787,27 @@ export default function TracksPage() {
                                     cardRef={cardRef(album.id)}
                                   >
                                     <div className="w-full h-px bg-navy/10 mb-2 mt-2" />
+                                      {/*
+                                        미발매곡은 중복을 가리지 않고 통째로 넣는다(기존 "전체 선택" 과 같은 규칙).
+                                        1곡짜리 앨범에는 줄을 두지 않는다 — 고를 것이 하나뿐인데 "전체" 라고 하면
+                                        곡을 직접 누르는 것과 다를 바가 없고 자리만 먹는다.
+                                      */}
+                                      {album.tracks.length > 1 && (
+                                        <AlbumSelectBar
+                                          artistName={artist.name}
+                                          album={album}
+                                          ids={selectedTrackIds}
+                                          meta={selectedTracksMetadata}
+                                          dedupe={false}
+                                          onChange={(next) => {
+                                            setSelectedTrackIds(next.ids);
+                                            setSelectedTracksMetadata(next.meta);
+                                          }}
+                                          label={t.selectAlbum}
+                                          clearLabel={t.clearAlbum}
+                                          countLabel={t.albumPicked}
+                                        />
+                                      )}
                                       <div className="flex flex-col gap-1">
                                         {album.tracks.map((track, idx) => {
                                           const isSelected = selectedTrackIds.has(track.id);
