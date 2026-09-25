@@ -303,13 +303,14 @@ export async function fetchMyChallenges(userId?: string | null): Promise<MyChall
       .eq("participant_key", device)
       .order("created_at", { ascending: false })
       .limit(50),
+    /*
+     * 계정이 가진 기록은 **RPC 에 묻는다.** 전에는 `user_id` 로 걸러 찾았는데, 그러려면
+     * 그 컬럼을 누구나 읽을 수 있어야 했다. `user_id` 는 방을 건너 같은 계정을 잇는
+     * 열쇠라서 공개할 것이 아니다. 소유는 밖에서 적어 보내는 것이 아니라 `auth.uid()`
+     * 가 아는 것이므로, 묻는 자리를 서버로 옮겼다(20260925100000).
+     */
     userId
-      ? supabase
-          .from("sort_challenge_entries")
-          .select("challenge_id, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(50)
+      ? supabase.rpc("my_sort_challenge_rooms")
       : Promise.resolve({ data: [], error: null }),
   ]);
 

@@ -46,11 +46,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "로그인이 필요해요." }, { status: 401 });
   }
 
-  // 1) 참여 기록은 남기고 이름만 지운다.
+  /*
+   * 1) 참여 기록은 남기고 이름만 지운다.
+   *
+   * 참여 키만 보면 안 된다 — 참여 키가 계정 uuid 였던 것은 신원과 소유권을 가르기 전의
+   * 옛 기록뿐이다(20260924000000). 그 뒤로는 기기 키로 참여하고 계정은 `user_id` 에
+   * 붙으므로, 계정으로 남긴 기록은 참여 키로 찾히지 않는다. 둘 다 보지 않으면
+   * **탈퇴한 사람의 닉네임이 방에 남는다.**
+   */
   const { error: anonErr } = await admin
     .from("sort_challenge_entries")
     .update({ nickname: null })
-    .eq("participant_key", user.id);
+    .or(`user_id.eq.${user.id},participant_key.eq.${user.id}`);
   if (anonErr) {
     console.error("[account/delete] 참여 기록 익명화 실패:", anonErr.message);
     return NextResponse.json({ error: "지우는 중에 문제가 생겼어요. 잠시 후 다시 시도해 주세요." }, { status: 500 });
