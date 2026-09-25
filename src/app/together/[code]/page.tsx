@@ -358,6 +358,18 @@ export default function TogetherInvitePage() {
           {showAllTracks ? "접기" : `전체 ${challenge.tracks.length}곡 보기`}
         </button>
       )}
+
+      {/*
+        **밖으로 나가는 길.** 뒤로가기와 다른 일이다 — 이 화면까지 오는 길이
+        초대 -> 월드컵 -> 결과 -> 초대 라서, 뒤로만으로는 같이 소트하기 안을 맴돈다.
+        갈 곳을 적어 둔다(history 를 보지 않는다).
+      */}
+      <div className="mt-8 flex justify-center">
+        <button type="button" onClick={() => router.push("/")} className={textLink}>
+          Sortify 홈으로
+        </button>
+      </div>
+
       <DockSpacer />
       </div>
 
