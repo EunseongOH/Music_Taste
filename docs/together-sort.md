@@ -94,6 +94,68 @@ RLS
 개인정보는 닉네임만 저장한다. 익명 참여자는 기기 localStorage 의 uuid 를 쓴다.
 탈퇴하면 `user_id` 만 `null` 이 되고 순위는 남는다 — 다른 참가자의 일치율이 바뀌면 안 된다.
 
+### 2026-09-25 — 기본 테이블을 잠갔다
+
+앞 문단의 RLS 설명은 그때의 기록이다. 실제로는 **그것만으로 막히지 않았다.**
+
+`anon`·`authenticated` 에게 이 테이블의 전 컬럼 SELECT·INSERT·UPDATE·DELETE 권한이
+그대로 남아 있었다. RLS 만 보고 "수정은 내 것만" 이라고 적어 두었는데, UPDATE 정책의
+둘째 갈래 `(user_id is null and claim_token_hash is null)` 은 **아무나** 통과한다.
+`user_id` 를 자기 uuid 로 적으면 WITH CHECK 도 통과해서, 증명 없는 행은 누구나
+가져갈 수 있었다. `save_sort_challenge_entry` 안에도 같은 문(`or claim_token_hash is
+null`)이 있었고, 그 아래 `user_id = coalesce(v_uid, user_id)` 가 부르는 사람의 계정으로
+덮어썼다. `participant_key` 는 목록 응답에 실려 있으니 추측할 필요조차 없었다.
+
+운영 31건 중 **30건이 증명 없는 행**이었다. `20260925100000_together_lock_base_table.sql`
+로 닫았다.
+
+| | 전 | 후 |
+|---|---|---|
+| 테이블 SELECT | 전 컬럼 (`user_id`·`claim_token_hash` 포함) | 컬럼 단위 — 그 둘은 뺐다 |
+| 테이블 INSERT·UPDATE·DELETE | 전 컬럼 | 없음. 쓰기는 RPC 만 |
+| 쓰기 RLS 정책 | 허용만 하는 두 개 | 지웠다(권한이 없으니 뜻이 없다) |
+| save RPC 의 수정 자격 | 증명 일치 · 내 계정 · **증명 없음** | 증명 일치 · 내 계정 |
+
+규칙은 셋뿐이다.
+
+| 행의 상태 | 누가 고칠 수 있나 | 운영 건수 |
+|---|---|---|
+| 증명이 있다 | 증명을 가진 사람 | 1 |
+| 증명은 없고 `user_id` 가 있다 | 그 계정만 | 17 |
+| 증명도 `user_id` 도 없다 | **아무도** (읽기 전용) | 13 |
+
+옛 행은 지우지 않았고, 닉네임·순위가 같다는 이유로 계정에 붙이지도 않았다.
+
+**알려진 결과**: 읽기 전용이 된 13건은 같은 기기에서 그 방을 다시 소트해도 고칠 수
+없다 — 증명이 없으니 주인임을 보일 방법이 없다. 모두 출시 전 시험 데이터다.
+
+`fetchMyChallenges` 가 `user_id` 로 걸러 찾던 것은 `my_sort_challenge_rooms()` RPC 로
+옮겼다. 프론트가 그 컬럼을 읽지 않아야 컬럼을 닫을 수 있다.
+
+검사: `npm run check:db` (`toss/baseline/together-db-security-check.mjs`).
+적용 **전에 먼저 돌려 7건이 빨갛게 뜨는 것을 확인**했다 — 못 잡는 검사는 검사가 아니다.
+
+### 아직 남은 것 — `participant_key` 는 여전히 공개다
+
+`participant_key` 는 기기 신원인데 방마다 그대로 실린다. 방 A·B·C 에서 같은 값이
+보이면 **같은 기기임을 이어 붙일 수 있다.** 그 값만으로 기록을 고칠 수는 없게 됐지만
+(위 표), 방을 건너 사람을 잇는 것은 막지 못한다.
+
+이번에 같이 바꾸지 않은 이유: 화면이 이 값에 깊이 기대고 있다.
+
+- 자기 판별 — `personName(e.nickname, e.participant_key === myKey)`
+- 관계도 노드 키·선택 상태 (`together/[code]/result/page.tsx`)
+- 다시 찾아온 비로그인 참여자가 자기 기록을 찾는 길
+
+옮길 방향: **화면에는 `entry.id`** (방 안에서만 뜻이 있는 값)를 쓰고, 기기 신원은
+`participant_key` 그대로 두되 목록 응답에서 뺀다. 자기 판별은 `resolveSelfIdentity`
+한 곳을 지나므로, 그 함수가 기기 키 대신 "내 기록의 id" 를 받게 바꾸면 된다.
+비로그인 재방문은 RPC 하나(`my_entry_by_key(challenge_id, participant_key)`)로
+자기 id 만 돌려받는 식이 될 것이다.
+
+`src/app/api/account/delete/route.ts` 가 `participant_key == user.id` 를 가정하던 것은
+이번에 고쳤다(`user_id` 도 함께 본다). 옛 로그인 기록만 그 모양이었다.
+
 ## 화면 (모두 `/together` 아래, 어디에서도 링크하지 않는다)
 
 | 경로 | 내용 |

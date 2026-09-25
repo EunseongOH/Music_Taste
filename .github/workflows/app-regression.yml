@@ -1,0 +1,45 @@
+name: App Regression
+
+# 비밀값이 필요 없는 검사만 자동으로 돌린다.
+#
+# 여기서 돌리지 않는 것과 그 이유:
+#   check:regression:e2e  브라우저(Playwright)와 dev 서버가 필요하다
+#   check:db              운영 Supabase 의 anon·service_role 키가 필요하다
+#   npm run build         Supabase·Spotify 환경변수 없이는 의미 있는 빌드가 아니다
+#   실제 OAuth 흐름       구글·카카오 로그인은 사람이 눌러 봐야 한다
+# 가짜 환경변수로 억지로 돌리면 "초록불인데 실은 아무것도 안 본" 상태가 된다.
+# 이 넷은 docs/manual-qa.md 의 손 검사 목록으로 남긴다.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # 타입은 비밀값 없이도 전부 본다. 실제로 깨진 것을 가장 잘 잡는다.
+      - name: 타입
+        run: npm run typecheck
+
+      # 서버 없이 도는 순수 검사 — 곡 수 규칙·같이 소트 이름·카드 색·카드 배치.
+      - name: 회귀 검사
+        run: npm run check:regression
+
+      # eslint 는 아직 기존 오류가 많다(주로 no-explicit-any). 여기서 막으면 아무 변경도
+      # 들어올 수 없으므로, 지금은 눈으로 보는 단계로 둔다. 줄여 놓고 나서 막는다.
+      - name: 린트 (참고용)
+        run: npm run lint
+        continue-on-error: true
