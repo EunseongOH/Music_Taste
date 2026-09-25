@@ -1395,15 +1395,25 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       {/*
         `onSuccess` 를 주지 않으면 LoginModal 이 기본으로 /explore 로 보낸다(LoginModal.tsx
         의 handleSuccess). 이 화면에서 로그인은 **하던 일을 계속하려는 것**이지 화면을
-        떠나려는 것이 아니다. 다른 사용처 7곳은 이미 콜백을 주고 있어, 여기만 주면 된다.
+        떠나려는 것이 아니다.
 
-        `onClose` 는 성공할 때도 불린다(handleSuccess 가 onClose 뒤에 onSuccess 를 부른다).
-        그래서 닫을 때 지우고 성공하면 다시 세운다 — 취소하고 나중에 다른 이유로 로그인해도
-        취향표가 저절로 저장되지 않는다.
+        세 콜백이 각각 다른 일을 뜻한다.
+
+          onSuccess  로그인됐다 — 이어서 저장한다
+          onGuest    게스트로 계속한다 — 저장할 계정이 없으니 하려던 일을 **지운다**
+          onClose    닫았다 — 마찬가지로 지운다
+
+        셋 다 `onClose` 를 먼저 지나므로(LoginModal 이 그렇게 부른다) 일단 지우고,
+        로그인에 성공했을 때만 다시 세운다. 그래야 게스트를 고르거나 창을 닫은 뒤
+        나중에 다른 이유로 로그인해도 누른 적 없는 저장이 실행되지 않는다.
       */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => {
+          setShowLoginModal(false);
+          clearPendingSave();
+        }}
+        onGuest={() => {
           setShowLoginModal(false);
           clearPendingSave();
         }}

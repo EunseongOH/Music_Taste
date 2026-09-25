@@ -13,13 +13,24 @@ import { NICKNAME_ERROR_TEXT, isNicknameAvailable, validateNickname } from "@/ut
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** **로그인에 성공했을 때만.** 게스트 선택은 여기로 오지 않는다 — `onGuest` 로 간다. */
   onSuccess?: () => void;
+  /**
+   * 게스트로 계속하기를 골랐을 때.
+   *
+   * 전에는 이것도 `onSuccess` 를 탔다. 그래서 최애곡 소트 결과 화면에서는 게스트를
+   * 골랐는데도 "로그인하면 이어서 저장" 이라는 뜻이 다시 세워졌고, 나중에 다른 이유로
+   * 로그인하면 누른 적 없는 저장이 실행될 수 있었다. 인증과 게스트는 다른 일이다.
+   *
+   * 주지 않으면 창만 닫는다.
+   */
+  onGuest?: () => void;
   locale?: "ko" | "en";
 }
 
 type Mode = "login" | "signup" | "guest-warning";
 
-export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLocale }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, onSuccess, onGuest, locale: propLocale }: LoginModalProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
   const [detectedLocale, setDetectedLocale] = useState<"ko" | "en">("ko");
@@ -125,6 +136,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
     }
   };
 
+  /** **로그인에 성공했을 때만** 부른다. 게스트는 `confirmGuest` 로 간다. */
   const handleSuccess = () => {
     window.dispatchEvent(new Event("storage"));
     onClose();
@@ -302,7 +314,10 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
     sessionStorage.setItem("isGuest", "true");
     sessionStorage.removeItem("userNickname");
     trackEvent("guest_mode_start");
-    handleSuccess();
+    // 머리말의 로그인 상태가 따라오도록 알린다(handleSuccess 가 하던 일).
+    window.dispatchEvent(new Event("storage"));
+    onClose();
+    onGuest?.();
   };
 
   const handleGuest = () => {

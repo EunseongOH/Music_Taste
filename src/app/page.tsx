@@ -330,6 +330,25 @@ export default function Home() {
     router.push(modes[activeCardIndex].target);
   };
 
+  /** 고른 모드로 들어간다. 로그인해서 왔든 게스트로 왔든 하는 일은 같다. */
+  const startSelectedMode = () => {
+    const activeMode = modes[activeCardIndex];
+    const isSingle = activeMode.id === "single";
+    // Clear all to ensure clean slate for new mode
+    localStorage.removeItem("worldcup_tracks");
+    localStorage.removeItem("worldcup_progress");
+    localStorage.removeItem("selectedArtists");
+    localStorage.removeItem("selected_genres");
+    sessionStorage.removeItem("worldcup_tracks");
+    sessionStorage.removeItem("worldcup_progress");
+    sessionStorage.removeItem("selectedArtists");
+    sessionStorage.removeItem("selected_genres");
+
+    localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+    sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
+    router.push(activeMode.target);
+  };
+
   return (
     <main className="w-full flex flex-1 flex-col items-center justify-between py-6 relative overflow-hidden">
       {/* JSON-LD Structured Data for Search Engine Sitelinks */}
@@ -570,23 +589,12 @@ export default function Home() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         locale={locale}
-        onSuccess={() => {
-          const activeMode = modes[activeCardIndex];
-          const isSingle = activeMode.id === "single";
-          // Clear all to ensure clean slate for new mode
-          localStorage.removeItem("worldcup_tracks");
-          localStorage.removeItem("worldcup_progress");
-          localStorage.removeItem("selectedArtists");
-          localStorage.removeItem("selected_genres");
-          sessionStorage.removeItem("worldcup_tracks");
-          sessionStorage.removeItem("worldcup_progress");
-          sessionStorage.removeItem("selectedArtists");
-          sessionStorage.removeItem("selected_genres");
-
-          localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
-          sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
-          router.push(activeMode.target);
-        }}
+        /*
+         * 게스트도 고른 모드로 들어가야 한다 — 이 화면의 게스트는 "로그인 안 하고 시작"
+         * 이지 "아무것도 안 함" 이 아니다. 콜백이 갈라졌으니 같은 일을 명시로 잇는다.
+         */
+        onGuest={() => startSelectedMode()}
+        onSuccess={() => startSelectedMode()}
       />
 
       {/* Start New Warning Modal */}

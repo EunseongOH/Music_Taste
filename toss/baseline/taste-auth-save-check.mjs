@@ -189,6 +189,33 @@ const path = (page) => new URL(page.url()).pathname;
   console.log('');
 }
 
+/* -- CASE G/H -- 게스트로 계속하기는 인증이 아니다 ------------ */
+{
+  console.log('CASE G — 게스트로 계속하기를 고르면 저장하려던 뜻도 지워진다');
+  const { ctx, page, inserts } = await open({ songs: 8 });
+  await clickSaveToSpace(page);
+  const armed = await page.evaluate(() => sessionStorage.getItem('taste_pending_auth_action'));
+  check(armed === 'save-to-space', '누른 직후에는 적혀 있다', String(armed));
+
+  await page.getByRole('button', { name: /게스트로 구경하기|Guest/ }).first().click();
+  await page.waitForTimeout(500);
+  await page.getByRole('button', { name: /게스트로 계속하기|Continue as Guest/ }).first().click();
+  await page.waitForTimeout(900);
+
+  check(path(page) === '/taste', '결과 화면에 그대로 있다', path(page));
+  check(/Harmony/.test(await page.locator('body').innerText()), '순위가 그대로');
+  const left = await page.evaluate(() => sessionStorage.getItem('taste_pending_auth_action'));
+  check(left === null, '이어서 할 일이 지워졌다', String(left));
+  check(inserts.length === 0, '저장되지 않음', `${inserts.length}회`);
+
+  console.log('CASE H — 그 뒤에 로그인해도 누른 적 없는 저장이 실행되지 않는다');
+  await signIn(ctx, page);
+  check(inserts.length === 0, '여전히 저장 0회', `${inserts.length}회`);
+  check(path(page) === '/taste', '화면을 떠나지 않음', path(page));
+  await ctx.close();
+  console.log('');
+}
+
 await browser.close();
 console.log(failed === 0 ? '결과: 통과' : `결과: 실패 ${failed}건`);
 process.exitCode = failed === 0 ? 0 : 1;
