@@ -13,6 +13,7 @@ import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nic
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
 import { MIX_MATCH, VISIBLE_MODES } from "@/config/modes";
 import { fetchMyChallenges, type MyChallenge } from "@/utils/togetherDb";
+import { buildCompletedArchiveItems } from "@/utils/completedArchive";
 import DeleteAccountSheet from "@/components/account/DeleteAccountSheet";
 import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
@@ -351,7 +352,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       noArchivesSub: "월드컵을 끝내면 여기에서 다시 볼 수 있어요.",
       sectionDrafts: "진행 중인 월드컵",
       sectionCompleted: "완료한 취향표",
-      sectionTogether: "같이 소트하기",
+      togetherTag: "같이 소트",
       resume: "이어하기",
       stageArtist: "아티스트 선택 단계",
       stageTrack: "곡 선택 단계",
@@ -380,7 +381,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       noArchivesSub: "Finish a World Cup to see it here.",
       sectionDrafts: "World Cups in progress",
       sectionCompleted: "Completed taste cards",
-      sectionTogether: "Sort together",
+      togetherTag: "Sort together",
       resume: "Resume",
       stageArtist: "Choosing artists",
       stageTrack: "Choosing songs",
@@ -393,7 +394,12 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
   const inputClass =
     "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/40";
-  const archiveCount = completedResults.length + activeDrafts.length + myRooms.length;
+  /*
+   * 완료한 취향표는 **두 출처를 한 목록으로** 본다. 좁은 모달에서 자리를 둘로 나누면
+   * 둘 다 조금씩만 보인다. 종류는 `kind` 로 들고 다니다가 그릴 때 갈라 쓴다.
+   */
+  const completedItems = buildCompletedArchiveItems(completedResults, myRooms);
+  const archiveCount = completedItems.length + activeDrafts.length;
 
   return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
@@ -569,61 +575,57 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                     </section>
                   )}
 
-                  {myRooms.length > 0 && (
+                  {completedItems.length > 0 && (
                     <section>
-                      <SectionTitle title={t.sectionTogether} count={myRooms.length} />
+                      <SectionTitle title={t.sectionCompleted} count={completedItems.length} />
                       <ul className="divide-y divide-navy/10 mt-1">
-                        {myRooms.map((room) => (
-                          <li key={room.code}>
-                            {/*
-                              가짜 1위를 지어내지 않는다. 같이 소트한 방은 취향표와 다른
-                              종류다 — 무엇인지 그대로 적고, 누르면 그 방의 결과로 간다.
-                            */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onClose();
-                                router.push(`/together/${room.code}/result`);
-                              }}
-                              className="w-full flex items-center gap-3 py-3 text-left"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="type-body-strong text-navy truncate">
-                                  {room.artistName || room.title}
-                                </p>
-                                <p className="type-caption text-navy/70">
-                                  {room.trackCount}곡 · {room.people}명이 함께 · {formatDate(room.sortedAt, locale)} · {t.sectionTogether}
-                                </p>
-                              </div>
-                              <ChevronRight size={18} className="text-navy/70 shrink-0" />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {completedResults.length > 0 && (
-                    <section>
-                      <SectionTitle title={t.sectionCompleted} count={completedResults.length} />
-                      <ul className="divide-y divide-navy/10 mt-1">
-                        {completedResults.map((result: any) => (
-                          <li key={result.id}>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedArchive(result)}
-                              className="w-full flex items-center gap-3 py-3 text-left"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="type-body-strong text-navy truncate">
-                                  {t.firstPlace} {result.winner_track_title} · {result.winner_track_artist}
-                                </p>
-                                <p className="type-caption text-navy/70">{formatDate(result.created_at, locale)}</p>
-                              </div>
-                              <ChevronRight size={18} className="text-navy/70 shrink-0" />
-                            </button>
-                          </li>
-                        ))}
+                        {completedItems.map((item) =>
+                          item.kind === "together" ? (
+                            /*
+                              같이 소트한 방. **취향표로 위장하지 않는다** — 가짜 1위를
+                              지어내면 누르는 곳도 보여 줄 것도 달라 결국 거짓이 된다.
+                              무엇인지 그대로 적고, 누르면 그 방의 결과로 간다.
+                              좁은 모달에서 잘리지 않게 곁들이 정보는 두 줄까지 쓴다.
+                            */
+                            <li key={`t:${item.room.code}`}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  router.push(`/together/${item.room.code}/result`);
+                                }}
+                                className="w-full flex items-center gap-3 py-3 text-left"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="type-body-strong text-navy truncate">
+                                    {item.room.artistName || item.room.title}
+                                  </p>
+                                  <p className="type-caption text-navy/70 break-keep">
+                                    {t.togetherTag} · {item.room.trackCount}곡 · {item.room.people}명
+                                  </p>
+                                  <p className="type-caption text-navy/70">{formatDate(item.at, locale)}</p>
+                                </div>
+                                <ChevronRight size={18} className="text-navy/70 shrink-0" />
+                              </button>
+                            </li>
+                          ) : (
+                            <li key={`r:${item.result.id}`}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedArchive(item.result)}
+                                className="w-full flex items-center gap-3 py-3 text-left"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="type-body-strong text-navy truncate">
+                                    {t.firstPlace} {(item.result as any).winner_track_title} · {(item.result as any).winner_track_artist}
+                                  </p>
+                                  <p className="type-caption text-navy/70">{formatDate(item.at, locale)}</p>
+                                </div>
+                                <ChevronRight size={18} className="text-navy/70 shrink-0" />
+                              </button>
+                            </li>
+                          )
+                        )}
                       </ul>
                     </section>
                   )}
