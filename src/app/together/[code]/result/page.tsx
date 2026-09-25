@@ -7,6 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
 import { saveCompletedResult } from "@/utils/worldcupDb";
+import { completionFor, markCompletion, type TogetherCompletion } from "@/utils/togetherCompletion";
 import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
@@ -22,24 +23,96 @@ import TogetherResultShareCard from "@/components/together/TogetherResultShareCa
 import { useInlinedCovers } from "@/utils/useInlinedCovers";
 import LoginModal from "@/components/LoginModal";
 
-interface StoredTrack {
-  id?: string;
-  i?: string;
-}
+/**
+ * 끝낸 판 하나를 저장하는 중인 것. **run 마다 하나.** 로그인 한 번에 AuthProvider 가
+ * user 를 두세 번 갱신하고 개발 모드는 effect 를 두 번 돌린다 — 같은 판을 두 번
+ * 보내지 않게 돌고 있는 것에 올라탄다.
+ */
+const processing = new Map<string, Promise<string | null>>();
 
-/** 방금 끝낸 소트의 순위(곡 id 배열). 없으면 null. */
-function rankingFromSession(): { ids: string[]; skipped: number } | null {
-  try {
-    const raw = safeSessionStorage.getItem("worldcup_ranking");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredTrack[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    const ids = parsed.map((t) => t.id || t.i || "").filter(Boolean);
-    const skipped = Number(safeSessionStorage.getItem("worldcup_skipped_count")) || 0;
-    return { ids, skipped };
-  } catch {
-    return null;
-  }
+/**
+ * 끝낸 판을 저장한다. 참여 기록 -> 개인 취향표 순서로, 끝낸 단계는 쪽지에 적는다.
+ * 실패한 단계는 적지 않는다 — 다음에 이 화면을 열 때 그 단계만 다시 한다.
+ * 쪽지는 두 단계가 다 끝나면 지워진다(`markCompletion`).
+ */
+function processCompletion(
+  found: SortChallenge,
+  c: TogetherCompletion,
+  user: { id: string; user_metadata?: { nickname?: string } } | null
+): Promise<string | null> {
+  const running = processing.get(c.runId);
+  if (running) return running;
+
+  const p = (async () => {
+    // 이 방의 곡이 아닌 id 는 싣지 않는다. 출처 확인은 challengeId 로 이미 했다.
+    const trackIds = new Set(found.tracks.map((t) => t.id));
+    const ids = c.ranking.filter((id) => trackIds.has(id));
+    let savedId: string | null = null;
+
+    if (!c.entrySaved) {
+      if (ids.length > 1) {
+        savedId = await saveEntry({
+          challengeId: found.id,
+          // 소트 시작 전에 받아 둔 이름. 로그인하지 않은 사람도 이름이 남는다
+          // (예전에는 프로필 닉네임만 봐서 전부 "익명 리스너"로 나왔다).
+          nickname: user?.user_metadata?.nickname ?? rememberedNickname() ?? null,
+          ranking: ids,
+          skippedCount: c.skipped,
+        });
+      }
+      // 저장했거나, 저장할 순위가 아니다(곡 1개 이하). 어느 쪽이든 다시 하지 않는다.
+      if (savedId || ids.length <= 1) {
+        markCompletion(c.runId, { entrySaved: true });
+        safeSessionStorage.removeItem("together_code");
+      }
+    }
+
+    if (!c.tasteDone) {
+      /*
+       * 같이 소트한 것도 **내 취향표로 남긴다.** 참여한 사람마다 각자의 취향표가 생긴다.
+       *
+       * 예전에는 남기지 않았다(월드컵이 `?challenge=1` 이면 저장을 건너뛴다). 그래서
+       * 같이 소트하기로 한 소트는 아무리 해도 내 취향 스페이스에 안 쌓였다.
+       *
+       * 기준은 혼자 할 때와 같은 16곡이다 — 방은 4곡부터 만들 수 있어서, 조건 없이
+       * 남기면 4곡짜리 취향표가 계속 쌓인다. "모르는 곡"으로 뺀 곡도 더해서 센다.
+       *
+       * **한 판에 한 장.** 이 화면을 몇 번 열든(새로 고침·뒤로 가기·로그인으로 effect 가
+       * 다시 돌든) 같은 run 이면 같은 id(`tasteResultId`)로 넣는다 — 두 번째는 PK 가 막는다.
+       * 판을 처음 처리할 때 게스트였으면 남기지 않는다(예전과 같다). 다시 소트한 결과는
+       * 새 run 이라 새로 남는다.
+       *
+       * 제목에 시각까지 적는다. 같은 방을 하루에 두 번 하면 날짜만으로는 구분이 안 되고,
+       * 가져온 원본 취향표와도 같은 이름이 된다.
+       */
+      const byTrackId = new Map(found.tracks.map((t) => [t.id, t]));
+      const ranked = ids.map((id) => byTrackId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
+      if (!user || ranked.length + c.skipped < 16) {
+        markCompletion(c.runId, { tasteDone: true });
+      } else {
+        const d = new Date(c.completedAt);
+        const p2 = (n: number) => String(n).padStart(2, "0");
+        const stamp = `${String(d.getFullYear()).slice(-2)}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
+        const artist = found.artist_name || ranked[0]?.artistName || found.title;
+        /*
+         * `clearDraft` 를 주지 않는다. 같이 소트한 결과는 **내 개인 임시저장과 무관**하다.
+         * 예전에는 결과를 저장하면 무조건 그 모드의 임시저장을 지워서, 같이 소트 한 번에
+         * 혼자 하던 월드컵의 이어하기가 사라졌다.
+         */
+        const res = await saveCompletedResult(ranked, ranked.slice(1), `${artist} sort_${stamp}`, {
+          isSingleArtist: true,
+          artistId: found.artist_id ?? null,
+          artistName: found.artist_name ?? null,
+          id: c.tasteResultId,
+        });
+        if (res.success) markCompletion(c.runId, { tasteDone: true });
+      }
+    }
+    return savedId;
+  })().finally(() => processing.delete(c.runId));
+
+  processing.set(c.runId, p);
+  return p;
 }
 
 /**
@@ -58,8 +131,6 @@ export default function TogetherResultPage() {
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
   /** 이 방에서 내 계정이 가진 기록의 id. 목록에는 user_id 가 실리지 않으므로 따로 묻는다. */
   const [ownedId, setOwnedId] = useState<string | null>(null);
-  /** 이번 순위를 이미 저장했는가. effect 가 user 변화로 다시 돌아도 한 번만 저장한다. */
-  const savedOnce = useRef<string | null>(null);
 
   useEffect(() => {
     if (!code || isLoading) return;
@@ -76,63 +147,21 @@ export default function TogetherResultPage() {
       }
 
       /*
-       * 방금 끝낸 순위가 있으면 내 기록으로 저장한다(다시 했으면 덮어쓴다).
+       * **이 화면을 여는 것은 읽기다.** 저장은 이 방에서 방금 끝낸 판의 쪽지가 있을 때만.
        *
-       * 이 effect 는 `user` 가 바뀔 때마다 다시 돈다. 로그인 한 번에 AuthProvider 가
-       * user 객체를 두세 번 갱신하므로, 표시를 두지 않으면 같은 순위를 여러 번 저장한다
-       * (개인 취향표가 두세 개 생겼다). 그래서 이번 순위를 한 번만 처리한다.
+       * 예전에는 세션에 남은 `worldcup_ranking` 을 곡이 겹치는지만 보고 저장했다. 그래서
+       * 소트한 적 없는 방의 결과를 열기만 해도 다른 방·혼자 소트의 순위가 내 기록으로
+       * 섰고, 로그아웃한 기기에서는 유령 참여자가 생겼고, 16곡 이상 방은 열 때마다
+       * 취향표가 한 장씩 늘었다. 이제 출처(challengeId)와 끝낸 사람을 확인한다
+       * (utils/togetherCompletion.ts).
+       *
+       * 이 effect 는 `user` 가 바뀔 때마다 다시 돈다. 같은 판이면 끝낸 단계는 건너뛰고,
+       * 돌고 있는 저장에는 올라탄다.
        */
-      const fresh = rankingFromSession();
-      const once = fresh ? `${found.id}:${fresh.ids.join(",")}` : null;
-      if (fresh && fresh.ids.length > 1 && savedOnce.current !== once) {
-        savedOnce.current = once;
-        const trackIds = new Set(found.tracks.map((t) => t.id));
-        const ids = fresh.ids.filter((id) => trackIds.has(id));
-        // 이 챌린지의 곡으로 한 소트일 때만 저장한다(다른 월드컵 기록이 남아 있을 수 있다).
-        if (ids.length > 1) {
-          const savedId = await saveEntry({
-            challengeId: found.id,
-            // 소트 시작 전에 받아 둔 이름. 로그인하지 않은 사람도 이름이 남는다
-            // (예전에는 프로필 닉네임만 봐서 전부 "익명 리스너"로 나왔다).
-            nickname: user?.user_metadata?.nickname ?? rememberedNickname() ?? null,
-            ranking: ids,
-            skippedCount: fresh.skipped,
-          });
-          if (alive && savedId && user) setOwnedId(savedId);
-          safeSessionStorage.removeItem("together_code");
-
-          /*
-           * 같이 소트한 것도 **내 취향표로 남긴다.** 참여한 사람마다 각자의 취향표가 생긴다.
-           *
-           * 예전에는 남기지 않았다(월드컵이 `?challenge=1` 이면 저장을 건너뛴다). 그래서
-           * 같이 소트하기로 한 소트는 아무리 해도 내 취향 스페이스에 안 쌓였다.
-           *
-           * 기준은 혼자 할 때와 같은 16곡이다 — 방은 4곡부터 만들 수 있어서, 조건 없이
-           * 남기면 4곡짜리 취향표가 계속 쌓인다. "모르는 곡"으로 뺀 곡도 더해서 센다.
-           *
-           * 제목에 시각까지 적는다. 같은 방을 하루에 두 번 하면 날짜만으로는 구분이 안 되고,
-           * 가져온 원본 취향표와도 같은 이름이 된다. 덮어쓰지 않고 **늘 새로 남긴다** —
-           * 다시 소트한 결과는 이전 것과 별개다.
-           */
-          const byTrackId = new Map(found.tracks.map((t) => [t.id, t]));
-          const ranked = ids.map((id) => byTrackId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
-          if (user && ranked.length + fresh.skipped >= 16) {
-            const d = new Date();
-            const p = (n: number) => String(n).padStart(2, "0");
-            const stamp = `${String(d.getFullYear()).slice(-2)}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
-            const artist = found.artist_name || ranked[0]?.artistName || found.title;
-            /*
-             * `clearDraft` 를 주지 않는다. 같이 소트한 결과는 **내 개인 임시저장과 무관**하다.
-             * 예전에는 결과를 저장하면 무조건 그 모드의 임시저장을 지워서, 같이 소트 한 번에
-             * 혼자 하던 월드컵의 이어하기가 사라졌다.
-             */
-            await saveCompletedResult(ranked, ranked.slice(1), `${artist} sort_${stamp}`, {
-              isSingleArtist: true,
-              artistId: found.artist_id ?? null,
-              artistName: found.artist_name ?? null,
-            });
-          }
-        }
+      const completion = completionFor(found.id, user?.id ?? null);
+      if (completion) {
+        const savedId = await processCompletion(found, completion, user);
+        if (alive && savedId && user) setOwnedId(savedId);
       }
 
       const list = await fetchEntries(found.id);

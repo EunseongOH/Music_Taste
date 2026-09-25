@@ -14,6 +14,7 @@ import {
   type SortChallenge,
 } from "@/utils/togetherDb";
 import { personName } from "@/utils/togetherName";
+import { startTogetherRun } from "@/utils/togetherCompletion";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import { normalizeEntriesForViewer, resolveSelfIdentity } from "@/utils/togetherIdentity";
 import NicknameDialog, { needsNickname } from "@/components/together/NicknameDialog";
@@ -180,6 +181,8 @@ export default function TogetherInvitePage() {
     safeSessionStorage.removeItem("worldcup_progress");
     safeLocalStorage.removeItem("worldcup_progress");
     safeSessionStorage.setItem("together_code", challenge.code);
+    // 이 방의 판을 시작한다. 결과 화면은 이 run 으로 끝낸 순위만 이 방에 저장한다.
+    startTogetherRun(challenge);
     router.push("/worldcup?mode=single&challenge=1");
   };
 

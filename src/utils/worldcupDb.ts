@@ -310,6 +310,11 @@ export const saveCompletedResult = async (
     picks?: DraftPick[];
     /** 이 결과가 내 계정의 임시저장에서 이어 온 것일 때만 true. 기본은 지우지 않는다. */
     clearDraft?: boolean;
+    /**
+     * 이 결과의 id 를 부르는 쪽이 정한다. 같은 판을 두 번 넣으면 PK 가 막는다 —
+     * 응답을 받기 전에 새로 고침돼 다시 저장해도 한 장만 남는다.
+     */
+    id?: string;
   }
 ) => {
   const supabase = createClient();
@@ -334,6 +339,7 @@ export const saveCompletedResult = async (
   }
 
   const resultData = {
+    ...(options?.id ? { id: options.id } : {}),
     user_id: user.id,
     title,
     winner_track_id: winner.id,
@@ -357,6 +363,10 @@ export const saveCompletedResult = async (
     .select('id')
     .single();
 
+  // 정해 준 id 가 이미 있다 = 이 판은 이미 저장됐다. 실패가 아니다.
+  if (insertError && options?.id && insertError.code === "23505") {
+    return { success: true, id: options.id };
+  }
   if (insertError) {
     console.error("[Supabase DB] Error saving tournament results:", insertError);
     return { success: false, error: insertError };

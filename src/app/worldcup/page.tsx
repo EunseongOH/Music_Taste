@@ -14,6 +14,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { rememberedNickname } from "@/utils/togetherDb";
 import { saveWorldcupDraft, loadActiveDraft, deleteActiveDraft, hydrateDraft, type DraftPick, type WorldcupState } from "@/utils/worldcupDb";
 import { onAppExit } from "@/utils/platform";
+import { recordTogetherCompletion } from "@/utils/togetherCompletion";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
@@ -440,6 +441,17 @@ export default function WorldCupPage() {
             * 임시저장은 **다른 판**이므로 건드리면 안 된다(나중에 로그인해도 마찬가지).
             */
            sessionStorage.setItem("worldcup_run_origin", isChallenge ? "challenge" : user ? "authenticated" : "guest");
+           /*
+            * 같이 소트하기 판이면 **어느 방의 어느 판인지** 묶어 결과 화면에 건넨다.
+            * 결과 화면은 위의 `worldcup_ranking` 을 읽지 않는다 — 그건 출처가 없다.
+            */
+           if (isChallenge) {
+             recordTogetherCompletion({
+               ranking: finalRanking.map((t) => t.id),
+               skipped: newSkipped.length,
+               ownerUserId: user?.id ?? null,
+             });
+           }
            setWinners(newWinners);
            setPhase("finished");
          } else {
