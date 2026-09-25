@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
+import Portal, { useBodyScrollLock } from "@/components/Portal";
 import { NICKNAME_ERROR_TEXT, isNicknameAvailable, validateNickname } from "@/utils/nickname";
 
 interface LoginModalProps {
@@ -43,6 +44,9 @@ interface LoginModalProps {
 type Mode = "login" | "signup" | "guest-warning";
 
 export default function LoginModal({ isOpen, onClose, onDismiss, onSuccess, onGuest, locale: propLocale }: LoginModalProps) {
+  // 창이 열린 동안 뒤 화면은 굴리지 않는다. 창 안쪽 스크롤은 그대로다.
+  useBodyScrollLock(isOpen);
+
   /** 사용자가 그만둔 것. 성공·게스트로 닫히는 것과 다르다. */
   const dismiss = () => {
     onClose();
@@ -401,19 +405,34 @@ export default function LoginModal({ isOpen, onClose, onDismiss, onSuccess, onGu
   }[locale];
 
   return (
+    /*
+     * 화면 맨 위 레이어에 그린다(Portal). 쓰는 화면이 제 쌓임 맥락을 만들어 두면
+     * — 월드컵의 <main> 이 relative z-10 이다 — 그 안에서는 z 를 아무리 올려도
+     * 그 화면의 후보 카드(z-50)나 바깥의 .bg-grain(body 아래 z-index:50)을 못 넘는다.
+     * 숫자가 아니라 **자리**의 문제다.
+     */
+    <Portal>
     <AnimatePresence>
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-[1000]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={dismiss}
           />
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none p-4 sm:p-6">
+          {/*
+            스크롤을 **바깥이** 맡는다. 창이 화면보다 길어도 위쪽이 화면 밖으로 밀려
+            닿을 수 없게 되면 안 된다. 예전에는 창 자체에 max-h-[90vh] 를 줬는데,
+            모바일 브라우저·웹뷰에서 vh 는 주소창을 포함한 높이라 실제로 보이는
+            영역보다 커서 위가 잘렸다. dvh 로 재고, 넘치면 화면째 굴린다.
+            안전 영역(노치·홈 인디케이터)만큼은 항상 비운다.
+          */}
+          <div className="fixed inset-0 z-[1010] overflow-y-auto overscroll-contain scrollbar-none pointer-events-none">
+            <div className="min-h-full flex items-center justify-center px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
             <motion.div
-              className="bg-cream w-full max-w-sm max-h-[90vh] overflow-y-auto scrollbar-none rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center"
+              className="bg-cream w-full max-w-sm max-h-[calc(100dvh_-_2rem)] overflow-y-auto scrollbar-none rounded-[2rem] border-[3px] border-navy p-6 sm:p-8 shadow-2xl relative pointer-events-auto flex flex-col items-center"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -763,9 +782,11 @@ export default function LoginModal({ isOpen, onClose, onDismiss, onSuccess, onGu
               )}
 
             </motion.div>
+            </div>
           </div>
         </>
       )}
     </AnimatePresence>
+    </Portal>
   );
 }
