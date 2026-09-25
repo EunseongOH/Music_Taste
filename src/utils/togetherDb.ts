@@ -303,12 +303,26 @@ export interface MyChallenge {
  *
  * 같은 방이 두 갈래에 다 있으면 한 번만 보여 준다.
  */
-export async function fetchMyChallenges(userId?: string | null): Promise<MyChallenge[]> {
+export async function fetchMyChallenges(
+  userId?: string | null,
+  opts: {
+    /**
+     * **이 계정이 가진 기록만.** 기기 키로 찾은 것은 빼고 본다.
+     *
+     * 계정의 보관함을 그리는 자리(프로필의 내 취향 스페이스)에서 쓴다. 거기에 기기
+     * 기록을 섞으면, 같은 기기에서 A 가 남긴 것이 B 의 보관함에 뜬다 — 기기가 같다는
+     * 이유로 남의 기록을 보여 주는 것은 안 된다.
+     */
+    accountOnly?: boolean;
+  } = {}
+): Promise<MyChallenge[]> {
   const supabase = createClient();
   const device = deviceParticipantKey();
 
   const [byDevice, byAccount] = await Promise.all([
-    supabase
+    opts.accountOnly
+      ? Promise.resolve({ data: [], error: null })
+      : supabase
       .from("sort_challenge_entries")
       .select("challenge_id, created_at")
       .eq("participant_key", device)

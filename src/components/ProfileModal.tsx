@@ -12,6 +12,7 @@ import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage,
 import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
 import { MIX_MATCH, VISIBLE_MODES } from "@/config/modes";
+import { fetchMyChallenges, type MyChallenge } from "@/utils/togetherDb";
 import DeleteAccountSheet from "@/components/account/DeleteAccountSheet";
 import { EmptyState, RankList, SectionTitle, UnderlineTabs, formatDate, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 
@@ -38,6 +39,12 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
   const [completedResults, setCompletedResults] = useState<any[]>([]);
   const [activeDrafts, setActiveDrafts] = useState<any[]>([]);
   const [isLoadingArchives, setIsLoadingArchives] = useState(false);
+  /*
+   * 같이 소트한 방. 본체 내 취향 스페이스(/explore-taste)는 이미 보여 주는데 여기만
+   * 안 보여 줘서, **같은 계정인데 두 화면의 목록이 달랐다.** 카카오만의 문제가 아니라
+   * 데이터 출처가 달랐던 것이다.
+   */
+  const [myRooms, setMyRooms] = useState<MyChallenge[]>([]);
 
   const getArchiveTracks = (archive: any) => {
     if (!archive) return [];
@@ -105,6 +112,14 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
             .from('tournament_drafts')
             .select('*')
             .eq('user_id', user.id);
+
+          /*
+           * 3. 같이 소트한 방. **이 계정이 가진 것만** 본다(`accountOnly`).
+           *    기기 키로 찾은 것까지 섞으면 같은 기기에서 A 가 남긴 방이 B 의
+           *    보관함에 뜬다. 기기가 같다는 이유로 남의 기록을 보여 줄 수는 없다.
+           */
+          const rooms = await fetchMyChallenges(user.id, { accountOnly: true });
+          setMyRooms(rooms);
             
           if (!resultsError && resultsData) {
             setCompletedResults(resultsData);
@@ -336,6 +351,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       noArchivesSub: "월드컵을 끝내면 여기에서 다시 볼 수 있어요.",
       sectionDrafts: "진행 중인 월드컵",
       sectionCompleted: "완료한 취향표",
+      sectionTogether: "같이 소트하기",
       resume: "이어하기",
       stageArtist: "아티스트 선택 단계",
       stageTrack: "곡 선택 단계",
@@ -364,6 +380,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       noArchivesSub: "Finish a World Cup to see it here.",
       sectionDrafts: "World Cups in progress",
       sectionCompleted: "Completed taste cards",
+      sectionTogether: "Sort together",
       resume: "Resume",
       stageArtist: "Choosing artists",
       stageTrack: "Choosing songs",
@@ -376,7 +393,7 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
 
   const inputClass =
     "w-full h-12 px-4 bg-white border border-navy/15 rounded-xl type-body text-navy outline-none focus:border-navy placeholder:text-navy/40";
-  const archiveCount = completedResults.length + activeDrafts.length;
+  const archiveCount = completedResults.length + activeDrafts.length + myRooms.length;
 
   return typeof document !== "undefined" ? createPortal(
     <AnimatePresence>
@@ -548,6 +565,40 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
                             </li>
                           );
                         })}
+                      </ul>
+                    </section>
+                  )}
+
+                  {myRooms.length > 0 && (
+                    <section>
+                      <SectionTitle title={t.sectionTogether} count={myRooms.length} />
+                      <ul className="divide-y divide-navy/10 mt-1">
+                        {myRooms.map((room) => (
+                          <li key={room.code}>
+                            {/*
+                              가짜 1위를 지어내지 않는다. 같이 소트한 방은 취향표와 다른
+                              종류다 — 무엇인지 그대로 적고, 누르면 그 방의 결과로 간다.
+                            */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                router.push(`/together/${room.code}/result`);
+                              }}
+                              className="w-full flex items-center gap-3 py-3 text-left"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="type-body-strong text-navy truncate">
+                                  {room.artistName || room.title}
+                                </p>
+                                <p className="type-caption text-navy/70">
+                                  {room.trackCount}곡 · {room.people}명이 함께 · {formatDate(room.sortedAt, locale)} · {t.sectionTogether}
+                                </p>
+                              </div>
+                              <ChevronRight size={18} className="text-navy/70 shrink-0" />
+                            </button>
+                          </li>
+                        ))}
                       </ul>
                     </section>
                   )}
