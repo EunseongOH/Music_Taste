@@ -72,3 +72,6 @@ The connected Figma environment currently does not expose Pretendard or Wanted S
 
 ## Consistency audit
 - [UI consistency audit](./consistency-audit.md) — full active-route review, duplicate-role findings, intentional exceptions, and proposed v1.1 migration order.
+
+## v1.1 candidate work
+- [v1.1 Phase 1 candidate components](../v1.1/phase-1-candidates.md) — IconButton, PageHeader, Dialog, Toast, BottomActionDock, Sheet, and Before → Standardized comparison.
