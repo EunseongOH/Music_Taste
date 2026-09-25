@@ -124,49 +124,83 @@ function better(a: TrackMeta, b: TrackMeta): number {
 /**
  * 월드컵에 올라갈 곡을 정한다. **화면에 적는 수도, 고르는 것도, 넘기는 것도 여기를 지난다.**
  *
- * 두 단계이고 **순서가 중요하다.**
+ * 한 줄(TrackMeta)은 **두 가지 신원**을 갖는다.
  *
- *   1) **트랙 id** 로 합친다. 선택은 `Set<id>` 로 담기므로 id 가 같으면 애초에 한 곡이다.
- *   2) **songKey** 로 합친다. 같은 곡이 리패키지·라이브·일본어판으로 여러 번 나온 것을 묶는다.
+ *   - 트랙 id   — 선택은 `Set<id>` 로 담으므로 id 가 같으면 애초에 한 곡이다
+ *   - songKey   — 리패키지·라이브·일본어판으로 여러 번 나온 같은 곡
  *
- * 1단계를 건너뛰면 머리말과 시작 단추의 수가 어긋난다 — 이게 "83 Tracks 인데 79 로
- * 시작" 의 실제 원인이었다. 머리말은 앨범의 raw 제목을 songKey 로 셌고(같은 id 가
- * 두 제목이면 2곡), 선택은 id 로 담았다(1곡). 재현: 볼빨간사춘기 84 vs 80.
+ * 둘 중 **하나라도 같으면 같은 곡**이고, 이 관계는 이어진다(transitive). 그래서
+ * "id 로 합치고 -> 대표의 songKey 로 다시 합친다" 는 두 벌 방식으로는 부족하다.
+ * 대표로 뽑히지 않은 제목이 다른 id 와 이어지는 다리가 될 수 있기 때문이다.
  *
- * 결과는 **들어온 순서에 좌우되지 않는다.** 대표를 총 순서로 고르고 별칭을 사전순으로
- * 담는다. 배열의 나열 순서만 입력을 따른다(앨범 순서를 월드컵에 그대로 넘기기 위해).
+ *   id X — "ABC" · "Long Title"
+ *   id Y — "Long Title"
+ *
+ * X 의 대표가 "ABC" 로 뽑히면 X 의 songKey 는 ABC 가 되어 Y 와 갈라진다. 하지만 X 에는
+ * "Long Title" 이 분명히 있었고, 그것이 Y 와 같다. 한 곡이어야 한다.
+ *
+ * 그래서 **연결 요소** 문제로 푼다. 줄마다 id 로 잇고 제목의 songKey 로도 이어서,
+ * 이어진 덩어리 하나가 한 곡이다.
+ *
+ * (이 함수가 왜 있는지: 머리말은 앨범의 raw 제목을 songKey 로 세고 선택은 id 로 담아
+ *  "84 Tracks 인데 80 으로 시작" 이 났다. 세는 자리를 하나로 모은 것이다.)
+ *
+ * 결과는 **들어온 순서에 좌우되지 않는다.** 연결 요소 자체가 순서와 무관하고, 대표는
+ * 총 순서로 고르며 별칭은 사전순으로 담는다. 배열의 나열 순서만 입력을 따른다
+ * (앨범 순서를 월드컵에 그대로 넘기기 위해서다).
  */
 export function resolveCanonicalTracks(tracks: readonly TrackMeta[]): CanonicalTrack[] {
-  // 1단계 — 트랙 id
-  const byId = new Map<string, { best: TrackMeta; titles: Set<string> }>();
-  for (const t of tracks) {
-    if (!t?.id) continue;
-    const g = byId.get(t.id);
+  const rows = tracks.filter((t): t is TrackMeta => Boolean(t?.id));
+
+  /* 작은 union-find. 줄 번호를 노드로 쓴다. */
+  const parent = rows.map((_, i) => i);
+  const find = (i: number): number => {
+    let r = i;
+    while (parent[r] !== r) r = parent[r];
+    while (parent[i] !== r) {
+      const up = parent[i];
+      parent[i] = r;                                            // 경로 압축
+      i = up;
+    }
+    return r;
+  };
+  const union = (i: number, j: number) => {
+    const a = find(i);
+    const b = find(j);
+    if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);       // 작은 쪽으로 — 순서와 무관하게
+  };
+
+  /* 같은 열쇠를 처음 본 줄에 나머지를 잇는다. id 와 songKey 를 같은 방식으로 다룬다. */
+  const firstSeen = new Map<string, number>();
+  const link = (key: string, i: number) => {
+    const seen = firstSeen.get(key);
+    if (seen === undefined) firstSeen.set(key, i);
+    else union(seen, i);
+  };
+  rows.forEach((t, i) => {
+    link(`id:${t.id}`, i);
+    link(`song:${songKey(t.artistName ?? "", t.title)}`, i);
+  });
+
+  /* 덩어리마다 대표 하나와, 버리지 않은 제목들. */
+  const groups = new Map<number, { best: TrackMeta; titles: Set<string> }>();
+  const order: number[] = [];
+  rows.forEach((t, i) => {
+    const root = find(i);
+    const g = groups.get(root);
     if (!g) {
-      byId.set(t.id, { best: t, titles: new Set([t.title]) });
-      continue;
+      groups.set(root, { best: t, titles: new Set([t.title]) });
+      order.push(root);
+      return;
     }
     g.titles.add(t.title);
     if (better(t, g.best) < 0) g.best = t;
-  }
+  });
 
-  // 2단계 — songKey
-  const bySong = new Map<string, { best: TrackMeta; titles: Set<string> }>();
-  for (const { best, titles } of byId.values()) {
-    const key = songKey(best.artistName ?? "", best.title);
-    const g = bySong.get(key);
-    if (!g) {
-      bySong.set(key, { best, titles: new Set(titles) });
-      continue;
-    }
-    for (const x of titles) g.titles.add(x);
-    if (better(best, g.best) < 0) g.best = best;
-  }
-
-  return [...bySong.values()].map(({ best, titles }) => ({
-    ...best,
-    aliases: [...titles].filter((x) => x !== best.title).sort(cmp),
-  }));
+  return order.map((root) => {
+    const g = groups.get(root)!;
+    return { ...g.best, aliases: [...g.titles].filter((x) => x !== g.best.title).sort(cmp) };
+  });
 }
 
 /** 앨범 한 장의 수록곡을 `TrackMeta` 로 편다. 세는 쪽과 고르는 쪽이 같은 모양을 쓴다. */

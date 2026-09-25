@@ -206,6 +206,16 @@ console.log('\n결과가 들어온 순서에 좌우되지 않는다');
     // 판 표기도 없고 길이도 같은 두 제목 — betterTitle 만으로는 승자가 안 갈린다.
     { id: 'p', title: 'Cookie', artistName: ARTIST, albumTitle: 'A', albumImage: '', albumId: 'A' },
     { id: 'q', title: 'cookie', artistName: ARTIST, albumTitle: 'E', albumImage: '', albumId: 'E' },
+    // 대표가 아닌 제목이 다리가 되는 경우도 섞는다.
+    { id: 'br1', title: 'ABC', artistName: ARTIST, albumTitle: 'F', albumImage: '', albumId: 'F' },
+    { id: 'br1', title: 'Long Title', artistName: ARTIST, albumTitle: 'G', albumImage: '', albumId: 'G' },
+    { id: 'br2', title: 'Long Title', artistName: ARTIST, albumTitle: 'H', albumImage: '', albumId: 'H' },
+    // 한 칸 건너 이어지는 경우도.
+    { id: 'ch1', title: 'Alpha', artistName: ARTIST, albumTitle: 'I', albumImage: '', albumId: 'I' },
+    { id: 'ch1', title: 'Beta', artistName: ARTIST, albumTitle: 'J', albumImage: '', albumId: 'J' },
+    { id: 'ch2', title: 'Beta', artistName: ARTIST, albumTitle: 'K', albumImage: '', albumId: 'K' },
+    { id: 'ch2', title: 'Gamma', artistName: ARTIST, albumTitle: 'L', albumImage: '', albumId: 'L' },
+    { id: 'ch3', title: 'Gamma', artistName: ARTIST, albumTitle: 'M', albumImage: '', albumId: 'M' },
   ];
   /** 순서와 무관하게 비교할 모양. 대표 id·제목과 별칭만 본다. */
   const shape = (list) =>
@@ -230,11 +240,51 @@ console.log('\n결과가 들어온 순서에 좌우되지 않는다');
   }
   check(same, '섞어서 200번 넣어도 같은 결과', bad);
   const canon = resolveCanonicalTracks(metas);
-  check(canon.length === 3, '세 곡으로 합쳐진다 (Hype Boy · Attention · Cookie)', `${canon.length}곡`);
+  check(canon.length === 5, '다섯 곡으로 합쳐진다 (Hype Boy · Attention · Cookie · 다리 · 사슬)',
+    `${canon.length}곡`);
   const hype = canon.find((t) => t.id === 'x');
   check(hype?.title === 'Hype Boy', '대표는 판 표기가 없는 쪽', hype?.title);
   check(hype?.aliases.join(',') === 'Hype Boy (Japanese Ver.),Hype Boy (Live)',
     '별칭은 사전순으로 전부 남는다', hype?.aliases.join(','));
+}
+
+/* ── CASE I. 대표가 아닌 제목이 다른 id 와 이어지는 다리가 된다 ── */
+console.log('\n대표로 안 뽑힌 제목이 다른 id 와 잇는다 (alias bridge)');
+{
+  const meta = (id, title) =>
+    ({ id, title, artistName: ARTIST, albumTitle: 'X', albumImage: '', albumId: 'X' });
+  /*
+   * id X 는 같은 녹음인데 앨범마다 제목이 다르다. 그중 "Long Title" 이 id Y 와 같다.
+   * X 의 대표가 "ABC" 로 뽑히면(더 짧다) 예전 방식은 X 와 Y 를 갈라 놓았다.
+   */
+  const rows = [meta('X', 'ABC'), meta('X', 'Long Title'), meta('Y', 'Long Title')];
+  const canon = resolveCanonicalTracks(rows);
+  check(canon.length === 1, '한 곡으로 이어진다', `${canon.length}곡`);
+  check(canon[0].title === 'ABC', '대표는 기존 정책 그대로', canon[0].title);
+  check(canon[0].aliases.join(',') === 'Long Title', '다리가 된 제목이 별칭에 남는다',
+    canon[0].aliases.join(','));
+}
+
+console.log('\n이어진 관계는 끝까지 따라간다 (transitive)');
+{
+  const meta = (id, title) =>
+    ({ id, title, artistName: ARTIST, albumTitle: 'X', albumImage: '', albumId: 'X' });
+  /*
+   * A(Alpha·Beta) — B(Beta·Gamma) — C(Gamma).
+   * A 와 C 는 직접 닿는 제목이 하나도 없다. B 를 거쳐야만 한 곡이 된다.
+   */
+  const rows = [
+    meta('A', 'Alpha'), meta('A', 'Beta'),
+    meta('B', 'Beta'), meta('B', 'Gamma'),
+    meta('C', 'Gamma'),
+  ];
+  const canon = resolveCanonicalTracks(rows);
+  check(canon.length === 1, '세 id 가 모두 한 곡', `${canon.length}곡`);
+  check(canon[0].aliases.length === 2, '대표를 뺀 두 제목이 별칭으로 남는다',
+    canon[0].aliases.join(','));
+  const all = new Set([canon[0].title, ...canon[0].aliases]);
+  check(all.has('Alpha') && all.has('Beta') && all.has('Gamma'), '제목을 하나도 잃지 않는다',
+    [...all].join(','));
 }
 
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);
