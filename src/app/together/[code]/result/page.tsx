@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
@@ -11,7 +11,7 @@ import { completionFor, markCompletion, type TogetherCompletion } from "@/utils/
 import { buildPairwiseMatches, groupMatchRate, inferLegacySkipped, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
-import { normalizeEntriesForViewer, rememberPendingClaim, resolveSelfIdentity, takePendingClaim } from "@/utils/togetherIdentity";
+import { bindPendingClaim, clearPendingClaim, normalizeEntriesForViewer, rememberPendingClaim, resolveSelfIdentity } from "@/utils/togetherIdentity";
 import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
@@ -195,17 +195,26 @@ export default function TogetherResultPage() {
     if (isLoading || !user || !challenge) return;
     let alive = true;
     (async () => {
-      const pending = takePendingClaim();
+      /*
+       * **성공하기 전에 뜻을 지우지 않는다.** 집어 갈 때 이 계정을 쪽지에 먼저 적고,
+       * 서버가 소유를 확인해 준 뒤에야 지운다. 실패하면 남아서 다음에 다시 시도한다.
+       */
+      const pending = bindPendingClaim(user.id);
       if (pending === challenge.id) {
         const claimed = await claimEntry(challenge.id);
-        if (alive && claimed) {
-          setOwnedId(claimed);
-          setEntries(await fetchEntries(challenge.id));
-          showToast("소트 결과를 내 계정에 저장했어요");
+        if (claimed) {
+          clearPendingClaim(challenge.id);
+          if (alive) {
+            setOwnedId(claimed);
+            setEntries(await fetchEntries(challenge.id));
+            showToast("소트 결과를 내 계정에 저장했어요");
+          }
           return;
         }
       }
+      // 이미 내 계정 것이면 뜻은 이뤄진 것이다 — 그때도 지운다.
       const owned = await fetchOwnedEntryId(challenge.id);
+      if (owned) clearPendingClaim(challenge.id);
       if (alive && owned) setOwnedId(owned);
     })();
     return () => {
@@ -307,10 +316,17 @@ export default function TogetherResultPage() {
     leaving.current = true;
     setAskLogin(true);
   };
+  /**
+   * **서비스 홈으로 나간다.** history 를 보지 않는다.
+   *
+   * 예전에는 history 가 있으면 `router.back()` 을 했다. 그런데 이 화면까지 오는 길이
+   *   초대 화면 -> 월드컵 -> 결과
+   * 라서, 뒤로 가면 같이 소트하기 안을 맴돌 뿐 밖으로 못 나갔다. "닫기" 는 "이전 화면"
+   * 이 아니라 "여기서 나간다" 는 뜻이므로 갈 곳을 분명히 적는다.
+   */
   const goHome = () => {
     leaving.current = true;
-    if (window.history.length > 1) router.back();
-    else router.push("/");
+    router.push("/");
   };
 
   /*
@@ -436,6 +452,23 @@ export default function TogetherResultPage() {
           <p className="type-body text-navy/70 mt-2">
             {shown.length}명이 함께했어요
           </p>
+
+          {/*
+            계정에 남았다는 것을 **계속** 보여 준다. 토스트는 3초 뒤 사라져서, 새로 고치면
+            "저장된 건가?" 를 다시 묻게 된다. 이 줄은 `ownedId` 로 그리므로 새로 고쳐도
+            서버가 소유를 확인해 주면 그대로 다시 선다.
+          */}
+          {user && ownedId && (
+            <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="type-caption text-navy/70 inline-flex items-center gap-1">
+                <Check size={14} strokeWidth={2.5} aria-hidden />
+                내 계정에 저장됐어요
+              </span>
+              <button type="button" onClick={() => router.push("/explore-taste")} className={textLink}>
+                내 취향 스페이스에서 보기
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

@@ -163,23 +163,77 @@ export function normalizeEntriesForViewer<T extends EntryIdentity>(
  *
  * 로그인 성공 콜백과 실제로 세션이 서는 시점은 다르다(OAuth 팝업·토큰 갱신).
  * 그래서 "콜백이 불렸다" 가 아니라 **계정이 확인됐을 때** 붙인다. 그 사이를 잇는 쪽지다.
+ *
+ * 두 가지를 지킨다.
+ *
+ *   **성공하기 전에 지우지 않는다.** 예전에는 읽으면서 바로 지웠다(`takePendingClaim`).
+ *   그래서 claim RPC 가 network·DB 오류로 실패하면 "계정에 남기겠다" 는 뜻이 함께
+ *   사라졌고, 다시 시도할 길이 없었다.
+ *
+ *   **누구에게 붙이려던 것인지 적는다.** 처음 이 뜻을 집어 가는 계정을 쪽지에 먼저
+ *   적는다. 그래야 A 가 집었다가 실패하고 로그아웃한 뒤 B 가 로그인해도, A 에게
+ *   붙이려던 기록이 B 의 것이 되지 않는다(들어볼 곡 큐와 같은 원칙).
  */
 const PENDING = "together_pending_claim";
 
+export interface PendingClaim {
+  challengeId: string;
+  /** 이 뜻을 집어 간 계정. 아직 아무도 안 집었으면 null. */
+  ownerUserId: string | null;
+}
+
+function readPending(): PendingClaim | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING);
+    if (!raw) return null;
+    // 이 칸이 생기기 전에는 방 id 문자열만 적었다. 그것도 읽는다.
+    if (!raw.startsWith("{")) return { challengeId: raw, ownerUserId: null };
+    const v = JSON.parse(raw) as Partial<PendingClaim>;
+    return v?.challengeId ? { challengeId: v.challengeId, ownerUserId: v.ownerUserId ?? null } : null;
+  } catch {
+    return null;
+  }
+}
+
 export function rememberPendingClaim(challengeId: string): void {
   try {
-    sessionStorage.setItem(PENDING, challengeId);
+    sessionStorage.setItem(PENDING, JSON.stringify({ challengeId, ownerUserId: null } satisfies PendingClaim));
   } catch {
     /* 저장 못 하면 이번 로그인에서는 못 붙인다. 화면은 기기 키로 계속 보인다. */
   }
 }
 
-export function takePendingClaim(): string | null {
+/** 적어 둔 뜻. 지우지 않는다. */
+export function getPendingClaim(): PendingClaim | null {
+  return readPending();
+}
+
+/**
+ * 이 계정이 그 뜻을 집어 간다. 집을 수 있으면 방 id 를, 아니면 null 을 돌려준다.
+ *
+ * 아직 주인이 없으면 **먼저 적고** 나서 돌려준다 — 적지 못하면 집지 않는다.
+ * 적히기 전에 붙이기를 시작하면, 실패한 뒤 다른 계정이 그 뜻을 가져갈 수 있다.
+ */
+export function bindPendingClaim(userId: string): string | null {
+  const p = readPending();
+  if (!p) return null;
+  if (p.ownerUserId === userId) return p.challengeId;
+  if (p.ownerUserId !== null) return null;   // 다른 계정이 집어 간 뜻이다
   try {
-    const v = sessionStorage.getItem(PENDING);
-    if (v) sessionStorage.removeItem(PENDING);
-    return v;
+    sessionStorage.setItem(PENDING, JSON.stringify({ challengeId: p.challengeId, ownerUserId: userId } satisfies PendingClaim));
   } catch {
     return null;
+  }
+  return p.challengeId;
+}
+
+/** 뜻이 이뤄졌다. **성공했을 때만** 부른다. 다른 방의 뜻은 건드리지 않는다. */
+export function clearPendingClaim(challengeId: string): void {
+  const p = readPending();
+  if (!p || p.challengeId !== challengeId) return;
+  try {
+    sessionStorage.removeItem(PENDING);
+  } catch {
+    /* 못 지워도 다음에 이미 내 것임을 확인하면 그때 다시 지운다 */
   }
 }
