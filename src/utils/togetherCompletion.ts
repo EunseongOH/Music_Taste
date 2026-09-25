@@ -91,7 +91,8 @@ export function startTogetherRun(challenge: { id: string; code: string }): Toget
  */
 export function recordTogetherCompletion(input: {
   ranking: readonly string[];
-  skippedTrackIds: readonly string[];
+  /** 안 주면 빈 목록. 모르는 곡을 지어내지 않는다. */
+  skippedTrackIds?: readonly string[];
   ownerUserId: string | null;
 }): TogetherCompletion | null {
   const run = readJson<TogetherRun>(RUN_KEY);
@@ -102,8 +103,8 @@ export function recordTogetherCompletion(input: {
     runId: run.runId,
     ranking: [...input.ranking],
     // 개수는 목록에서 센다. 둘이 어긋날 길을 만들지 않는다.
-    skipped: input.skippedTrackIds.length,
-    skippedTrackIds: [...input.skippedTrackIds],
+    skipped: (input.skippedTrackIds ?? []).length,
+    skippedTrackIds: [...(input.skippedTrackIds ?? [])],
     ownerUserId: input.ownerUserId,
     completedAt: new Date().toISOString(),
     entrySaved: false,

@@ -31,7 +31,7 @@ console.log('\n시작하지 않은 판은 끝나도 쪽지가 없다');
   reset();
   // 혼자 소트한 순위만 세션에 있다.
   safeSessionStorage.setItem('worldcup_ranking', JSON.stringify([{ id: 't1' }, { id: 't2' }]));
-  const c = recordTogetherCompletion({ ranking: ['t1', 't2'], skipped: 0, ownerUserId: null });
+  const c = recordTogetherCompletion({ ranking: ['t1', 't2'], skippedTrackIds: [], ownerUserId: null });
   check(c === null, 'run 없이 끝나면 아무것도 적지 않는다');
   check(completionFor(B.id, null) === null, '혼자 소트한 순위로는 방 B 에 쓸 것이 없다');
 }
@@ -40,7 +40,7 @@ console.log('\n쪽지는 그 방에만 쓰인다 — 곡이 같아도');
 {
   reset();
   startTogetherRun(A);
-  recordTogetherCompletion({ ranking: ['t1', 't2', 't3'], skipped: 0, ownerUserId: null });
+  recordTogetherCompletion({ ranking: ['t1', 't2', 't3'], skippedTrackIds: [], ownerUserId: null });
   check(completionFor(A.id, null)?.challengeId === A.id, '방 A 에서는 보인다');
   // 방 B 의 곡이 방 A 와 완전히 같아도 challengeId 가 다르면 없다.
   check(completionFor(B.id, null) === null, '방 B 에서는 없다(곡 겹침과 무관)');
@@ -50,7 +50,7 @@ console.log('\n끝낸 사람이 아니면 저장하지 않는다');
 {
   reset();
   startTogetherRun(A);
-  recordTogetherCompletion({ ranking: ['t1', 't2'], skipped: 0, ownerUserId: 'user-a' });
+  recordTogetherCompletion({ ranking: ['t1', 't2'], skippedTrackIds: [], ownerUserId: 'user-a' });
   check(completionFor(A.id, 'user-a') !== null, '끝낸 계정이면 보인다');
   check(completionFor(A.id, null) === null, '로그아웃한 같은 기기(게스트)에서는 없다');
   check(completionFor(A.id, 'user-b') === null, '다른 계정에서는 없다');
@@ -58,7 +58,7 @@ console.log('\n끝낸 사람이 아니면 저장하지 않는다');
 
   reset();
   startTogetherRun(A);
-  recordTogetherCompletion({ ranking: ['t1', 't2'], skipped: 0, ownerUserId: null });
+  recordTogetherCompletion({ ranking: ['t1', 't2'], skippedTrackIds: [], ownerUserId: null });
   check(completionFor(A.id, 'user-a') !== null, '게스트로 끝내고 로그인하면 이어서 한다');
 }
 
@@ -66,8 +66,8 @@ console.log('\n한 run 은 한 번만 끝나고, 단계가 다 끝나면 쪽지�
 {
   reset();
   startTogetherRun(A);
-  const c = recordTogetherCompletion({ ranking: ['t1', 't2'], skipped: 0, ownerUserId: null });
-  check(recordTogetherCompletion({ ranking: ['t9'], skipped: 0, ownerUserId: null }) === null,
+  const c = recordTogetherCompletion({ ranking: ['t1', 't2'], skippedTrackIds: [], ownerUserId: null });
+  check(recordTogetherCompletion({ ranking: ['t9'], skippedTrackIds: [], ownerUserId: null }) === null,
     '같은 run 으로 두 번 끝낼 수 없다');
   markCompletion(c.runId, { entrySaved: true });
   const mid = completionFor(A.id, null);
@@ -81,9 +81,9 @@ console.log('\n같은 방을 다시 소트하면 새 판이다');
 {
   reset();
   startTogetherRun(A);
-  const first = recordTogetherCompletion({ ranking: ['t1', 't2'], skipped: 0, ownerUserId: null });
+  const first = recordTogetherCompletion({ ranking: ['t1', 't2'], skippedTrackIds: [], ownerUserId: null });
   startTogetherRun(A);
-  const second = recordTogetherCompletion({ ranking: ['t2', 't1'], skipped: 0, ownerUserId: null });
+  const second = recordTogetherCompletion({ ranking: ['t2', 't1'], skippedTrackIds: [], ownerUserId: null });
   check(first.runId !== second.runId && first.tasteResultId !== second.tasteResultId, 'run·취향표 id 가 새로 나온다');
   // 옛 run 의 표시가 새 판을 끝낸 것으로 만들면 안 된다.
   markCompletion(first.runId, { entrySaved: true, tasteDone: true });
