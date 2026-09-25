@@ -11,7 +11,8 @@ import BackButton from "@/components/BackButton";
 import { Sheet, primaryButton, secondaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
 import ProfileHeader from "@/components/ProfileHeader";
 import { searchSpotifyArtists, getInitialArtists, getRelatedArtists, getSpotifyGenreQuery, searchArtistsByGenres, getLastSpotifyError } from "@/utils/spotify";
-import { saveArtistSelectionDraft, loadActiveDraft, deleteActiveDraft } from "@/utils/worldcupDb";
+import { saveArtistSelectionDraft, replaceDraftWithArtistSelection, loadActiveDraft, deleteDraftUnlessProtected } from "@/utils/worldcupDb";
+import { useDraftConflict } from "@/components/DraftConflictSheet";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
@@ -101,6 +102,11 @@ export default function ExplorePage() {
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
 
   const [locale, setLocale] = useState<"ko" | "en">("ko");
+  /**
+   * 계정에 진행 중인 월드컵이 있는데 새 아티스트로 넘어가려 한다(UX-001).
+   * 홈 "시작하기" 와 같은 시트로 묻는다 — 이어서 하거나, 새로 시작해 이전 판을 지운다.
+   */
+  const { saveOrAsk, sheet: draftConflictSheet } = useDraftConflict(!!user, locale === "en" ? "en" : "ko");
   const [spotifyError, setSpotifyError] = useState<string | null>(null);
 
   const checkSpotifyError = useCallback(async () => {
@@ -196,14 +202,20 @@ export default function ExplorePage() {
 
   const handleConfirmSaveExit = async () => {
     setShowSaveWarning(false);
-    await saveArtistSelectionDraft(selectedArtists, isSingleArtistMode);
-    router.push("/");
+    const selected = selectedArtists;
+    await saveOrAsk(
+      isSingleArtistMode,
+      () => saveArtistSelectionDraft(selected, isSingleArtistMode),
+      () => replaceDraftWithArtistSelection(selected, isSingleArtistMode),
+      () => router.push("/")
+    );
   };
 
   const handleDiscardExit = async () => {
     setShowSaveWarning(false);
+    // 아티스트 고르던 것만 버린다. 진행 중인 월드컵 초안은 여기서 지우지 않는다.
     if (user) {
-      await deleteActiveDraft(isSingleArtistMode);
+      await deleteDraftUnlessProtected(isSingleArtistMode);
     }
     localStorage.removeItem("selectedArtists");
     sessionStorage.removeItem("selectedArtists");
@@ -1095,49 +1107,50 @@ export default function ExplorePage() {
                 >
                   <button 
                     onClick={async () => {
-                      // Check if artist selection changed from what was previously stored
-                      const prevStoredStr = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
-                      let artistsChanged = true;
-                      if (prevStoredStr) {
-                        try {
-                          const prevArtists: { id: string }[] = JSON.parse(prevStoredStr);
-                          const prevIds = new Set(prevArtists.map(a => a.id));
-                          const curIds = new Set(selectedArtists.map(a => a.id));
-                          artistsChanged =
-                            prevIds.size !== curIds.size ||
-                            selectedArtists.some(a => !prevIds.has(a.id));
-                        } catch (e) {}
-                      }
-
-                      sessionStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
-                      localStorage.setItem('selectedArtists', JSON.stringify(selectedArtists));
-                      localStorage.setItem('worldcup_is_single_artist', 'false');
-                      sessionStorage.setItem('worldcup_is_single_artist', 'false');
-
-                      // If the artist lineup changed, discard stale track selections
-                      if (artistsChanged) {
-                        sessionStorage.removeItem('worldcup_tracks');
-                        localStorage.removeItem('worldcup_tracks');
-                      }
-                      
-                      if (user) {
-                        try {
-                          // Await database draft update to ensure it is written before redirecting!
-                          await saveArtistSelectionDraft(selectedArtists, false);
-                          
-                          // Sync user metadata as a secondary backup
-                          await supabase.auth.updateUser({
-                            data: {
-                              selected_artists: selectedArtists
-                            }
-                          });
-                        } catch (err) {
-                          console.error("Error saving selected artists to Supabase:", err);
+                      const selected = selectedArtists;
+                      const proceed = async () => {
+                        // Check if artist selection changed from what was previously stored
+                        const prevStoredStr = sessionStorage.getItem('selectedArtists') || localStorage.getItem('selectedArtists');
+                        let artistsChanged = true;
+                        if (prevStoredStr) {
+                          try {
+                            const prevArtists: { id: string }[] = JSON.parse(prevStoredStr);
+                            const prevIds = new Set(prevArtists.map(a => a.id));
+                            const curIds = new Set(selected.map(a => a.id));
+                            artistsChanged =
+                              prevIds.size !== curIds.size ||
+                              selected.some(a => !prevIds.has(a.id));
+                          } catch (e) {}
                         }
-                      }
-                      
-                      trackEvent("funnel_artist_complete", { selected_artists_count: selectedIds.size });
-                      router.push('/tracks');
+
+                        sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
+                        localStorage.setItem('selectedArtists', JSON.stringify(selected));
+                        localStorage.setItem('worldcup_is_single_artist', 'false');
+                        sessionStorage.setItem('worldcup_is_single_artist', 'false');
+
+                        // If the artist lineup changed, discard stale track selections
+                        if (artistsChanged) {
+                          sessionStorage.removeItem('worldcup_tracks');
+                          localStorage.removeItem('worldcup_tracks');
+                        }
+
+                        if (user) {
+                          // Sync user metadata as a secondary backup
+                          await supabase.auth.updateUser({ data: { selected_artists: selected } }).catch((err: unknown) => {
+                            console.error("Error saving selected artists to Supabase:", err);
+                          });
+                        }
+
+                        trackEvent("funnel_artist_complete", { selected_artists_count: selected.length });
+                        router.push('/tracks');
+                      };
+                      // 계정 초안에 먼저 적는다. 진행 중인 월드컵이 있으면 덮지 않고 묻는다(UX-001).
+                      await saveOrAsk(
+                        false,
+                        () => saveArtistSelectionDraft(selected, false),
+                        () => replaceDraftWithArtistSelection(selected, false),
+                        proceed
+                      );
                     }}
                     className="w-full py-4 rounded-full bg-brand text-cream font-sans font-medium text-lg shadow-xl border flex items-center justify-center gap-2 border-navy/20 hover:bg-brand/90 transition-colors cursor-pointer"
                   >
@@ -1216,31 +1229,32 @@ export default function ExplorePage() {
           <div className="flex flex-col gap-2">
             <button onClick={async () => {
                       const selected = [pendingSingleArtist];
-                      setSelectedArtists(selected);
-                      sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
-                      localStorage.setItem('selectedArtists', JSON.stringify(selected));
-                      localStorage.setItem('worldcup_is_single_artist', 'true');
-                      sessionStorage.setItem('worldcup_is_single_artist', 'true');
-
-                      // Clear any stale track selections — a new single artist means fresh start
-                      sessionStorage.removeItem('worldcup_tracks');
-                      localStorage.removeItem('worldcup_tracks');
-                      
-                      if (user) {
-                        try {
-                          await saveArtistSelectionDraft(selected, true);
-                          await supabase.auth.updateUser({
-                            data: {
-                              selected_artists: selected
-                            }
-                          });
-                        } catch (err) {
-                          console.error("Error saving draft inside explore proceed:", err);
-                        }
-                      }
-                      
                       setPendingSingleArtist(null);
-                      router.push('/tracks?mode=single');
+                      const proceed = async () => {
+                        setSelectedArtists(selected);
+                        sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
+                        localStorage.setItem('selectedArtists', JSON.stringify(selected));
+                        localStorage.setItem('worldcup_is_single_artist', 'true');
+                        sessionStorage.setItem('worldcup_is_single_artist', 'true');
+
+                        // Clear any stale track selections — a new single artist means fresh start
+                        sessionStorage.removeItem('worldcup_tracks');
+                        localStorage.removeItem('worldcup_tracks');
+
+                        if (user) {
+                          await supabase.auth.updateUser({ data: { selected_artists: selected } }).catch((err: unknown) => {
+                            console.error("Error saving draft inside explore proceed:", err);
+                          });
+                        }
+                        router.push('/tracks?mode=single');
+                      };
+                      // 계정 초안에 먼저 적는다. 진행 중인 월드컵이 있으면 덮지 않고 묻는다(UX-001).
+                      await saveOrAsk(
+                        true,
+                        () => saveArtistSelectionDraft(selected, true),
+                        () => replaceDraftWithArtistSelection(selected, true),
+                        proceed
+                      );
                     }} className={`${primaryButton} w-full`}>{locale === "en" ? "Choose songs" : "곡 고르러 가기"}</button>
             <button onClick={() => setPendingSingleArtist(null)} className={`${secondaryButton} w-full`}>{t.cancel}</button>
           </div>
@@ -1293,6 +1307,9 @@ export default function ExplorePage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* 계정에 진행 중인 월드컵이 있다 — 홈 "시작하기" 와 같은 시트(UX-001) */}
+      {draftConflictSheet}
     </main>
   );
 }

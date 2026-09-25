@@ -10,7 +10,8 @@ import { Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ProfileHeader from "@/components/ProfileHeader";
 import ModeCard from "@/components/home/ModeCard";
-import { Sheet, primaryButton, dangerButton } from "@/components/space/SpaceUI";
+import DraftConflictSheet from "@/components/DraftConflictSheet";
+import { draftResumePath, restoreDraftToStorage } from "@/utils/worldcupRun";
 
 import { createClient } from "@/utils/supabase/client";
 import { MIX_MATCH } from "@/config/modes";
@@ -238,31 +239,8 @@ export default function Home() {
 
   const handleRestore = () => {
     if (activeDraft) {
-      localStorage.setItem("worldcup_is_single_artist", activeDraft.is_single_artist ? "true" : "false");
-      sessionStorage.setItem("worldcup_is_single_artist", activeDraft.is_single_artist ? "true" : "false");
-
-      // 1. Sync data to storage
-      if (activeDraft.selected_artists && activeDraft.selected_artists.length > 0) {
-        sessionStorage.setItem("selectedArtists", JSON.stringify(activeDraft.selected_artists));
-        localStorage.setItem("selectedArtists", JSON.stringify(activeDraft.selected_artists));
-      }
-      if (activeDraft.selected_tracks && activeDraft.selected_tracks.length > 0) {
-        sessionStorage.setItem("worldcup_tracks", JSON.stringify(activeDraft.selected_tracks));
-        localStorage.setItem("worldcup_tracks", JSON.stringify(activeDraft.selected_tracks));
-      }
-      // 진행 상태는 월드컵 페이지가 DB 초안(progress 컬럼)에서 직접 복원한다.
-      // 여기서 로컬에 옮겨 쓰면 오래된 로컬 진행이 DB 를 가릴 수 있어 지운다.
-      sessionStorage.removeItem("worldcup_progress");
-      localStorage.removeItem("worldcup_progress");
-
-      // 2. Redirect based on stage status
-      if (activeDraft.status === 'artist_selection') {
-        router.push(activeDraft.is_single_artist ? "/explore?mode=single" : "/explore");
-      } else if (activeDraft.status === 'track_selection') {
-        router.push(activeDraft.is_single_artist ? "/tracks?mode=single" : "/tracks");
-      } else {
-        router.push(activeDraft.is_single_artist ? "/worldcup?mode=single" : "/worldcup");
-      }
+      restoreDraftToStorage(activeDraft);
+      router.push(draftResumePath(activeDraft));
     } else {
       // Fallback local storage checks
       const storedArtists = localStorage.getItem("selectedArtists") || sessionStorage.getItem("selectedArtists");
@@ -601,28 +579,14 @@ export default function Home() {
       <AnimatePresence>
         </AnimatePresence>
 
-      {/* 진행 중인 월드컵이 있을 때 — 하단 시트 (docs/design-system/dialogs.md 3장) */}
-      <Sheet
+      {/* 진행 중인 월드컵이 있을 때 — 하단 시트. 아티스트 고르기·곡 고르기도 같은 시트를 쓴다 */}
+      <DraftConflictSheet
         open={showRestoreModal}
+        draft={activeDraft}
+        locale={locale}
         onClose={() => setShowRestoreModal(false)}
-        closeLabel={t.cancel}
-        header={
-          <>
-            <h2 className="type-title-1 text-navy">{locale === "en" ? "You have a World Cup in progress" : "진행 중인 월드컵이 있어요"}</h2>
-            <p className="type-sub text-navy/70 mt-1 whitespace-pre-line break-keep">
-              {(activeDraft && draftExpiresAt(activeDraft) !== null
-                ? `${activeDraft.current_round_name} · ${formatDraftExpiry(activeDraft, locale)}`
-                : locale === "en" ? "Your chosen artists and songs are still here." : "고르던 아티스트와 곡이 남아 있어요.")
-                + (locale === "en" ? "\nStarting new clears them." : "\n새로 시작하면 이전 내역은 지워져요.")}
-            </p>
-          </>
-        }
-        footer={
-          <div className="flex flex-col gap-2">
-            <button onClick={() => { setShowRestoreModal(false); handleRestore(); }} className={`${primaryButton} w-full`}>{t.continue}</button>
-            <button onClick={handleStartNew} className={`${dangerButton} w-full`}>{t.startNewBtn}</button>
-          </div>
-        }
+        onContinue={() => { setShowRestoreModal(false); handleRestore(); }}
+        onStartNew={handleStartNew}
       />
 
       {/* Semantic Sitemap Links for Search Engine Crawlers */}
