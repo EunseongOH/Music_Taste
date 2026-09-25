@@ -14,6 +14,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { rememberedNickname } from "@/utils/togetherDb";
 import { saveWorldcupDraft, loadActiveDraft, deleteActiveDraft, hydrateDraft, type DraftPick, type WorldcupState } from "@/utils/worldcupDb";
 import { onAppExit } from "@/utils/platform";
+import { flushPendingListenLater, rememberPendingListenLater } from "@/utils/listenLater";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { trackEvent } from "@/utils/gtag";
@@ -484,29 +485,18 @@ export default function WorldCupPage() {
     removalTimer.current = setTimeout(() => {
       removalTimer.current = null;
       setPendingRemoval(null);
-      if (user) {
-        const albumId = (track as Track & { albumId?: string }).albumId;
-        supabase
-          .from("listen_later_tracks")
-          .upsert(
-            {
-              user_id: user.id,
-              track_id: track.id,
-              title: track.title,
-              artist_name: track.artistName,
-              album_title: (track as Track & { albumTitle?: string }).albumTitle ?? null,
-              album_image: track.albumImage,
-              album_id: albumId ?? null,
-              // 미발매곡은 tracks 화면에서 가상 앨범 id 'al_unreleased_<id>' 를 받는다.
-              is_unreleased: !!albumId?.startsWith("al_unreleased_"),
-            },
-            { onConflict: "user_id,track_id", ignoreDuplicates: true }
-          )
-          .then(({ error }: { error: { message: string } | null }) => {
-            // 목록 저장이 실패해도 월드컵 진행은 막지 않는다.
-            if (error) console.error("[listen_later] 저장 실패:", error.message);
-          });
-      }
+      /*
+       * **먼저 이 기기에 적고, 그 다음에 계정으로 옮긴다.**
+       *
+       * 예전에는 로그인 상태일 때만 DB 에 바로 썼다. 게스트면 아무 데도 안 남았고,
+       * 로그인했더라도 쓰기가 실패하면 console 한 줄만 남기고 뜻이 사라졌다.
+       * 확정된 "모르는 곡" 은 사용자의 뜻이지 서버의 것이 아니다.
+       *
+       * 옮기기를 기다리지 않는다 — 목록 저장이 실패해도 월드컵 진행은 막지 않는다는
+       * 성질은 그대로다. 다만 실패가 뜻을 지우지는 못한다.
+       */
+      rememberPendingListenLater(track);
+      void flushPendingListenLater();
       advance(opponent, { removed: true });
     }, REMOVE_UNDO_MS);
   };

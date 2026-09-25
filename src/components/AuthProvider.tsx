@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage } from "@/utils/storage";
+import { flushPendingListenLater } from "@/utils/listenLater";
 
 interface AuthContextType {
   user: User | null;
@@ -56,8 +57,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   const signOut = async () => {
+    /*
+     * 적어 둔 "들어볼 곡" 은 지우지 않는다. 로그아웃은 "그 곡을 모른다는 말을
+     * 취소한다" 는 뜻이 아니다. 다음에 로그인하면 그대로 옮겨진다.
+     */
     await supabase.auth.signOut();
   };
+
+  /*
+   * 확정된 "모르는 곡" 을 계정으로 옮긴다.
+   *
+   * 로그인 방법마다(이메일·가입·구글·카카오·팝업 콜백·앱 시작 시 세션 복원) 각자
+   * 옮기는 코드를 두지 않는다 — 어떤 길로 오든 **실제 세션이 서면 여기를 지난다.**
+   * 그게 이 자리에 두는 이유다.
+   *
+   * 닉네임 자동 생성과 한 effect 에 섞지 않는다. 책임이 다르고, 저쪽이 실패해도
+   * 이쪽은 돌아야 한다. 같은 로그인에서 `user` 가 여러 번 갱신되므로 이 effect 도
+   * 여러 번 도는데, 옮기는 함수가 겹쳐 돌지 않게 스스로 묶는다.
+   */
+  useEffect(() => {
+    if (isLoading || !user) return;
+    void flushPendingListenLater().then((r) => {
+      // 실패해도 적어 둔 것은 그대로다. 다음 기회에 다시 옮긴다.
+      if (r.status === "failed") console.error("[listen_later] 옮기지 못했어요:", r.error);
+    });
+  }, [user, isLoading]);
 
   useEffect(() => {
     if (!isLoading && user) {
