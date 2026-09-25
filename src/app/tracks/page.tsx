@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, Check, Compass, Disc, Search, Plus, X, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -21,7 +21,11 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { coverPlaceholder } from "@/utils/coverPlaceholder";
 import { songKey, betterTitle } from "@/utils/songKey";
-import { albumPickedCount, setAlbumSelected, type Selection, type TrackMeta } from "@/utils/trackSelection";
+import {
+  albumPickedCount, canonicalSelection, canonicalUniverse, clearAllTracks,
+  pruneToCanonical, resolveCanonicalTracks, selectAllTracks, setAlbumSelected,
+  type Selection, type TrackMeta,
+} from "@/utils/trackSelection";
 import SpotifyLink from "@/components/SpotifyLink";
 import { AlbumCard, useAlbumAccordion } from "@/components/album/AlbumCard";
 import UnreleasedDialog, { getYouTubeVideoId, type AddedUnreleasedTrack } from "@/components/album/UnreleasedDialog";
@@ -39,6 +43,7 @@ const translations = {
     openAlbums: "앨범 및 트랙 목록 열기",
     loadingFromSpotify: "스포티파이에서 앨범을 불러오고 있어요...",
     selectAll: "전체 선택",
+    countingTracks: "곡 수 확인 중…",
     selectAlbum: "이 앨범 전체 선택",
     clearAlbum: "이 앨범 전체 해제",
     albumPicked: (n: number) => `${n}곡 선택`,
@@ -85,6 +90,7 @@ const translations = {
     openAlbums: "Open albums & tracks list",
     loadingFromSpotify: "Loading albums from Spotify...",
     selectAll: "Select All",
+    countingTracks: "Counting tracks…",
     selectAlbum: "Select this album",
     clearAlbum: "Clear this album",
     albumPicked: (n: number) => `${n} selected`,
@@ -172,15 +178,7 @@ interface ArtistGroup {
  * 세는 쪽과 넘기는 쪽이 같은 함수를 써야 한다.
  */
 function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<string> {
-  const best = new Map<string, string>();      // 곡 키 -> 남길 트랙 ID
-  for (const id of ids) {
-    const m = meta[id];
-    const key = m?.title ? songKey(m.artistName ?? "", m.title) : id;   // 메타가 없으면 따로 센다
-    const prev = best.get(key);
-    // 판 표기가 없는 쪽을 남긴다 (handleStartWorldCup 과 같은 규칙)
-    if (!prev || betterTitle(meta[prev]?.title ?? "", m?.title ?? "") > 0) best.set(key, id);
-  }
-  return new Set(best.values());
+  return new Set(canonicalSelection({ ids, meta }).map((t) => t.id));
 }
 
 /**
@@ -191,17 +189,17 @@ function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<strin
  * 곡 수만 보고 아직 없는 곡을 고른 척할 수는 없다.
  */
 function AlbumSelectBar({
-  artistName, album, ids, meta, onChange, label, clearLabel, countLabel, dedupe = true,
+  artistName, album, ids, meta, onChange, label, clearLabel, countLabel,
 }: {
   artistName: string;
   album: { id: string; title: string; image: string; tracks: { id: string; title: string; duration?: number | string }[] };
   ids: Set<string>;
   meta: Record<string, TrackMeta>;
-  onChange: (next: Selection) => void;
+  /** `on` 은 방금 고른 것인지(true) 뺀 것인지(false). 화면이 자동 선택을 멈출 근거로 쓴다. */
+  onChange: (next: Selection, on: boolean) => void;
   label: string;
   clearLabel: string;
   countLabel: (n: number) => string;
-  dedupe?: boolean;
 }) {
   if (!album.tracks.length) return null;
   const picked = albumPickedCount({ ids, meta }, artistName, album);
@@ -211,7 +209,7 @@ function AlbumSelectBar({
       <span className="font-sans text-xs font-bold text-navy/70 tabular-nums">{countLabel(picked)}</span>
       <button
         type="button"
-        onClick={() => onChange(setAlbumSelected({ ids, meta }, artistName, album, !all, { dedupe }))}
+        onClick={() => onChange(setAlbumSelected({ ids, meta }, artistName, album, !all), !all)}
         className="px-3 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0"
       >
         {all ? clearLabel : label}
@@ -220,23 +218,26 @@ function AlbumSelectBar({
   );
 }
 
-function countDistinctTracks(artist: ArtistGroup, singleMode: boolean): number {
-  const keys = new Set<string>();
-  let pending = 0, loaded = 0;
-  for (const album of artist.allAlbums || artist.albums) {
-    if (!album) continue;
-    if (!album.tracks.length) { pending += album.totalTracks || 0; continue; }
-    loaded++;
-    for (const t of album.tracks) keys.add(songKey(artist.name, t.title));
-  }
-  // 미발매곡은 "전체 선택"이 중복을 가리지 않고 통째로 넣는다. 세는 쪽도 똑같이 한다
-  const unreleased = (artist.unreleasedAlbums ?? []).reduce((n, a) => n + a.tracks.length, 0);
+/**
+ * 머리말에 적는 곡 수. **월드컵에 실제로 올라가는 수와 같은 함수**를 지난다.
+ *
+ * 수록곡을 아직 못 받은 앨범은 세지 않는다. 앨범이 말하는 곡 수(`totalTracks`)를 더하면
+ * 고를 수도 없는 곡을 확정 숫자처럼 적게 된다. 아직 받는 중인지는 `albumsSettled` 로
+ * 갈라 말하고, 받는 중일 때는 숫자 대신 "곡 수 확인 중…" 을 보여 준다.
+ */
+function countDistinctTracks(artist: ArtistGroup): number {
+  return canonicalUniverse(artist.name, artist.allAlbums || artist.albums, artist.unreleasedAlbums ?? []).length;
+}
 
-  // 전곡 모드에서 배경 수집이 끝났는데도 수록곡이 없는 앨범은, 앞으로도 안 들어온다
-  // (우리 DB 에 없고 Spotify 하루 예산도 다 쓴 경우다). 그걸 세면 "70곡" 이라 적어 놓고
-  // 52곡만 고를 수 있게 된다. 못 받은 건 빼고, 실제로 고를 수 있는 수만 적는다.
-  const settled = singleMode && artist.albumsLoaded && !artist.backgroundLoading && loaded > 0;
-  return keys.size + unreleased + (settled ? 0 : pending);
+/**
+ * 곡 수를 확정해서 말할 수 있는가.
+ *
+ * 앨범 목록을 다 받았고 배경 수집도 끝났으면 확정이다. 그때 수록곡이 비어 있는 앨범은
+ * 앞으로도 안 들어온다(우리 DB 에 없고 Spotify 하루 예산도 다 쓴 경우다) — 그러니
+ * 그 곡들을 뺀 수가 실제로 고를 수 있는 수다.
+ */
+function albumsSettled(artist: ArtistGroup): boolean {
+  return Boolean(artist.albumsLoaded) && !artist.backgroundLoading;
 }
 
 export default function TracksPage() {
@@ -259,6 +260,37 @@ export default function TracksPage() {
     [selectedTrackIds, selectedTracksMetadata]);
   /* 고정 바의 실제 높이만큼 본문 끝을 비운다 — 바가 "불러오는 중"과 "시작하기"로 바뀐다. */
   const dockRef = useDockClearance();
+  /*
+   * 개발·검사에서만 열리는 창구. 머리말의 곱 수와 시작 단추의 곱 수가 어긋날 때
+   * **어느 단계에서 갈라졌는지** 를 본다. 운영 빌드에는 달리지 않는다.
+   * toss/baseline/track-count-audit.mjs 가 이것만 읽는다.
+   */
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    (window as unknown as Record<string, unknown>).__trackAudit = () =>
+      artistData.map((a) => ({
+        id: a.id,
+        name: a.name,
+        totalReleases: a.totalReleases,
+        albumsLoaded: a.albumsLoaded,
+        backgroundLoading: a.backgroundLoading,
+        albums: (a.allAlbums || a.albums).map((al, i) =>
+          al
+            ? { i, id: al.id, title: al.title, type: al.type, year: al.year,
+                loaded: al.tracks.length, totalTracks: al.totalTracks,
+                titles: al.tracks.map((t) => t.title) }
+            : { i, empty: true }
+        ),
+        unreleased: (a.unreleasedAlbums ?? []).flatMap((al) => al.tracks.map((t) => t.title)),
+        headline: countDistinctTracks(a),
+        settled: albumsSettled(a),
+        selectedRaw: selectedTrackIds.size,
+        selectedIds: [...selectedTrackIds],
+        selectedTitles: [...selectedTrackIds].map((id) => selectedTracksMetadata[id]?.title ?? null),
+        selectedDistinct: distinctSongIds(selectedTrackIds, selectedTracksMetadata).size,
+      }));
+  });
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -289,6 +321,69 @@ export default function TracksPage() {
     return () => clearTimeout(timer);
   }, [customAlert]);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
+  /*
+   * 아티스트마다 "전부 고르는 중" 인가.
+   *
+   * 앨범은 배경에서 계속 들어오고, 들어올 때마다 자동으로 골라진다. 그래서 사용자가
+   * 불러오는 도중에 곡을 **해제해도 뒤늦게 들어온 앨범이 도로 골라졌다.** 일부만
+   * 고르려는 뜻을 자동 선택이 덮어쓰면 안 된다.
+   *
+   * 기본은 true — 이 화면은 원래 전곡을 골라 둔 채로 시작한다. 곡이나 앨범을 직접
+   * 해제하는 순간 false 가 되고, 그때부터 새 앨범을 자동으로 담지 않는다.
+   * 화면에 그리는 값이 아니라 ref 로 둔다(리렌더가 필요 없다).
+   */
+  const selectAllIntent = useRef<Record<string, boolean>>({});
+  const keepSelectingAll = (artistId: string, on: boolean) => {
+    selectAllIntent.current[artistId] = on;
+  };
+  const wantsAll = (artistId: string) => selectAllIntent.current[artistId] !== false;
+
+  /*
+   * 월드컵에 올라가지 못할 곡은 **체크를 남겨 두지 않는다.**
+   *
+   * 앨범을 받을 때마다 곡을 통째로 담는데, 우리 DB 는 같은 녹음을 여러 앨범에 같은 id 로
+   * 주고 제목 표기는 다를 수 있다. 그러면 체크는 91개인데 월드컵에는 80곡만 올라간다 —
+   * 사용자는 체크된 곡을 보면서 "이건 왜 안 나왔지" 를 겪는다. 세는 쪽만 맞추는 것으로는
+   * 부족하고, 안 올라갈 곡은 애초에 체크가 풀려 있어야 한다.
+   *
+   * `pruneToCanonical` 은 멱등이라 한 번 정리되면 더 돌지 않는다(크기가 같으면 멈춘다).
+   */
+  useEffect(() => {
+    const pruned = pruneToCanonical({ ids: selectedTrackIds, meta: selectedTracksMetadata });
+    if (pruned.ids.size === selectedTrackIds.size) return;
+    setSelectedTrackIds(pruned.ids);
+    setSelectedTracksMetadata(pruned.meta as Record<string, any>);
+  }, [selectedTrackIds, selectedTracksMetadata]);
+
+  /**
+   * 새로 들어온 앨범의 곡을 자동으로 담는다.
+   *
+   * 세 곳(첫 쪽·배경 수집·쪽 넘기기)이 같은 코드를 따로 갖고 있었다. 한 자리로 모아야
+   * "해제한 뜻을 존중한다" 는 규칙을 한 번만 적을 수 있다.
+   */
+  const autoSelectAlbum = (
+    artistId: string,
+    artistName: string,
+    album: { id: string; title: string; image: string },
+    tracks: { id: string; title: string; duration?: string }[]
+  ) => {
+    if (!wantsAll(artistId) || tracks.length === 0) return;
+    setSelectedTrackIds((prev) => {
+      const next = new Set(prev);
+      for (const tr of tracks) next.add(tr.id);
+      return next;
+    });
+    setSelectedTracksMetadata((prev) => {
+      const next = { ...prev };
+      for (const tr of tracks) {
+        next[tr.id] = {
+          id: tr.id, title: tr.title, duration: tr.duration, artistName,
+          albumTitle: album.title, albumImage: album.image, albumId: album.id,
+        };
+      }
+      return next;
+    });
+  };
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   React.useEffect(() => {
@@ -738,28 +833,7 @@ export default function TracksPage() {
                 };
               });
 
-              // Auto-select these tracks
-              setSelectedTrackIds(prev => {
-                const next = new Set(prev);
-                tracks.forEach((track: any) => next.add(track.id));
-                return next;
-              });
-
-              setSelectedTracksMetadata(prev => {
-                const next = { ...prev };
-                tracks.forEach((track: any) => {
-                  next[track.id] = {
-                    id: track.id,
-                    title: track.title,
-                    duration: track.duration,
-                    artistName: artistName,
-                    albumTitle: album.title,
-                    albumImage: album.image,
-                    albumId: album.id
-                  };
-                });
-                return next;
-              });
+              autoSelectAlbum(artistId, artistName, album, tracks);
 
               return { ...album, tracks };
             } catch (e) {
@@ -879,28 +953,7 @@ export default function TracksPage() {
                       previewUrl: t.preview_url
                     };
                   });
-                  
-                  setSelectedTrackIds(prev => {
-                    const next = new Set(prev);
-                    tracks.forEach((track: any) => next.add(track.id));
-                    return next;
-                  });
-
-                  setSelectedTracksMetadata(prev => {
-                    const next = { ...prev };
-                    tracks.forEach((track: any) => {
-                      next[track.id] = {
-                        id: track.id,
-                        title: track.title,
-                        duration: track.duration,
-                        artistName: artist.name,
-                        albumTitle: album.title,
-                        albumImage: album.image,
-                        albumId: album.id
-                      };
-                    });
-                    return next;
-                  });
+                  autoSelectAlbum(artistId, artist.name, album, tracks);
 
                   return { ...album, tracks };
                 } catch (e) {
@@ -910,32 +963,8 @@ export default function TracksPage() {
               })
             );
 
-            if (unreleasedAlbumsList.length > 0) {
-              setSelectedTrackIds(prev => {
-                const next = new Set(prev);
-                unreleasedAlbumsList.forEach(album => {
-                  album.tracks.forEach(track => next.add(track.id));
-                });
-                return next;
-              });
-
-              setSelectedTracksMetadata(prev => {
-                const next = { ...prev };
-                unreleasedAlbumsList.forEach(album => {
-                  album.tracks.forEach(track => {
-                    next[track.id] = {
-                      id: track.id,
-                      title: track.title,
-                      duration: track.duration,
-                      artistName: artist.name,
-                      albumTitle: album.title,
-                      albumImage: album.image,
-                      albumId: album.id
-                    };
-                  });
-                });
-                return next;
-              });
+            for (const al of unreleasedAlbumsList) {
+              autoSelectAlbum(artistId, artist.name, al, al.tracks);
             }
           }
 
@@ -1038,28 +1067,7 @@ export default function TracksPage() {
                   previewUrl: t.preview_url
                 };
               });
-              
-              setSelectedTrackIds(prev => {
-                const next = new Set(prev);
-                tracks.forEach((track: any) => next.add(track.id));
-                return next;
-              });
-
-              setSelectedTracksMetadata(prev => {
-                const next = { ...prev };
-                tracks.forEach((track: any) => {
-                  next[track.id] = {
-                    id: track.id,
-                    title: track.title,
-                    duration: track.duration,
-                    artistName: artist.name,
-                    albumTitle: album.title,
-                    albumImage: album.image,
-                    albumId: album.id
-                  };
-                });
-                return next;
-              });
+              autoSelectAlbum(artistId, artist.name, album, tracks);
 
               return { ...album, tracks };
             } catch (e) {
@@ -1177,6 +1185,13 @@ export default function TracksPage() {
     if (newSelected.has(trackId)) {
       newSelected.delete(trackId);
       delete newMetadata[trackId];
+      // 직접 해제했다. 이 아티스트는 더 이상 "전부 고르는 중" 이 아니다.
+      for (const a of artistData) {
+        if (a.albums.some((al) => al.tracks.some((x) => x.id === trackId))
+            || (a.unreleasedAlbums ?? []).some((al) => al.tracks.some((x) => x.id === trackId))) {
+          keepSelectingAll(a.id, false);
+        }
+      }
     } else {
       newSelected.add(trackId);
       if (metadata) {
@@ -1313,15 +1328,11 @@ export default function TracksPage() {
       } catch (e) {}
     }
 
-    // 마지막 안전장치: 같은 곡이 두 번 들어가면 월드컵에서 같은 곡끼리 붙는다.
-    // 앨범을 따로따로 골랐을 때도 여기서 걸린다. 판 표기가 없는 쪽을 남긴다.
-    const bySong = new Map<string, any>();
-    for (const t of selectedTracksData) {
-      const k = songKey(t.artistName ?? "", t.title ?? "");
-      const prev = bySong.get(k);
-      if (!prev || betterTitle(prev.title, t.title) > 0) bySong.set(k, t);
-    }
-    const uniqueTracks = [...bySong.values()];
+    /*
+     * 같은 곡이 두 번 들어가면 월드컵에서 같은 곡끼리 붙는다. 화면에 적은 수와 여기
+     * 넘기는 수가 반드시 같아야 하므로 **머리말·하단과 같은 함수**를 쓴다.
+     */
+    const uniqueTracks = resolveCanonicalTracks(selectedTracksData);
 
     if (uniqueTracks.length < 4) {
       setCustomAlert(locale === "en" ? translations.en.needAtLeast4 : translations.ko.needAtLeast4);
@@ -1505,7 +1516,7 @@ export default function TracksPage() {
                            {loadingAlbums.has(`artist_${artist.id}`)
                              ? t.albumLoading
                              : artist.albumsLoaded
-                               ? `${countDistinctTracks(artist, isSingleArtistMode)} Tracks${artist.backgroundLoading ? (locale === "ko" ? " (로딩 중...)" : " (Loading...)") : ""} • ${artist.totalReleases || artist.albums.length} Releases`
+                               ? `${albumsSettled(artist) ? `${countDistinctTracks(artist)} Tracks` : t.countingTracks} • ${artist.totalReleases || artist.albums.length} Releases`
                                : t.openAlbums}
                          </p>
                       </div>
@@ -1536,65 +1547,20 @@ export default function TracksPage() {
                                <button
                                  type="button"
                                  onClick={() => {
-                                   const nextIds = new Set(selectedTrackIds);
-                                   const nextMetadata = { ...selectedTracksMetadata };
-                                   // 같은 곡은 한 번만 고른다. 정규 앨범 -> EP -> 싱글 순으로, 오래된 것부터 본다.
-                                   // (아이돌은 같은 곡을 리패키지·라이브·일본어판으로 여러 번 낸다)
-                                   const rank = (ty: string) => (ty === "Album" ? 0 : ty === "EP" ? 1 : 2);
-                                   const albumsToSelect = [...(artist.allAlbums || artist.albums)]
-                                     .filter((a): a is Album => Boolean(a))
-                                     .sort((x, y) => rank(x.type) - rank(y.type) || String(x.year).localeCompare(String(y.year)));
-                                   const takenSongs = new Map<string, string>();   // 곡 키 -> 이미 고른 트랙 ID
-                                   for (const id of nextIds) {
-                                     const m = nextMetadata[id];
-                                     if (m?.title) takenSongs.set(songKey(m.artistName ?? artist.name, m.title), id);
-                                   }
-
-                                   albumsToSelect.forEach(album => {
-                                     if (!album) return;
-                                     album.tracks.forEach(track => {
-                                       const key = songKey(artist.name, track.title);
-                                       const already = takenSongs.get(key);
-                                       if (already) {
-                                         // 이미 같은 곡이 있다. 판 표기가 없는 쪽을 남긴다
-                                         const prev = nextMetadata[already];
-                                         if (!prev || betterTitle(prev.title, track.title) <= 0) return;
-                                         nextIds.delete(already);
-                                         delete nextMetadata[already];
-                                       }
-                                       takenSongs.set(key, track.id);
-                                       nextIds.add(track.id);
-                                       nextMetadata[track.id] = {
-                                         id: track.id,
-                                         title: track.title,
-                                         duration: track.duration,
-                                         artistName: artist.name,
-                                         albumTitle: album.title,
-                                         albumImage: album.image,
-                                         albumId: album.id
-                                       };
-                                     });
-                                   });
-
-                                   if (artist.unreleasedAlbums) {
-                                     artist.unreleasedAlbums.forEach(album => {
-                                       album.tracks.forEach(track => {
-                                         nextIds.add(track.id);
-                                         nextMetadata[track.id] = {
-                                           id: track.id,
-                                           title: track.title,
-                                           duration: track.duration,
-                                           artistName: artist.name,
-                                           albumTitle: album.title,
-                                           albumImage: album.image,
-                                           albumId: album.id
-                                         };
-                                       });
-                                     });
-                                   }
-
-                                   setSelectedTrackIds(nextIds);
-                                   setSelectedTracksMetadata(nextMetadata);
+                                   /*
+                                    * 규칙은 `selectAllTracks` 안에만 있다. 예전에는 여기에
+                                    * 정렬·중복 제거가 그대로 적혀 있어서, 머리말·앨범 단위
+                                    * 선택·월드컵이 각자 다른 셈을 했다.
+                                    */
+                                   const next = selectAllTracks(
+                                     { ids: selectedTrackIds, meta: selectedTracksMetadata },
+                                     artist.name,
+                                     artist.allAlbums || artist.albums,
+                                     artist.unreleasedAlbums ?? []
+                                   );
+                                   setSelectedTrackIds(next.ids);
+                                   setSelectedTracksMetadata(next.meta as Record<string, any>);
+                                   keepSelectingAll(artist.id, true);
                                  }}
                                  className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer"
                                >
@@ -1603,24 +1569,14 @@ export default function TracksPage() {
                                <button
                                  type="button"
                                  onClick={() => {
-                                   const nextIds = new Set(selectedTrackIds);
-                                   const albumsToDeselect = artist.allAlbums || artist.albums;
-                                   albumsToDeselect.forEach(album => {
-                                     if (!album) return;
-                                     album.tracks.forEach(track => {
-                                       nextIds.delete(track.id);
-                                     });
-                                   });
-
-                                   if (artist.unreleasedAlbums) {
-                                     artist.unreleasedAlbums.forEach(album => {
-                                       album.tracks.forEach(track => {
-                                         nextIds.delete(track.id);
-                                       });
-                                     });
-                                   }
-
-                                   setSelectedTrackIds(nextIds);
+                                   const next = clearAllTracks(
+                                     { ids: selectedTrackIds, meta: selectedTracksMetadata },
+                                     artist.allAlbums || artist.albums,
+                                     artist.unreleasedAlbums ?? []
+                                   );
+                                   setSelectedTrackIds(next.ids);
+                                   setSelectedTracksMetadata(next.meta as Record<string, any>);
+                                   keepSelectingAll(artist.id, false);
                                  }}
                                  className="px-3.5 py-1.5 rounded-full border border-navy/15 hover:border-point hover:text-point text-xs font-sans font-bold text-navy bg-white hover:bg-point/5 shadow-sm active:scale-95 transition-all cursor-pointer"
                                >
@@ -1641,7 +1597,14 @@ export default function TracksPage() {
                                     meta={`${album.type} • ${album.year}`}
                                     open={expandedAlbumId === album.id}
                                     onToggle={() => handleAlbumClick(album.id, artist.id)}
-                                    badge={album.tracks.filter(tr => selectedTrackIds.has(tr.id)).length}
+                                    badge={
+                                      /*
+                                       * 펼쳤을 때의 "n곡 선택" 과 같은 셈을 쓴다. 같은 곡이 다른 판으로
+                                       * 들어가 있으면 이 앨범의 트랙 id 로는 안 잡히는데, 카드에 0 이라
+                                       * 적고 줄에는 "전체 해제" 라고 적히면 둘이 서로를 부정한다.
+                                       */
+                                      albumPickedCount({ ids: selectedTrackIds, meta: selectedTracksMetadata }, artist.name, album)
+                                    }
                                     reduceMotion={reduceMotion}
                                     cardRef={cardRef(album.id)}
                                   >
@@ -1672,9 +1635,11 @@ export default function TracksPage() {
                                         album={album}
                                         ids={selectedTrackIds}
                                         meta={selectedTracksMetadata}
-                                        onChange={(next) => {
+                                        onChange={(next, on) => {
                                           setSelectedTrackIds(next.ids);
                                           setSelectedTracksMetadata(next.meta);
+                                          // 앨범을 통째로 뺐다 — 일부만 고르려는 뜻이다.
+                                          if (!on) keepSelectingAll(artist.id, false);
                                         }}
                                         label={t.selectAlbum}
                                         clearLabel={t.clearAlbum}
@@ -1782,7 +1747,14 @@ export default function TracksPage() {
                                     meta={`${album.type} • ${album.year}`}
                                     open={expandedAlbumId === album.id}
                                     onToggle={() => handleAlbumClick(album.id, artist.id)}
-                                    badge={album.tracks.filter(tr => selectedTrackIds.has(tr.id)).length}
+                                    badge={
+                                      /*
+                                       * 펼쳤을 때의 "n곡 선택" 과 같은 셈을 쓴다. 같은 곡이 다른 판으로
+                                       * 들어가 있으면 이 앨범의 트랙 id 로는 안 잡히는데, 카드에 0 이라
+                                       * 적고 줄에는 "전체 해제" 라고 적히면 둘이 서로를 부정한다.
+                                       */
+                                      albumPickedCount({ ids: selectedTrackIds, meta: selectedTracksMetadata }, artist.name, album)
+                                    }
                                     reduceMotion={reduceMotion}
                                     cardRef={cardRef(album.id)}
                                   >
@@ -1798,10 +1770,10 @@ export default function TracksPage() {
                                           album={album}
                                           ids={selectedTrackIds}
                                           meta={selectedTracksMetadata}
-                                          dedupe={false}
-                                          onChange={(next) => {
+                                          onChange={(next, on) => {
                                             setSelectedTrackIds(next.ids);
                                             setSelectedTracksMetadata(next.meta);
+                                            if (!on) keepSelectingAll(artist.id, false);
                                           }}
                                           label={t.selectAlbum}
                                           clearLabel={t.clearAlbum}
