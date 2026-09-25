@@ -214,6 +214,39 @@ try {
     check(!r.ok && now === '이름바꿈', '남이 그 기록을 고치려 하면 거부', `HTTP ${r.status} · 지금 "${now}"`);
   }
 
+  console.log('\n적힌 권한과 실제 권한이 같다');
+  {
+    /*
+     * 응답 코드로 미루어 짐작하지 않고 DB 에 직접 묻는다. PUBLIC EXECUTE 는 함수를
+     * 만들 때 기본으로 붙는데, 지금 당장 더 할 수 있는 일이 없어도 **적힌 것과 실제가
+     * 달라진다** — 나중에 역할을 하나 더 만들면 아무도 의도하지 않은 채 열린다.
+     */
+    const want = {
+      save_sort_challenge_entry:  { public: false, anon: true,  authenticated: true },
+      claim_sort_challenge_entry: { public: false, anon: false, authenticated: true },
+      my_sort_challenge_entry:    { public: false, anon: false, authenticated: true },
+      my_sort_challenge_rooms:    { public: false, anon: false, authenticated: true },
+      together_hash:              { public: false, anon: false, authenticated: false },
+    };
+    const r = await fetch(`${URL_BASE}/rest/v1/rpc/together_privileges_probe`, {
+      method: 'POST',
+      headers: { apikey: SERVICE, authorization: `Bearer ${SERVICE}`, 'content-type': 'application/json' },
+      body: '{}',
+    });
+    if (!r.ok) {
+      console.log(`  [!] 권한을 직접 묻지 못했다(HTTP ${r.status}). 이 항목은 건너뛴다.`);
+    } else {
+      const rows = await r.json();
+      for (const [fn, exp] of Object.entries(want)) {
+        const got = rows.find((x) => x.proname === fn);
+        const ok = got && got.public_exec === exp.public
+          && got.anon_exec === exp.anon && got.auth_exec === exp.authenticated;
+        check(Boolean(ok), `${fn}`,
+          got ? `public ${got.public_exec} · anon ${got.anon_exec} · auth ${got.auth_exec}` : '함수를 못 찾음');
+      }
+    }
+  }
+
   console.log('\n계정 전용 RPC 는 anon 에게 닫혀 있다');
   for (const fn of ['my_sort_challenge_rooms', 'my_sort_challenge_entry', 'claim_sort_challenge_entry']) {
     const r = await rest(`rpc/${fn}`, { method: 'POST', body: {} });

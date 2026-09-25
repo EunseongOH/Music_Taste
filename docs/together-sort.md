@@ -132,6 +132,21 @@ null`)이 있었고, 그 아래 `user_id = coalesce(v_uid, user_id)` 가 부르�
 `fetchMyChallenges` 가 `user_id` 로 걸러 찾던 것은 `my_sort_challenge_rooms()` RPC 로
 옮겼다. 프론트가 그 컬럼을 읽지 않아야 컬럼을 닫을 수 있다.
 
+RPC 실행 권한 (2026-09-25 `has_function_privilege` 로 확인)
+
+| 함수 | PUBLIC | anon | authenticated |
+|---|---|---|---|
+| `save_sort_challenge_entry` | ✗ | **○** | ○ |
+| `claim_sort_challenge_entry` | ✗ | ✗ | ○ |
+| `my_sort_challenge_entry` | ✗ | ✗ | ○ |
+| `my_sort_challenge_rooms` | ✗ | ✗ | ○ |
+| `together_hash` | ✗ | ✗ | ✗ |
+
+`save` 의 anon 만 열려 있다 — 익명 참여가 같이 소트하기의 전제다. PUBLIC 은 함수를
+만들 때 기본으로 붙는 것이라 걷었다(`20260925110000`). 지금 당장 누가 더 할 수 있는
+일은 없지만, 적힌 것과 실제가 다르면 나중에 역할을 하나 더 만들 때 아무도 의도하지
+않은 채 열린다.
+
 검사: `npm run check:db` (`toss/baseline/together-db-security-check.mjs`).
 적용 **전에 먼저 돌려 7건이 빨갛게 뜨는 것을 확인**했다 — 못 잡는 검사는 검사가 아니다.
 
