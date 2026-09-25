@@ -69,3 +69,6 @@ The connected Figma environment currently does not expose Pretendard or Wanted S
 ## Files
 - `index.html`: visual HTML reference
 - `styles.css`: CSS token/component snapshot
+
+## Consistency audit
+- [UI consistency audit](./consistency-audit.md) — full active-route review, duplicate-role findings, intentional exceptions, and proposed v1.1 migration order.
