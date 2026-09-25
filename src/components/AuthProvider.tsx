@@ -74,10 +74,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * 닉네임 자동 생성과 한 effect 에 섞지 않는다. 책임이 다르고, 저쪽이 실패해도
    * 이쪽은 돌아야 한다. 같은 로그인에서 `user` 가 여러 번 갱신되므로 이 effect 도
    * 여러 번 도는데, 옮기는 함수가 겹쳐 돌지 않게 스스로 묶는다.
+   *
+   * **누구로 옮길지는 여기서 정한다.** 옮기는 함수가 세션을 다시 추측하지 않도록, 이
+   * 경계에서 확인한 `user.id` 를 넘긴다. 그 계정의 줄과 주인 없는(게스트) 줄만 간다.
    */
   useEffect(() => {
     if (isLoading || !user) return;
-    void flushPendingListenLater().then((r) => {
+    void flushPendingListenLater(user.id).then((r) => {
       // 실패해도 적어 둔 것은 그대로다. 다음 기회에 다시 옮긴다.
       if (r.status === "failed") console.error("[listen_later] 옮기지 못했어요:", r.error);
     });

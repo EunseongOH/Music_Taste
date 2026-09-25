@@ -494,9 +494,12 @@ export default function WorldCupPage() {
        *
        * 옮기기를 기다리지 않는다 — 목록 저장이 실패해도 월드컵 진행은 막지 않는다는
        * 성질은 그대로다. 다만 실패가 뜻을 지우지는 못한다.
+       *
+       * 누구의 뜻인지 함께 적는다 — 로그인했으면 그 계정, 게스트면 주인 없음.
        */
-      rememberPendingListenLater(track);
-      void flushPendingListenLater();
+      const ownerUserId = user?.id ?? null;
+      rememberPendingListenLater(track, ownerUserId);
+      if (ownerUserId) void flushPendingListenLater(ownerUserId);
       advance(opponent, { removed: true });
     }, REMOVE_UNDO_MS);
   };
