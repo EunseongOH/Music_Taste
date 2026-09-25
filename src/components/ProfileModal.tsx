@@ -138,7 +138,17 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
       sessionStorage.removeItem("worldcup_tracks");
       sessionStorage.removeItem("worldcup_progress");
       sessionStorage.removeItem("selected_genres");
-      
+      /*
+       * 방금 끝낸 판을 결과 화면에 건네는 자리. 로그아웃한 뒤 같은 기기의 다음 사람이
+       * 결과 화면을 열면 앞 사람의 순위가 그 사람 것처럼 보인다.
+       * (같이 소트하기의 쪽지 `together_completion_v1` 은 지우지 않는다 — 끝낸 사람이
+       * 적혀 있어 다른 사람으로는 저장되지 않고, 끝낸 사람이 돌아오면 이어서 저장한다.)
+       */
+      sessionStorage.removeItem("worldcup_ranking");
+      sessionStorage.removeItem("worldcup_skipped_count");
+      sessionStorage.removeItem("worldcup_picks");
+      sessionStorage.removeItem("worldcup_run_origin");
+
       localStorage.removeItem("worldcup_tracks");
       localStorage.removeItem("worldcup_progress");
       localStorage.removeItem("selectedArtists");
