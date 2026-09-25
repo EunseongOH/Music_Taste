@@ -272,6 +272,26 @@ export default function LoginModal({ isOpen, onClose, onSuccess, locale: propLoc
       return;
     }
 
+    /*
+     * 가입은 됐는데 **세션이 없을 수 있다.**
+     *
+     * Supabase 에서 이메일 확인을 켜 두면 `data.user` 만 오고 `data.session` 은 null 이다.
+     * 그때 로그인 성공으로 처리하면 창은 닫히는데 계정은 서지 않는다 — 최애곡 소트
+     * 결과 화면에서는 저장을 이어가려고 적어 둔 뜻이 영영 실행되지 않아, 만들어 둔
+     * 순위가 조용히 사라진다.
+     *
+     * (2026-09-25 확인: 이 프로젝트는 auto-confirm 이라 지금은 바로 세션이 온다.
+     *  대시보드에서 확인 메일을 켜는 날 조용히 깨지지 않게 갈라 둔다.)
+     */
+    if (!data.session) {
+      setSignupError(
+        locale === "ko"
+          ? "가입은 됐어요. 메일로 보낸 링크로 이메일을 확인한 뒤 로그인해 주세요."
+          : "Account created. Please confirm your email from the link we sent, then sign in."
+      );
+      return;
+    }
+
     // Success
     sessionStorage.setItem("isGuest", "false");
     sessionStorage.setItem("userNickname", signupNickname);
