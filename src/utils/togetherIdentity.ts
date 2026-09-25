@@ -1,6 +1,6 @@
 "use client";
 
-import { safeLocalStorage } from "@/utils/storage";
+import { safeLocalStorage, safeSessionStorage } from "./storage.ts";
 
 /**
  * 같이 소트하기의 **참여 신원**.
@@ -184,7 +184,7 @@ export interface PendingClaim {
 
 function readPending(): PendingClaim | null {
   try {
-    const raw = sessionStorage.getItem(PENDING);
+    const raw = safeSessionStorage.getItem(PENDING);
     if (!raw) return null;
     // 이 칸이 생기기 전에는 방 id 문자열만 적었다. 그것도 읽는다.
     if (!raw.startsWith("{")) return { challengeId: raw, ownerUserId: null };
@@ -197,7 +197,7 @@ function readPending(): PendingClaim | null {
 
 export function rememberPendingClaim(challengeId: string): void {
   try {
-    sessionStorage.setItem(PENDING, JSON.stringify({ challengeId, ownerUserId: null } satisfies PendingClaim));
+    safeSessionStorage.setItem(PENDING, JSON.stringify({ challengeId, ownerUserId: null } satisfies PendingClaim));
   } catch {
     /* 저장 못 하면 이번 로그인에서는 못 붙인다. 화면은 기기 키로 계속 보인다. */
   }
@@ -220,7 +220,7 @@ export function bindPendingClaim(userId: string): string | null {
   if (p.ownerUserId === userId) return p.challengeId;
   if (p.ownerUserId !== null) return null;   // 다른 계정이 집어 간 뜻이다
   try {
-    sessionStorage.setItem(PENDING, JSON.stringify({ challengeId: p.challengeId, ownerUserId: userId } satisfies PendingClaim));
+    safeSessionStorage.setItem(PENDING, JSON.stringify({ challengeId: p.challengeId, ownerUserId: userId } satisfies PendingClaim));
   } catch {
     return null;
   }
@@ -232,7 +232,7 @@ export function clearPendingClaim(challengeId: string): void {
   const p = readPending();
   if (!p || p.challengeId !== challengeId) return;
   try {
-    sessionStorage.removeItem(PENDING);
+    safeSessionStorage.removeItem(PENDING);
   } catch {
     /* 못 지워도 다음에 이미 내 것임을 확인하면 그때 다시 지운다 */
   }

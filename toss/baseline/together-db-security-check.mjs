@@ -214,6 +214,92 @@ try {
     check(!r.ok && now === '이름바꿈', '남이 그 기록을 고치려 하면 거부', `HTTP ${r.status} · 지금 "${now}"`);
   }
 
+  console.log('\n옛 클라이언트(v1)가 그대로 동작한다');
+  const rowOf = async (pk) => {
+    const r = await rest(`sort_challenge_entries?select=ranking,skipped_count,skipped_track_ids&participant_key=eq.${pk}`, { key: SERVICE });
+    return (await r.json())[0];
+  };
+  const saveV1 = (key, token, body = {}) =>
+    rest('rpc/save_sort_challenge_entry', { method: 'POST', body: {
+      p_challenge_id: room.id, p_participant_key: key, p_claim_token: token,
+      p_nickname: '옛클라', p_ranking: [{ id: 'A' }], p_skipped_count: 3, p_imported: false, ...body } });
+  const saveV2 = (key, token, skipped, body = {}) =>
+    rest('rpc/save_sort_challenge_entry_v2', { method: 'POST', body: {
+      p_challenge_id: room.id, p_participant_key: key, p_claim_token: token,
+      p_nickname: '새클라', p_ranking: [{ id: 'A' }, { id: 'B' }],
+      p_skipped_track_ids: skipped, p_imported: false, ...body } });
+  {
+    const k = `seccheck_v1_${uuid()}`;
+    const r = await saveV1(k, `s-${uuid()}`);
+    const row = await rowOf(k);
+    check(r.ok, 'v1 호출이 계속 된다', `HTTP ${r.status}`);
+    check(row?.skipped_count === 3, 'v1 이 보낸 개수는 보존', String(row?.skipped_count));
+    check(JSON.stringify(row?.skipped_track_ids) === '[]', 'v1 저장은 목록을 [] 로 둔다', JSON.stringify(row?.skipped_track_ids));
+  }
+
+  console.log('\nv2 가 어떤 곡을 몰랐는지 저장한다');
+  const K2 = `seccheck_v2_${uuid()}`;
+  const S2 = `s-${uuid()}`;
+  {
+    const r = await saveV2(K2, S2, ['D', 'E']);
+    const row = await rowOf(K2);
+    check(r.ok, 'v2 저장 성공', `HTTP ${r.status}`);
+    check(JSON.stringify(row?.skipped_track_ids) === '["D","E"]', '곡 목록이 그대로', JSON.stringify(row?.skipped_track_ids));
+    check(row?.skipped_count === 2, '개수는 서버가 목록에서 센다', String(row?.skipped_count));
+  }
+  {
+    // 다시 소트하면 지난 판의 목록이 남으면 안 된다.
+    await saveV2(K2, S2, ['C']);
+    const row = await rowOf(K2);
+    check(JSON.stringify(row?.skipped_track_ids) === '["C"]', '재소트하면 새 목록만', JSON.stringify(row?.skipped_track_ids));
+    check(row?.skipped_count === 1, '개수도 따라온다', String(row?.skipped_count));
+  }
+  {
+    // 옛 클라이언트가 그 행을 다시 쓰면 목록을 비운다 — 남기면 새 순위에 붙어 거짓이 된다.
+    await saveV1(K2, S2);
+    const row = await rowOf(K2);
+    check(JSON.stringify(row?.skipped_track_ids) === '[]', 'v1 이 덮어쓰면 목록을 비운다', JSON.stringify(row?.skipped_track_ids));
+  }
+  {
+    const r = await saveV2(`seccheck_bad_${uuid()}`, `s-${uuid()}`, { nope: 1 });
+    check(!r.ok, '배열이 아닌 목록은 거부', `HTTP ${r.status}`);
+  }
+
+  console.log('\n민감 컬럼 경계는 새 컬럼이 생겨도 그대로');
+  {
+    const r = await rest(`sort_challenge_entries?select=skipped_track_ids&challenge_id=eq.${room.id}`);
+    check(r.ok, 'skipped_track_ids 는 읽힌다', `HTTP ${r.status}`);
+  }
+
+  console.log('\n합쳐진 기록이 모르는 곡을 들고 있을 수 있다');
+  {
+    /*
+     * `claim_sort_challenge_entry` 자체는 여기서 못 부른다 — `auth.uid()` 로 도는
+     * 함수라 anon 키로는 로그인한 사람이 될 수 없다. 흉내만 내는 검사는 함수를
+     * 지켜 주지 못하므로 **그런 척하지 않는다.**
+     *
+     * 여기서 지키는 것은 그 아래 경계다: 합쳐진 뒤의 행이 세 값을 모두 들고 있을 수
+     * 있는지(컬럼이 살아 있고 읽히는지). claim 함수가 그 값을 옮기는지는 마이그레이션
+     * 본문과 SQL 확인에 있고, 자동 검사 범위 밖이라고 보고에 적는다.
+     */
+    const merged = `seccheck_merged_${uuid()}`;
+    await rest('sort_challenge_entries', {
+      key: SERVICE, method: 'POST', prefer: 'return=representation',
+      body: { challenge_id: room2.id, participant_key: merged, nickname: '합쳐진기록',
+              ranking: [{ id: 'A' }, { id: 'B' }], skipped_count: 2, skipped_track_ids: ['D', 'E'],
+              user_id: VICTIM, claim_token_hash: `hash-${uuid()}` },
+    });
+    const row = await rowOf(merged);
+    check(row?.skipped_count === 2 && JSON.stringify(row?.skipped_track_ids) === '["D","E"]',
+      '계정 기록이 순위·개수·모르는 곡을 함께 들고 있다',
+      `${row?.skipped_count} · ${JSON.stringify(row?.skipped_track_ids)}`);
+
+    const pub = await rest(`sort_challenge_entries?select=skipped_track_ids&participant_key=eq.${merged}`);
+    const got = pub.ok ? await pub.json() : [];
+    check(pub.ok && JSON.stringify(got[0]?.skipped_track_ids) === '["D","E"]',
+      '참가자 화면에서도 그 목록이 읽힌다', JSON.stringify(got[0]?.skipped_track_ids));
+  }
+
   console.log('\n적힌 권한과 실제 권한이 같다');
   {
     /*
@@ -223,6 +309,10 @@ try {
      */
     const want = {
       save_sort_challenge_entry:  { public: false, anon: true,  authenticated: true },
+      // v2 도 v1 과 같다 — 익명 참여가 같이 소트하기의 전제다.
+      save_sort_challenge_entry_v2: { public: false, anon: true,  authenticated: true },
+      // 저장 규칙의 속. 클라이언트는 어떤 역할로도 못 부른다.
+      _save_sort_challenge_entry: { public: false, anon: false, authenticated: false },
       claim_sort_challenge_entry: { public: false, anon: false, authenticated: true },
       my_sort_challenge_entry:    { public: false, anon: false, authenticated: true },
       my_sort_challenge_rooms:    { public: false, anon: false, authenticated: true },
