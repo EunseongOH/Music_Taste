@@ -8,7 +8,7 @@ import { safeSessionStorage } from "@/utils/storage";
 import * as platform from "@/utils/platform";
 import { saveCompletedResult } from "@/utils/worldcupDb";
 import { completionFor, markCompletion, type TogetherCompletion } from "@/utils/togetherCompletion";
-import { buildPairwiseMatches, groupMatchRate, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
+import { buildPairwiseMatches, groupMatchRate, inferLegacySkipped, matchRate, otherKey, partnersOf, pickHighlightEdges } from "@/utils/togetherMatch";
 import { personName } from "@/utils/togetherName";
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import { normalizeEntriesForViewer, rememberPendingClaim, resolveSelfIdentity, takePendingClaim } from "@/utils/togetherIdentity";
@@ -57,7 +57,8 @@ function processCompletion(
           // (예전에는 프로필 닉네임만 봐서 전부 "익명 리스너"로 나왔다).
           nickname: user?.user_metadata?.nickname ?? rememberedNickname() ?? null,
           ranking: ids,
-          skippedCount: c.skipped,
+          // 이 방의 곡만 싣는다. 순위와 같은 기준이다.
+          skippedTrackIds: c.skippedTrackIds.filter((id) => trackIds.has(id)),
         });
       }
       // 저장했거나, 저장할 순위가 아니다(곡 1개 이하). 어느 쪽이든 다시 하지 않는다.
@@ -373,6 +374,17 @@ export default function TogetherResultPage() {
   }
 
   const byId = new Map(challenge.tracks.map((t) => [t.id, t]));
+  const challengeTrackIds = challenge.tracks.map((t) => t.id);
+  /*
+   * 그 사람이 **어떤 곡을 몰랐는가.** 적혀 있으면 그대로 쓰고, 적히기 전의 기록은
+   * 셀 수 있을 때만 되살린다(`inferLegacySkipped`). 셀 수 없으면 아무 곡도
+   * "모르는 곡" 이라고 하지 않는다 — 틀린 표시는 없는 표시보다 나쁘다.
+   */
+  const skippedOf = (e: { ranking: string[]; skipped_count: number; skipped_track_ids?: string[] } | null | undefined) => {
+    if (!e) return [];
+    if (Array.isArray(e.skipped_track_ids) && e.skipped_track_ids.length > 0) return e.skipped_track_ids;
+    return inferLegacySkipped(e.ranking, e.skipped_count ?? 0, challengeTrackIds);
+  };
   const myTracks = mine.ranking.map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
   const link = typeof window === "undefined" ? "" : `${window.location.origin}/together/${challenge.code}`;
 
@@ -474,6 +486,9 @@ export default function TogetherResultPage() {
           myKey={key}
           myRanking={mine.ranking}
           theirRanking={selectedEntry.ranking}
+          mySkippedIds={skippedOf(mine)}
+          theirSkippedIds={skippedOf(selectedEntry)}
+          challengeTrackIds={challengeTrackIds}
           theirName={personName(selectedEntry.nickname)}
           byId={byId}
         />

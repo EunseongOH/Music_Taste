@@ -6,8 +6,7 @@
 import {
   matchRate, averageRate, makeCode,
   buildPairwiseMatches, groupMatchRate, pickHighlightEdges, partnersOf,
-  getTopK, getSharedTopTracks, buildRankComparison, commonOrders,
-} from '../../src/utils/togetherMatch.ts';
+  getTopK, getSharedTopTracks, buildRankComparison, commonOrders, buildFullRankComparison, inferLegacySkipped } from '../../src/utils/togetherMatch.ts';
 import { withJosa, josaOf } from '../../src/utils/josa.ts';
 import { personName } from '../../src/utils/togetherName.ts';
 
@@ -286,6 +285,83 @@ console.log('\n조사 (닉네임 뒤)');
   check(personName(null, true) === '나', '이름이 없어도 내 자리는 "나"');
   check(personName('Crongcrong') === 'Crongcrong', '남은 닉네임 그대로');
   check(personName('  ') === '익명 리스너' && personName(null) === '익명 리스너', '이름이 없는 남은 익명 리스너');
+}
+
+console.log('\n모르는 곡은 순위가 아니다 — 전체 비교');
+{
+  const room = ['A', 'B', 'C', 'D'];
+  const cell = (s) => (s.status === 'ranked' ? String(s.rank) : s.status === 'unknown' ? '모르는 곡' : '기록 없음');
+  const table = (rows) => rows.map((r) => `${cell(r.mine)}|${r.id}|${cell(r.theirs)}`).join(' / ');
+
+  // 1·2. 한쪽만 몰랐다
+  {
+    const rows = buildFullRankComparison({
+      myRanking: ['A', 'B', 'C'], mySkippedIds: ['D'],
+      theirRanking: ['C', 'D', 'A', 'B'], theirSkippedIds: [],
+      challengeTrackIds: room,
+    });
+    check(table(rows) === '1|A|3 / 2|B|4 / 3|C|1 / 모르는 곡|D|2', '내가 모른 곡은 내 칸만 "모르는 곡"', table(rows));
+  }
+  {
+    const rows = buildFullRankComparison({
+      myRanking: ['A', 'B'], mySkippedIds: [],
+      theirRanking: ['A'], theirSkippedIds: ['B'],
+      challengeTrackIds: ['A', 'B'],
+    });
+    check(table(rows) === '1|A|1 / 2|B|모르는 곡', '상대가 모른 곡은 상대 칸만', table(rows));
+  }
+  // 3. 둘 다 몰랐다
+  {
+    const rows = buildFullRankComparison({
+      myRanking: ['A', 'B'], mySkippedIds: ['C', 'D'],
+      theirRanking: ['B', 'A'], theirSkippedIds: ['C', 'D'],
+      challengeTrackIds: room,
+    });
+    check(table(rows) === '1|A|2 / 2|B|1 / 모르는 곡|C|모르는 곡 / 모르는 곡|D|모르는 곡',
+      '둘 다 모른 곡은 양쪽 다 "모르는 곡"', table(rows));
+  }
+  // 7. 가짜 꼴찌를 붙이지 않는다
+  {
+    const rows = buildFullRankComparison({
+      myRanking: ['A'], mySkippedIds: ['B', 'C'],
+      theirRanking: ['A'], theirSkippedIds: [],
+      challengeTrackIds: ['A', 'B', 'C'],
+    });
+    const ranks = rows.filter((r) => r.mine.status === 'ranked').map((r) => r.mine.rank);
+    check(ranks.join(',') === '1', '모르는 곡에는 등수가 없다', ranks.join(','));
+    check(rows.map((r) => r.id).join(',') === 'A,B,C', '내 순위 -> 모르는 곡 -> 기록 없음 순', rows.map((r) => r.id).join(','));
+  }
+  // 기록 없음은 추측하지 않는다
+  {
+    const rows = buildFullRankComparison({
+      myRanking: ['A'], mySkippedIds: [],
+      theirRanking: ['A', 'B'], theirSkippedIds: [],
+      challengeTrackIds: ['A', 'B'],
+    });
+    check(table(rows) === '1|A|1 / 기록 없음|B|2', '뺀 목록에 없으면 "기록 없음"', table(rows));
+  }
+}
+
+console.log('\n4·5·6. 일치율·TOP·가장 갈린 곡은 모르는 곡을 안 쓴다');
+{
+  // 두 사람이 A·B 만 줄 세우고 C·D 는 둘 다 몰랐다. C·D 가 점수를 움직이면 안 된다.
+  const bare = matchRate(['A', 'B'], ['B', 'A']);
+  const withUnknown = matchRate(['A', 'B'], ['B', 'A']);
+  check(bare.rate === withUnknown.rate && bare.common === 2, '모르는 곡은 분모에 없다',
+    `${bare.rate}% · ${bare.common}곡`);
+  // 꼴찌로 붙였다면 이렇게 됐을 값 — 달라야 한다(즉 우리는 그렇게 하지 않는다).
+  const faked = matchRate(['A', 'B', 'C', 'D'], ['B', 'A', 'C', 'D']);
+  check(faked.common !== bare.common, '꼴찌로 붙이면 값이 달라진다(그래서 안 붙인다)',
+    `${faked.common} vs ${bare.common}`);
+}
+
+console.log('\n8. 옛 기록은 셀 수 있을 때만 되살린다');
+{
+  const room = ['A', 'B', 'C', 'D'];
+  check(inferLegacySkipped(['A', 'B'], 2, room).join(',') === 'C,D', '개수가 딱 맞으면 나머지가 뺀 곡', inferLegacySkipped(['A', 'B'], 2, room).join(','));
+  check(inferLegacySkipped(['A', 'B'], 1, room).length === 0, '개수가 어긋나면 추측하지 않는다');
+  check(inferLegacySkipped(['A', 'B'], 0, room).length === 0, '뺀 적이 없으면 빈 목록');
+  check(inferLegacySkipped(['A', 'Z'], 2, room).length === 0, '이 방의 곡이 아닌 순위가 섞였으면 추측하지 않는다');
 }
 
 console.log(failed === 0 ? '\n결과: 통과' : `\n결과: 실패 ${failed}건`);

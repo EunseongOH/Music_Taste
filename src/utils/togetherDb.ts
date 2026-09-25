@@ -31,9 +31,14 @@ export interface ChallengeEntry {
   challenge_id: string;
   participant_key: string;
   nickname: string | null;
-  /** 곡 id 배열(1위부터) */
+  /** 곡 id 배열(1위부터). **모르는 곡은 여기 없다.** */
   ranking: string[];
   skipped_count: number;
+  /**
+   * "모르는 곡" 으로 뺀 곡 id. 순위가 아니다 — 일치율 계산에 넣지 않는다.
+   * 이 칸이 생기기 전의 기록은 `[]` 다(어떤 곡인지 **모르는 것**이지 없는 것이 아니다).
+   */
+  skipped_track_ids: string[];
   /**
    * 직접 소트한 것이 아니라 **이전 취향표를 불러온** 기록인가.
    * 방장이 내 취향표로 방을 만들 때만 true 다. 다시 소트하면 false 로 덮인다.
@@ -90,7 +95,7 @@ export async function fetchEntries(challengeId: string): Promise<ChallengeEntry[
    */
   const { data, error } = await createClient()
     .from("sort_challenge_entries")
-    .select("id,challenge_id,participant_key,nickname,ranking,skipped_count,imported,created_at")
+    .select("id,challenge_id,participant_key,nickname,ranking,skipped_count,skipped_track_ids,imported,created_at")
     .eq("challenge_id", challengeId)
     .order("created_at", { ascending: true });
   if (error) {
@@ -202,17 +207,23 @@ export async function saveEntry(input: {
   challengeId: string;
   nickname: string | null;
   ranking: string[];
-  skippedCount: number;
+  /**
+   * "모르는 곡" 으로 뺀 곡 id. **개수는 보내지 않는다** — 서버가 이 목록에서 센다.
+   * 둘을 따로 받으면 `count=3` 인데 목록은 한 곡인 상태를 만들 수 있다.
+   *
+   * 불러온 취향표(imported)처럼 뺀 적이 없는 기록은 빈 배열이다. 없는 것을 지어내지 않는다.
+   */
+  skippedTrackIds: readonly string[];
   /** 이전 취향표를 불러온 것이면 true. 직접 소트한 저장은 반드시 false 로 덮어야 한다. */
   imported?: boolean;
 }): Promise<string | null> {
-  const { data, error } = await createClient().rpc("save_sort_challenge_entry", {
+  const { data, error } = await createClient().rpc("save_sort_challenge_entry_v2", {
     p_challenge_id: input.challengeId,
     p_participant_key: deviceParticipantKey(),
     p_claim_token: deviceClaimSecret(),
     p_nickname: input.nickname,
     p_ranking: input.ranking,
-    p_skipped_count: input.skippedCount,
+    p_skipped_track_ids: [...input.skippedTrackIds],
     p_imported: input.imported ?? false,
   });
   if (error) {

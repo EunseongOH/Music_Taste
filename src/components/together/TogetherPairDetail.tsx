@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import type { PairMatch } from "@/utils/togetherMatch";
-import { buildRankComparison, commonOrders, getSharedTopTracks, getTopK } from "@/utils/togetherMatch";
+import { buildFullRankComparison, commonOrders, getSharedTopTracks, getTopK, type FullRankRow, type TrackStance } from "@/utils/togetherMatch";
 import { Cover, textLink } from "@/components/space/SpaceUI";
 import { withJosa } from "@/utils/josa";
 
@@ -25,6 +25,9 @@ export default function TogetherPairDetail({
   myKey,
   myRanking,
   theirRanking,
+  mySkippedIds = [],
+  theirSkippedIds = [],
+  challengeTrackIds = [],
   theirName,
   byId,
 }: {
@@ -32,6 +35,11 @@ export default function TogetherPairDetail({
   myKey: string;
   myRanking: string[];
   theirRanking: string[];
+  /** "모르는 곡" 으로 뺀 곡. **순위가 아니다** — 일치율에는 들어가지 않는다. */
+  mySkippedIds?: string[];
+  theirSkippedIds?: string[];
+  /** 방의 곡 순서. 모르는 곡을 나열하는 기준이 된다. */
+  challengeTrackIds?: string[];
   theirName: string;
   byId: Map<string, DetailTrack>;
 }) {
@@ -41,7 +49,17 @@ export default function TogetherPairDetail({
     // 한 사람을 골라 보는 자리라 **그 사람과 겹친 곡 안에서** 센다.
     const shared = commonOrders(myRanking, theirRanking);
     const k = getTopK(pair.common);
-    const rows = buildRankComparison(myRanking, theirRanking);
+    /*
+     * **보여 주는 목록만** 모르는 곡까지 담는다. 위의 `commonOrders`·`getSharedTopTracks`
+     * 와 `pair.biggestGap` 은 그대로다 — 둘 다 순위를 매긴 곡으로만 잰다.
+     */
+    const rows = buildFullRankComparison({
+      myRanking,
+      mySkippedIds,
+      theirRanking,
+      theirSkippedIds,
+      challengeTrackIds,
+    });
     return {
       topK: k,
       sharedTop: getSharedTopTracks(shared.mine, shared.theirs, k),
@@ -49,7 +67,7 @@ export default function TogetherPairDetail({
       // 순위 표시는 각자의 전체 소트 기준이다(pair.biggestGap 과 같은 규칙).
       gap: pair.biggestGap,
     };
-  }, [myRanking, theirRanking, pair]);
+  }, [myRanking, theirRanking, mySkippedIds, theirSkippedIds, challengeTrackIds, pair]);
 
   if (!pair.comparable) {
     return (
@@ -123,7 +141,12 @@ export default function TogetherPairDetail({
         <ul className="flex flex-col">
           {shown.map((row) => {
             const t = byId.get(row.id);
-            const worst = gap?.id === row.id;
+            /* 가장 갈린 곡은 **둘 다 순위를 매긴 곡**에서만 나온다(pair.biggestGap). */
+            const worst = gap?.id === row.id && row.mine.status === "ranked" && row.theirs.status === "ranked";
+            const gapText =
+              worst && row.mine.status === "ranked" && row.theirs.status === "ranked"
+                ? `${Math.abs(row.mine.rank - row.theirs.rank)}칸 차이`
+                : "";
             return (
               <li
                 key={row.id}
@@ -131,16 +154,12 @@ export default function TogetherPairDetail({
                    숫자 사이에 차이도 함께 적는다. */
                 className={`flex items-center gap-3 py-2 -mx-2 px-2 rounded-lg ${worst ? "bg-navy/5" : ""}`}
               >
-                <span className="type-body-strong font-num tabular-nums text-navy w-7 text-center shrink-0">
-                  {row.mineRank}
-                </span>
+                <Stance of={row.mine} />
                 <span className="flex-1 min-w-0">
                   <span className="block type-body text-navy truncate">{t?.title ?? row.id}</span>
-                  {worst && <span className="block type-caption text-navy/70">{row.gap}칸 차이</span>}
+                  {worst && <span className="block type-caption text-navy/70">{gapText}</span>}
                 </span>
-                <span className="type-body-strong font-num tabular-nums text-navy w-7 text-center shrink-0">
-                  {row.theirRank}
-                </span>
+                <Stance of={row.theirs} />
               </li>
             );
           })}
@@ -153,6 +172,30 @@ export default function TogetherPairDetail({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * 한 칸에 적는 그 사람의 처지. 숫자 / "모르는 곡" / "기록 없음".
+ *
+ * **모르는 곡에 숫자를 주지 않는다.** 18·19위 같은 등수를 붙이면 "싫어서 낮다" 는
+ * 뜻이 생기는데, 그 사람은 그 곡을 평가한 적이 없다. 오류가 아니므로 경고색도 쓰지 않는다.
+ *
+ * 폭은 고정하지 않는다 — 숫자 자리에 글자가 들어오면 잘린다.
+ */
+function Stance({ of }: { of: TrackStance }) {
+  if (of.status === "ranked") {
+    return (
+      <span className="type-body-strong font-num tabular-nums text-navy w-7 text-center shrink-0">
+        {of.rank}
+      </span>
+    );
+  }
+  const label = of.status === "unknown" ? "모르는 곡" : "기록 없음";
+  return (
+    <span className="type-caption text-navy/50 text-center shrink-0 whitespace-nowrap min-w-[3.5rem]">
+      {label}
+    </span>
   );
 }
 

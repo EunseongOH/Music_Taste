@@ -628,7 +628,8 @@ export default function TogetherNewPage() {
         challengeId: made.id,
         nickname: user?.user_metadata?.nickname ?? name ?? rememberedNickname() ?? null,
         ranking: chosen.map((t) => t.id),
-        skippedCount: 0,
+        // 불러온 취향표에는 "모르는 곡" 으로 뺀 행동이 없다. 없는 것을 지어내지 않는다.
+        skippedTrackIds: [],
         // 직접 소트한 게 아니라 불러온 것이다. 초대 화면이 이걸 보고 다르게 말한다.
         imported: true,
       });

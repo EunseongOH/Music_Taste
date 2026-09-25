@@ -37,6 +37,13 @@ export interface TogetherCompletion extends TogetherRun {
   ranking: string[];
   /** "모르는 곡" 으로 뺀 수. 16곡 기준을 셀 때 더한다. */
   skipped: number;
+  /**
+   * **어떤 곡을** 몰랐는가. 순위가 아니다 — `ranking` 에 섞지 않는다.
+   *
+   * 옛 쪽지에는 이 칸이 없다. 없으면 빈 배열로 읽는다 — 어느 곡인지 모르는 것과
+   * "없다" 는 다르므로, 없는 것을 추측해 채우지 않는다.
+   */
+  skippedTrackIds: string[];
   /** 판을 끝낸 계정. 게스트면 null. 다른 계정의 판을 저장하지 않으려고 적는다. */
   ownerUserId: string | null;
   completedAt: string;
@@ -84,7 +91,7 @@ export function startTogetherRun(challenge: { id: string; code: string }): Toget
  */
 export function recordTogetherCompletion(input: {
   ranking: readonly string[];
-  skipped: number;
+  skippedTrackIds: readonly string[];
   ownerUserId: string | null;
 }): TogetherCompletion | null {
   const run = readJson<TogetherRun>(RUN_KEY);
@@ -94,7 +101,9 @@ export function recordTogetherCompletion(input: {
     code: run.code,
     runId: run.runId,
     ranking: [...input.ranking],
-    skipped: input.skipped,
+    // 개수는 목록에서 센다. 둘이 어긋날 길을 만들지 않는다.
+    skipped: input.skippedTrackIds.length,
+    skippedTrackIds: [...input.skippedTrackIds],
     ownerUserId: input.ownerUserId,
     completedAt: new Date().toISOString(),
     entrySaved: false,
@@ -123,7 +132,8 @@ export function completionFor(challengeId: string, userId: string | null): Toget
   if (!c || c.challengeId !== challengeId || !Array.isArray(c.ranking) || !c.runId) return null;
   const owner = c.ownerUserId ?? null;
   if (owner !== null && owner !== userId) return null;
-  return c;
+  // 이 칸이 없던 때의 쪽지도 읽는다. 없으면 빈 배열 — 모르는 곡을 추측하지 않는다.
+  return { ...c, skippedTrackIds: Array.isArray(c.skippedTrackIds) ? c.skippedTrackIds : [] };
 }
 
 /**

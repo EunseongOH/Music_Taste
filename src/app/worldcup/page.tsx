@@ -448,7 +448,8 @@ export default function WorldCupPage() {
            if (isChallenge) {
              recordTogetherCompletion({
                ranking: finalRanking.map((t) => t.id),
-               skipped: newSkipped.length,
+               // **어떤 곡을** 몰랐는지 그대로 넘긴다. 가짜 꼴찌로 순위에 붙이지 않는다.
+               skippedTrackIds: newSkipped.map((t) => t.id),
                ownerUserId: user?.id ?? null,
              });
            }

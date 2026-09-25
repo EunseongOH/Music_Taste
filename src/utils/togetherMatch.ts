@@ -179,6 +179,110 @@ export function buildRankComparison(mine: string[], theirs: string[]): RankRow[]
   return rows;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * 보여 주기용 — "모르는 곡" 까지 담은 전체 비교
+ *
+ * **일치율 계산은 이 아래 어디에서도 건드리지 않는다.** 위의 `matchRate` ·
+ * `commonOrders` · `getSharedTopTracks` · `buildRankComparison` 은 둘 다 순위를 매긴
+ * 곡만 본다. 모르는 곡은 취향 차이가 아니라 **평가하지 않은 것**이다.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** 한 사람이 그 곡을 어떻게 했는가. */
+export type TrackStance =
+  /** 순위를 매겼다 */
+  | { status: "ranked"; rank: number }
+  /** "모르는 곡" 으로 뺐다고 **명시적으로 적혀 있다** */
+  | { status: "unknown" }
+  /** 순위에도 없고 뺀 목록에도 없다. 무엇을 했는지 모른다 — 추측하지 않는다 */
+  | { status: "missing" };
+
+export interface FullRankRow {
+  id: string;
+  mine: TrackStance;
+  theirs: TrackStance;
+}
+
+function stance(rank: Map<string, number>, skipped: Set<string>, id: string): TrackStance {
+  const r = rank.get(id);
+  if (r !== undefined) return { status: "ranked", rank: r };
+  if (skipped.has(id)) return { status: "unknown" };
+  return { status: "missing" };
+}
+
+/**
+ * 옛 기록의 "모르는 곡" 을 **셀 수 있을 때만** 되살린다.
+ *
+ * `skipped_track_ids` 가 생기기 전 기록에는 개수(`skipped_count`)만 있다. 순위에 없는
+ * 곡이 그 개수와 **정확히** 같고 순위가 전부 이 방의 곡일 때만, 나머지가 뺀 곡이라고
+ * 말할 수 있다. 하나라도 어긋나면 **아무 곡도 "모르는 곡" 이라고 하지 않는다** —
+ * 틀린 표시는 없는 표시보다 나쁘다.
+ */
+export function inferLegacySkipped(
+  ranking: readonly string[],
+  skippedCount: number,
+  challengeTrackIds: readonly string[]
+): string[] {
+  if (skippedCount <= 0) return [];
+  const inRoom = new Set(challengeTrackIds);
+  if (!ranking.every((id) => inRoom.has(id))) return [];
+  const ranked = new Set(ranking);
+  const missing = challengeTrackIds.filter((id) => !ranked.has(id));
+  return missing.length === skippedCount ? missing : [];
+}
+
+/**
+ * 두 사람의 **전체** 비교. 화면에 그대로 그릴 수 있는 줄들.
+ *
+ * 줄 순서는 "나" 를 기준으로 읽히게 한다.
+ *   1) 내가 순위를 매긴 곡 — 내 순위 순
+ *   2) 내가 모르는 곡      — 방의 원래 곡 순서
+ *   3) 그 밖(기록 없음)    — 방의 원래 곡 순서
+ *
+ * 모르는 곡에 순위를 주지 않는다. 18·19위 같은 가짜 등수를 붙이면 "싫어서 낮다" 는
+ * 뜻이 생기는데, 그 사람은 그 곡을 평가한 적이 없다.
+ */
+export function buildFullRankComparison(input: {
+  myRanking: readonly string[];
+  mySkippedIds: readonly string[];
+  theirRanking: readonly string[];
+  theirSkippedIds: readonly string[];
+  challengeTrackIds: readonly string[];
+}): FullRankRow[] {
+  const mineRank = rankMap([...input.myRanking]);
+  const theirRank = rankMap([...input.theirRanking]);
+  const mineSkipped = new Set(input.mySkippedIds);
+  const theirSkipped = new Set(input.theirSkippedIds);
+
+  /*
+   * 방의 곡 순서를 기준으로 삼되, 방에 없는데 누군가의 순위에는 있는 곡도 빠뜨리지
+   * 않는다(방의 곡이 바뀐 옛 기록). 나열 순서는 아래에서 다시 정한다.
+   */
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const id of [...input.challengeTrackIds, ...input.myRanking, ...input.theirRanking]) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  const order = new Map(ids.map((id, i) => [id, i]));
+
+  const rows = ids.map((id) => ({
+    id,
+    mine: stance(mineRank, mineSkipped, id),
+    theirs: stance(theirRank, theirSkipped, id),
+  }));
+
+  const bucket = (s: TrackStance) => (s.status === "ranked" ? 0 : s.status === "unknown" ? 1 : 2);
+  return rows.sort((x, y) => {
+    const bx = bucket(x.mine);
+    const by = bucket(y.mine);
+    if (bx !== by) return bx - by;
+    if (x.mine.status === "ranked" && y.mine.status === "ranked") return x.mine.rank - y.mine.rank;
+    return (order.get(x.id) ?? 0) - (order.get(y.id) ?? 0);
+  });
+}
+
 function pairOf(a: Participant, b: Participant): PairMatch {
   const m = matchRate(a.ranking, b.ranking);
   const gapId = m.biggestGap?.id ?? null;
