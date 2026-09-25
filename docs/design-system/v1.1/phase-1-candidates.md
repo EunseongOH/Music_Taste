@@ -260,3 +260,6 @@ A Phase 1 component is ready for code migration when:
 - explicit close/back semantics are present
 - bottom safe-area ownership is centralized
 - Web and Apps-in-Toss use the same component API, with platform-only behavior isolated inside the shared component
+
+## Full-flow audit before production migration
+- [Full Flow Component Audit](./flow-component-audit.md) — Favorite Songs Sort, Sort Together, My Taste Space, and Our Taste Archive component inventory. Production migration should wait until the audit waves are resolved.
