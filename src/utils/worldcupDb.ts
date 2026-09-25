@@ -282,6 +282,22 @@ export const deleteActiveDraft = async (isSingleArtist: boolean) => {
 };
 
 // Save completed tournament results
+/**
+ * 임시저장을 지울지는 **부르는 쪽이 정한다.**
+ *
+ * 예전에는 결과를 저장하면 무조건 그 모드의 임시저장을 지웠다. 그런데 지우는 범위가
+ * `user_id + is_single_artist` 뿐이라, **이 결과와 아무 상관 없는 임시저장까지** 지웠다.
+ *
+ *   계정에 예전 임시저장 X 가 있다
+ *   로그아웃하고 게스트로 소트해 결과 Y 를 만든다
+ *   로그인해서 Y 를 저장한다  ->  X 가 사라진다
+ *
+ * 같이 소트하기 결과를 남길 때도 같은 일이 났다 — 개인 월드컵 임시저장이 지워졌다.
+ *
+ * 지워도 되는 것은 **이 결과가 바로 그 임시저장에서 나온 경우뿐**이다. 그건 화면이
+ * 안다(`worldcup_run_origin`). 기본은 지우지 않는다 — 잘못 지우면 되돌릴 수 없고,
+ * 안 지우면 어차피 보관 기간이 지나 사라진다.
+ */
 export const saveCompletedResult = async (
   finalWinners: any[],
   eliminatedTracks: any[],
@@ -292,6 +308,8 @@ export const saveCompletedResult = async (
     artistId?: string | null;
     artistName?: string | null;
     picks?: DraftPick[];
+    /** 이 결과가 내 계정의 임시저장에서 이어 온 것일 때만 true. 기본은 지우지 않는다. */
+    clearDraft?: boolean;
   }
 ) => {
   const supabase = createClient();
@@ -344,8 +362,8 @@ export const saveCompletedResult = async (
     return { success: false, error: insertError };
   }
 
-  // Once saved successfully, clear the draft (of this mode only)
-  await deleteActiveDraft(options?.isSingleArtist ?? false);
+  // 이 결과가 내 임시저장에서 나온 것일 때만 그것을 정리한다.
+  if (options?.clearDraft) await deleteActiveDraft(options?.isSingleArtist ?? false);
   return { success: true, id: data?.id };
 };
 
@@ -376,7 +394,13 @@ export const overwriteCompletedResult = async (
   finalWinners: any[],
   eliminatedTracks: any[],
   title: string,
-  options?: { isPublic?: boolean; isSingleArtist?: boolean; picks?: DraftPick[] }
+  options?: {
+    isPublic?: boolean;
+    isSingleArtist?: boolean;
+    picks?: DraftPick[];
+    /** 이 결과가 내 계정의 임시저장에서 이어 온 것일 때만 true. 기본은 지우지 않는다. */
+    clearDraft?: boolean;
+  }
 ) => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -424,7 +448,6 @@ export const overwriteCompletedResult = async (
     return { success: false, error };
   }
 
-  // Once saved successfully, clear the draft (of this mode only)
-  await deleteActiveDraft(options?.isSingleArtist ?? true);
+  if (options?.clearDraft) await deleteActiveDraft(options?.isSingleArtist ?? true);
   return { success: true, id: resultId };
 };

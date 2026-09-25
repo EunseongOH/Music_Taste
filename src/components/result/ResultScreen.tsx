@@ -165,6 +165,16 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://sortify.kr";
  *   **자동 저장하지 않는다**(예전에는 같은 화면을 재사용해 불러올 때마다 중복 저장됐다).
  *   연출·"내 취향 스페이스에 저장"이 없고, 나가기는 뒤로 가기만 한다.
  */
+/**
+ * 저장을 시도한 결과. **"안 됐다" 를 한 가지로 뭉뚱그리지 않는다.**
+ *
+ *   saved                  저장됨
+ *   needs-existing-choice  기존 기록이 있어 덮어쓸지 묻는 창을 띄웠다 — 실패가 아니다
+ *   failed                 실제로 실패했다. 눌러 둔 뜻을 지우면 안 된다
+ *   no-user                아직 계정이 없다. 마찬가지로 지우지 않는다
+ */
+type SaveOutcome = "saved" | "needs-existing-choice" | "failed" | "no-user";
+
 export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "saved" }) {
   const isSavedView = mode === "saved";
   const router = useRouter();
@@ -203,15 +213,14 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    */
   const savedIdRef = useRef<string | null>(null);
   /**
-   * 저장이 한 번에 하나만 돌게 하는 빗장.
+   * 저장이 한 번에 하나만 돌게 한다. **버리지 않고 같은 결과를 기다리게** 한다.
    *
    * 로그인하면 `user` 가 바뀌어 자동 저장 effect 가 다시 도는데, 그때 로그인 전에
-   * 눌러 둔 [저장하기] 도 이어서 돈다. 빗장이 없으면 둘이 동시에 뛰어 취향표가 두 건
-   * 생긴다. 16곡 미만이면 자동 저장이 아예 없으므로 빗장은 그때 아무 일도 하지 않는다.
+   * 눌러 둔 [저장하기] 도 이어서 돈다. 예전에는 boolean 빗장이라 뒤에 온 쪽이 그냥
+   * 돌아갔다 — 그게 눌러 둔 저장이면 **사용자가 누른 일이 말없이 사라진다.**
+   * 지금은 돌고 있는 약속을 돌려주므로, 둘 다 같은 결과를 받는다.
    */
-  const saveInFlight = useRef(false);
-  /** 로그인 뒤 이어서 할 저장을 한 번만 처리한다. AuthProvider 는 user 를 여러 번 갱신한다. */
-  const pendingConsumed = useRef(false);
+  const savePromise = useRef<Promise<SaveOutcome> | null>(null);
   const rememberSavedId = (id: string | null) => {
     savedIdRef.current = id;
   };
@@ -262,25 +271,39 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const t = locale === "en" ? translations.en : translations.ko;
 
   /*
-   * 로그인 뒤에 이어서 할 일.
+   * 로그인 뒤에 이어서 할 일. **두 군데에 같이 둔다.**
    *
-   * 화면 상태가 아니라 sessionStorage 에 둔다 — 구글·카카오는 팝업에서 돌아오고,
-   * 그 사이 컴포넌트가 다시 그려질 수 있다. 저장이 끝나면 바로 지운다.
+   *   sessionStorage  구글·카카오는 팝업에서 돌아오고 그 사이 다시 그려질 수 있다.
+   *                   새로 고침·재마운트를 건너 살아남아야 한다.
+   *   React state     effect 가 **반응**해야 한다.
+   *
+   * 전에는 sessionStorage 만 봤다. effect 의 dependency 는 `user` 하나뿐이라,
+   * 로그인이 먼저 서고 뜻이 나중에 적히는 순서에서는 effect 가 다시 돌 일이 없어
+   * 뜻만 남고 저장은 안 되는 상태가 가능했다. 어느 쪽이 먼저든 돌게 한다.
    */
+  const [pendingSave, setPendingSave] = useState(false);
+  useEffect(() => {
+    try {
+      setPendingSave(sessionStorage.getItem("taste_pending_auth_action") === "save-to-space");
+    } catch {
+      /* 못 읽으면 이번 화면에서는 이어갈 것이 없다 */
+    }
+  }, []);
   const armPendingSave = () => {
     try {
       sessionStorage.setItem("taste_pending_auth_action", "save-to-space");
     } catch {
-      /* 못 적으면 이번 로그인에서는 못 이어간다. 화면은 그대로 남는다 */
+      /* 못 적어도 이 화면에 있는 동안에는 state 로 이어간다 */
     }
-    pendingConsumed.current = false;
+    setPendingSave(true);
   };
   const clearPendingSave = () => {
     try {
       sessionStorage.removeItem("taste_pending_auth_action");
     } catch {
-      /* 지우지 못해도 아래 once 빗장이 두 번 저장을 막는다 */
+      /* 못 지워도 state 가 false 라 다시 돌지 않는다 */
     }
+    setPendingSave(false);
   };
 
   const showToastMessage = (text: string, type: "success" | "error" = "success") => {
@@ -384,19 +407,23 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 그래서 한 번만 집어 간다.
    */
   useEffect(() => {
-    if (!user || isSavedView || pendingConsumed.current) return;
-    let pending: string | null = null;
-    try {
-      pending = sessionStorage.getItem("taste_pending_auth_action");
-    } catch {
-      /* 못 읽으면 이어갈 것이 없다 */
-    }
-    if (pending !== "save-to-space") return;
-    pendingConsumed.current = true;
-    clearPendingSave();
-    void saveToSpace();
+    if (!user || isSavedView || isSaved || !pendingSave) return;
+    let alive = true;
+    void (async () => {
+      const outcome = await saveToSpace();
+      if (!alive) return;
+      /*
+       * **끝난 뒤에** 지운다. 예전에는 시작 전에 지워서, 중간에 실패하면 눌러 둔 뜻이
+       * 함께 사라졌다 — 다시 누르기 전에는 되살릴 길이 없었다.
+       * 묻는 창까지 간 것도 제 할 일을 다 한 것이므로 지운다(§12 의 선택은 사용자 몫).
+       */
+      if (outcome === "saved" || outcome === "needs-existing-choice") clearPendingSave();
+    })();
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isSavedView]);
+  }, [user, pendingSave, isSaved, isSavedView]);
 
   // Auto-Save Effect: Triggered for logged-in users completing 16+ tracks
   useEffect(() => {
@@ -407,6 +434,12 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     // 개발용 점검 페이지(/dev/result-lab)에서 연 결과 화면은 운영 DB 에 자동 저장하지 않는다.
     if (new URLSearchParams(window.location.search).get("preview") === "1") return;
     const skippedCount = Number(sessionStorage.getItem("worldcup_skipped_count")) || 0;
+    /*
+     * 사용자가 직접 누른 저장이 기다리고 있으면 **자동 저장은 비켜선다.**
+     * 둘이 같이 뛰면 하나는 빗장에 막히는데, 막히는 쪽이 사용자가 누른 것이면
+     * 누른 일이 말없이 사라진다. 눌러 둔 쪽이 끝나면 isSaved 가 서서 여기는 할 일이 없다.
+     */
+    if (pendingSave) return;
     if (user && winners.length + skippedCount >= 16 && !isSaved && !isAutoSaving) {
       setIsAutoSaving(true);
       autoSaveRef.current = (async () => {
@@ -673,8 +706,9 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
     await saveCards(1);
   };
 
-  const executeSaveArchive = async (overwrite: boolean, isAuto: boolean = false) => {
-    if (!user) return;
+  /** 실제로 저장한다. **성공했는지 돌려준다** — 부르는 쪽이 눌러 둔 뜻을 지울지 정해야 한다. */
+  const executeSaveArchive = async (overwrite: boolean, isAuto: boolean = false): Promise<boolean> => {
+    if (!user) return false;
     setIsSavingArchive(true);
     try {
       let artistId = null;
@@ -706,16 +740,24 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       let picks: any[] = [];
       try { picks = JSON.parse(sessionStorage.getItem("worldcup_picks") || "[]"); } catch {}
 
+      /*
+       * 내 임시저장을 지워도 되는 것은 **이 결과가 그 임시저장에서 나왔을 때뿐**이다.
+       * 게스트로 소트한 뒤 로그인해 저장하는 경우, 계정에 있던 임시저장은 다른 판이다.
+       * 표시가 없으면(옛 세션·직접 들어온 화면) 지우지 않는다 — 잘못 지우면 못 되돌린다.
+       */
+      const clearDraft = sessionStorage.getItem("worldcup_run_origin") === "authenticated";
+
       let saveRes;
       if (overwrite && existingResult) {
-        saveRes = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic, isSingleArtist: isSingleArtistMode, picks });
+        saveRes = await overwriteCompletedResult(existingResult.id, winners, winners.slice(1), title, { isPublic, isSingleArtist: isSingleArtistMode, picks, clearDraft });
       } else {
         saveRes = await saveCompletedResult(winners, winners.slice(1), title, {
           isPublic,
           isSingleArtist: isSingleArtistMode,
           artistId,
           artistName,
-          picks
+          picks,
+          clearDraft
         });
       }
 
@@ -746,9 +788,11 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       }
       setShowOverwriteModal(false);
       setShowSaveSheet(false);
+      return true;
     } catch (err: any) {
       console.error("Failed to save to archive:", err);
       showToastMessage(locale === "en" ? `Failed to save: ${err.message || err}` : `저장하지 못했어요: ${err.message || err}`, "error");
+      return false;
     } finally {
       setIsSavingArchive(false);
     }
@@ -760,37 +804,57 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
    * 전에는 자동 저장과 [저장하기] 가 같은 일을 각자 적어 두고 있었다. 로그인 직후에는
    * 둘이 동시에 뛸 수 있어서(로그인하면 user 가 바뀌어 자동 저장 effect 가 다시 돈다)
    * 취향표가 두 건 생기거나 덮어쓰기 창과 경쟁했다. 이제 한 함수를 지나고,
-   * `saveInFlight` 로 한 번에 하나만 돈다.
+   * `savePromise` 로 한 번에 하나만 돌되, 뒤에 온 쪽은 버리지 않고 같은 결과를 기다린다.
    *
    * 기존 기록이 있으면 **묻는다.** 로그인했다는 이유로 말없이 덮어쓰거나 새로 만들지 않는다.
    */
-  const saveToSpace = async (isAuto = false): Promise<void> => {
-    if (saveInFlight.current) return;
-    saveInFlight.current = true;
-    try {
-      let artistId: string | null = null;
-      try {
-        const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
-        if (storedArtists) {
-          const parsed = JSON.parse(storedArtists);
-          if (parsed && parsed.length > 0) artistId = parsed[0].id;
-        }
-      } catch {
-        /* 저장소를 못 읽으면 아티스트 없이 새로 저장한다 */
-      }
+  const saveToSpace = (isAuto = false): Promise<SaveOutcome> => {
+    // 이미 돌고 있으면 **같은 약속을 돌려준다.** 뒤에 온 쪽을 버리지 않는다.
+    if (savePromise.current) return savePromise.current;
 
-      if (isSingleArtistMode && artistId) {
-        const existing = await fetchCompletedResultByArtist(artistId);
-        if (existing) {
-          setExistingResult(existing);
-          setShowOverwriteModal(true);
-          return;
+    const run = async (): Promise<SaveOutcome> => {
+      if (!user) return "no-user";
+      try {
+        let artistId: string | null = null;
+        try {
+          const storedArtists = sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists");
+          if (storedArtists) {
+            const parsed = JSON.parse(storedArtists);
+            if (parsed && parsed.length > 0) artistId = parsed[0].id;
+          }
+        } catch {
+          /* 저장소를 못 읽으면 아티스트 없이 새로 저장한다 */
         }
+
+        if (isSingleArtistMode && artistId) {
+          const existing = await fetchCompletedResultByArtist(artistId);
+          if (existing) {
+            setExistingResult(existing);
+            setShowOverwriteModal(true);
+            // 묻는 창까지 왔으면 "이어서 하기" 는 제 할 일을 다 했다. 실패가 아니다.
+            return "needs-existing-choice";
+          }
+        }
+        return (await executeSaveArchive(false, isAuto)) ? "saved" : "failed";
+      } catch (e) {
+        /*
+         * 여기서 잡지 않으면 조용한 실패가 된다. 예전에는 `void saveToSpace()` 로
+         * 불러서, 중간에 던지면 아무 데도 안 나오고 눌러 둔 뜻만 사라졌다.
+         */
+        console.error("[taste] 저장 중 오류:", e);
+        showToastMessage(
+          locale === "en" ? "Failed to save. Please try again." : "저장하지 못했어요. 다시 시도해 주세요.",
+          "error"
+        );
+        return "failed";
       }
-      await executeSaveArchive(false, isAuto);
-    } finally {
-      saveInFlight.current = false;
-    }
+    };
+
+    const p = run().finally(() => {
+      savePromise.current = null;
+    });
+    savePromise.current = p;
+    return p;
   };
 
   const handleSaveToSpace = async () => {
@@ -805,13 +869,15 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       setShowLoginModal(true);
       return;
     }
-    await saveToSpace();
+    const outcome = await saveToSpace();
+    if (outcome === "saved" || outcome === "needs-existing-choice") clearPendingSave();
   };
 
   const executeExit = async () => {
     sessionStorage.removeItem("worldcup_ranking");
     sessionStorage.removeItem("worldcup_picks");
     sessionStorage.removeItem("worldcup_skipped_count");
+    sessionStorage.removeItem("worldcup_run_origin");
     sessionStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_progress");
     sessionStorage.removeItem("selected_genres");
@@ -1397,30 +1463,33 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
         의 handleSuccess). 이 화면에서 로그인은 **하던 일을 계속하려는 것**이지 화면을
         떠나려는 것이 아니다.
 
-        세 콜백이 각각 다른 일을 뜻한다.
+        네 콜백이 각각 다른 일을 뜻한다.
 
-          onSuccess  로그인됐다 — 이어서 저장한다
-          onGuest    게스트로 계속한다 — 저장할 계정이 없으니 하려던 일을 **지운다**
-          onClose    닫았다 — 마찬가지로 지운다
+          onClose    화면만 닫는다. 모든 길이 지난다
+          onSuccess  로그인됐다 — **눌러 둔 뜻은 그대로 둔다.** 이어서 하기 effect 가
+                     `user` 와 그 뜻을 함께 보고 돈다
+          onGuest    게스트로 계속한다 — 저장할 계정이 없으니 뜻을 지운다
+          onDismiss  사용자가 그만뒀다(X·바깥 누르기) — 지운다
 
-        셋 다 `onClose` 를 먼저 지나므로(LoginModal 이 그렇게 부른다) 일단 지우고,
-        로그인에 성공했을 때만 다시 세운다. 그래야 게스트를 고르거나 창을 닫은 뒤
-        나중에 다른 이유로 로그인해도 누른 적 없는 저장이 실행되지 않는다.
+        전에는 `onClose` 가 지우고 `onSuccess` 가 다시 세웠다. 그 사이 순서가 어긋나면
+        (로그인이 먼저 서고 콜백이 나중에 오면) 저장이 끝난 뒤에 **유령 뜻**이 다시
+        세워졌고, 반대 순서에서는 뜻만 남고 저장이 안 될 수 있었다. 성공했을 때는
+        아무것도 건드리지 않는 것이 맞다.
+
+        `listen_later_pending` 은 여기서 건드리지 않는다 — "이 곡은 모른다" 는 이미
+        확정한 행동이고, 취향표를 저장하려던 뜻과 다른 일이다.
       */}
       <LoginModal
         isOpen={showLoginModal}
-        onClose={() => {
-          setShowLoginModal(false);
-          clearPendingSave();
-        }}
-        onGuest={() => {
-          setShowLoginModal(false);
-          clearPendingSave();
-        }}
-        onSuccess={() => {
-          setShowLoginModal(false);
-          armPendingSave();
-        }}
+        onClose={() => setShowLoginModal(false)}
+        onDismiss={clearPendingSave}
+        onGuest={clearPendingSave}
+        /*
+         * 성공했을 때는 **아무것도 하지 않는다.** 다만 콜백 자체는 주어야 한다 —
+         * `onSuccess` 가 없으면 LoginModal 이 기본으로 /explore 로 보내서 화면을 잃는다.
+         * 이어서 저장하는 일은 위 effect 가 `user` 와 눌러 둔 뜻을 함께 보고 한다.
+         */
+        onSuccess={() => setShowLoginModal(false)}
       />
 
       {/* Offscreen High-Fidelity 9:16 Instagram Story Export Cards */}

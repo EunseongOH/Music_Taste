@@ -433,6 +433,13 @@ export default function WorldCupPage() {
            const lastPick: DraftPick | null = loser && !removed
              ? [currentRoundName.includes("예선전") ? -roundNum : roundNum, winner.id, loser.id] : null;
            sessionStorage.setItem("worldcup_picks", JSON.stringify(lastPick ? [...picks, lastPick] : picks));
+           /*
+            * 이 판이 어디서 시작했는지. 결과를 저장할 때 **내 임시저장을 지워도 되는지**
+            * 를 이걸로 가른다. 로그인 상태로 끝냈으면 그동안 자동저장이 이 판을 적고
+            * 있었으니 그 임시저장은 이 결과의 것이다. 게스트로 끝냈으면 계정에 있는
+            * 임시저장은 **다른 판**이므로 건드리면 안 된다(나중에 로그인해도 마찬가지).
+            */
+           sessionStorage.setItem("worldcup_run_origin", isChallenge ? "challenge" : user ? "authenticated" : "guest");
            setWinners(newWinners);
            setPhase("finished");
          } else {

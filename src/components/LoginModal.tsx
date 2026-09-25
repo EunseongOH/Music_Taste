@@ -12,7 +12,19 @@ import { NICKNAME_ERROR_TEXT, isNicknameAvailable, validateNickname } from "@/ut
 
 interface LoginModalProps {
   isOpen: boolean;
+  /**
+  * 창을 닫는다. **모든 길에서 불린다** — 취소도, 로그인 성공도, 게스트도.
+  * 여기서는 화면만 닫는다. "사용자가 그만뒀다" 는 뜻은 `onDismiss` 가 맡는다.
+  */
   onClose: () => void;
+  /**
+   * 사용자가 **로그인을 그만뒀다** — X · 바깥 누르기 같은 실제 취소.
+   *
+   * 로그인에 성공해서 창이 닫히는 것은 취소가 아니다. 예전에는 둘이 같은 `onClose` 를
+   * 타서, 결과 화면이 "로그인했으니 이어서 저장" 이라는 뜻을 지웠다가 다시 세우는
+   * 짓을 해야 했다. 그 사이에 저장이 걸려 있으면 뜻이 어긋난다.
+   */
+  onDismiss?: () => void;
   /** **로그인에 성공했을 때만.** 게스트 선택은 여기로 오지 않는다 — `onGuest` 로 간다. */
   onSuccess?: () => void;
   /**
@@ -30,7 +42,12 @@ interface LoginModalProps {
 
 type Mode = "login" | "signup" | "guest-warning";
 
-export default function LoginModal({ isOpen, onClose, onSuccess, onGuest, locale: propLocale }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, onDismiss, onSuccess, onGuest, locale: propLocale }: LoginModalProps) {
+  /** 사용자가 그만둔 것. 성공·게스트로 닫히는 것과 다르다. */
+  const dismiss = () => {
+    onClose();
+    onDismiss?.();
+  };
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
   const [detectedLocale, setDetectedLocale] = useState<"ko" | "en">("ko");
@@ -392,7 +409,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, onGuest, locale
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={dismiss}
           />
           <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none p-4 sm:p-6">
             <motion.div
@@ -403,7 +420,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, onGuest, locale
               transition={{ type: "spring", stiffness: 350, damping: 25 }}
             >
               <button 
-                onClick={onClose}
+                onClick={dismiss}
                 className="absolute top-5 right-5 text-navy hover:text-point transition-colors bg-navy/5 p-1.5 rounded-full"
                 aria-label="Close modal"
               >

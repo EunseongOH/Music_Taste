@@ -56,6 +56,7 @@ async function open({ songs = 20, existingResult = null } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 430, height: 932 }, locale: 'ko-KR' });
   const page = await ctx.newPage();
   const inserts = [];
+  const fail = { on: false };
   await ctx.route('**://i.scdn.co/**', (r) =>
     r.fulfill({
       status: 200, contentType: 'image/svg+xml',
@@ -75,6 +76,13 @@ async function open({ songs = 20, existingResult = null } = {}) {
     const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (url.includes('/auth/v1/')) return json({ user: SESSION.user });
     if (req.method() === 'POST' && url.includes('/tournament_results')) {
+      // 저장이 실패하는 상황을 만들 수 있어야 한다 — 실패했을 때 눌러 둔 뜻이 남는지 본다.
+      if (fail.on) {
+        return route.fulfill({
+          status: 500, contentType: 'application/json',
+          body: JSON.stringify({ message: 'boom' }),
+        });
+      }
       inserts.push(req.postData() ?? '');
       return json([{ id: `res-${inserts.length}` }]);
     }
@@ -91,7 +99,7 @@ async function open({ songs = 20, existingResult = null } = {}) {
   await page.getByRole('tab', { name: '리스트형' }).waitFor({ state: 'visible', timeout: 180_000 });
   await page.waitForTimeout(1500);
   await page.addStyleTag({ content: '*{animation:none!important;transition:none!important} nextjs-portal{display:none!important}' });
-  return { ctx, page, inserts };
+  return { ctx, page, inserts, fail };
 }
 
 /** 저장하기 → 내 취향 스페이스에 저장. 비로그인이면 여기서 로그인 창이 뜬다. */
@@ -212,6 +220,57 @@ const path = (page) => new URL(page.url()).pathname;
   await signIn(ctx, page);
   check(inserts.length === 0, '여전히 저장 0회', `${inserts.length}회`);
   check(path(page) === '/taste', '화면을 떠나지 않음', path(page));
+  await ctx.close();
+  console.log('');
+}
+
+/* -- CASE I -- 로그인이 먼저 서고 콜백이 안 와도 저장된다 ---- */
+{
+  console.log('CASE I — 로그인이 먼저 서는 순서에서도 이어서 저장된다');
+  const { ctx, page, inserts } = await open({ songs: 8 });
+  await clickSaveToSpace(page);
+
+  /*
+   * LoginModal 의 콜백을 아예 거치지 않는다. 쿠키만 심고 새로 고쳐서, **계정이 먼저
+   * 서 있고 눌러 둔 뜻은 저장소에만 있는** 상태로 화면을 다시 연다. 예전 구조는
+   * effect 가 `user` 만 보고 돌아서, 이 순서에서는 뜻만 남고 저장이 안 될 수 있었다.
+   */
+  await ctx.addCookies([{
+    name: `sb-${PROJECT_REF}-auth-token`,
+    value: `base64-${Buffer.from(JSON.stringify(SESSION)).toString('base64')}`,
+    url: BASE,
+  }]);
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 180_000 });
+  await page.waitForTimeout(3500);
+
+  check(path(page) === '/taste', '화면을 떠나지 않음', path(page));
+  check(inserts.length === 1, '저장 1회', `${inserts.length}회`);
+  const left = await page.evaluate(() => sessionStorage.getItem('taste_pending_auth_action'));
+  check(left === null, '이어서 할 일이 지워짐', String(left));
+  await ctx.close();
+  console.log('');
+}
+
+/* -- CASE J -- 저장이 실패하면 눌러 둔 뜻을 지우지 않는다 ---- */
+{
+  console.log('CASE J — 저장에 실패하면 다시 시도할 수 있게 뜻을 남긴다');
+  const { ctx, page, inserts, fail } = await open({ songs: 8 });
+  fail.on = true;
+  await clickSaveToSpace(page);
+  await signIn(ctx, page);
+
+  check(inserts.length === 0, '저장되지 않음', `${inserts.length}회`);
+  const kept = await page.evaluate(() => sessionStorage.getItem('taste_pending_auth_action'));
+  check(kept === 'save-to-space', '눌러 둔 뜻이 남아 있다', String(kept));
+  check(path(page) === '/taste', '화면을 떠나지 않음', path(page));
+
+  // 이제 되는 상태에서 다시 누르면 저장된다.
+  fail.on = false;
+  await page.getByRole('button', { name: '저장하기' }).first().click();
+  await page.waitForTimeout(700);
+  await page.getByRole('button', { name: /내 취향 스페이스/ }).first().click();
+  await page.waitForTimeout(2500);
+  check(inserts.length === 1, '다시 누르면 저장된다', `${inserts.length}회`);
   await ctx.close();
   console.log('');
 }

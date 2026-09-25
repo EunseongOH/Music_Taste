@@ -121,6 +121,11 @@ export default function TogetherResultPage() {
             const p = (n: number) => String(n).padStart(2, "0");
             const stamp = `${String(d.getFullYear()).slice(-2)}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
             const artist = found.artist_name || ranked[0]?.artistName || found.title;
+            /*
+             * `clearDraft` 를 주지 않는다. 같이 소트한 결과는 **내 개인 임시저장과 무관**하다.
+             * 예전에는 결과를 저장하면 무조건 그 모드의 임시저장을 지워서, 같이 소트 한 번에
+             * 혼자 하던 월드컵의 이어하기가 사라졌다.
+             */
             await saveCompletedResult(ranked, ranked.slice(1), `${artist} sort_${stamp}`, {
               isSingleArtist: true,
               artistId: found.artist_id ?? null,
