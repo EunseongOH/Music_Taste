@@ -857,8 +857,20 @@ export default function TogetherNewPage() {
         </>
       )}
 
-      {/* 고정 바가 있는 동안만 그만큼 비운다(바가 없으면 --dock-h 도 없다). */}
-      {pendingArtist && <DockSpacer />}
+      {/*
+        바닥을 비우는 책임을 **둘 중 하나가** 진다.
+
+          고정 바가 있다   -> DockSpacer 가 바 높이만큼 비운다
+          고정 바가 없다   -> 그때는 화면 자체가 끝이므로 여기서 비운다
+
+        추천 목록에 `mb-20` 을 박지 않는다 — 아래에 "이미 한 소트에서 가져오기" 가
+        있는 사람에게는 그만큼이 빈 구멍이 된다. 안전 영역(홈 인디케이터)도 더한다.
+      */}
+      {pendingArtist ? (
+        <DockSpacer />
+      ) : (
+        <div aria-hidden className="h-[calc(2rem+env(safe-area-inset-bottom))]" />
+      )}
 
       {/*
         고른 아티스트로 넘어가는 자리. 눌러야 곡 목록을 받는다.
