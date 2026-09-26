@@ -1,0 +1,28 @@
+{
+  "_source": "운영 Supabase(kgpwbxkaudeuoybdicqn) information_schema.columns, public.tournament_drafts, 2026-09-26 조회. 이 표는 repo 마이그레이션에 CREATE TABLE 이 없다(운영에서 먼저 만들어졌다). 스키마가 바뀌면 이 파일을 같이 고친다.",
+  "table": "tournament_drafts",
+  "columns": {
+    "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+    "user_id": { "type": "uuid", "nullable": false, "default": null },
+    "title": { "type": "text", "nullable": false, "default": "내 음악 월드컵" },
+    "status": { "type": "text", "nullable": false, "default": "artist_selection" },
+    "selected_artists": { "type": "jsonb", "nullable": false, "default": [] },
+    "selected_tracks": { "type": "jsonb", "nullable": false, "default": [] },
+    "phase": { "type": "text", "nullable": false, "default": "loading" },
+    "current_round_name": { "type": "text", "nullable": true, "default": null },
+    "current_match_index": { "type": "integer", "nullable": true, "default": 0 },
+    "bye_count": { "type": "integer", "nullable": true, "default": 0 },
+    "tracks": { "type": "jsonb", "nullable": false, "default": [] },
+    "matches": { "type": "jsonb", "nullable": false, "default": [] },
+    "winners": { "type": "jsonb", "nullable": false, "default": [] },
+    "eliminated_tracks": { "type": "jsonb", "nullable": false, "default": [] },
+    "selected_byes": { "type": "jsonb", "nullable": false, "default": [] },
+    "created_at": { "type": "timestamptz", "nullable": false, "default": "now()" },
+    "updated_at": { "type": "timestamptz", "nullable": false, "default": "now()" },
+    "is_single_artist": { "type": "boolean", "nullable": false, "default": false },
+    "skipped_tracks": { "type": "jsonb", "nullable": false, "default": [] },
+    "progress": { "type": "jsonb", "nullable": true, "default": null },
+    "saved_at": { "type": "timestamptz", "nullable": true, "default": null }
+  },
+  "unique": [["user_id", "is_single_artist"]]
+}

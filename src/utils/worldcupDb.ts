@@ -1,5 +1,6 @@
 import { createClient } from "./supabase/client";
 import { getSafeLocale } from "./storage";
+import { stageRow, type DraftArtist, type Stage } from "./draftStage.ts";
 
 const getSessionExpiredMessage = () => {
   const isEn = getSafeLocale() === "en";
@@ -34,87 +35,71 @@ export const isProtectedDraft = (d: { status?: string; saved_at?: string | null;
 
 export type StageSaveResult = "saved" | "conflict" | "no-user" | "error";
 
-/** 초안에 담는 아티스트. 화면마다 모양이 조금씩 달라 이름만 요구한다. */
-type DraftArtist = { name?: string };
-
-const stageTitle = (selectedArtists: DraftArtist[]) =>
-  selectedArtists.length > 0
-    ? `${selectedArtists.map((a) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
-    : "내 음악 월드컵";
 
 /**
- * 한 단계의 줄 전체. 월드컵 칸(phase·round·progress·skipped)은 항상 비운다 —
- * 일부만 쓰면 이전 판의 진행이 새 단계에 섞인다.
+ * 네트워크가 끊기면 supabase-js 는 `{ error }` 대신 예외를 던질 수 있다. 어느 쪽이든
+ * **"error" 한 가지**로 돌려준다 — 부르는 쪽이 성공으로 오해해 다음 화면으로 가지 않게.
  */
-const stageRow = (
-  userId: string,
-  isSingle: boolean,
-  stage: { status: "artist_selection"; selectedArtists: DraftArtist[] } | { status: "track_selection"; selectedArtists: DraftArtist[]; selectedTracks: unknown[] }
-) => ({
-  user_id: userId,
-  is_single_artist: isSingle,
-  status: stage.status,
-  selected_artists: stage.selectedArtists,
-  selected_tracks: stage.status === "track_selection" ? stage.selectedTracks : null,
-  phase: null,
-  current_round_name: null,
-  current_match_index: null,
-  progress: null,
-  saved_at: null,
-  // NOT NULL 컬럼이라 비울 때는 [] 로. 빼먹으면 이전 월드컵의 뺀 곡이 다음 판으로 넘어간다.
-  skipped_tracks: [],
-  title: stageTitle(stage.selectedArtists),
-  updated_at: new Date().toISOString(),
-});
-
-type Stage = Parameters<typeof stageRow>[2];
+async function settle(label: string, run: () => Promise<StageSaveResult>): Promise<StageSaveResult> {
+  try {
+    return await run();
+  } catch (e) {
+    console.error(`[Supabase DB] ${label}:`, e instanceof Error ? e.message : e);
+    return "error";
+  }
+}
 
 /** 보호된 초안이 없을 때만 쓴다. 있으면 아무것도 바꾸지 않고 "conflict". */
-async function saveStageDraft(stage: Stage, isSingle: boolean, retried = false): Promise<StageSaveResult> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return "no-user";
-  const row = stageRow(user.id, isSingle, stage);
+const saveStageDraft = (stage: Stage, isSingle: boolean): Promise<StageSaveResult> =>
+  settle("Error saving draft stage", async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "no-user";
 
-  const { data: updated, error: updateError } = await supabase
-    .from('tournament_drafts')
-    .update(row)
-    .eq('user_id', user.id)
-    .eq('is_single_artist', isSingle)
-    .not('status', 'in', `(${PROTECTED_STATUSES.join(",")})`)
-    .select('user_id');
-  if (updateError) {
-    console.error("[Supabase DB] Error saving draft stage:", updateError.message);
-    return "error";
-  }
-  if (updated && updated.length > 0) return "saved";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      // 칸을 모두 적는다 — UPDATE 는 빠진 칸에 기본값을 넣어 주지 않는다(draftStage.ts).
+      const row = stageRow(user.id, isSingle, stage);
+      const { data: updated, error: updateError } = await supabase
+        .from('tournament_drafts')
+        .update(row)
+        .eq('user_id', user.id)
+        .eq('is_single_artist', isSingle)
+        .not('status', 'in', `(${PROTECTED_STATUSES.join(",")})`)
+        .select('user_id');
+      if (updateError) {
+        console.error("[Supabase DB] Error saving draft stage:", updateError.message);
+        return "error";
+      }
+      if (updated && updated.length > 0) return "saved";
 
-  // 고칠 줄이 없다 — 줄이 아예 없거나, 보호된 줄이 있다.
-  const { error: insertError } = await supabase.from('tournament_drafts').insert(row);
-  if (!insertError) return "saved";
-  if (insertError.code !== "23505") {
-    console.error("[Supabase DB] Error saving draft stage:", insertError.message);
-    return "error";
-  }
-  // 보호된 줄이 있다. 만료됐으면 loadActiveDraft 가 지우므로 한 번만 다시 해 본다.
-  if (!retried && (await loadActiveDraft(isSingle)) === null) return saveStageDraft(stage, isSingle, true);
-  return "conflict";
-}
+      // 고칠 줄이 없다 — 줄이 아예 없거나, 보호된 줄이 있다.
+      const { error: insertError } = await supabase.from('tournament_drafts').insert(row);
+      if (!insertError) return "saved";
+      if (insertError.code !== "23505") {
+        console.error("[Supabase DB] Error saving draft stage:", insertError.message);
+        return "error";
+      }
+      // 보호된 줄이 있다. 만료됐으면 loadActiveDraft 가 지우므로 한 번만 다시 해 본다.
+      if (attempt > 0 || (await loadActiveDraft(isSingle)) !== null) return "conflict";
+    }
+    return "conflict";
+  });
 
 /** "새로 시작" 을 사용자가 고른 뒤에만. 이전 초안을 이 단계의 줄로 통째로 바꾼다. */
-async function replaceStageDraft(stage: Stage, isSingle: boolean): Promise<StageSaveResult> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return "no-user";
-  const { error } = await supabase
-    .from('tournament_drafts')
-    .upsert(stageRow(user.id, isSingle, stage), { onConflict: DRAFT_KEY });
-  if (error) {
-    console.error("[Supabase DB] Error replacing draft:", error.message);
-    return "error";
-  }
-  return "saved";
-}
+const replaceStageDraft = (stage: Stage, isSingle: boolean): Promise<StageSaveResult> =>
+  settle("Error replacing draft", async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return "no-user";
+    const { error } = await supabase
+      .from('tournament_drafts')
+      .upsert(stageRow(user.id, isSingle, stage), { onConflict: DRAFT_KEY });
+    if (error) {
+      console.error("[Supabase DB] Error replacing draft:", error.message);
+      return "error";
+    }
+    return "saved";
+  });
 
 const modeOf = (selectedArtists: DraftArtist[], isSingleArtist?: boolean) => isSingleArtist ?? (selectedArtists.length === 1);
 

@@ -2,25 +2,36 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sheet, primaryButton, dangerButton } from "@/components/space/SpaceUI";
+import { Sheet, Toast, primaryButton, dangerButton, useToast } from "@/components/space/SpaceUI";
 import { draftExpiresAt, formatDraftExpiry, loadActiveDraft, type StageSaveResult } from "@/utils/worldcupDb";
 import { clearActiveRun, draftResumePath, restoreDraftToStorage } from "@/utils/worldcupRun";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
+
+/** 시트 문구에 필요한 만큼의 초안. */
+type DraftSummary = { status?: string; is_single_artist?: boolean; saved_at?: string | null; updated_at?: string; current_round_name?: string | null };
+
+/** saveOrAsk 가 끝난 뒤 화면이 할 일을 정할 수 있게 돌려준다. */
+export type SaveOrAskOutcome = "proceeded" | "asked" | "failed";
 
 /**
  * 고르기 단계(아티스트·곡)에서 계정 초안에 쓰는 자리마다 쓰는 흐름.
  *
  *   saveOrAsk(모드, 저장, 바꾸기, 원래 할 일)
- *     저장이 됐거나 게스트면       원래 할 일
- *     진행 중인 월드컵이 있으면     시트: 이어서 진행하기 -> 그 초안으로 / 새로 시작 -> 바꾸고 원래 할 일
+ *     게스트                 원래 할 일(계정 초안이 없다)
+ *     saved                  원래 할 일
+ *     conflict               시트: 이어서 진행하기 -> 그 초안으로 / 새로 시작 -> 바꾸고 원래 할 일
+ *     error · no-user        **원래 할 일을 하지 않는다.** 알리고 이 화면·선택 그대로 — 다시 누르면 된다
+ *
+ * 예전에는 conflict 만 따로 보고 나머지는 모두 성공처럼 다음 화면으로 갔다. 저장이
+ * 실패해도 넘어가서, 다음 화면이 계정의 옛 초안을 읽고 새 선택이 조용히 사라졌다
+ * (UX-001, UX-009, AC-06). 결과는 빠짐없이 나눠서 다룬다 — 새 결과가 생기면 타입 검사가
+ * 여기서 멈춘다.
  *
  * "새로 시작" 을 고르기 전에는 이전 초안을 건드리지 않는다(UX-001).
  */
-/** 시트 문구에 필요한 만큼의 초안. */
-type DraftSummary = { status?: string; is_single_artist?: boolean; saved_at?: string | null; updated_at?: string; current_round_name?: string | null };
-
 export function useDraftConflict(signedIn: boolean, locale: "ko" | "en") {
   const router = useRouter();
+  const { toast, showToast } = useToast();
   const [pending, setPending] = useState<{
     draft: DraftSummary | null;
     replace: () => Promise<StageSaveResult>;
@@ -28,51 +39,108 @@ export function useDraftConflict(signedIn: boolean, locale: "ko" | "en") {
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** 실패를 알린다. 원문 오류(23502·TypeError 등)는 보여 주지 않는다. */
+  const reportFailure = (result: "error" | "no-user") => {
+    const en = locale === "en";
+    showToast(
+      result === "no-user"
+        ? en ? "Your login session expired. Please log in again." : "로그인 세션이 만료되었어요. 다시 로그인해 주세요."
+        : en ? "Couldn't save. Please try again." : "임시저장에 실패했어요. 다시 시도해 주세요.",
+      "error"
+    );
+  };
+
+  /** 저장 결과 하나를 처리한다. 성공일 때만 원래 할 일로 넘어간다. */
+  const settle = async (
+    result: StageSaveResult,
+    onConflict: () => Promise<void>,
+    proceed: () => void | Promise<void>
+  ): Promise<SaveOrAskOutcome> => {
+    switch (result) {
+      case "saved":
+        await proceed();
+        return "proceeded";
+      case "conflict":
+        await onConflict();
+        return "asked";
+      case "error":
+      case "no-user":
+        reportFailure(result);
+        return "failed";
+      default: {
+        const unhandled: never = result;
+        throw new Error(`처리하지 않은 저장 결과: ${String(unhandled)}`);
+      }
+    }
+  };
+
+  /** 던져진 예외도 "error" 로 받는다 — 성공으로 오해해 넘어가지 않게. */
+  const run = async (save: () => Promise<StageSaveResult>): Promise<StageSaveResult> => {
+    try {
+      return await save();
+    } catch {
+      return "error";
+    }
+  };
+
   const saveOrAsk = async (
     isSingle: boolean,
     save: () => Promise<StageSaveResult>,
     replace: () => Promise<StageSaveResult>,
     proceed: () => void | Promise<void>
-  ) => {
-    if (signedIn && (await save()) === "conflict") {
-      setPending({ draft: await loadActiveDraft(isSingle), replace, proceed });
-      return;
+  ): Promise<SaveOrAskOutcome> => {
+    if (!signedIn) {
+      await proceed();
+      return "proceeded";
     }
-    await proceed();
+    return settle(
+      await run(save),
+      async () => {
+        const draft = await loadActiveDraft(isSingle).catch(() => null);
+        setPending({ draft, replace, proceed });
+      },
+      proceed
+    );
   };
 
   const sheet = (
-    <DraftConflictSheet
-      open={!!pending}
-      draft={pending?.draft ?? null}
-      locale={locale}
-      busy={busy}
-      onClose={() => { if (!busy) setPending(null); }}
-      onContinue={() => {
-        const draft = pending?.draft;
-        setPending(null);
-        if (!draft) return;
-        restoreDraftToStorage(draft);
-        router.push(draftResumePath(draft));
-      }}
-      onStartNew={async () => {
-        if (!pending) return;
-        setBusy(true);
-        const r = await pending.replace();
-        setBusy(false);
-        if (r !== "saved") {
-          alert(locale === "en" ? "Couldn't start new. Please try again." : "새로 시작하지 못했어요. 다시 시도해 주세요.");
-          return;
-        }
-        // 이전 판은 이제 없다. 이 기기에 남은 그 판의 진행도 함께 치운다.
-        safeSessionStorage.removeItem("worldcup_progress");
-        safeLocalStorage.removeItem("worldcup_progress");
-        clearActiveRun();
-        const { proceed } = pending;
-        setPending(null);
-        await proceed();
-      }}
-    />
+    <>
+      <DraftConflictSheet
+        open={!!pending}
+        draft={pending?.draft ?? null}
+        locale={locale}
+        busy={busy}
+        onClose={() => { if (!busy) setPending(null); }}
+        onContinue={() => {
+          const draft = pending?.draft;
+          setPending(null);
+          if (!draft) return;
+          restoreDraftToStorage(draft);
+          router.push(draftResumePath(draft));
+        }}
+        onStartNew={async () => {
+          if (!pending) return;
+          const current = pending;
+          setBusy(true);
+          const result = await run(current.replace);
+          setBusy(false);
+          await settle(
+            result,
+            // 명시적 바꾸기는 upsert 라 conflict 가 나지 않는다. 난다면 시트를 그대로 둔다.
+            async () => {},
+            async () => {
+              // 이전 판은 이제 없다. 이 기기에 남은 그 판의 진행도 함께 치운다.
+              safeSessionStorage.removeItem("worldcup_progress");
+              safeLocalStorage.removeItem("worldcup_progress");
+              clearActiveRun();
+              setPending(null);
+              await current.proceed();
+            }
+          );
+        }}
+      />
+      <Toast toast={toast} />
+    </>
   );
 
   return { saveOrAsk, sheet };
