@@ -74,8 +74,8 @@ export async function shareUrl(savedId: string | null, ogImageUrl?: string): Pro
 
 /** 화면 요소를 PNG 로 만들어 사용자에게 저장시킨다. */
 export async function saveImage(el: HTMLElement, fileName: string): Promise<void> {
-  // cacheBust 는 쓰지 않는다. 카드 안 커버는 useInlinedCovers 가 미리 data URL 로
-  // 바꿔 두므로 저장 시점에 다시 받을 이유가 없고, 재요청은 누락 위험만 늘린다.
+  // cacheBust 는 쓰지 않는다. 카드 안 커버는 useResolvedArtwork 가 미리 data URL 로
+  // 굳혀 두므로 저장 시점에 다시 받을 이유가 없고, 재요청은 누락 위험만 늘린다.
   const dataUrl = await htmlToImage.toPng(el, {
     pixelRatio: 5,
   });

@@ -3,12 +3,15 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, useAnimation, useDragControls, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { useTrackArtwork } from "@/utils/useTrackArtwork";
 
 interface Track {
   id: string;
   title: string;
   artistName: string;
   albumImage: string;
+  albumImageFallbacks?: string[];
+  artistImage?: string;
   albumTitle?: string;
   duration?: string;
 }
@@ -27,6 +30,8 @@ export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }:
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const controls = useAnimation();
   const dragControls = useDragControls();
+  // 슬리브와 LP 라벨이 같은 그림을 쓴다 — 한쪽만 대체 그림으로 넘어가는 일이 없게 한 번만 정한다.
+  const art = useTrackArtwork(track);
 
   useEffect(() => {
     onActive?.(isLP);
@@ -105,7 +110,7 @@ export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }:
           
           {/* LP Label (Scales perfectly in ratio) */}
           <div className="w-[45%] h-[45%] rounded-full border border-navy/20 relative overflow-hidden bg-point z-10 flex items-center justify-center shadow-inner pointer-events-none">
-             <Image src={track.albumImage} alt={track.title} fill sizes="64px" className="object-cover opacity-80" />
+             <Image src={art.src} onError={art.onError} alt={track.title} fill sizes="64px" className="object-cover opacity-80" />
              <div className="w-[20%] h-[20%] rounded-full bg-cream border border-navy shadow-sm z-20 absolute" />
           </div>
         </motion.div>
@@ -121,7 +126,19 @@ export default function WorldCupCandidate({ track, onDrop, onRemove, onActive }:
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
           className="absolute inset-0 rounded-2xl sm:rounded-[1.5rem] border border-navy/20 bg-cream shadow-[0_6px_20px_rgba(var(--t-ink-rgb),0.15)] newtone:bg-white newtone:border-navy/10 newtone:shadow-[0_8px_24px_-12px_rgba(24,33,59,0.25)] overflow-hidden z-30 pointer-events-none"
         >
-          <Image src={track.albumImage} alt={track.title} fill sizes="(max-width: 768px) 140px, 160px" className="object-cover" />
+          <Image src={art.src} onError={art.onError} alt={track.title} fill sizes="(max-width: 768px) 140px, 160px" className="object-cover" />
+          {/*
+            재킷이 없어 아티스트 사진을 쓸 때만. 같은 아티스트의 두 곡이 같은 사진으로 맞붙으면
+            그림으로는 못 가른다 — 아래쪽에 곡 제목을 얕게 얹는다. 실제 재킷에는 아무것도 얹지 않는다.
+          */}
+          {art.kind === "artist" && (
+            <div
+              data-artwork-fallback="artist"
+              className="absolute inset-x-0 bottom-0 px-2 pb-1.5 pt-6 bg-gradient-to-t from-black/60 to-transparent"
+            >
+              <p className="font-sans font-bold text-[10px] sm:text-xs leading-tight text-white line-clamp-2 text-left">{track.title}</p>
+            </div>
+          )}
           <div className="absolute inset-0 bg-black/0 hover:bg-black/5 transition-colors" />
         </motion.div>
       </div>

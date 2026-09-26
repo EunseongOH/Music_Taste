@@ -3,12 +3,15 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useTrackArtwork } from "@/utils/useTrackArtwork";
 
 export interface LPPlayerProps {
   isPlaying?: boolean;
   currentTrack?: {
     id: string;
     albumImage: string;
+    albumImageFallbacks?: string[];
+    artistImage?: string;
     title: string;
   } | null;
   onTogglePlay?: () => void;
@@ -42,6 +45,7 @@ export interface LPPlayerProps {
  *          받침 안에 들어오는 크기(플래터 136 · LP 124), 파랑 없음, 그림자 없음 — 조용하게.
  */
 export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay, className = "", disc = "strong", look = "surface" }: LPPlayerProps) {
+  const art = useTrackArtwork(currentTrack);
   // 재킷을 받아 올 해상도에만 쓴다. 새 테마에서는 재킷이 LP 전체(최대 168px)라 80px 로는 흐리다.
   // 모양은 전부 CSS(newtone:)가 가르므로 이 값이 늦게 정해져도 깜빡이지 않는다. legacy 는 "80px" 그대로.
   const [newtone, setNewtone] = useState(false);
@@ -104,7 +108,7 @@ export default function LPPlayer({ isPlaying = false, currentTrack, onTogglePlay
               }`}
             >
               {currentTrack && (
-                 <Image src={currentTrack.albumImage} alt={currentTrack.title} fill sizes={newtone ? "168px" : "80px"} className="object-cover opacity-80 newtone:opacity-90" />
+                 <Image src={art.src} onError={art.onError} alt={currentTrack.title} fill sizes={newtone ? "168px" : "80px"} className="object-cover opacity-80 newtone:opacity-90" />
               )}
               {/* 픽처 디스크도 판이라는 것이 읽히게 아주 옅은 홈 두 줄. 새 테마에서 재킷이 있을 때만. */}
               {currentTrack && (

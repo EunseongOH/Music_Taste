@@ -10,6 +10,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTrackArtwork } from "@/utils/useTrackArtwork";
+import type { TrackArtwork } from "@/utils/trackArtwork";
 import Image from "next/image";
 import { X } from "lucide-react";
 
@@ -206,13 +208,18 @@ export function EmptyState({
 // ---------------------------------------------------------------------------
 
 /** 앨범 커버. 이미지가 없으면 같은 크기의 옅은 면만 둔다(아이콘을 넣지 않는다). */
-export function Cover({ src, alt, size }: { src?: string | null; alt: string; size: number }) {
+/**
+ * 곡·앨범 커버. 주소가 깨지면(404) 다음 후보 → 대체 그림으로 간다 — 깨진 그림 아이콘을 보이지 않는다.
+ * 곡을 통째로 주면(`track`) 재킷 → 다른 재킷 → 아티스트 사진 순서를 쓴다.
+ */
+export function Cover({ src, alt, size, track }: { src?: string | null; alt: string; size: number; track?: TrackArtwork }) {
+  const art = useTrackArtwork(track ?? { albumImage: src, title: alt });
   return (
     <div
       className="relative shrink-0 overflow-hidden rounded-lg bg-navy/5"
       style={{ width: size, height: size }}
     >
-      {src && <Image src={src} alt={alt} width={size} height={size} className="object-cover w-full h-full" />}
+      <Image src={art.src} onError={art.onError} alt={alt} width={size} height={size} className="object-cover w-full h-full" />
     </div>
   );
 }
@@ -279,6 +286,8 @@ export interface RankTrack {
   title: string;
   artistName: string;
   albumImage?: string;
+  albumImageFallbacks?: string[];
+  artistImage?: string;
 }
 
 /** 취향표 순위. 1~3위 숫자만 강조색, 나머지는 보조색. */
@@ -294,7 +303,7 @@ export function RankList({ tracks }: { tracks: RankTrack[] }) {
           >
             {idx + 1}
           </span>
-          <Cover src={track.albumImage} alt={track.title} size={40} />
+          <Cover track={track} alt={track.title} size={40} />
           <div className="flex-1 min-w-0">
             <p className="type-body-strong text-navy truncate">{track.title}</p>
             <p className="type-caption text-navy/70 truncate">{track.artistName}</p>

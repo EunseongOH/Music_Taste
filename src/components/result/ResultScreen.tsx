@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Download, Share2, Archive, Check, X, FileSpreadsheet, Loader2 } from "lucide-react";
@@ -21,9 +21,10 @@ import { shareBody as buildShareBody, shareRanking, shareTitle } from "@/utils/s
 import PalettePicker from "@/components/result/PalettePicker";
 import { type CardPalette } from "@/components/result/cardPalette";
 import { shareToKakao } from "@/utils/kakaoShare";
-import { useInlinedCovers } from "@/utils/useInlinedCovers";
+import { useResolvedArtwork } from "@/utils/useTrackArtwork";
+import { withArtistImages } from "@/utils/trackArtwork";
 import PyramidStage from "@/components/result/PyramidStage";
-import { normalizeRanking } from "@/utils/ranking";
+import { normalizeRanking, withSavedArtistImage } from "@/utils/ranking";
 
 const translations = {
   ko: {
@@ -144,6 +145,9 @@ interface Track {
   title: string;
   artistName: string;
   albumImage: string;
+  albumImageFallbacks?: string[];
+  artistImage?: string;
+  artistId?: string;
 }
 
 /* 공유 문구는 src/utils/shareText.ts 한 곳에서 만든다(모든 채널이 같은 말을 쓰게). */
@@ -182,14 +186,15 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const supabase = createClient();
   const [winners, setWinners] = useState<Track[]>([]);
   /**
-   * 내보내기 카드에 쓸 순위. 커버만 미리 받아 둔 data URL 로 바꿔 둔다.
-   * 화면에 보이는 템플릿은 그대로 원격 주소를 쓴다 — 저장되는 건 오프스크린 카드뿐이다.
+   * 내보내기 카드에 쓸 순위. 곡마다 재킷 → 다른 재킷 → 아티스트 사진을 실제로 받아 보고
+   * 처음 성공한 것을 data URL 로 굳힌다(다 실패하면 대체 그림). 카드 안에 원격 주소가 남지 않는다.
+   *
+   * 굳힌 뒤에는 **화면의 카드도 같은 값**을 쓴다. 화면은 <img> 로 불러와 되고 저장은 fetch 로
+   * 막히는 그림(CORS)이 있어도, 미리보기와 저장 이미지가 서로 다른 그림이 되지 않는다.
+   * 굳히기 전에는 화면만 <img> 사다리(useTrackArtwork)로 먼저 보여 준다.
    */
-  const coverMap = useInlinedCovers(winners.map((w) => w.albumImage));
-  const exportWinners = useMemo(
-    () => winners.map((w) => (coverMap[w.albumImage] ? { ...w, albumImage: coverMap[w.albumImage] } : w)),
-    [winners, coverMap]
-  );
+  const artwork = useResolvedArtwork(winners);
+  const exportWinners = artwork.resolved ?? winners;
   const [isExporting, setIsExporting] = useState(false);
   const [isSavingArchive, setIsSavingArchive] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -358,7 +363,8 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
           return;
         }
         // 압축 형식({i,t,a,m})으로 저장된 예전 순위도 같은 모양으로 맞춘다.
-        const ranking: Track[] = normalizeRanking(data.ranking);
+        // 예전 한 아티스트 취향표는 곡에 아티스트 사진이 없다 — 결과의 artist_id 로만 찾아 붙인다.
+        const ranking: Track[] = await withSavedArtistImage(supabase, data, normalizeRanking(data.ranking));
         const created = new Date(data.created_at);
         setTestDate(`${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, "0")}.${String(created.getDate()).padStart(2, "0")}`);
         setWinners(ranking);
@@ -380,7 +386,10 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       if (storedRanking) {
         const parsed = JSON.parse(storedRanking);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setWinners(parsed);
+          // 이 변경 전에 시작한 판의 곡에는 아티스트 사진이 없다 — 고른 아티스트 목록에서 채운다.
+          let artists = null;
+          try { artists = JSON.parse(sessionStorage.getItem("selectedArtists") || localStorage.getItem("selectedArtists") || "null"); } catch { /* 없으면 그대로 */ }
+          setWinners(withArtistImages(parsed, artists));
         }
       }
 
@@ -681,6 +690,8 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
   const saveCards = async (count: number) => {
     setIsExporting(true);
     try {
+      // 그림을 다 굳혀 카드에 반영한 뒤에 잡는다. 화면이 뜨자마자 눌러도 빈 칸·깨진 그림이 들어가지 않는다.
+      await artwork.whenReady();
       const base = `${winners[0]?.artistName || "Artist"}_Music_Taste_${template}`;
       for (let i = 0; i < count; i++) {
         const el = document.getElementById(`export-card-${i}`);
@@ -1042,7 +1053,7 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
               // 월드컵 직후 인트로: 예전 피라미드 모션 그대로. 끝나면 기본 템플릿(레코드형) 카드로.
               <PyramidStage tracks={winners} playing onDone={() => setIntroDone(true)} skipLabel={t.skipIntro} />
             ) : (
-              renderCards(winners).map((card, i) => (
+              renderCards(exportWinners).map((card, i) => (
                 <ScaledCard key={`${template}-${i}`} halo={palette?.previewHalo}>
                   {card}
                 </ScaledCard>

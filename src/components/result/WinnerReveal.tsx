@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { SafeImage } from "@/components/SafeImage";
+import Image from "next/image";
+import { useTrackArtwork } from "@/utils/useTrackArtwork";
 import { primaryButton } from "@/components/space/SpaceUI";
 
 interface Track {
@@ -10,6 +11,8 @@ interface Track {
   title: string;
   artistName: string;
   albumImage: string;
+  albumImageFallbacks?: string[];
+  artistImage?: string;
 }
 
 interface WinnerRevealProps {
@@ -65,6 +68,8 @@ export default function WinnerReveal({
   const t = copy[locale] ?? copy.ko;
   const reduce = useReducedMotion();
   const side = championOnLeft ? -1 : 1;
+  const championArt = useTrackArtwork(champion);
+  const runnerUpArt = useTrackArtwork(runnerUp);
 
   // 동작 줄이기를 켰으면 결승 장면을 건너뛰고 마지막 모습으로 바로 간다.
   const [revealed, setRevealed] = useState(!!reduce);
@@ -113,7 +118,7 @@ export default function WinnerReveal({
             className="absolute w-[101px] h-[101px] rounded-[4px] overflow-hidden grayscale"
             style={{ transform: `translate(${-side * 132}px, 22px)` }}
           >
-            <SafeImage src={runnerUp.albumImage} alt="" fill sizes="101px" fallbackType="track" className="object-cover" />
+            <Image src={runnerUpArt.src} onError={runnerUpArt.onError} alt="" fill sizes="101px" className="object-cover" />
           </motion.div>
         )}
 
@@ -126,12 +131,12 @@ export default function WinnerReveal({
               : "relative z-10 w-[217px] h-[217px] rounded-[4px] overflow-hidden shadow-[0_18px_40px_-16px_rgba(var(--t-ink-rgb),0.55)]"
           }
         >
-          <SafeImage
-            src={champion.albumImage}
+          <Image
+            src={championArt.src}
+            onError={championArt.onError}
             alt={champion.title}
             fill
             sizes="(max-width: 430px) 100vw, 430px"
-            fallbackType="track"
             className="object-cover"
           />
           {/*

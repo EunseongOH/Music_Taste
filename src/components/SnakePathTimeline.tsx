@@ -7,12 +7,15 @@
 
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
+import { TrackArtImg } from "@/components/TrackArtImg";
 
 interface Track {
   id: string;
   title: string;
   artistName: string;
   albumImage: string;
+  albumImageFallbacks?: string[];
+  artistImage?: string;
 }
 
 interface SnakePathTimelineProps {
@@ -366,8 +369,8 @@ export default function SnakePathTimeline({ tracks, drawDuration = 5, onLayoutCo
                         WebkitMaskImage: HOLE_MASK
                       }}
                     >
-                      <img 
-                        src={pt.track.albumImage} 
+                      <TrackArtImg
+                        track={pt.track}
                         alt={pt.track.title} 
                         className="w-full h-full object-cover" 
                         loading="eager"

@@ -7,7 +7,8 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getSafeLocale } from "@/utils/storage";
-import { normalizeRanking, type RankedTrack } from "@/utils/ranking";
+import { normalizeRanking, withSavedArtistImage, type RankedTrack } from "@/utils/ranking";
+import { useTrackArtwork } from "@/utils/useTrackArtwork";
 import { MIX_MATCH } from "@/config/modes";
 import { Avatar, RankList, primaryButton, secondaryButton } from "@/components/space/SpaceUI";
 import { DISC_BACKGROUND } from "@/components/TasteTemplates";
@@ -85,6 +86,8 @@ export default function TasteSharedPage() {
   const [locale, setLocale] = useState<"ko" | "en">("ko");
   /* 고정 바(버튼 3개)의 실제 높이만큼 본문 끝을 비운다. */
   const dockRef = useDockClearance();
+  // 1위 슬리브와 LP 라벨이 같은 그림을 쓴다(재킷 → 다른 재킷 → 아티스트 → 대체 그림).
+  const topArt = useTrackArtwork(ranking[0]);
 
   useEffect(() => {
     setLocale(getSafeLocale());
@@ -95,13 +98,16 @@ export default function TasteSharedPage() {
     let alive = true;
     (async () => {
       try {
-        const { data, error } = await createClient().from("tournament_results").select("*").eq("id", id).single();
+        const supabase = createClient();
+        const { data, error } = await supabase.from("tournament_results").select("*").eq("id", id).single();
         if (error) throw error;
         if (!alive) return;
         // 공개된 취향표만 보여준다.
         if (data && data.is_public) {
+          const ranked = await withSavedArtistImage(supabase, data, normalizeRanking(data.ranking));
+          if (!alive) return;
           setResult(data);
-          setRanking(normalizeRanking(data.ranking));
+          setRanking(ranked);
         } else {
           setResult(null);
         }
@@ -194,11 +200,12 @@ export default function TasteSharedPage() {
                 animate={reduceMotion ? undefined : { rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 14, ease: "linear" }}
               >
-                <img src={top.albumImage} alt="" className="absolute inset-0 m-auto w-[56px] h-[56px] rounded-full object-cover" />
+                <img src={topArt.src} onError={topArt.onError} alt="" className="absolute inset-0 m-auto w-[56px] h-[56px] rounded-full object-cover" />
                 <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-cream" />
               </motion.div>
               <img
-                src={top.albumImage}
+                src={topArt.src}
+                onError={topArt.onError}
                 alt=""
                 className="absolute left-0 top-[12px] w-[176px] h-[176px] object-cover -rotate-3 shadow-[0_10px_24px_-10px_rgba(var(--t-ink-rgb),0.45)]"
               />

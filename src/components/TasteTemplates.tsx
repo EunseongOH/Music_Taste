@@ -2,6 +2,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { TrackArtImg } from "@/components/TrackArtImg";
+import { useTrackArtwork } from "@/utils/useTrackArtwork";
 import {
   LIST_FEATURE_H,
   LIST_TOP_GAP,
@@ -33,7 +35,12 @@ export interface CardTrack {
   title: string;
   artistName: string;
   albumImage: string;
+  /** 재킷이 없을 때의 다음 후보들. 저장용 카드에는 이미 data URL 하나로 굳혀서 넘어온다. */
+  albumImageFallbacks?: string[];
+  artistImage?: string;
 }
+
+type Art = { src: string; onError: () => void };
 
 export interface CardMeta {
   /** 카드 제목. 한 아티스트면 아티스트명, 여럿이면 "○○ 외 n명" */
@@ -150,10 +157,11 @@ function CardFooter({ page, pages }: { page?: number; pages?: number }) {
   );
 }
 
-function Cover({ src, size, round = false, className = "" }: { src: string; size: number; round?: boolean; className?: string }) {
+function Cover({ art, size, round = false, className = "" }: { art: Art; size: number; round?: boolean; className?: string }) {
   return (
     <img
-      src={src}
+      src={art.src}
+      onError={art.onError}
       alt=""
       crossOrigin="anonymous"
       className={`block object-cover shrink-0 ${round ? "rounded-full" : "rounded-[3px]"} ${className}`}
@@ -186,12 +194,13 @@ function rowStyle(h: number) {
 
 function ListRow({ track, rank, height, single }: { track: CardTrack; rank: number; height: number; single: boolean }) {
   const s = rowStyle(height);
+  const art = useTrackArtwork(track);
   return (
     <li className="grid items-center gap-x-3" style={{ height, gridTemplateColumns: `${s.rankCol}px auto 1fr` }}>
       <span className={`font-num tabular-nums font-bold text-right ${rankColor(rank)}`} style={{ fontSize: s.rank, lineHeight: 1 }}>
         {rank}
       </span>
-      <Cover src={track.albumImage} size={s.img} />
+      <Cover art={art} size={s.img} />
       <span className={`min-w-0 flex ${s.stacked ? "flex-col" : "items-baseline gap-2"}`}>
         <b className={`truncate ${height < 31 ? "font-semibold" : "font-bold"}`} style={{ fontSize: s.title, lineHeight: 1.3 }}>
           {track.title}
@@ -255,10 +264,10 @@ export const DISC_BACKGROUND =
   "radial-gradient(circle, transparent 0 19%, rgba(255,255,255,0.08) 19% 19.6%, transparent 19.6%), " +
   "repeating-radial-gradient(circle, var(--card-disc-a, #161616) 0 1.5px, var(--card-disc-b, #232323) 1.5px 3px)";
 
-function MiniRecord({ src, size }: { src: string; size: number }) {
+function MiniRecord({ art, size }: { art: Art; size: number }) {
   return (
     <span className="relative shrink-0 rounded-full overflow-hidden" style={{ width: size, height: size }}>
-      <Cover src={src} size={size} round />
+      <Cover art={art} size={size} round />
       <span className="absolute inset-0 m-auto w-[5px] h-[5px] rounded-full bg-[var(--card-bg)]" />
     </span>
   );
@@ -267,12 +276,13 @@ function MiniRecord({ src, size }: { src: string; size: number }) {
 /** 리스트형과 같은 크기 규칙(rowStyle)에 커버만 작은 레코드로. */
 function RecordRow({ track, rank, height, single }: { track: CardTrack; rank: number; height: number; single: boolean }) {
   const s = rowStyle(height);
+  const art = useTrackArtwork(track);
   return (
     <li className="grid items-center gap-x-3" style={{ height, gridTemplateColumns: `${s.rankCol}px auto 1fr` }}>
       <span className={`font-num tabular-nums font-bold text-right ${rankColor(rank)}`} style={{ fontSize: s.rank, lineHeight: 1 }}>
         {rank}
       </span>
-      <MiniRecord src={track.albumImage} size={s.img} />
+      <MiniRecord art={art} size={s.img} />
       <span className={`min-w-0 flex ${s.stacked ? "flex-col" : "items-baseline gap-2"}`}>
         <b className="truncate font-semibold" style={{ fontSize: s.title, lineHeight: 1.3 }}>
           {track.title}
@@ -302,6 +312,8 @@ export function RecordCard({
 }) {
   const t = text[meta.locale];
   const top = tracks[0];
+  // 큰 슬리브와 LP 가운데 라벨이 같은 그림을 쓴다. 재킷이 없으면 둘 다 아티스트 사진으로 간다.
+  const topArt = useTrackArtwork(top);
   const from = page.hero ? 1 : page.from;
   const rows = tracks.slice(from, page.to);
   const sleeve = page.sleeve;
@@ -317,11 +329,11 @@ export function RecordCard({
               className="absolute rounded-full"
               style={{ left: Math.round(sleeve * 0.51), top: Math.round((sleeve - disc) / 2), width: disc, height: disc, background: DISC_BACKGROUND }}
             >
-              <Cover src={top.albumImage} size={Math.round(disc * 0.35)} round className="absolute inset-0 m-auto" />
+              <Cover art={topArt} size={Math.round(disc * 0.35)} round className="absolute inset-0 m-auto" />
               <span className="absolute inset-0 m-auto w-[6px] h-[6px] rounded-full bg-[var(--card-bg)]" />
             </div>
             <Cover
-              src={top.albumImage}
+              art={topArt}
               size={sleeve}
               className="absolute left-0 top-0 !rounded-none shadow-[0_10px_24px_-10px_rgba(var(--t-ink-rgb),0.45)]"
             />
@@ -401,7 +413,7 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
               const filler = tracks.length ? tracks[i % Math.min(tracks.length, layout.shown || 1)] : null;
               return (
                 <div key={i} className="absolute overflow-hidden bg-[color-mix(in_srgb,var(--card-ink)_8%,var(--card-bg))]" style={box}>
-                  {filler && <img src={filler.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover opacity-30" />}
+                  {filler && <TrackArtImg track={filler} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover opacity-30" />}
                 </div>
               );
             }
@@ -409,7 +421,7 @@ export function MosaicCard({ tracks, meta, shape }: { tracks: CardTrack[]; meta:
             const rank = c.rank + 1;
             return (
               <div key={i} className="absolute overflow-hidden" style={box}>
-                <img src={track.albumImage} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover" />
+                <TrackArtImg track={track} alt="" crossOrigin="anonymous" className="block w-full h-full object-cover" />
                 {overlay ? (
                   <div className="absolute inset-0 bg-[color-mix(in_srgb,var(--card-ink)_55%,transparent)] flex flex-col items-center justify-center text-center px-2 gap-0.5">
                     <span className="font-num font-bold text-[var(--card-bg)]" style={{ fontSize: rank === 1 ? 18 : 15, lineHeight: 1 }}>
