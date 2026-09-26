@@ -1072,3 +1072,28 @@ Only after Waves A–D are resolved should production component migration begin.
 - **Wave B — Tournament: Figma candidate validated.** See [wave-b-tournament.md](./wave-b-tournament.md).
 - **Wave C — Records & Archive: Figma candidate validated.** See [wave-c-records-archive.md](./wave-c-records-archive.md).
 - **Wave D — Together domain: Figma candidate validated.** See [wave-d-together-domain.md](./wave-d-together-domain.md).
+
+
+# 12. Migration readiness
+
+Design Waves A–D are validated, but production migration is **not yet cleared to start**.
+
+Repository status checked on 2026-09-26:
+- current `develop`: `741949a5476bf91ec937b18d0a7d136b95b36617`
+- `fix/together-result-consistency` is currently **8 commits ahead / 4 commits behind** develop
+- common merge base: `cca50a183a70a9d034ec1d8cd704a6aea3f43172`
+
+The design system is therefore:
+
+- **DESIGN READY**
+- **CODE BASELINE NOT YET LOCKED**
+
+Before implementation, reconcile the Together branch with develop and run the intended combined regression suite. Do not migrate the design system independently onto both divergent branches.
+
+See [migration-readiness.md](./migration-readiness.md) for:
+- migration gates
+- batch order
+- code mapping
+- regression requirements
+- Tournament behavior guardrails
+- first pilot PR recommendation
