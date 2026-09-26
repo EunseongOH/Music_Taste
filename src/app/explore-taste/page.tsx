@@ -133,6 +133,8 @@ const translations = {
     deleteAction: "삭제",
     deleteSuccess: "취향표를 삭제했어요.",
     deleteFailed: "삭제하지 못했어요. 다시 시도해 주세요.",
+    listenRemoved: "들어볼 곡에서 지웠어요.",
+    listenRemoveFailed: "지우지 못했어요. 다시 시도해 주세요.",
     loadAndShare: "불러와서 공유하기",
     emptyListenTitle: "들어볼 곡이 없어요",
     emptyListenDesc: "월드컵에서 모르는 곡을 위로 올려 빼면 여기에 모여요.",
@@ -186,6 +188,8 @@ const translations = {
     deleteAction: "Delete",
     deleteSuccess: "Taste card deleted.",
     deleteFailed: "Couldn't delete. Please try again.",
+    listenRemoved: "Removed from Listen Later.",
+    listenRemoveFailed: "Couldn't remove. Please try again.",
     loadAndShare: "Load & share",
     emptyListenTitle: "Nothing to listen to yet",
     emptyListenDesc: "Songs you drag up to skip during a World Cup gather here.",
@@ -329,13 +333,21 @@ export default function ExploreTastePage() {
     }
   }, [user, isLoading]);
 
+  /*
+   * 들어볼 곡에서 지우기. 낙관적으로 먼저 지우되, **실패는 말한다**(UX-015).
+   * 예전에는 실패하면 줄이 조용히 되돌아와 "왜 다시 생겼지?"만 남았다. 성공도 한 줄 알린다.
+   */
   const handleRemoveListen = async (id: string) => {
     const prev = listenTracks;
     setListenTracks(prev.filter((tr) => tr.id !== id));
-    const { error } = await supabase.from("listen_later_tracks").delete().eq("id", id);
-    if (error) {
-      console.error("[ExploreTaste] Error removing listen later:", error.message);
+    try {
+      const { error } = await supabase.from("listen_later_tracks").delete().eq("id", id);
+      if (error) throw error;
+      showToast(translations[locale].listenRemoved);
+    } catch (e) {
+      console.error("[ExploreTaste] Error removing listen later:", e instanceof Error ? e.message : e);
       setListenTracks(prev);
+      showToast(translations[locale].listenRemoveFailed, "error");
     }
   };
 

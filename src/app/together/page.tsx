@@ -22,7 +22,15 @@ export default function TogetherHomePage() {
     const clean = code.trim().toLowerCase();
     if (clean.length < 4) return;
     setBusy(true);
-    const found = await fetchChallenge(clean);
+    let found: Awaited<ReturnType<typeof fetchChallenge>>;
+    try {
+      found = await fetchChallenge(clean);
+    } catch {
+      // 못 읽은 것은 "없는 코드"가 아니다(UX-014).
+      setBusy(false);
+      showToast("방을 확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.", "error");
+      return;
+    }
     setBusy(false);
     if (!found) {
       showToast("그런 코드가 없어요. 다시 확인해 주세요.", "error");

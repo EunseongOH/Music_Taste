@@ -790,8 +790,12 @@ export default function ResultScreen({ mode = "fresh" }: { mode?: "fresh" | "sav
       setShowSaveSheet(false);
       return true;
     } catch (err: any) {
+      // 원시 예외 문자열("TypeError: Failed to fetch")은 콘솔에만. 사용자에게는 무엇이 실패했고 다시 해도 되는지만(UX-007).
       console.error("Failed to save to archive:", err);
-      showToastMessage(locale === "en" ? `Failed to save: ${err.message || err}` : `저장하지 못했어요: ${err.message || err}`, "error");
+      showToastMessage(
+        locale === "en" ? "Couldn't save your taste card. Please try again." : "취향표를 저장하지 못했어요. 다시 시도해 주세요.",
+        "error"
+      );
       return false;
     } finally {
       setIsSavingArchive(false);

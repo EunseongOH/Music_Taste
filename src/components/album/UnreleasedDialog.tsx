@@ -31,8 +31,9 @@ const copy = {
     info2: "공식 승인 전이라도 ",
     info3: "바로 넣을 수 있어요.",
     submit: "추가하기",
+    submitting: "추가하는 중…",
     savedDb: "미발매곡 등록을 요청했어요. 승인 대기 중이라도 바로 쓸 수 있어요!",
-    savedTemp: "아쉽게도 저장 과정에 문제가 생겼지만, 지금 바로 사용할 수 있어요!",
+    savedTemp: "미발매곡을 등록하지 못했어요. 이번 판에서만 임시로 쓸 수 있어요. 잠시 후 다시 시도해 주세요.",
     guest: "로그인하지 않은 상태예요. 임시로 추가되어 바로 쓸 수 있지만, 브라우저를 닫으면 사라질 수 있어요.",
   },
   en: {
@@ -46,8 +47,9 @@ const copy = {
     info2: "Even before official approval, you can ",
     info3: "use it right away.",
     submit: "Add",
+    submitting: "Adding…",
     savedDb: "Track submission requested. You can use it right away!",
-    savedTemp: "Failed to save to database, but it has been added temporarily for now!",
+    savedTemp: "Couldn't submit the track. It's only available in this round for now. Please try again later.",
     guest: "Using guest mode. The track is added temporarily but may be lost when the browser closes.",
   },
 };
@@ -76,14 +78,19 @@ interface Props {
   artistId: string | null;
   artistName: string;
   locale: "ko" | "en";
-  /** 등록 직후. notice 는 그대로 띄울 안내 문장이다(로그인 상태에 따라 다르다) */
-  onAdded: (track: AddedUnreleasedTrack, notice: string) => void;
+  /**
+   * 등록 직후. notice 는 그대로 띄울 안내 문장이다(로그인 상태에 따라 다르다).
+   * tone 은 실제 결과다 — DB 에 남았으면 success, 못 남겼으면 error(UX-021). 게스트 임시 추가는 info.
+   */
+  onAdded: (track: AddedUnreleasedTrack, notice: string, tone: "success" | "error" | "info") => void;
 }
 
 export default function UnreleasedDialog({ open, onClose, artistId, artistName, locale, onAdded }: Props) {
   const { user } = useAuth();
   const t = copy[locale] ?? copy.ko;
   const [form, setForm] = useState({ title: "", videoUrl: "", date: "" });
+  /** 저장 요청 중. 두 번 눌리지 않게 하고 버튼에 진행 중임을 보인다. */
+  const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,6 +101,8 @@ export default function UnreleasedDialog({ open, onClose, artistId, artistName, 
     const cover = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : coverPlaceholder(id);
 
     // 로그인해야 DB 에 남는다. 안 해도 이 자리에서는 쓸 수 있게 둔다.
+    if (busy) return;
+    setBusy(true);
     let saved = false;
     if (user) {
       try {
@@ -110,9 +119,11 @@ export default function UnreleasedDialog({ open, onClose, artistId, artistName, 
         console.error("미발매곡 저장 실패:", err);
       }
     }
+    setBusy(false);
 
     onClose();
     setForm({ title: "", videoUrl: "", date: "" });
+    // 실패는 실패로 말한다(UX-021). 임시로 쓸 수 있다는 사실은 덧붙이되 성공 톤을 빌리지 않는다.
     onAdded(
       {
         id,
@@ -122,7 +133,8 @@ export default function UnreleasedDialog({ open, onClose, artistId, artistName, 
         date: form.date,
         year: form.date ? form.date.substring(0, 4) : new Date().getFullYear().toString(),
       },
-      user ? (saved ? t.savedDb : t.savedTemp) : t.guest
+      user ? (saved ? t.savedDb : t.savedTemp) : t.guest,
+      user ? (saved ? "success" : "error") : "info"
     );
   };
 
@@ -216,9 +228,11 @@ export default function UnreleasedDialog({ open, onClose, artistId, artistName, 
               </div>
               <button
                 type="submit"
-                className="mt-2 w-full py-3.5 bg-brand text-cream font-sans font-medium rounded-xl shadow-md hover:bg-brand/90 active:scale-[0.98] transition-all cursor-pointer"
+                disabled={busy}
+                aria-busy={busy}
+                className="mt-2 w-full py-3.5 bg-brand text-cream font-sans font-medium rounded-xl shadow-md hover:bg-brand/90 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 disabled:cursor-default"
               >
-                {t.submit}
+                {busy ? t.submitting : t.submit}
               </button>
             </form>
           </motion.div>

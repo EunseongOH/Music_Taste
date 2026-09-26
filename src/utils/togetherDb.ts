@@ -74,11 +74,16 @@ export function isMine(challenge: Pick<SortChallenge, "code" | "creator_id">, us
   return mineCodes().includes(challenge.code);
 }
 
+/**
+ * 방을 찾는다. **없는 것(null)과 못 읽은 것(throw)을 가른다** — UX-014.
+ * 예전에는 둘 다 null 이라, 연결이 끊긴 초대 링크가 "지워졌거나 잘못된 링크"로 보이거나
+ * 화면이 "불러오고 있어요"에 멈췄다. 부르는 쪽은 throw 를 받아 "불러오지 못했어요 · 다시 시도"를 보여 준다.
+ */
 export async function fetchChallenge(code: string): Promise<SortChallenge | null> {
   const { data, error } = await createClient().from("sort_challenges").select("*").eq("code", code).maybeSingle();
   if (error) {
     console.error("[together] 챌린지를 불러오지 못했어요:", error.message);
-    return null;
+    throw new Error(error.message);
   }
   return (data as SortChallenge) ?? null;
 }

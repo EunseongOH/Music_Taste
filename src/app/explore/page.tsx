@@ -58,6 +58,11 @@ export default function ExplorePage() {
   const selectedIds = React.useMemo(() => new Set(selectedArtists.map(a => a.id)), [selectedArtists]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(true); // Start true to show loading initially
+  /** 검색 요청이 실패했다. "결과 없음"과 다르게 보여 주고 다시 시도할 수 있게 한다(UX-014). */
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [searchRetry, setSearchRetry] = useState(0);
+  /** 더 불러오기가 실패했다. 스피너를 멈추고 다시 시도 버튼을 보여 준다. */
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [pendingSingleArtist, setPendingSingleArtist] = useState<Artist | null>(null);
@@ -133,6 +138,9 @@ export default function ExplorePage() {
       searchResult: "검색 결과",
       searchResultSub: `"${searchQuery}" 검색 결과예요`,
       noResults: "검색 결과가 없어요. 다른 검색어로 검색해 볼까요?",
+      searchFailed: "검색 결과를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
+      loadMoreFailed: "더 불러오지 못했어요 · 다시 시도",
+      retry: "다시 시도",
       loadingMore: "아티스트 더 불러오는 중...",
       selectedLabel: "선택한 아티스트",
       countLabel: "명",
@@ -150,6 +158,9 @@ export default function ExplorePage() {
       searchResult: "Search Results",
       searchResultSub: `Results for "${searchQuery}"`,
       noResults: "No results found. Let's try searching for something else.",
+      searchFailed: "Couldn't load search results. Check your connection and try again.",
+      loadMoreFailed: "Couldn't load more · Try again",
+      retry: "Try again",
       loadingMore: "Loading more artists...",
       selectedLabel: "Selected Artists",
       countLabel: "",
@@ -476,6 +487,7 @@ export default function ExplorePage() {
       setIsSearching(true);
       setSearchOffset(0);
       setHasMoreSearch(true);
+      setSearchFailed(false);
       try {
         const results = await searchSpotifyArtists(searchQuery, 10, 0);
         const mappedArtists: Artist[] = results.map((artist: any) => ({
@@ -494,6 +506,14 @@ export default function ExplorePage() {
         if (error.message === "429" || error.status === 429) {
           setSpotifyError("429");
         }
+        /*
+         * 실패는 "결과 없음"도 "아직 불러오는 중"도 아니다(UX-014). 목록을 비우고 실패로
+         * 표시하며, 무한 스크롤이 같은 요청을 계속 던지지 않게 멈춘다.
+         */
+        setArtists([]);
+        setHasMoreSearch(false);
+        setLoadMoreFailed(false);
+        setSearchFailed(true);
       } finally {
         setIsSearching(false);
         await checkSpotifyError();
@@ -501,7 +521,13 @@ export default function ExplorePage() {
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timer);
-  }, [searchQuery, defaultArtists]);
+  }, [searchQuery, defaultArtists, searchRetry]);
+
+  /** 실패한 검색을 같은 검색어로 다시 돌린다. 검색어가 안 바뀌어도 effect 가 다시 돌게 한다. */
+  const retrySearch = () => {
+    prevSearchQueryRef.current = "";
+    setSearchRetry((n) => n + 1);
+  };
 
   // Stable callback using refs to avoid stale closures in IntersectionObserver.
   // IMPORTANT: genreOffsetRef is updated DIRECTLY (not via setState) so this
@@ -515,6 +541,7 @@ export default function ExplorePage() {
 
       isLoadingMoreRef.current = true;
       setIsLoadingMore(true);
+      setLoadMoreFailed(false);
       try {
         const nextOffset = searchOffsetRef.current + 10;
         const results = await searchSpotifyArtists(searchQueryRef.current, 10, nextOffset);
@@ -544,6 +571,10 @@ export default function ExplorePage() {
         if (e.message === "429" || e.status === 429) {
           setSpotifyError("429");
         }
+        // 실패한 채로 스피너를 돌리지 않는다. 관찰자가 같은 요청을 반복하지 않게 멈추고 다시 시도를 준다.
+        setHasMoreSearch(false);
+        hasMoreSearchRef.current = false;
+        setLoadMoreFailed(true);
       } finally {
         setIsLoadingMore(false);
         isLoadingMoreRef.current = false;
@@ -979,7 +1010,15 @@ export default function ExplorePage() {
               {t.searchResult}
               <span className="text-xs font-sans text-point font-medium">{t.searchResultSub}</span>
             </h2>
-            {artists.length === 0 ? (
+            {searchFailed ? (
+              /* 실패 ≠ 결과 없음. 무엇을 못 했는지 말하고 같은 검색어로 다시 시도할 수 있게 한다(UX-014). */
+              <div role="alert" className="py-10 px-4 text-center font-sans text-sm text-navy/70 bg-white/40 border border-navy/10 rounded-3xl flex flex-col items-center gap-3">
+                <span>{t.searchFailed}</span>
+                <button type="button" onClick={retrySearch} className="px-4 py-2 rounded-full bg-navy text-cream text-xs font-bold cursor-pointer active:scale-95 transition-transform">
+                  {t.retry}
+                </button>
+              </div>
+            ) : artists.length === 0 ? (
               <div className="py-12 text-center font-sans text-sm text-charcoal/50 bg-white/20 border border-dashed border-navy/10 rounded-3xl">
                 {t.noResults}
               </div>
@@ -1005,13 +1044,17 @@ export default function ExplorePage() {
 
       {/* Infinite Scroll Sentinel — callback ref ensures observer attaches when this element mounts */}
       <div ref={setSentinelRef} className="h-20 w-full flex items-center justify-center mt-4">
-        {((searchQuery.trim().length > 0 && hasMoreSearch) || 
+        {searchQuery.trim().length > 0 && loadMoreFailed && !searchFailed ? (
+          <button type="button" onClick={() => { setHasMoreSearch(true); hasMoreSearchRef.current = true; void handleLoadMore(); }} className="font-sans text-xs text-navy/70 underline underline-offset-4 cursor-pointer py-4">
+            {t.loadMoreFailed}
+          </button>
+        ) : (((searchQuery.trim().length > 0 && hasMoreSearch) ||
           (searchQuery.trim().length === 0 && selectedGenres.length > 0 && hasMoreGenre)) && (
           <div className="flex flex-col items-center gap-1.5 py-4">
             <Loader2 className="animate-spin text-point/60" size={24} />
             <span className="font-sans text-[10px] text-navy/40 font-bold">{t.loadingMore}</span>
           </div>
-        )}
+        ))}
       </div>
 
       {/* 목록 끝의 Spotify 링크백 (약관 II.4). 아티스트 사진이 Spotify 에서 오므로 이 묶음에 하나가 필요하다.

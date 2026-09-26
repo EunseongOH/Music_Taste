@@ -246,7 +246,7 @@ export default function TogetherNewPage() {
    * 그래도 방에는 곡 정보가 통째로 저장되므로(challenge.tracks) 초대받은
    * 사람도 같은 곡을 본다 — 승인은 "다른 방에도 보일지"를 정하는 일이다.
    */
-  const addUnreleased = (track: AddedUnreleasedTrack, notice: string) => {
+  const addUnreleased = (track: AddedUnreleasedTrack, notice: string, tone: "success" | "error" | "info") => {
     setArtistSource((prev) =>
       prev
         ? {
@@ -271,7 +271,8 @@ export default function TogetherNewPage() {
       next.delete(track.id);
       return next;
     });
-    showToast(notice);
+    // 실패는 오류 톤으로 보인다(UX-021). 게스트 임시 추가는 안내 톤.
+    showToast(notice, tone === "error" ? "error" : undefined);
   };
 
   /*

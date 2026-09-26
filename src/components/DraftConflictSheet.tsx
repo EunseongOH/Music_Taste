@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sheet, Toast, primaryButton, dangerButton, useToast } from "@/components/space/SpaceUI";
-import { draftExpiresAt, formatDraftExpiry, loadActiveDraft, type StageSaveResult } from "@/utils/worldcupDb";
+import { draftExpiresAt, formatDraftExpiry, fetchActiveDraftStrict, type StageSaveResult } from "@/utils/worldcupDb";
 import { clearActiveRun, draftResumePath, restoreDraftToStorage } from "@/utils/worldcupRun";
 import { safeLocalStorage, safeSessionStorage } from "@/utils/storage";
 
@@ -53,16 +53,18 @@ export function useDraftConflict(signedIn: boolean, locale: "ko" | "en") {
   /** 저장 결과 하나를 처리한다. 성공일 때만 원래 할 일로 넘어간다. */
   const settle = async (
     result: StageSaveResult,
-    onConflict: () => Promise<void>,
+    onConflict: () => Promise<boolean | void>,
     proceed: () => void | Promise<void>
   ): Promise<SaveOrAskOutcome> => {
     switch (result) {
       case "saved":
         await proceed();
         return "proceeded";
-      case "conflict":
-        await onConflict();
-        return "asked";
+      case "conflict": {
+        // 충돌은 났지만 물어볼 준비(초안 상세)를 못 하면 실패다 — 부르는 화면이 시트를 닫지 않고 다시 시도하게 한다(UX-011).
+        const asked = await onConflict();
+        return asked === false ? "failed" : "asked";
+      }
       case "error":
       case "no-user":
         reportFailure(result);
@@ -96,8 +98,23 @@ export function useDraftConflict(signedIn: boolean, locale: "ko" | "en") {
     return settle(
       await run(save),
       async () => {
-        const draft = await loadActiveDraft(isSingle).catch(() => null);
+        /*
+         * 충돌은 났는데 초안 상세를 못 읽으면(연결 문제) 시트를 띄우지 않는다 — UX-011.
+         * 예전에는 draft: null 로 시트를 열어 "이어서 진행하기"가 아무 일도 하지 않는 막다른 길이 됐다.
+         * 대신 무엇을 못 했는지 말하고, 사용자는 같은 버튼으로 다시 시도한다. 기존 초안은 건드리지 않는다.
+         */
+        let draft: DraftSummary | null;
+        try {
+          draft = await fetchActiveDraftStrict(isSingle);
+        } catch {
+          showToast(
+            locale === "en" ? "Couldn't check your sort in progress. Please try again." : "진행 중인 소트를 확인하지 못했어요. 다시 시도해 주세요.",
+            "error"
+          );
+          return false;
+        }
         setPending({ draft, replace, proceed });
+        return true;
       },
       proceed
     );

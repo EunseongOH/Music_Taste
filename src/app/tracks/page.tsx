@@ -53,6 +53,9 @@ const translations = {
     noTracks: "이 앨범의 수록곡은 아직 준비 중이에요. 다른 앨범을 골라주세요.",
     noTracksBudget: "오늘은 수록곡을 더 불러올 수 없어요. 내일 다시 시도해 주세요.",
     noTracksError: "수록곡을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+    albumsLoadFailed: "앨범을 불러오지 못했어요",
+    albumsLoadFailedDesc: "앨범 목록을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
+    retry: "다시 시도",
     close: "닫기",
     prev: "이전",
     next: "다음",
@@ -100,6 +103,9 @@ const translations = {
     noTracks: "We don't have this album's tracks yet. Try another album.",
     noTracksBudget: "We can't load any more tracks today. Please try again tomorrow.",
     noTracksError: "We couldn't load the tracks. Please try again in a moment.",
+    albumsLoadFailed: "Couldn't load albums",
+    albumsLoadFailedDesc: "We couldn't load the album list. Check your connection and try again.",
+    retry: "Try again",
     close: "Close",
     prev: "Prev",
     next: "Next",
@@ -160,6 +166,8 @@ interface ArtistGroup {
   allAlbums?: (Album | null)[]; // Cache of all albums loaded across all pages
   backgroundLoading?: boolean; // Is background loading active?
   backgroundProgress?: { loaded: number; total: number }; // Progress indicator values
+  /** 첫 앨범 페이지를 못 불러왔다. "앨범 없음"·"로딩 중"과 다르게 보여 주고 다시 시도하게 한다(UX-014). */
+  loadError?: boolean;
 }
 
 /**
@@ -311,6 +319,8 @@ export default function TracksPage() {
   // 오류 제보 모달. 아티스트 컨텍스트를 같이 들고 있어야 제보가 쓸모 있다.
   const [feedbackTarget, setFeedbackTarget] = useState<{ id: string; name: string; albumId?: string; albumTitle?: string } | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  /** 알림의 톤. 실패를 성공처럼 보이지 않게 아이콘·색을 가른다(UX-021). */
+  const [notificationTone, setNotificationTone] = useState<"success" | "error" | "info">("success");
 
   const [exitWizardStep, setExitWizardStep] = useState<'main' | 'exit_confirm' | null>(null);
   /** 배경 자동저장이 마지막으로 저장한(또는 복원한) 선택 집합. 같으면 저장하지 않는다. */
@@ -696,11 +706,16 @@ export default function TracksPage() {
   React.useEffect(() => {
     if (isLoaded && isSingleArtistMode && artistData.length === 1) {
       const singleArtist = artistData[0];
-      if (!singleArtist.albumsLoaded && !loadingAlbums.has(`artist_${singleArtist.id}`)) {
+      /*
+       * 실패 뒤에는 자동으로 다시 토글하지 않는다. `artistData` 가 바뀔 때마다 이 effect 가 돌아
+       * 실패를 적는 순간 이미 펼쳐진 줄을 도로 접어 버렸다 — 그래서 실패가 빈 화면으로 보였다(UX-014).
+       * 다시 시도는 사용자의 버튼으로 한다.
+       */
+      if (!singleArtist.albumsLoaded && !singleArtist.loadError && !loadingAlbums.has(`artist_${singleArtist.id}`) && expandedArtistId !== singleArtist.id) {
         toggleArtistAccordion(singleArtist.id);
       }
     }
-  }, [isLoaded, isSingleArtistMode, artistData]);
+  }, [isLoaded, isSingleArtistMode, artistData, expandedArtistId]);
 
   // Save selected tracks to Supabase in the background
   //
@@ -891,7 +906,15 @@ export default function TracksPage() {
       setExpandedArtistId(null);
     } else {
       setExpandedArtistId(artistId);
+      await loadArtistAlbums(artistId);
+    }
+    setExpandedAlbumId(null);
+  };
 
+  /** 첫 앨범 페이지를 (다시) 불러온다. 실패 뒤 "다시 시도"도 이 함수를 부른다(UX-014). */
+  const loadArtistAlbums = async (artistId: string) => {
+    {
+      setArtistData(prev => prev.map(a => (a.id === artistId ? { ...a, loadError: false } : a)));
       // Lazy load page 1 of albums for this artist
       const artist = artistData.find(a => a.id === artistId);
       if (artist && !artist.albumsLoaded) {
@@ -1008,6 +1031,8 @@ export default function TracksPage() {
           }
         } catch (e) {
           console.error("Failed to load albums for artist", e);
+          // 실패를 "앨범 없음"으로 두지 않는다. 줄에 실패를 적고 다시 시도 버튼을 보인다(UX-014).
+          setArtistData(prev => prev.map(a => (a.id === artistId ? { ...a, loadError: true } : a)));
         } finally {
           setLoadingAlbums(prev => {
             const next = new Set(prev);
@@ -1017,7 +1042,6 @@ export default function TracksPage() {
         }
       }
     }
-    setExpandedAlbumId(null); 
   };
 
   // Change album pagination page (server-side getArtistAlbums limit=10)
@@ -1254,7 +1278,7 @@ export default function TracksPage() {
   };
 
   /** 팝업이 등록을 마치면 화면에 앉힌다 — 가상 싱글 앨범 한 장으로 만들어 바로 고른 상태로 둔다. */
-  const handleAddUnreleased = (track: AddedUnreleasedTrack, notice: string) => {
+  const handleAddUnreleased = (track: AddedUnreleasedTrack, notice: string, tone: "success" | "error" | "info" = "success") => {
     const albumId = `al_unreleased_${track.id}`;
     const newAlbum: Album = {
       id: albumId,
@@ -1284,6 +1308,7 @@ export default function TracksPage() {
       albumId,
     });
 
+    setNotificationTone(tone);
     setNotification(notice);
     setTimeout(() => setNotification(null), 5000);
   };
@@ -1531,7 +1556,9 @@ export default function TracksPage() {
                              ? t.albumLoading
                              : artist.albumsLoaded
                                ? `${albumsSettled(artist) ? `${countDistinctTracks(artist)} Tracks` : t.countingTracks} • ${artist.totalReleases || artist.albums.length} Releases`
-                               : t.openAlbums}
+                               : artist.loadError
+                                 ? t.albumsLoadFailed
+                                 : t.openAlbums}
                          </p>
                       </div>
                     </div>
@@ -1553,6 +1580,14 @@ export default function TracksPage() {
                           <div className="py-10 flex flex-col items-center justify-center text-navy/50 gap-3">
                              <Disc className="animate-spin text-point/70" size={28} />
                              <p className="font-sans text-sm">{t.loadingFromSpotify}</p>
+                          </div>
+                       ) : artist.loadError && artist.albums.length === 0 ? (
+                          /* 실패 ≠ 로딩 ≠ 앨범 없음. 무엇을 못 했는지 말하고 같은 요청을 다시 보낸다(UX-014). */
+                          <div role="alert" className="py-10 px-4 flex flex-col items-center justify-center text-navy/70 gap-3 text-center">
+                             <p className="font-sans text-sm">{t.albumsLoadFailedDesc}</p>
+                             <button type="button" onClick={() => void loadArtistAlbums(artist.id)} className="px-4 py-2 rounded-full bg-navy text-cream text-xs font-bold cursor-pointer active:scale-95 transition-transform">
+                               {t.retry}
+                             </button>
                           </div>
                        ) : (
                          <>
@@ -2035,6 +2070,7 @@ export default function TracksPage() {
             : undefined
         }
         onSubmitted={(msg) => {
+          setNotificationTone("success");
           setNotification(msg);
           setTimeout(() => setNotification(null), 5000);
         }}
@@ -2046,9 +2082,12 @@ export default function TracksPage() {
           <div className="fixed top-20 left-0 right-0 z-[100] px-4 flex justify-center pointer-events-none">
             <motion.div
               initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}
-              className="bg-ink text-cream px-5 py-3.5 rounded-2xl shadow-lg flex items-center gap-3 max-w-md w-full pointer-events-auto border border-white/10"
+              role={notificationTone === "error" ? "alert" : "status"}
+              className={`${notificationTone === "error" ? "bg-red-600" : "bg-ink"} text-cream px-5 py-3.5 rounded-2xl shadow-lg flex items-center gap-3 max-w-md w-full pointer-events-auto border border-white/10`}
             >
-              <Check size={18} className="text-point shrink-0" strokeWidth={3} />
+              {notificationTone === "error"
+                ? <AlertCircle size={18} className="text-cream shrink-0" strokeWidth={2.5} />
+                : <Check size={18} className="text-point shrink-0" strokeWidth={3} />}
               <p className="font-sans text-sm leading-snug">{notification}</p>
             </motion.div>
           </div>

@@ -263,6 +263,26 @@ export const saveWorldcupDraft = async (
   return true;
 };
 
+/**
+ * 초안 상세를 읽되 **못 읽은 것(throw)과 없는 것(null)을 가른다** — UX-011.
+ * `loadActiveDraft` 는 오류를 null 로 삼켜 "초안 없음"과 구분이 안 된다. 충돌 시트처럼
+ * "있다는 건 아는데 내용이 필요한" 자리에서는 이쪽을 쓴다. 만료 삭제는 하지 않는다(읽기만).
+ */
+export const fetchActiveDraftStrict = async (isSingleArtist: boolean) => {
+  const supabase = createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw new Error(userError.message);
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('tournament_drafts')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_single_artist', isSingleArtist)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data && data.length > 0 ? data[0] : null;
+};
+
 // Load active draft for one mode. 만료된 플레이 초안은 지우고 null.
 export const loadActiveDraft = async (isSingleArtist: boolean) => {
   const supabase = createClient();

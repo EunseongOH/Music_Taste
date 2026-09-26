@@ -44,6 +44,9 @@ export default function TogetherInvitePage() {
   const { toast, showToast } = useToast();
   const [challenge, setChallenge] = useState<SortChallenge | null>(null);
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
+  /** 방을 못 읽었다(연결 문제). 없는 방(challenge null)과 다르다. */
+  const [loadError, setLoadError] = useState(false);
+  const [loadRetry, setLoadRetry] = useState(0);
   // 렌더 중에 판정하지 않는다 — isMine 이 localStorage 를 읽어서 서버 렌더와 어긋난다.
   const [iAmCreator, setIAmCreator] = useState(false);
   /** 소트를 시작하기 전에 이름을 묻는다 — 일치율 화면에서 누가 누구인지 알아야 한다. */
@@ -65,8 +68,16 @@ export default function TogetherInvitePage() {
     let alive = true;
     let timer: ReturnType<typeof setInterval> | null = null;
     (async () => {
-      const found = await fetchChallenge(code);
+      let found: SortChallenge | null;
+      try {
+        found = await fetchChallenge(code);
+      } catch {
+        // 못 읽은 것(연결 끊김)은 "불러오는 중"도 "잘못된 링크"도 아니다 — UX-014.
+        if (alive) setLoadError(true);
+        return;
+      }
       if (!alive) return;
+      setLoadError(false);
       setChallenge(found);
       if (!found) {
         setEntries([]);
@@ -85,7 +96,7 @@ export default function TogetherInvitePage() {
       alive = false;
       if (timer) clearInterval(timer);
     };
-  }, [code, user?.id]);
+  }, [code, user?.id, loadRetry]);
 
   /* 고정 바의 실제 높이만큼 본문 끝을 비운다 — 버튼이 1~3개로 바뀐다. */
   const dockRef = useDockClearance();
@@ -185,6 +196,18 @@ export default function TogetherInvitePage() {
     startTogetherRun(challenge);
     router.push("/worldcup?mode=single&challenge=1");
   };
+
+  if (loadError) {
+    return (
+      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col items-center justify-center gap-2 px-6 text-center" role="alert">
+        <p className="type-title-2 text-navy">링크를 불러오지 못했어요</p>
+        <p className="type-sub text-navy/70">연결을 확인하고 다시 시도해 주세요.</p>
+        <button onClick={() => { setLoadError(false); setEntries(null); setLoadRetry((n) => n + 1); }} className={`${primaryButton} mt-6`}>
+          다시 시도
+        </button>
+      </main>
+    );
+  }
 
   if (entries === null) {
     return (

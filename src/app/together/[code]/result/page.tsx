@@ -131,13 +131,24 @@ export default function TogetherResultPage() {
   const [entries, setEntries] = useState<ChallengeEntry[] | null>(null);
   /** 이 방에서 내 계정이 가진 기록의 id. 목록에는 user_id 가 실리지 않으므로 따로 묻는다. */
   const [ownedId, setOwnedId] = useState<string | null>(null);
+  /** 방을 못 읽었다(연결 문제). 없는 방과 다르다. */
+  const [loadError, setLoadError] = useState(false);
+  const [loadRetry, setLoadRetry] = useState(0);
 
   useEffect(() => {
     if (!code || isLoading) return;
     let alive = true;
     let timer: ReturnType<typeof setInterval> | null = null;
     (async () => {
-      const found = await fetchChallenge(code);
+      let found: SortChallenge | null;
+      try {
+        found = await fetchChallenge(code);
+      } catch {
+        // 못 읽은 것은 "계산 중"도 "잘못된 링크"도 아니다 — UX-014.
+        if (alive) setLoadError(true);
+        return;
+      }
+      if (alive) setLoadError(false);
       if (!alive || !found) {
         if (alive) {
           setChallenge(null);
@@ -179,7 +190,7 @@ export default function TogetherResultPage() {
       alive = false;
       if (timer) clearInterval(timer);
     };
-  }, [code, isLoading, user]);
+  }, [code, isLoading, user, loadRetry]);
 
   /*
    * 계정이 확인되면 **익명으로 남긴 기록에 소유권을 붙인다.**
@@ -339,6 +350,18 @@ export default function TogetherResultPage() {
       showToast(`새 결과가 반영됐어요 · ${shown.length}명이 함께했어요`);
     }
   }, [entries, shown.length, showToast]);
+
+  if (loadError) {
+    return (
+      <main className="min-h-screen bg-[var(--app-bg)] flex flex-col items-center justify-center gap-2 px-6 text-center" role="alert">
+        <p className="type-title-2 text-navy">결과를 불러오지 못했어요</p>
+        <p className="type-sub text-navy/70">연결을 확인하고 다시 시도해 주세요.</p>
+        <button onClick={() => { setLoadError(false); setEntries(null); setLoadRetry((n) => n + 1); }} className={`${primaryButton} mt-6`}>
+          다시 시도
+        </button>
+      </main>
+    );
+  }
 
   if (entries === null) {
     return (
@@ -552,7 +575,9 @@ export default function TogetherResultPage() {
                 showToast("이미지를 저장했어요");
               } catch (e) {
                 // 토스 구버전은 저장 자체를 지원하지 않는다(PlatformError 로 이유가 온다).
-                showToast(e instanceof Error ? e.message : "이미지를 저장하지 못했어요", "error");
+                // 원시 예외 문구는 콘솔로. 사용자에게는 실패 사실과 다시 시도만(UX-007).
+                console.error("[together] 이미지 저장 실패:", e);
+                showToast("이미지를 저장하지 못했어요. 다시 시도해 주세요.", "error");
               } finally {
                 setSaving(false);
               }
