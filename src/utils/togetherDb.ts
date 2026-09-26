@@ -262,6 +262,28 @@ export async function fetchOwnedEntryId(challengeId: string): Promise<string | n
 }
 
 /**
+ * 이 방의 내 참여와 **그 판으로 남은 개인 취향표**를 잇는다. 이었으면 true.
+ *
+ * 프로필의 완료 목록에서 한 활동이 두 줄로 보이지 않게 하는 근거다. 닮았다고 합치지
+ * 않으려면 "정확히 이 취향표" 라는 값이 있어야 한다.
+ *
+ * 서버가 둘 다 확인한다 — 그 취향표가 내 것인지, 이 방에 내 참여가 있는지. 아니면
+ * null 이 돌아오고, 그때는 이은 것이 아니므로 false 다. **성공을 가장하지 않는다**:
+ * 부르는 쪽이 이 값을 보고 다음에 다시 시도할지 정한다.
+ */
+export async function linkTasteResult(challengeId: string, resultId: string): Promise<boolean> {
+  const { data, error } = await createClient().rpc("link_sort_challenge_taste_result", {
+    p_challenge_id: challengeId,
+    p_result_id: resultId,
+  });
+  if (error) {
+    console.error("[together] 취향표를 잇지 못했어요:", error.message);
+    return false;
+  }
+  return ((data as string | null) ?? null) !== null;
+}
+
+/**
  * 불러온 취향표를 **원래 언제 소트했는지**. "6월 3일" 처럼 쓸 문자열로 돌려준다.
  * 그 취향표를 지웠으면 null — 그때는 날짜 없이 "이전에 했던" 이라고만 말한다.
  */
@@ -288,6 +310,13 @@ export interface MyChallenge {
   /** 내가 이 방에서 소트한 시각 */
   sortedAt: string;
   iCreated: boolean;
+  /**
+   * 이 참여가 남긴 개인 취향표 id. 없으면 null.
+   *
+   * 계정으로 찾은 방에만 있다(기기 키로 찾은 방은 내 계정 것이 아니므로 물을 수 없다).
+   * 완료 목록에서 같은 활동의 취향표 줄을 **정확히** 가릴 때만 쓴다.
+   */
+  linkedTasteResultId: string | null;
 }
 
 /**
@@ -335,14 +364,15 @@ export async function fetchMyChallenges(
      * 가 아는 것이므로, 묻는 자리를 서버로 옮겼다(20260925100000).
      */
     userId
-      ? supabase.rpc("my_sort_challenge_rooms")
+      // v2 는 연결(linked_taste_result_id)까지 준다. v1 은 운영 중인 옛 main 이 계속 쓴다.
+      ? supabase.rpc("my_sort_challenge_rooms_v2")
       : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (byDevice.error) console.error("[together] 참여한 방을 불러오지 못했어요:", byDevice.error.message);
   if (byAccount.error) console.error("[together] 계정의 방을 불러오지 못했어요:", byAccount.error.message);
 
-  type Row = { challenge_id: string; created_at: string };
+  type Row = { challenge_id: string; created_at: string; linked_taste_result_id?: string | null };
   // 계정 기록을 앞에 둔다 — 같은 방이 둘 다 있으면 계정 쪽 시각을 쓴다.
   const merged = [...((byAccount.data ?? []) as Row[]), ...((byDevice.data ?? []) as Row[])];
   const seen = new Set<string>();
@@ -381,6 +411,7 @@ export async function fetchMyChallenges(
         people: people.get(r.challenge_id) ?? 1,
         sortedAt: r.created_at,
         iCreated: !!room.creator_id && !!userId && room.creator_id === userId,
+        linkedTasteResultId: r.linked_taste_result_id ?? null,
       } satisfies MyChallenge;
     })
     .filter((x): x is MyChallenge => x !== null);

@@ -16,7 +16,7 @@ import TasteRelationGraph from "@/components/together/TasteRelationGraph";
 import ParticipantSheet from "@/components/together/ParticipantSheet";
 import {
   rememberedNickname, fetchChallenge, fetchEntries, saveEntry, claimEntry, fetchOwnedEntryId,
-  type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
+  linkTasteResult, type ChallengeEntry, type SortChallenge } from "@/utils/togetherDb";
 import { RankList, Sheet, Toast, primaryButton, secondaryButton, textLink, useToast } from "@/components/space/SpaceUI";
 import TogetherPairDetail from "@/components/together/TogetherPairDetail";
 import TogetherResultShareCard from "@/components/together/TogetherResultShareCard";
@@ -106,7 +106,18 @@ function processCompletion(
           artistName: found.artist_name ?? null,
           id: c.tasteResultId,
         });
-        if (res.success) markCompletion(c.runId, { tasteDone: true });
+        /*
+         * **잇는 것까지 끝나야 이 단계가 끝난 것이다.**
+         *
+         * 취향표는 남았는데 연결이 실패하면, 프로필의 완료 목록에 같은 활동이 두 줄로
+         * 남는다. 그 상태로 `tasteDone` 을 적어 버리면 다시 시도할 길이 없다.
+         *
+         * 다시 와도 안전하다 — 취향표는 같은 `tasteResultId` 로 넣으므로 두 번째는 PK 가
+         * 막고(23505 를 성공으로 본다), 연결만 다시 시도한다.
+         */
+        if (res.success && (await linkTasteResult(found.id, c.tasteResultId))) {
+          markCompletion(c.runId, { tasteDone: true });
+        }
       }
     }
     return savedId;

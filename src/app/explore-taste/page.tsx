@@ -6,6 +6,7 @@ import { Trash2, Disc, ChevronDown } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/components/AuthProvider";
 import { fetchMyChallenges, type MyChallenge } from "@/utils/togetherDb";
+import { linkedTasteResultIds } from "@/utils/completedArchive";
 import { createClient } from "@/utils/supabase/client";
 import { getSafeLocale } from "@/utils/storage";
 import LoginModal from "@/components/LoginModal";
@@ -513,10 +514,18 @@ export default function ExploreTastePage() {
    *
    * 날짜 하나로 섞어 정렬한다. 취향표는 20건씩 늘고 방은 한 번에 다 오므로,
    * [더 보기] 로 취향표가 붙을 때마다 전체가 다시 날짜순이 된다.
+   *
+   * 같이 소트를 끝내면 방 기록과 개인 취향표가 둘 다 생긴다. 방이 "이 취향표" 라고
+   * 적어 둔 한 장만 방 줄이 대표하게 하고, **화면에서만** 가린다. `completedResults`
+   * 자체는 그대로다 — 취향 메이트의 기준 취향표 고르기와 사회 지표는 전부 그 목록을
+   * 쓴다. 지난 판의 취향표도 남는다(가리는 근거가 방 id 가 아니라 적어 둔 id 다).
    */
   const spaceItems = useMemo(() => {
+    const linked = linkedTasteResultIds(myRooms);
     const items: SpaceItem[] = [
-      ...completedResults.map((r) => ({ kind: "taste" as const, at: r.created_at, result: r })),
+      ...completedResults
+        .filter((r) => !linked.has(r.id))
+        .map((r) => ({ kind: "taste" as const, at: r.created_at, result: r })),
       ...(myRooms ?? []).map((room) => ({ kind: "together" as const, at: room.sortedAt, room })),
     ];
     return items.sort((a, b) => b.at.localeCompare(a.at));

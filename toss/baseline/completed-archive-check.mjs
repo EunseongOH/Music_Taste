@@ -36,6 +36,7 @@ const room = (code, at, extra = {}) => ({
   people: 3,
   sortedAt: at,
   iCreated: false,
+  linkedTasteResultId: null,
   ...extra,
 });
 
@@ -79,6 +80,47 @@ console.log('\n닮았다는 이유로 합치지 않는다');
     [room('t1', '2026-09-26T10:00:30Z')]
   );
   check(sameDay.length === 2, '30초 차이·같은 아티스트여도 두 줄', `${sameDay.length}건`);
+}
+
+console.log('\n연결이 적혀 있으면 그 취향표 한 장만 방 줄이 대표한다');
+{
+  /*
+   * 근거는 닮음이 아니라 **적어 둔 값**이다. 방이 "이 취향표" 라고 가리키는 한 장만
+   * 가린다. 같은 방을 다시 소트해 취향표가 여러 장이면 지난 판은 그대로 남는다 —
+   * 방 id 로 묶었다면 지난 판까지 숨었다.
+   */
+  const items = buildCompletedArchiveItems(
+    [result('r2', '2026-09-26T10:00:00Z'), result('r1', '2026-09-20T10:00:00Z')],
+    [room('t1', '2026-09-26T10:00:30Z', { linkedTasteResultId: 'r2' })]
+  );
+  const order = items.map((x) => (x.kind === 'result' ? x.result.id : x.room.code)).join(' ');
+  check(order === 't1 r1', '가리킨 r2 만 가려지고 지난 판 r1 은 남는다', order);
+  check(items.length === 2, '두 줄만 선다', `${items.length}건`);
+
+  // 가리키는 취향표가 목록에 없으면(지웠다) 아무것도 가리지 않는다.
+  const gone = buildCompletedArchiveItems(
+    [result('r9', '2026-09-26T10:00:00Z')],
+    [room('t1', '2026-09-26T10:00:30Z', { linkedTasteResultId: 'r-deleted' })]
+  );
+  check(gone.length === 2, '없는 id 를 가리켜도 남의 줄을 지우지 않는다', `${gone.length}건`);
+
+  // 방이 여러 개면 각자 가리킨 것만.
+  const many = buildCompletedArchiveItems(
+    [result('ra', '2026-09-26T10:00:00Z'), result('rb', '2026-09-25T10:00:00Z'), result('rc', '2026-09-24T10:00:00Z')],
+    [
+      room('ta', '2026-09-26T10:00:30Z', { linkedTasteResultId: 'ra' }),
+      room('tb', '2026-09-25T10:00:30Z', { linkedTasteResultId: 'rb' }),
+    ]
+  );
+  const manyOrder = many.map((x) => (x.kind === 'result' ? x.result.id : x.room.code)).join(' ');
+  check(manyOrder === 'ta tb rc', '연결된 둘만 가려진다', manyOrder);
+
+  // 연결이 없는 방은 예전처럼 둘 다 선다.
+  const noLink = buildCompletedArchiveItems(
+    [result('r1', '2026-09-26T10:00:00Z')],
+    [room('t1', '2026-09-26T10:00:30Z')]
+  );
+  check(noLink.length === 2, '연결이 없으면 가리지 않는다', `${noLink.length}건`);
 }
 
 console.log('\n빈 입력·깨진 줄에도 터지지 않는다');

@@ -78,7 +78,7 @@ console.log(`대상 ${BASE}\n`);
  * 한 탭(=한 sessionStorage)을 연다. 쓰기는 세고, 취향표 insert 는 id PK 를 흉내 낸다.
  * `tasteDelayMs` 를 주면 첫 insert 를 그만큼 붙잡는다(응답 전에 새로 고침하는 경우).
  */
-async function openTab({ loggedIn, seed, tasteDelayMs = 0 }) {
+async function openTab({ loggedIn, seed, tasteDelayMs = 0, linkFails = false }) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
   const state = { loggedIn };
   const setLoggedIn = async (v) => {
@@ -100,7 +100,7 @@ async function openTab({ loggedIn, seed, tasteDelayMs = 0 }) {
   await setLoggedIn(loggedIn);
 
   const page = await ctx.newPage();
-  const w = { entrySaves: [], tasteInserts: 0, tasteIds: new Set() };
+  const w = { entrySaves: [], tasteInserts: 0, tasteIds: new Set(), links: [] };
 
   await page.addInitScript((seedJson) => {
     localStorage.setItem('together_participant', 'anon_device_fixed');
@@ -127,6 +127,19 @@ async function openTab({ loggedIn, seed, tasteDelayMs = 0 }) {
     if (url.includes('/rpc/save_sort_challenge_entry')) {
       w.entrySaves.push(JSON.parse(req.postData() || '{}'));
       return json('e-mine');
+    }
+    /*
+     * 취향표를 이어 붙이는 RPC. 실제 함수는 **이 방에 내 참여가 있고 그 취향표가 내
+     * 것일 때만** 참여 id 를 돌려주고, 아니면 null 이다. 여기서도 그렇게 둔다 —
+     * 아무 rpc 나 null 로 답하던 예전 mock 은 "이었다" 와 "못 이었다" 를 구분하지 못해,
+     * 화면이 연결 실패를 알아차리는지 검사할 수 없었다.
+     */
+    if (url.includes('/rpc/link_sort_challenge_taste_result')) {
+      const body = JSON.parse(req.postData() || '{}');
+      w.links.push(body);
+      if (linkFails) return json(null);
+      const mine = w.entrySaves.some((x) => x.p_challenge_id === body.p_challenge_id);
+      return json(mine ? 'e-mine' : null);
     }
     if (url.includes('/rpc/')) return json(null);
     if (url.includes('/tournament_results') && method === 'POST') {
@@ -216,6 +229,8 @@ console.log('\n18곡 방을 끝내고 결과를 연다 → 새로 고침 3회 �
   for (let i = 0; i < 3; i++) await t.reload();
   check(t.w.entrySaves.length === 1, '새로 고침 3회 — 참여 저장이 더 나가지 않는다', `${t.w.entrySaves.length}`);
   check(t.w.tasteIds.size === 1 && t.w.tasteInserts === 1, '새로 고침 3회 — 취향표 1장', `장 ${t.w.tasteIds.size} · 요청 ${t.w.tasteInserts}`);
+  check(t.w.links.length === 1 && t.w.links[0]?.p_result_id, '취향표를 방에 잇는다 — 한 번만',
+    `연결 ${t.w.links.length}`);
   await t.page.goto(`${BASE}/together/roomc`, { waitUntil: 'domcontentloaded' });
   await t.settle();
   await t.page.goBack({ waitUntil: 'domcontentloaded' });
@@ -232,6 +247,25 @@ console.log('\n18곡 방을 끝내고 결과를 연다 → 새로 고침 3회 �
   await t.reload();
   check(t.w.entrySaves.length === 2 && t.w.tasteIds.size === 2, '같은 방 새 판 — 참여 저장·취향표가 하나씩 더',
     `참여 ${t.w.entrySaves.length} · 장 ${t.w.tasteIds.size}`);
+  await t.ctx.close();
+}
+
+console.log('\n취향표는 남았는데 잇지 못했다 — 다음에 다시 잇는다');
+{
+  /*
+   * 연결까지 끝나야 이 단계가 끝난 것이다. 취향표만 남고 연결이 실패한 상태로
+   * 끝난 것으로 적어 버리면, 완료 목록에 같은 활동이 두 줄로 남고 고칠 길이 없다.
+   *
+   * 다시 시도해도 취향표는 **한 장**이어야 한다 — 같은 id 로 넣고 PK(23505)가 막는다.
+   */
+  const t = await openTab({ loggedIn: true, seed: completionSeed({ roomKey: 'roomc', ownerUserId: USER_ID, runId: 'run-link' }), linkFails: true });
+  await t.open('roomc');
+  check(t.w.links.length === 1, '한 번 이어 보고', `연결 ${t.w.links.length}`);
+  await t.reload();
+  check(t.w.links.length >= 2, '실패했으니 다시 이어 본다', `연결 ${t.w.links.length}`);
+  check(t.w.tasteIds.size === 1, '그래도 취향표는 한 장', `장 ${t.w.tasteIds.size} · 요청 ${t.w.tasteInserts}`);
+  const ids = t.w.links.map((x) => x.p_result_id);
+  check(new Set(ids).size === 1, '같은 취향표 id 로 다시 시도한다', ids.join(' '));
   await t.ctx.close();
 }
 

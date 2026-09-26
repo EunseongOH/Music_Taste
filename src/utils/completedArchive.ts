@@ -36,6 +36,23 @@ export type CompletedArchiveItem =
       room: MyChallenge;
     };
 
+/**
+ * 방이 "이 취향표" 라고 적어 둔 id 들.
+ *
+ * 완료 목록을 그리는 자리가 둘이다(프로필 모달, 취향 스페이스). 가리는 규칙을 양쪽에
+ * 따로 적으면 갈라지므로 여기 한 번만 둔다. 판단은 **적어 둔 id 가 같은가** 뿐이다 —
+ * 방 id·제목·날짜로 묶지 않는다.
+ */
+export function linkedTasteResultIds(
+  rooms: readonly MyChallenge[] | null | undefined
+): Set<string> {
+  const ids = new Set<string>();
+  for (const room of rooms ?? []) {
+    if (room?.code && room.linkedTasteResultId) ids.add(room.linkedTasteResultId);
+  }
+  return ids;
+}
+
 /** 정렬 기준 시각. 읽을 수 없으면 맨 뒤로 보낸다(순서를 흔들지 않는다). */
 function time(at: string): number {
   const t = Date.parse(at);
@@ -49,17 +66,24 @@ function time(at: string): number {
  * 방까지 섞으면 같은 기기에서 A 가 남긴 방이 B 의 보관함에 뜬다. 그 경계는 부르는
  * 쪽에서 지킨다 — 여기서는 받은 것을 그대로 쓴다.
  *
- * **합치면서 지우지 않는다.** 제목·아티스트·날짜가 비슷하다는 이유로 두 줄을 하나로
- * 묶지 않는다. 그건 같은 활동이라는 증거가 아니라 닮았다는 것뿐이고, 실제로 다른
- * 활동을 지울 수 있다.
+ * **닮았다는 이유로 합치지 않는다.** 제목·아티스트·날짜가 비슷한 것은 같은 활동이라는
+ * 증거가 아니고, 실제로 다른 활동을 지울 수 있다.
+ *
+ * 합치는 근거는 하나뿐이다: 방의 참여가 **정확히 어느 취향표인지 적어 둔 값**
+ * (`linkedTasteResultId`, 20260926050931). 그 취향표는 방 줄이 대표하므로 따로 세우지
+ * 않는다. 같은 방을 다시 소트해서 취향표가 여러 장이면 **지금 판이 가리키는 한 장만**
+ * 가려지고, 지난 판의 취향표는 그대로 남는다 — 방 id 로 묶으면 지난 판까지 숨는다.
+ *
+ * 화면에서만 가린다. 지우는 것이 아니고, 소셜·취향 메이트 계산은 원래 목록을 쓴다.
  */
 export function buildCompletedArchiveItems(
   results: readonly CompletedResultLike[] | null | undefined,
   rooms: readonly MyChallenge[] | null | undefined
 ): CompletedArchiveItem[] {
   const items: CompletedArchiveItem[] = [];
+  const linked = linkedTasteResultIds(rooms);
   for (const r of results ?? []) {
-    if (r?.id) items.push({ kind: "result", at: r.created_at, result: r });
+    if (r?.id && !linked.has(r.id)) items.push({ kind: "result", at: r.created_at, result: r });
   }
   for (const room of rooms ?? []) {
     if (room?.code) items.push({ kind: "together", at: room.sortedAt, room });
