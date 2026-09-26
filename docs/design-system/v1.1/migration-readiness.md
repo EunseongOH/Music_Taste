@@ -472,3 +472,10 @@ Therefore:
 > **Do not begin production component migration yet.**
 >
 > Once the Together branch is reconciled with develop and the combined regression suite is green, the project is ready for staged v1.1 code migration.
+
+
+## Code migration structure
+
+For the concrete **before → after code architecture, folder structure, route-by-route replacements, and Mermaid dependency diagrams**, see:
+
+- [Code Migration Impact / Structure Map](./code-migration-impact.md)
