@@ -97,6 +97,13 @@ console.log('\n연결이 적혀 있으면 그 취향표 한 장만 방 줄이 �
   check(order === 't1 r1', '가리킨 r2 만 가려지고 지난 판 r1 은 남는다', order);
   check(items.length === 2, '두 줄만 선다', `${items.length}건`);
 
+  // 취향표가 그 한 장뿐이면 방 줄 하나만 남는다.
+  const only = buildCompletedArchiveItems(
+    [result('r1', '2026-09-26T10:00:00Z')],
+    [room('t1', '2026-09-26T10:00:30Z', { linkedTasteResultId: 'r1' })]
+  );
+  check(only.length === 1 && only[0].kind === 'together', '한 활동은 한 줄', `${only.length}건 · ${only[0]?.kind}`);
+
   // 가리키는 취향표가 목록에 없으면(지웠다) 아무것도 가리지 않는다.
   const gone = buildCompletedArchiveItems(
     [result('r9', '2026-09-26T10:00:00Z')],
