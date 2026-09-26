@@ -505,7 +505,12 @@ export const getDbArtistAlbums = async (spotifyArtistId: string): Promise<DbAlbu
           const ta = titlesOfAlbum.get(sorted[i].id);
           const tb = titlesOfAlbum.get(sorted[j].id);
           const sameByDur = sameByDuration(durOfAlbum.get(sorted[i].id), durOfAlbum.get(sorted[j].id));
-          if (sameByDur || (ta && tb && sameAlbum(ta, tb))) merged.add(sorted[j].id);
+          if (sameByDur || (ta && tb && sameAlbum(ta, tb))) {
+            merged.add(sorted[j].id);
+            // 같은 앨범의 다른 출처가 빠질 때 그 재킷은 버리지 않고 남는 쪽의 다음 후보로 넘긴다.
+            // CAA 에 재킷이 없거나 미러가 500 을 낼 때 쓴다(하츠투하츠 FOCUS: CAA 뿐인데 Deezer 판에 재킷이 있었다).
+            for (const im of sorted[j].images) if (!sorted[i].images.some((k) => k.url === im.url)) sorted[i].images.push(im);
+          }
         }
       }
     }
