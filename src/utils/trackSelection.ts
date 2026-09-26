@@ -1,4 +1,5 @@
 import { betterTitle, songKey } from "./songKey.ts";
+import { isCoverPlaceholder, mergeArtwork } from "./trackArtwork.ts";
 
 /**
  * 곡 고르기의 **선택 규칙 한 곳**.
@@ -21,10 +22,21 @@ export interface SelectableAlbum {
   id: string;
   title: string;
   image: string;
+  /** 재킷 2순위 — DB 앨범이면 CAA 다음의 Deezer 커버, Spotify 앨범이면 같은 그림의 작은 판 */
+  image2?: string;
   tracks: SelectableTrack[];
 }
 
-/** 선택 목록에 넣는 한 줄. 월드컵으로 그대로 넘어간다. */
+/** 곡을 고른 아티스트. 이름만 넘기던 예전 호출도 받는다. */
+export type SelectableArtist = string | { id?: string; name: string; image?: string };
+const artistNameOf = (a: SelectableArtist) => (typeof a === "string" ? a : a.name);
+
+/**
+ * 선택 목록에 넣는 한 줄. 월드컵 → 순위 → 저장된 취향표까지 그대로 넘어간다.
+ *
+ * 그림 필드(albumImageFallbacks·artistImage·artistId)는 선택이다 — 예전 초안·순위에는 없다.
+ * 대체 그림(NO COVER)은 여기에 넣지 않는다. 그리는 쪽이 마지막에 만든다(`trackArtwork.ts`).
+ */
 export interface TrackMeta {
   id: string;
   title: string;
@@ -33,6 +45,35 @@ export interface TrackMeta {
   albumTitle: string;
   albumImage: string;
   albumId: string;
+  albumImageFallbacks?: string[];
+  artistId?: string;
+  artistImage?: string;
+}
+
+/**
+ * 곡 한 줄을 만드는 **한 자리.** 자동 선택·앨범 전체·곡 하나·저장·시작 모두 이것을 지난다.
+ * 여기를 거치지 않는 길이 하나라도 있으면 그 길로 고른 곡만 재킷 후보를 잃는다.
+ */
+export function trackMeta(
+  artist: SelectableArtist,
+  album: { id: string; title: string; image?: string; image2?: string },
+  track: SelectableTrack
+): TrackMeta {
+  const real = (u?: string) => (u && !isCoverPlaceholder(u) ? u : "");
+  const image = real(album.image);
+  const image2 = real(album.image2);
+  return {
+    id: track.id,
+    title: track.title,
+    duration: track.duration,
+    artistName: artistNameOf(artist),
+    albumTitle: album.title,
+    albumImage: image,
+    albumId: album.id,
+    ...(image2 && image2 !== image ? { albumImageFallbacks: [image2] } : {}),
+    ...(typeof artist !== "string" && artist.id ? { artistId: artist.id } : {}),
+    ...(typeof artist !== "string" && artist.image ? { artistImage: artist.image } : {}),
+  };
 }
 
 export interface Selection {
@@ -53,7 +94,7 @@ export interface Selection {
  */
 export function setAlbumSelected(
   current: Selection,
-  artistName: string,
+  artistName: SelectableArtist,
   album: SelectableAlbum,
   on: boolean
 ): Selection {
@@ -183,37 +224,36 @@ export function resolveCanonicalTracks(tracks: readonly TrackMeta[]): CanonicalT
   });
 
   /* 덩어리마다 대표 하나와, 버리지 않은 제목들. */
-  const groups = new Map<number, { best: TrackMeta; titles: Set<string> }>();
+  const groups = new Map<number, { best: TrackMeta; titles: Set<string>; members: TrackMeta[] }>();
   const order: number[] = [];
   rows.forEach((t, i) => {
     const root = find(i);
     const g = groups.get(root);
     if (!g) {
-      groups.set(root, { best: t, titles: new Set([t.title]) });
+      groups.set(root, { best: t, titles: new Set([t.title]), members: [t] });
       order.push(root);
       return;
     }
     g.titles.add(t.title);
+    g.members.push(t);
     if (better(t, g.best) < 0) g.best = t;
   });
 
+  /*
+   * 대표 **제목**과 대표 **재킷**은 따로 고른다. 대표 줄에 재킷이 없고 별칭 줄에 있으면
+   * 대표 줄만 펴는 순간 재킷이 사라진다. 덩어리의 재킷 후보를 대표 순서대로 모두 모은다
+   * (총 순서라 들어온 순서와 무관하다).
+   */
   return order.map((root) => {
     const g = groups.get(root)!;
-    return { ...g.best, aliases: [...g.titles].filter((x) => x !== g.best.title).sort(cmp) };
+    const art = mergeArtwork([...g.members].sort(better));
+    return { ...g.best, ...art, aliases: [...g.titles].filter((x) => x !== g.best.title).sort(cmp) };
   });
 }
 
 /** 앨범 한 장의 수록곡을 `TrackMeta` 로 편다. 세는 쪽과 고르는 쪽이 같은 모양을 쓴다. */
-export function albumTrackMetas(artistName: string, album: SelectableAlbum): TrackMeta[] {
-  return album.tracks.map((t) => ({
-    id: t.id,
-    title: t.title,
-    duration: t.duration,
-    artistName,
-    albumTitle: album.title,
-    albumImage: album.image,
-    albumId: album.id,
-  }));
+export function albumTrackMetas(artist: SelectableArtist, album: SelectableAlbum): TrackMeta[] {
+  return album.tracks.map((t) => trackMeta(artist, album, t));
 }
 
 /**
@@ -224,7 +264,7 @@ export function albumTrackMetas(artistName: string, album: SelectableAlbum): Tra
  * 아직 받는 중인지는 화면이 `albumsSettled` 로 갈라 말한다.
  */
 export function canonicalUniverse(
-  artistName: string,
+  artistName: SelectableArtist,
   albums: readonly (SelectableAlbum | null | undefined)[],
   unreleased: readonly SelectableAlbum[] = []
 ): CanonicalTrack[] {
@@ -273,7 +313,7 @@ export function pruneToCanonical(current: Selection): Selection {
  */
 export function selectAllTracks(
   current: Selection,
-  artistName: string,
+  artistName: SelectableArtist,
   albums: readonly (SelectableAlbum | null | undefined)[],
   unreleased: readonly SelectableAlbum[] = []
 ): Selection {

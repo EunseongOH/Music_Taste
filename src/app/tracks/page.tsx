@@ -21,10 +21,11 @@ import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { coverPlaceholder } from "@/utils/coverPlaceholder";
+import { withArtistImages } from "@/utils/trackArtwork";
 import { songKey, betterTitle } from "@/utils/songKey";
 import {
   albumPickedCount, canonicalSelection, canonicalUniverse, clearAllTracks,
-  pruneToCanonical, resolveCanonicalTracks, selectAllTracks, setAlbumSelected,
+  pruneToCanonical, resolveCanonicalTracks, selectAllTracks, setAlbumSelected, trackMeta,
   type Selection, type TrackMeta,
 } from "@/utils/trackSelection";
 import SpotifyLink from "@/components/SpotifyLink";
@@ -190,10 +191,10 @@ function distinctSongIds(ids: Set<string>, meta: Record<string, any>): Set<strin
  * 곡 수만 보고 아직 없는 곡을 고른 척할 수는 없다.
  */
 function AlbumSelectBar({
-  artistName, album, ids, meta, onChange, label, clearLabel, countLabel,
+  artist, album, ids, meta, onChange, label, clearLabel, countLabel,
 }: {
-  artistName: string;
-  album: { id: string; title: string; image: string; tracks: { id: string; title: string; duration?: number | string }[] };
+  artist: { id: string; name: string; image: string };
+  album: { id: string; title: string; image: string; image2?: string; tracks: { id: string; title: string; duration?: number | string }[] };
   ids: Set<string>;
   meta: Record<string, TrackMeta>;
   /** `on` 은 방금 고른 것인지(true) 뺀 것인지(false). 화면이 자동 선택을 멈출 근거로 쓴다. */
@@ -203,14 +204,14 @@ function AlbumSelectBar({
   countLabel: (n: number) => string;
 }) {
   if (!album.tracks.length) return null;
-  const picked = albumPickedCount({ ids, meta }, artistName, album);
+  const picked = albumPickedCount({ ids, meta }, artist.name, album);
   const all = picked >= album.tracks.length;
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 px-1">
       <span className="font-sans text-xs font-bold text-navy/70 tabular-nums">{countLabel(picked)}</span>
       <button
         type="button"
-        onClick={() => onChange(setAlbumSelected({ ids, meta }, artistName, album, !all), !all)}
+        onClick={() => onChange(setAlbumSelected({ ids, meta }, artist, album, !all), !all)}
         className="px-3 py-1.5 rounded-full border border-navy/15 hover:border-navy text-xs font-sans font-bold text-navy bg-white hover:bg-navy/5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0"
       >
         {all ? clearLabel : label}
@@ -363,12 +364,11 @@ export default function TracksPage() {
    * "해제한 뜻을 존중한다" 는 규칙을 한 번만 적을 수 있다.
    */
   const autoSelectAlbum = (
-    artistId: string,
-    artistName: string,
-    album: { id: string; title: string; image: string },
+    artist: { id: string; name: string; image: string },
+    album: { id: string; title: string; image: string; image2?: string },
     tracks: { id: string; title: string; duration?: string }[]
   ) => {
-    if (!wantsAll(artistId) || tracks.length === 0) return;
+    if (!wantsAll(artist.id) || tracks.length === 0) return;
     setSelectedTrackIds((prev) => {
       const next = new Set(prev);
       for (const tr of tracks) next.add(tr.id);
@@ -376,12 +376,7 @@ export default function TracksPage() {
     });
     setSelectedTracksMetadata((prev) => {
       const next = { ...prev };
-      for (const tr of tracks) {
-        next[tr.id] = {
-          id: tr.id, title: tr.title, duration: tr.duration, artistName,
-          albumTitle: album.title, albumImage: album.image, albumId: album.id,
-        };
-      }
+      for (const tr of tracks) next[tr.id] = trackMeta(artist, album, tr);
       return next;
     });
   };
@@ -450,38 +445,8 @@ export default function TracksPage() {
     // Build full tracks data using metadata cache and fallback search
     const selectedTracksData: any[] = [];
     selectedTrackIds.forEach(id => {
-      if (selectedTracksMetadata[id]) {
-        selectedTracksData.push(selectedTracksMetadata[id]);
-      } else {
-        artistData.forEach(artist => {
-          artist.albums.forEach(album => {
-            const track = album.tracks.find(t => t.id === id);
-            if (track) {
-              selectedTracksData.push({
-                ...track,
-                artistName: artist.name,
-                albumTitle: album.title,
-                albumImage: album.image,
-                albumId: album.id
-              });
-            }
-          });
-          if (artist.unreleasedAlbums) {
-            artist.unreleasedAlbums.forEach(album => {
-              const track = album.tracks.find(t => t.id === id);
-              if (track) {
-                selectedTracksData.push({
-                  ...track,
-                  artistName: artist.name,
-                  albumTitle: album.title,
-                  albumImage: album.image,
-                  albumId: album.id
-                });
-              }
-            });
-          }
-        });
-      }
+      const m = selectedTracksMetadata[id] ?? findTrackMeta(id);
+      if (m) selectedTracksData.push(m);
     });
 
     const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
@@ -566,6 +531,8 @@ export default function TracksPage() {
                 }
               }
 
+              // 예전 초안의 곡에는 아티스트 사진이 없다 — 초안의 아티스트 목록에서 채운다(재킷이 없을 때 쓴다).
+              tracksToLoad = withArtistImages(tracksToLoad, draft.selected_artists);
               if (tracksToLoad.length > 0) {
                 // Hydrate local storages with full track metadata
                 const tracksStr = JSON.stringify(tracksToLoad);
@@ -647,6 +614,9 @@ export default function TracksPage() {
             } catch (e) {}
           }
 
+          if (stored) {
+            try { validTracks = withArtistImages(validTracks, JSON.parse(stored)); } catch { /* 아티스트 목록을 못 읽으면 그대로 */ }
+          }
           if (validTracks.length > 0) {
             const metadataMap: Record<string, any> = {};
             const loadedTrackIds: string[] = [];
@@ -717,38 +687,8 @@ export default function TracksPage() {
       
       const selectedTracksData: any[] = [];
       selectedTrackIds.forEach(id => {
-        if (selectedTracksMetadata[id]) {
-          selectedTracksData.push(selectedTracksMetadata[id]);
-        } else {
-          artistData.forEach(artist => {
-            artist.albums.forEach(album => {
-              const track = album.tracks.find(t => t.id === id);
-              if (track) {
-                selectedTracksData.push({
-                  ...track,
-                  artistName: artist.name,
-                  albumTitle: album.title,
-                  albumImage: album.image,
-                  albumId: album.id
-                });
-              }
-            });
-            if (artist.unreleasedAlbums) {
-              artist.unreleasedAlbums.forEach(album => {
-                const track = album.tracks.find(t => t.id === id);
-                if (track) {
-                  selectedTracksData.push({
-                    ...track,
-                    artistName: artist.name,
-                    albumTitle: album.title,
-                    albumImage: album.image,
-                    albumId: album.id
-                  });
-                }
-              });
-            }
-          });
-        }
+        const m = selectedTracksMetadata[id] ?? findTrackMeta(id);
+        if (m) selectedTracksData.push(m);
       });
 
       const storedTracksStr = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
@@ -804,7 +744,8 @@ export default function TracksPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, artistData]);
 
-  const loadRemainingPagesInBackground = async (artistId: string, totalReleases: number, artistName: string) => {
+  const loadRemainingPagesInBackground = async (artist: { id: string; name: string; image: string }, totalReleases: number) => {
+    const artistId = artist.id;
     const totalPages = Math.ceil(totalReleases / 10);
     if (totalPages <= 1) return;
 
@@ -844,7 +785,7 @@ export default function TracksPage() {
                 };
               });
 
-              autoSelectAlbum(artistId, artistName, album, tracks);
+              autoSelectAlbum(artist, album, tracks);
 
               return { ...album, tracks };
             } catch (e) {
@@ -964,7 +905,7 @@ export default function TracksPage() {
                       previewUrl: t.preview_url
                     };
                   });
-                  autoSelectAlbum(artistId, artist.name, album, tracks);
+                  autoSelectAlbum(artist, album, tracks);
 
                   return { ...album, tracks };
                 } catch (e) {
@@ -975,7 +916,7 @@ export default function TracksPage() {
             );
 
             for (const al of unreleasedAlbumsList) {
-              autoSelectAlbum(artistId, artist.name, al, al.tracks);
+              autoSelectAlbum(artist, al, al.tracks);
             }
           }
 
@@ -1004,7 +945,7 @@ export default function TracksPage() {
           }));
 
           if (isSingleArtistMode && albumsData.total > 10) {
-            loadRemainingPagesInBackground(artistId, albumsData.total, artist.name);
+            loadRemainingPagesInBackground(artist, albumsData.total);
           }
         } catch (e) {
           console.error("Failed to load albums for artist", e);
@@ -1078,7 +1019,7 @@ export default function TracksPage() {
                   previewUrl: t.preview_url
                 };
               });
-              autoSelectAlbum(artistId, artist.name, album, tracks);
+              autoSelectAlbum(artist, album, tracks);
 
               return { ...album, tracks };
             } catch (e) {
@@ -1181,15 +1122,18 @@ export default function TracksPage() {
     }
   };
 
-  const toggleTrack = (trackId: string, metadata?: {
-    id: string;
-    title: string;
-    duration: string;
-    artistName: string;
-    albumTitle: string;
-    albumImage: string;
-    albumId?: string;
-  }) => {
+  /** 메타가 없는 곡을 지금 들고 있는 앨범에서 찾아 한 줄로 만든다. 모든 길이 `trackMeta` 를 지난다. */
+  const findTrackMeta = (id: string): TrackMeta | null => {
+    for (const artist of artistData) {
+      for (const album of [...artist.albums, ...(artist.unreleasedAlbums ?? [])]) {
+        const tr = album.tracks.find((x) => x.id === id);
+        if (tr) return trackMeta(artist, album, tr);
+      }
+    }
+    return null;
+  };
+
+  const toggleTrack = (trackId: string, metadata?: TrackMeta) => {
     const newSelected = new Set(selectedTrackIds);
     const newMetadata = { ...selectedTracksMetadata };
 
@@ -1205,49 +1149,8 @@ export default function TracksPage() {
       }
     } else {
       newSelected.add(trackId);
-      if (metadata) {
-        newMetadata[trackId] = metadata;
-      } else {
-        // Fallback: Populate metadata from state arrays if not supplied
-        let found = false;
-        artistData.forEach(artist => {
-          if (found) return;
-          artist.albums.forEach(album => {
-            if (found) return;
-            const t = album.tracks.find(x => x.id === trackId);
-            if (t) {
-              newMetadata[trackId] = {
-                id: t.id,
-                title: t.title,
-                duration: t.duration,
-                artistName: artist.name,
-                albumTitle: album.title,
-                albumImage: album.image,
-                albumId: album.id
-              };
-              found = true;
-            }
-          });
-          if (artist.unreleasedAlbums) {
-            artist.unreleasedAlbums.forEach(album => {
-              if (found) return;
-              const t = album.tracks.find(x => x.id === trackId);
-              if (t) {
-                newMetadata[trackId] = {
-                  id: t.id,
-                  title: t.title,
-                  duration: t.duration,
-                  artistName: artist.name,
-                  albumTitle: album.title,
-                  albumImage: album.image,
-                  albumId: album.id
-                };
-                found = true;
-              }
-            });
-          }
-        });
-      }
+      const m = metadata ?? findTrackMeta(trackId);
+      if (m) newMetadata[trackId] = m;
     }
     setSelectedTrackIds(newSelected);
     setSelectedTracksMetadata(newMetadata);
@@ -1274,15 +1177,11 @@ export default function TracksPage() {
       )
     );
 
-    toggleTrack(track.id, {
-      id: track.id,
-      title: track.title,
-      duration: "Live",
-      artistName: track.artistName,
-      albumTitle: track.title,
-      albumImage: track.cover,
-      albumId,
-    });
+    const owner = artistData.find((a) => a.id === modalArtistId);
+    toggleTrack(
+      track.id,
+      trackMeta(owner ? { ...owner, name: track.artistName } : track.artistName, newAlbum, newAlbum.tracks[0])
+    );
 
     setNotification(notice);
     setTimeout(() => setNotification(null), 5000);
@@ -1292,38 +1191,8 @@ export default function TracksPage() {
     // Gather full details for selected tracks
     const selectedTracksData: any[] = [];
     selectedTrackIds.forEach(id => {
-      if (selectedTracksMetadata[id]) {
-        selectedTracksData.push(selectedTracksMetadata[id]);
-      } else {
-        artistData.forEach(artist => {
-          artist.albums.forEach(album => {
-            const track = album.tracks.find(t => t.id === id);
-            if (track) {
-              selectedTracksData.push({
-                ...track,
-                artistName: artist.name,
-                albumTitle: album.title,
-                albumImage: album.image,
-                albumId: album.id
-              });
-            }
-          });
-          if (artist.unreleasedAlbums) {
-            artist.unreleasedAlbums.forEach(album => {
-              const track = album.tracks.find(t => t.id === id);
-              if (track) {
-                selectedTracksData.push({
-                  ...track,
-                  artistName: artist.name,
-                  albumTitle: album.title,
-                  albumImage: album.image,
-                  albumId: album.id
-                });
-              }
-            });
-          }
-        });
-      }
+      const m = selectedTracksMetadata[id] ?? findTrackMeta(id);
+      if (m) selectedTracksData.push(m);
     });
 
     // Merge with legacy track list inside sessionStorage
@@ -1454,15 +1323,15 @@ export default function TracksPage() {
                   <div
                     key={result.trackId}
                     onClick={() => {
-                      toggleTrack(result.trackId, {
-                        id: result.trackId,
-                        title: result.title,
-                        duration: result.duration,
-                        artistName: result.artistName,
-                        albumTitle: result.albumTitle,
-                        albumImage: result.albumImage,
-                        albumId: result.albumId
-                      });
+                      const owner = artistData.find((a) => a.id === result.artistId);
+                      toggleTrack(
+                        result.trackId,
+                        trackMeta(
+                          owner ? { ...owner, name: result.artistName } : { id: result.artistId, name: result.artistName },
+                          { id: result.albumId, title: result.albumTitle, image: result.albumImage },
+                          { id: result.trackId, title: result.title, duration: result.duration }
+                        )
+                      );
                     }}
                     className={`flex items-center justify-between p-4 rounded-3xl cursor-pointer transition-all active:scale-[0.98] border ${
                       isSelected 
@@ -1568,7 +1437,7 @@ export default function TracksPage() {
                                     */
                                    const next = selectAllTracks(
                                      { ids: selectedTrackIds, meta: selectedTracksMetadata },
-                                     artist.name,
+                                     artist,
                                      artist.allAlbums || artist.albums,
                                      artist.unreleasedAlbums ?? []
                                    );
@@ -1645,7 +1514,7 @@ export default function TracksPage() {
                                     ) : (
                                       <>
                                       <AlbumSelectBar
-                                        artistName={artist.name}
+                                        artist={artist}
                                         album={album}
                                         ids={selectedTrackIds}
                                         meta={selectedTracksMetadata}
@@ -1666,15 +1535,7 @@ export default function TracksPage() {
                                             <div
                                               key={track.id}
                                               onClick={() =>
-                                                toggleTrack(track.id, {
-                                                  id: track.id,
-                                                  title: track.title,
-                                                  duration: track.duration,
-                                                  artistName: artist.name,
-                                                  albumTitle: album.title,
-                                                  albumImage: album.image,
-                                                  albumId: album.id,
-                                                })
+                                                toggleTrack(track.id, trackMeta(artist, album, track))
                                               }
                                               className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                             >
@@ -1780,7 +1641,7 @@ export default function TracksPage() {
                                       */}
                                       {album.tracks.length > 1 && (
                                         <AlbumSelectBar
-                                          artistName={artist.name}
+                                          artist={artist}
                                           album={album}
                                           ids={selectedTrackIds}
                                           meta={selectedTracksMetadata}
@@ -1801,15 +1662,7 @@ export default function TracksPage() {
                                             <div
                                               key={track.id}
                                               onClick={() =>
-                                                toggleTrack(track.id, {
-                                                  id: track.id,
-                                                  title: track.title,
-                                                  duration: track.duration,
-                                                  artistName: artist.name,
-                                                  albumTitle: album.title,
-                                                  albumImage: album.image,
-                                                  albumId: album.id,
-                                                })
+                                                toggleTrack(track.id, trackMeta(artist, album, track))
                                               }
                                               className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.98] ${isSelected ? "bg-point/10" : "hover:bg-navy/5"}`}
                                             >
