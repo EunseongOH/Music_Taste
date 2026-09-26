@@ -1071,4 +1071,4 @@ Only after Waves A–D are resolved should production component migration begin.
 - **Wave A — Picking: Figma candidate validated.** See [wave-a-picking.md](./wave-a-picking.md). Production migration remains not started.
 - **Wave B — Tournament: Figma candidate validated.** See [wave-b-tournament.md](./wave-b-tournament.md).
 - **Wave C — Records & Archive: Figma candidate validated.** See [wave-c-records-archive.md](./wave-c-records-archive.md).
-- Wave D — Together domain: pending.
+- **Wave D — Together domain: Figma candidate validated.** See [wave-d-together-domain.md](./wave-d-together-domain.md).
