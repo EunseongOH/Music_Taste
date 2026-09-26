@@ -1097,3 +1097,10 @@ See [migration-readiness.md](./migration-readiness.md) for:
 - regression requirements
 - Tournament behavior guardrails
 - first pilot PR recommendation
+
+
+## Code migration structure
+
+For the concrete **before → after code architecture, folder structure, route-by-route replacements, and Mermaid dependency diagrams**, see:
+
+- [Code Migration Impact / Structure Map](./code-migration-impact.md)
