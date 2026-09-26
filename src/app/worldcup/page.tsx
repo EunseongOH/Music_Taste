@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import WinnerReveal from "@/components/result/WinnerReveal";
-import { Sheet, primaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
+import { ConfirmSheet, Sheet, primaryButton, dangerButton, textLink } from "@/components/space/SpaceUI";
 import BackButton from "@/components/BackButton";
 import LoginModal from "@/components/LoginModal";
 import ProfileHeader from "@/components/ProfileHeader";
@@ -12,7 +12,8 @@ import LPPlayer from "@/components/LPPlayer";
 import WorldCupCandidate from "@/components/WorldCupCandidate";
 import { useAuth } from "@/components/AuthProvider";
 import { rememberedNickname } from "@/utils/togetherDb";
-import { saveWorldcupDraft, loadActiveDraft, deleteActiveDraft, hydrateDraft, type DraftPick, type WorldcupState } from "@/utils/worldcupDb";
+import { saveWorldcupDraft, loadActiveDraft, deleteActiveDraft, hydrateDraft, isProtectedDraft, type DraftPick, type WorldcupState } from "@/utils/worldcupDb";
+import { attachRun, beginRun, clearActiveRun, getActiveRun } from "@/utils/worldcupRun";
 import { onAppExit } from "@/utils/platform";
 import { recordTogetherCompletion } from "@/utils/togetherCompletion";
 import { createClient } from "@/utils/supabase/client";
@@ -59,7 +60,7 @@ const getCurrentRoundNumber = (roundName: string, matchesCount: number) => {
 };
 
 export default function WorldCupPage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const supabase = createClient();
   const router = useRouter();
 
@@ -107,6 +108,16 @@ export default function WorldCupPage() {
    * ③ 끝났을 때 취향표 대신 일치율 화면으로 간다 — 평소 흐름은 그대로다.
    */
   const [isChallenge, setIsChallenge] = useState(false);
+  /**
+   * 이 판이 붙어 있는 계정(utils/worldcupRun.ts). **붙어 있을 때만** 계정 초안에 저장하고,
+   * 끝내거나 버릴 때 그 초안을 지운다. 로그인했다는 것만으로는 붙지 않는다(UX-004).
+   */
+  const [attachedTo, setAttachedTo] = useState<string | null>(null);
+  const attached = !!user && !isChallenge && attachedTo === user.id;
+  /** 임시저장하려는데 계정에 진행 중인 다른 판이 있다 — 바꿀지 묻는다. */
+  const [replaceAsk, setReplaceAsk] = useState(false);
+  /** 어느 판을 띄울지는 **한 번만** 정한다. 로그인은 이 결정을 다시 하게 하지 않는다. */
+  const initializedRef = useRef(false);
   const [locale, setLocale] = useState<"ko" | "en">("ko");
 
   useEffect(() => {
@@ -150,18 +161,37 @@ export default function WorldCupPage() {
     }
   }, []);
 
+  /*
+   * **어느 판을 띄울지 한 번만 정한다.**
+   *
+   * 예전에는 이 effect 가 `[user]` 에 걸려 있어서, 게스트로 하던 중 로그인하면 다시 돌며
+   * 계정의 옛 초안을 불러와 **지금 하던 판을 갈아치웠다**(UX-004). 로그인은 판을 바꾸라는
+   * 명령이 아니다. 인증 확인이 끝난 뒤(`isLoading`) 한 번 정하고, 그 뒤 user 가 바뀌어도
+   * 다시 정하지 않는다 — 로그인 뒤 할 일(계정에 붙일지)은 아래 따로 둔 effect 가 한다.
+   *
+   *   1. 같이 소트하기            링크의 곡 세트
+   *   2. 이 탭에서 하던 판         그대로 이어서 (새로 고침해도 같은 판)
+   *   3. 계정에 진행 중인 초안     불러온다 (다른 기기에서 하던 판, 홈 "이어서")
+   *   4. 새로 고른 곡·로컬 진행    새 판 / 이어서
+   */
   useEffect(() => {
+    if (isLoading || initializedRef.current) return;
+    initializedRef.current = true;
     const loadState = async () => {
       let stored = sessionStorage.getItem("worldcup_tracks") || localStorage.getItem("worldcup_tracks");
       let savedState = sessionStorage.getItem("worldcup_progress") || localStorage.getItem("worldcup_progress");
 
-      // 1. Try loading from active draft in Supabase if logged in
-      //    (같이 소트하기로 들어온 판은 링크의 곡 세트를 그대로 써야 해서 건너뛴다)
-      const challengeRun = new URLSearchParams(window.location.search).get("challenge") === "1";
-      if (user && !challengeRun) {
+      const params = new URLSearchParams(window.location.search);
+      const challengeRun = params.get("challenge") === "1";
+      // 믹스 매치를 내린 동안에는 ?mode 가 없어도 단일이 기본이다 — docs/mode-pivot.md
+      const isSingle = !MIX_MATCH || params.get("mode") === "single";
+      // 이 탭에서 하던 판. localStorage 는 탭·계정이 같이 쓰므로 근거로 삼지 않는다.
+      const tabRun = challengeRun ? null : getActiveRun(isSingle);
+      const tabHasRun = !!tabRun && !!sessionStorage.getItem("worldcup_progress") && !!sessionStorage.getItem("worldcup_tracks");
+
+      // 3. 이 탭에서 하던 판이 없으면 계정 초안 (같이 소트하기는 링크의 곡 세트를 써야 해서 건너뛴다)
+      if (user && !challengeRun && !tabHasRun) {
         try {
-          const params = new URLSearchParams(window.location.search);
-          const isSingle = params.get("mode") === "single";
           const draft = await loadActiveDraft(isSingle);
           // 플레이 중 초안이면 progress(곡 ID) 를 selected_tracks 로 되살린다.
           // 옛 형식(progress 없음)은 null 이라 아래 로컬 폴백으로 간다.
@@ -170,6 +200,17 @@ export default function WorldCupPage() {
             stored = JSON.stringify(h.tracks);
             sessionStorage.setItem("worldcup_tracks", stored);
             localStorage.setItem("worldcup_tracks", stored);
+            /*
+             * 고른 아티스트도 **이 초안의 것으로** 맞춘다. 곡만 바꾸면 자동저장이
+             * "아티스트는 다른 판, 곡은 이 판" 인 섞인 줄을 쓴다(UX-004).
+             */
+            if (Array.isArray(draft.selected_artists)) {
+              const artists = JSON.stringify(draft.selected_artists);
+              sessionStorage.setItem("selectedArtists", artists);
+              localStorage.setItem("selectedArtists", artists);
+            }
+            beginRun(isSingle, user.id);
+            setAttachedTo(user.id);
 
             setTracks(h.tracks as Track[]);
             setPhase("playing");
@@ -188,7 +229,7 @@ export default function WorldCupPage() {
         }
       }
 
-      // 2. Fallback to offline local storage
+      // 2·4. 이 탭의 판, 또는 이 기기에 남은 곡·진행
       if (!stored) {
         router.replace("/tracks");
         return;
@@ -202,6 +243,14 @@ export default function WorldCupPage() {
         
         if (savedState) {
           const st = JSON.parse(savedState);
+          /*
+           * 이어서 하는 판. 이 탭의 판이면 그 표시(붙은 계정)를 그대로 쓴다. 아니면(다른 탭·
+           * 옛 방문의 진행) 아직 어느 계정에도 붙지 않은 판으로 시작한다 — 붙일지는 아래에서.
+           */
+          if (!challengeRun) {
+            const run = tabRun ?? beginRun(isSingle, null);
+            setAttachedTo(run.attachedUserId);
+          }
           setTracks(parsedTracks);
           const mappedPhase: Phase = st.phase === "pre-tournament" ? "playing" : (st.phase as Phase);
           setPhase(mappedPhase);
@@ -220,8 +269,12 @@ export default function WorldCupPage() {
                router.replace("/tracks");
                return;
           }
-          // 새 판. 곡 객체를 DB 에 다시 써야 한다.
+          // 새 판. 곡 객체를 DB 에 다시 써야 한다. 계정에 붙일지는 아래에서 정한다.
           tracksWrittenRef.current = false;
+          if (!challengeRun) {
+            beginRun(isSingle, null);
+            setAttachedTo(null);
+          }
           setPicks([]);
           // Directly start matching without the deprecated manual pre-round selection modal
           startRound(parsedTracks);
@@ -233,7 +286,32 @@ export default function WorldCupPage() {
     };
 
     loadState();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, user]);
+
+  /*
+   * **로그인했을 때 이 판을 계정에 붙일지.** 판은 바꾸지 않는다.
+   *
+   *   계정에 진행 중인 다른 판이 없다   붙인다 — 지금 판이 계정에 이어서 저장된다
+   *   계정에 진행 중인 판이 있다        붙이지 않는다 — 둘 다 지킨다. 지금 판은 이 기기에서
+   *                                    계속하고, 임시저장하려 하면 그때 바꿀지 묻는다
+   */
+  const ready = phase !== "loading";
+  useEffect(() => {
+    if (!ready || isChallenge || !user || attachedTo === user.id) return;
+    let alive = true;
+    (async () => {
+      const draft = await loadActiveDraft(isSingleArtistMode);
+      if (!alive || isProtectedDraft(draft)) return;
+      attachRun(isSingleArtistMode, user.id);
+      tracksWrittenRef.current = false; // 이 계정에는 아직 곡 목록이 없다
+      setAttachedTo(user.id);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, isChallenge, user?.id, attachedTo, isSingleArtistMode]);
 
   const currentState = (): WorldcupState => ({
     tracks, phase, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks,
@@ -268,15 +346,16 @@ export default function WorldCupPage() {
     sessionStorage.setItem("worldcup_progress", progressData);
     localStorage.setItem("worldcup_progress", progressData);
 
-    // DB 자동저장(버퍼). 곡 ID 만 보낸다. 같이 소트하기 판은 사용자의 이어하기를 덮지 않는다.
-    if (user && !isChallenge && phase === "playing") {
+    // DB 자동저장(버퍼). 곡 ID 만 보낸다. **계정 초안에 붙은 판만** — 같이 소트하기 판이나
+    // 게스트로 시작해 계정의 다른 판과 겹친 판은 그 초안을 덮지 않는다.
+    if (attached && phase === "playing") {
       autosaveTimer.current = setTimeout(() => {
         autosaveTimer.current = null;
         saveDraft(false);
       }, 1500);
       return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
     }
-  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, picks, user, isChallenge]);
+  }, [phase, currentRoundName, matches, currentMatchIndex, winners, eliminatedTracks, skippedTracks, picks, attached]);
 
   // 브라우저·네비게이션 바 뒤로가기를 가로채 나가기 모달을 띄운다 (docs/worldcup-draft-plan.md 3-3).
   useEffect(() => {
@@ -293,9 +372,9 @@ export default function WorldCupPage() {
 
   // 앱인토스 홈 버튼: 물어볼 틈이 없으니 바로 임시저장(확정)해 둔다.
   useEffect(() => {
-    if (phase !== "playing" || !user || isChallenge) return;
+    if (phase !== "playing" || !attached) return;
     return onAppExit(() => { saveDraft(true); });
-  }, [phase, user, isChallenge, tracks, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks]);
+  }, [phase, attached, tracks, currentRoundName, currentMatchIndex, matches, winners, eliminatedTracks, skippedTracks, picks]);
 
   const leave = () => {
     leavingRef.current = true;
@@ -306,6 +385,24 @@ export default function WorldCupPage() {
   const handleSaveAndExit = async () => {
     if (!user) { setIsLoginModalOpen(true); return; }
     if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); autosaveTimer.current = null; }
+    if (!attached) {
+      // 계정에 진행 중인 다른 판이 있으면 조용히 덮지 않는다 — 바꿀지 묻는다.
+      setIsSaving(true);
+      const other = await loadActiveDraft(isSingleArtistMode);
+      setIsSaving(false);
+      if (isProtectedDraft(other)) { setExitModal(false); setReplaceAsk(true); return; }
+    }
+    await saveAndExit();
+  };
+
+  /** 이 판을 계정 초안으로 저장하고 나간다. 붙어 있지 않았으면 여기서 붙인다. */
+  const saveAndExit = async () => {
+    if (!user) return;
+    if (!attached) {
+      attachRun(isSingleArtistMode, user.id);
+      tracksWrittenRef.current = false;
+      setAttachedTo(user.id);
+    }
     setIsSaving(true);
     const ok = await saveDraft(true);
     setIsSaving(false);
@@ -321,7 +418,9 @@ export default function WorldCupPage() {
     if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); autosaveTimer.current = null; }
     sessionStorage.removeItem("worldcup_progress");
     localStorage.removeItem("worldcup_progress");
-    if (user && !isChallenge) await deleteActiveDraft(isSingleArtistMode);
+    clearActiveRun();
+    // 계정 초안은 이 판의 것일 때만 지운다. 게스트로 한 판을 버리며 계정의 다른 판을 지우지 않는다.
+    if (attached) await deleteActiveDraft(isSingleArtistMode);
     trackEvent("tournament_exit", { action: "discard" });
     leave();
   };
@@ -330,13 +429,15 @@ export default function WorldCupPage() {
   useEffect(() => {
     if (phase === "finished" && user && !isChallenge && winners.length > 0) {
       const clearDraft = async () => {
-        await deleteActiveDraft(isSingleArtistMode);
+        // 이 판이 계정 초안이었을 때만 지운다(계정의 다른 판은 그대로).
+        if (attached) await deleteActiveDraft(isSingleArtistMode);
+        clearActiveRun();
         sessionStorage.removeItem("worldcup_progress");
         localStorage.removeItem("worldcup_progress");
       };
       clearDraft();
     }
-  }, [phase, user, winners, eliminatedTracks, isChallenge]);
+  }, [phase, user, winners, eliminatedTracks, isChallenge, attached]);
 
   // The mathematical Play-in Wildcard Round matching logic
   const startRound = (participants: Track[]) => {
@@ -440,7 +541,9 @@ export default function WorldCupPage() {
             * 있었으니 그 임시저장은 이 결과의 것이다. 게스트로 끝냈으면 계정에 있는
             * 임시저장은 **다른 판**이므로 건드리면 안 된다(나중에 로그인해도 마찬가지).
             */
-           sessionStorage.setItem("worldcup_run_origin", isChallenge ? "challenge" : user ? "authenticated" : "guest");
+           // "authenticated" 는 **이 판이 계정 초안에 붙어 있었다** 는 뜻이다. 로그인했어도 붙지
+           // 않은 판이면 결과를 저장할 때 계정의 다른 판을 지우면 안 된다.
+           sessionStorage.setItem("worldcup_run_origin", isChallenge ? "challenge" : attached ? "authenticated" : "guest");
            /*
             * 같이 소트하기 판이면 **어느 방의 어느 판인지** 묶어 결과 화면에 건넨다.
             * 결과 화면은 위의 `worldcup_ranking` 을 읽지 않는다 — 그건 출처가 없다.
@@ -785,6 +888,24 @@ export default function WorldCupPage() {
           />
         );
       })()}
+
+      {/*
+        * 계정에 진행 중인 다른 판이 있는데 이 판을 임시저장하려 한다. 계정에는 판이 하나만
+        * 남으므로 조용히 덮지 않고 묻는다(UX-004). 취소하면 이 판을 계속한다.
+        */}
+      <ConfirmSheet
+        open={replaceAsk}
+        title={locale === "en" ? "Another World Cup is saved to your account" : "계정에 진행 중인 다른 소트가 있어요"}
+        desc={locale === "en"
+          ? "Saving this one replaces the World Cup saved to your account."
+          : "지금 진행을 저장하면 계정에 임시저장된 소트가 이 소트로 바뀌어요."}
+        confirmLabel={locale === "en" ? "Replace and save" : "바꾸고 저장하기"}
+        cancelLabel={locale === "en" ? "Keep sorting" : "계속 소트하기"}
+        danger
+        busy={isSaving}
+        onClose={() => { if (!isSaving) setReplaceAsk(false); }}
+        onConfirm={async () => { await saveAndExit(); setReplaceAsk(false); }}
+      />
 
       {/* 게스트가 임시저장을 누르면 로그인부터. 로그인되면 user 가 바뀌어 다시 누를 수 있다. */}
       <LoginModal

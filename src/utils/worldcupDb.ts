@@ -9,95 +9,134 @@ const getSessionExpiredMessage = () => {
 // 초안은 사용자·모드(싱글/멀티)당 하나. (user_id, is_single_artist) 유니크 인덱스가 기준이다.
 const DRAFT_KEY = "user_id,is_single_artist";
 
-// Stage 1: Save artist selection
-export const saveArtistSelectionDraft = async (selectedArtists: any[], isSingleArtist?: boolean) => {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+/**
+ * **진행 중인 월드컵은 묻지 않고 덮지 않는다.**
+ *
+ * 초안은 계정·모드당 한 줄이라, 아티스트·곡 고르기 단계의 저장이 같은 줄을 upsert 하면
+ * 진행 중이던 월드컵(progress)이 사라진다. `/explore` 에 바로 들어와 다른 아티스트를
+ * 고르기만 해도 그랬다(UX-001). 게다가 몇 칸만 덮어서 "아티스트는 B, 곡은 A" 인
+ * 섞인 줄이 남았다.
+ *
+ * 그래서 단계 저장은 두 가지로 나눈다.
+ *
+ *   saveStageDraft     **보호된 초안(진행 중 월드컵)이 있으면 건드리지 않고 "conflict"**
+ *   replaceStageDraft  사용자가 "새로 시작" 을 고른 뒤에만. 줄 전체를 새 단계로 쓴다
+ *
+ * 보호 여부를 먼저 읽고 쓰면 그 사이에 다른 탭이 끼어들 수 있다. 그래서 DB 가 판단하게
+ * 한다 — "보호되지 않은 줄만 update", 줄이 없으면 insert, insert 가 유니크 충돌이면
+ * 그 사이 보호된 줄이 생긴 것이다. 새 스키마 없이 한 문장씩 원자적으로 끝난다.
+ */
+const PROTECTED_STATUSES = ["playing", "pre_tournament"] as const;
 
-  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
-  const title = selectedArtists.length > 0
-    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
+/** 진행 중인 월드컵이라 **확인 없이 덮으면 안 되는** 초안인가. 만료된 것은 보호하지 않는다. */
+export const isProtectedDraft = (d: { status?: string; saved_at?: string | null; updated_at?: string } | null | undefined) =>
+  !!d && (PROTECTED_STATUSES as readonly string[]).includes(d.status ?? "") && !isDraftExpired(d);
+
+export type StageSaveResult = "saved" | "conflict" | "no-user" | "error";
+
+/** 초안에 담는 아티스트. 화면마다 모양이 조금씩 달라 이름만 요구한다. */
+type DraftArtist = { name?: string };
+
+const stageTitle = (selectedArtists: DraftArtist[]) =>
+  selectedArtists.length > 0
+    ? `${selectedArtists.map((a) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
     : "내 음악 월드컵";
 
-  const { error } = await supabase
-    .from('tournament_drafts')
-    .upsert({
-      user_id: user.id,
-      is_single_artist: isSingle,
-      status: 'artist_selection',
-      selected_artists: selectedArtists,
-      title,
-      progress: null,
-      saved_at: null,
-      updated_at: new Date().toISOString()
-    }, { onConflict: DRAFT_KEY });
+/**
+ * 한 단계의 줄 전체. 월드컵 칸(phase·round·progress·skipped)은 항상 비운다 —
+ * 일부만 쓰면 이전 판의 진행이 새 단계에 섞인다.
+ */
+const stageRow = (
+  userId: string,
+  isSingle: boolean,
+  stage: { status: "artist_selection"; selectedArtists: DraftArtist[] } | { status: "track_selection"; selectedArtists: DraftArtist[]; selectedTracks: unknown[] }
+) => ({
+  user_id: userId,
+  is_single_artist: isSingle,
+  status: stage.status,
+  selected_artists: stage.selectedArtists,
+  selected_tracks: stage.status === "track_selection" ? stage.selectedTracks : null,
+  phase: null,
+  current_round_name: null,
+  current_match_index: null,
+  progress: null,
+  saved_at: null,
+  // NOT NULL 컬럼이라 비울 때는 [] 로. 빼먹으면 이전 월드컵의 뺀 곡이 다음 판으로 넘어간다.
+  skipped_tracks: [],
+  title: stageTitle(stage.selectedArtists),
+  updated_at: new Date().toISOString(),
+});
 
-  if (error) {
-    console.error("[Supabase DB] Error saving artist selection draft:", error.message);
-  }
-};
+type Stage = Parameters<typeof stageRow>[2];
 
-// Stage 2: Save track selection
-export const saveTrackSelectionDraft = async (selectedArtists: any[], selectedTracks: any[], isSingleArtist?: boolean) => {
+/** 보호된 초안이 없을 때만 쓴다. 있으면 아무것도 바꾸지 않고 "conflict". */
+async function saveStageDraft(stage: Stage, isSingle: boolean, retried = false): Promise<StageSaveResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return "no-user";
+  const row = stageRow(user.id, isSingle, stage);
 
-  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
-
-  const { error } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('tournament_drafts')
-    .upsert({
-      user_id: user.id,
-      is_single_artist: isSingle,
-      status: 'track_selection',
-      selected_artists: selectedArtists,
-      selected_tracks: selectedTracks,
-      progress: null,
-      saved_at: null,
-      updated_at: new Date().toISOString()
-    }, { onConflict: DRAFT_KEY });
-
-  if (error) {
-    console.error("[Supabase DB] Error saving track selection draft:", error.message);
+    .update(row)
+    .eq('user_id', user.id)
+    .eq('is_single_artist', isSingle)
+    .not('status', 'in', `(${PROTECTED_STATUSES.join(",")})`)
+    .select('user_id');
+  if (updateError) {
+    console.error("[Supabase DB] Error saving draft stage:", updateError.message);
+    return "error";
   }
-};
+  if (updated && updated.length > 0) return "saved";
 
-// Downgrade active draft to Artist Selection and clear track selection
-export const downgradeDraftToArtistSelection = async (selectedArtists: any[], isSingleArtist?: boolean) => {
+  // 고칠 줄이 없다 — 줄이 아예 없거나, 보호된 줄이 있다.
+  const { error: insertError } = await supabase.from('tournament_drafts').insert(row);
+  if (!insertError) return "saved";
+  if (insertError.code !== "23505") {
+    console.error("[Supabase DB] Error saving draft stage:", insertError.message);
+    return "error";
+  }
+  // 보호된 줄이 있다. 만료됐으면 loadActiveDraft 가 지우므로 한 번만 다시 해 본다.
+  if (!retried && (await loadActiveDraft(isSingle)) === null) return saveStageDraft(stage, isSingle, true);
+  return "conflict";
+}
+
+/** "새로 시작" 을 사용자가 고른 뒤에만. 이전 초안을 이 단계의 줄로 통째로 바꾼다. */
+async function replaceStageDraft(stage: Stage, isSingle: boolean): Promise<StageSaveResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const isSingle = isSingleArtist ?? (selectedArtists.length === 1);
-  const title = selectedArtists.length > 0
-    ? `${selectedArtists.map((a: any) => a.name).slice(0, 2).join(", ")} 외 월드컵 초안`
-    : "내 음악 월드컵";
-
+  if (!user) return "no-user";
   const { error } = await supabase
     .from('tournament_drafts')
-    .upsert({
-      user_id: user.id,
-      is_single_artist: isSingle,
-      status: 'artist_selection',
-      selected_artists: selectedArtists,
-      selected_tracks: null,
-      phase: null,
-      current_round_name: null,
-      current_match_index: null,
-      progress: null,
-      saved_at: null,
-      // NOT NULL 컬럼이라 비울 때는 [] 로. 빼먹으면 이전 월드컵의 뺀 곡이 다음 판으로 넘어간다.
-      skipped_tracks: [],
-      title,
-      updated_at: new Date().toISOString()
-    }, { onConflict: DRAFT_KEY });
-
+    .upsert(stageRow(user.id, isSingle, stage), { onConflict: DRAFT_KEY });
   if (error) {
-    console.error("[Supabase DB] Error downgrading draft status:", error.message);
+    console.error("[Supabase DB] Error replacing draft:", error.message);
+    return "error";
   }
-};
+  return "saved";
+}
+
+const modeOf = (selectedArtists: DraftArtist[], isSingleArtist?: boolean) => isSingleArtist ?? (selectedArtists.length === 1);
+
+// Stage 1: 아티스트 고르기. 진행 중인 월드컵이 있으면 "conflict" — 덮지 않는다.
+export const saveArtistSelectionDraft = (selectedArtists: DraftArtist[], isSingleArtist?: boolean) =>
+  saveStageDraft({ status: "artist_selection", selectedArtists }, modeOf(selectedArtists, isSingleArtist));
+
+// Stage 2: 곡 고르기. 진행 중인 월드컵이 있으면 "conflict" — 덮지 않는다.
+export const saveTrackSelectionDraft = (selectedArtists: DraftArtist[], selectedTracks: unknown[], isSingleArtist?: boolean) =>
+  saveStageDraft({ status: "track_selection", selectedArtists, selectedTracks }, modeOf(selectedArtists, isSingleArtist));
+
+// 곡 고르기에서 아티스트 고르기로 되돌아간다. 고른 곡을 비운다. 진행 중인 월드컵은 덮지 않는다.
+export const downgradeDraftToArtistSelection = (selectedArtists: DraftArtist[], isSingleArtist?: boolean) =>
+  saveStageDraft({ status: "artist_selection", selectedArtists }, modeOf(selectedArtists, isSingleArtist));
+
+/** 사용자가 "새로 시작" 을 확인한 뒤에만 부른다. */
+export const replaceDraftWithArtistSelection = (selectedArtists: DraftArtist[], isSingleArtist?: boolean) =>
+  replaceStageDraft({ status: "artist_selection", selectedArtists }, modeOf(selectedArtists, isSingleArtist));
+
+/** 사용자가 "새로 시작" 을 확인한 뒤에만 부른다. */
+export const replaceDraftWithTrackSelection = (selectedArtists: DraftArtist[], selectedTracks: unknown[], isSingleArtist?: boolean) =>
+  replaceStageDraft({ status: "track_selection", selectedArtists, selectedTracks }, modeOf(selectedArtists, isSingleArtist));
 
 /* ------------------------------------------------------------------ */
 /* Stage 3: 월드컵 진행 (docs/worldcup-draft-plan.md)                    */
@@ -262,6 +301,15 @@ export const loadActiveDraft = async (isSingleArtist: boolean) => {
     return null;
   }
   return draft;
+};
+
+/**
+ * 고르기 단계에서 "저장하지 않고 나가기". 그 단계의 초안만 지운다 —
+ * 진행 중인 월드컵 초안은 이 버튼의 대상이 아니다(묻지 않고 지우면 되돌릴 수 없다).
+ */
+export const deleteDraftUnlessProtected = async (isSingleArtist: boolean) => {
+  if (isProtectedDraft(await loadActiveDraft(isSingleArtist))) return;
+  await deleteActiveDraft(isSingleArtist);
 };
 
 // Delete active draft for one mode

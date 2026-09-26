@@ -11,7 +11,8 @@ import { Sheet, Toast, primaryButton, secondaryButton, dangerButton, textLink } 
 import { DockSpacer, useDockClearance } from "@/components/space/BottomDock";
 import ProfileHeader from "@/components/ProfileHeader";
 import { getArtistAlbums, getAlbumTracks, getTrackBudgetLeft } from "@/utils/spotify";
-import { saveTrackSelectionDraft, loadActiveDraft, deleteActiveDraft, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
+import { saveTrackSelectionDraft, replaceDraftWithTrackSelection, loadActiveDraft, deleteDraftUnlessProtected, downgradeDraftToArtistSelection } from "@/utils/worldcupDb";
+import { useDraftConflict } from "@/components/DraftConflictSheet";
 import { trackEvent } from "@/utils/gtag";
 import { MIX_MATCH } from "@/config/modes";
 import { fetchUnreleasedTracksForArtist } from "@/utils/unreleasedDb";
@@ -385,6 +386,11 @@ export default function TracksPage() {
     });
   };
   const [locale, setLocale] = useState<"ko" | "en">("ko");
+  /**
+   * 계정에 진행 중인 월드컵이 있는데 곡 고르기를 저장하거나 새 판을 시작하려 한다.
+   * 묻지 않고 덮지 않는다 — 아티스트 고르기·홈과 같은 시트(UX-001).
+   */
+  const { saveOrAsk, sheet: draftConflictSheet } = useDraftConflict(!!user, locale);
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -491,14 +497,19 @@ export default function TracksPage() {
     }
 
     const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-    await saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode);
-    router.push("/");
+    await saveOrAsk(
+      isSingleArtistMode,
+      () => saveTrackSelectionDraft(selectedArtists, selectedTracksData, isSingleArtistMode),
+      () => replaceDraftWithTrackSelection(selectedArtists, selectedTracksData, isSingleArtistMode),
+      () => router.push("/")
+    );
   };
 
   const handleDiscardExit = async () => {
     setExitWizardStep(null);
+    // 곡 고르던 것만 버린다. 진행 중인 월드컵 초안은 여기서 지우지 않는다.
     if (user) {
-      await deleteActiveDraft(isSingleArtistMode);
+      await deleteDraftUnlessProtected(isSingleArtistMode);
     }
     localStorage.removeItem("worldcup_tracks");
     sessionStorage.removeItem("worldcup_tracks");
@@ -1339,28 +1350,31 @@ export default function TracksPage() {
       return;
     }
 
-    const tracksStr = JSON.stringify(uniqueTracks);
-    sessionStorage.setItem("worldcup_tracks", tracksStr);
-    localStorage.setItem("worldcup_tracks", tracksStr);
+    const start = () => {
+      const tracksStr = JSON.stringify(uniqueTracks);
+      sessionStorage.setItem("worldcup_tracks", tracksStr);
+      localStorage.setItem("worldcup_tracks", tracksStr);
+      sessionStorage.removeItem("worldcup_progress");
+      localStorage.removeItem("worldcup_progress");
 
-    // Save as track selection draft before pushing
-    if (user) {
-      try {
-        const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
-        await saveTrackSelectionDraft(selectedArtists, uniqueTracks, isSingleArtistMode);
-      } catch (err) {
-        console.error("Error saving draft before tournament:", err);
-      }
-    }
+      // Trigger GA4 events
+      trackEvent("funnel_song_complete", { selected_songs_count: uniqueTracks.length });
+      trackEvent("tournament_start", { selected_songs_count: uniqueTracks.length });
 
-    sessionStorage.removeItem("worldcup_progress");
-    localStorage.removeItem("worldcup_progress");
+      router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
+    };
 
-    // Trigger GA4 events
-    trackEvent("funnel_song_complete", { selected_songs_count: uniqueTracks.length });
-    trackEvent("tournament_start", { selected_songs_count: uniqueTracks.length });
-
-    router.push(isSingleArtistMode ? "/worldcup?mode=single" : "/worldcup");
+    /*
+     * 새 판을 시작하기 전에 계정 초안에 적는다. 계정에 **진행 중인 월드컵**이 있으면
+     * 덮지 않고 묻는다 — 곡 고르기 화면에 바로 들어와 시작을 누르면 이전 판이 사라졌다.
+     */
+    const selectedArtists = artistData.map(a => ({ id: a.id, name: a.name, image: a.image }));
+    await saveOrAsk(
+      isSingleArtistMode,
+      () => saveTrackSelectionDraft(selectedArtists, uniqueTracks, isSingleArtistMode),
+      () => replaceDraftWithTrackSelection(selectedArtists, uniqueTracks, isSingleArtistMode),
+      start
+    );
   };
 
   const t = locale === "en" ? translations.en : translations.ko;
@@ -2068,6 +2082,8 @@ export default function TracksPage() {
 
       {/* 고를 것이 없는 알림은 토스트 */}
       <Toast toast={customAlert ? { text: customAlert, tone: "info" } : null} />
+      {/* 계정에 진행 중인 월드컵이 있다 — 아티스트 고르기·홈과 같은 시트(UX-001) */}
+      {draftConflictSheet}
     </main>
   );
 }

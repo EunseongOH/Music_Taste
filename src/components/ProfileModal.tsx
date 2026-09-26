@@ -11,6 +11,7 @@ import { createClient } from "@/utils/supabase/client";
 import { safeLocalStorage as localStorage, safeSessionStorage as sessionStorage, getSafeLocale } from "@/utils/storage";
 import { NICKNAME_ERROR_TEXT, saveNickname, validateNickname } from "@/utils/nickname";
 import { draftExpiresAt, formatDraftExpiry, isDraftExpired } from "@/utils/worldcupDb";
+import { draftResumePath, restoreDraftToStorage } from "@/utils/worldcupRun";
 import { MIX_MATCH, VISIBLE_MODES } from "@/config/modes";
 import { fetchMyChallenges, type MyChallenge } from "@/utils/togetherDb";
 import { buildCompletedArchiveItems } from "@/utils/completedArchive";
@@ -60,37 +61,11 @@ export default function ProfileModal({ isOpen, onClose, onUpdateImg }: ProfileMo
     return archive.ranking || [];
   };
 
+  /** 홈 "이어서 진행하기" 와 같은 기준으로 초안에 돌아간다(utils/worldcupRun.ts). */
   const handleResumeDraft = (draft: any) => {
-    // 1. Set selectedArtists in session and localStorage
-    if (draft.selected_artists && draft.selected_artists.length > 0) {
-      sessionStorage.setItem("selectedArtists", JSON.stringify(draft.selected_artists));
-      localStorage.setItem("selectedArtists", JSON.stringify(draft.selected_artists));
-    }
-    
-    // 2. Set worldcup_tracks (selected_tracks)
-    if (draft.selected_tracks && draft.selected_tracks.length > 0) {
-      sessionStorage.setItem("worldcup_tracks", JSON.stringify(draft.selected_tracks));
-      localStorage.setItem("worldcup_tracks", JSON.stringify(draft.selected_tracks));
-    }
-
-    // 3. 진행 상태는 월드컵 페이지가 DB 초안(progress 컬럼)에서 직접 복원한다.
-    //    로컬의 오래된 진행이 DB 를 가리지 않게 지운다.
-    sessionStorage.removeItem("worldcup_progress");
-    localStorage.removeItem("worldcup_progress");
-    const isSingle = !!draft.is_single_artist;
-    sessionStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
-    localStorage.setItem("worldcup_is_single_artist", isSingle ? "true" : "false");
-
-    // 4. Redirect user based on status (모드를 붙여야 같은 모드의 초안을 읽는다)
-    const qs = isSingle ? "?mode=single" : "";
+    restoreDraftToStorage(draft);
     onClose();
-    if (draft.status === 'artist_selection') {
-      router.push(`/explore${qs}`);
-    } else if (draft.status === 'track_selection') {
-      router.push(`/tracks${qs}`);
-    } else {
-      router.push(`/worldcup${qs}`);
-    }
+    router.push(draftResumePath(draft));
   };
 
   useEffect(() => {
