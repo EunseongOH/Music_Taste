@@ -123,3 +123,42 @@ Favorite/Together difference is persistence and routing only.
 Not started.
 
 Next design wave: Records & Archive.
+
+
+## Figma fidelity rebuild — 2026-09-26
+
+The first documentation-only specimens for `WorldCupCandidate / Existing` and `LPPlayer / Existing` were too schematic and did not preserve the visual character of the production UI. They were rebuilt by re-reading the production component code and the approved turntable design decisions.
+
+### WorldCupCandidate / Existing
+
+The main component itself was rebuilt while preserving its component-set identity, so every CandidatePair and Tournament Validation instance continues to reference the same main component.
+
+Documented production geometry:
+- mobile visual wrapper: 112px
+- idle: full album sleeve
+- active/dragging: LP revealed behind the sleeve
+- LP base: 90% of wrapper, with while-drag emphasis represented in the Figma active state
+- sleeve: approximately 85% scale, upward translation, 0.5 opacity and -5° rotation
+- dark new-tone LP with grooves
+- album-image label and spindle hole
+- title/artist label disappears while active
+
+### LPPlayer / Existing
+
+The main component itself was rebuilt and all existing Figma instances remain linked to it.
+
+Documented new-tone World Cup state:
+- surface-based plinth, not line art
+- recessed screws
+- platter: 136px
+- LP: 124px
+- World Cup disc treatment: soft neutral glass
+- idle label: point, 30% of LP
+- playing state: full picture-disc jacket
+- subtle picture-disc grooves and spindle
+- neutral metallic pivot/body/headshell
+- playing tonearm angle: 43°
+- tonearm head reaches over the rotating LP
+- the player remains visually quieter than the candidate covers
+
+The rebuild updates the same main component IDs, so existing uses in `CandidatePair / Composition` and `41 Tournament Validation` update automatically rather than becoming detached copies.
