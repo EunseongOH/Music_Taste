@@ -61,6 +61,8 @@ export default function ExplorePage() {
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [isSingleArtistMode, setIsSingleArtistMode] = useState(false);
   const [pendingSingleArtist, setPendingSingleArtist] = useState<Artist | null>(null);
+  /** "곡 고르러 가기" 를 누르고 저장을 기다리는 중. 두 번 눌러 두 번 저장하지 않게. */
+  const [singleSaving, setSingleSaving] = useState(false);
   const [visibleDefaultCount, setVisibleDefaultCount] = useState(30);
   const [searchOffset, setSearchOffset] = useState(0);
   const [hasMoreSearch, setHasMoreSearch] = useState(true);
@@ -1227,9 +1229,8 @@ export default function ExplorePage() {
         )}
         footer={pendingSingleArtist && (
           <div className="flex flex-col gap-2">
-            <button onClick={async () => {
+            <button disabled={singleSaving} onClick={async () => {
                       const selected = [pendingSingleArtist];
-                      setPendingSingleArtist(null);
                       const proceed = async () => {
                         setSelectedArtists(selected);
                         sessionStorage.setItem('selectedArtists', JSON.stringify(selected));
@@ -1249,12 +1250,16 @@ export default function ExplorePage() {
                         router.push('/tracks?mode=single');
                       };
                       // 계정 초안에 먼저 적는다. 진행 중인 월드컵이 있으면 덮지 않고 묻는다(UX-001).
-                      await saveOrAsk(
+                      setSingleSaving(true);
+                      const outcome = await saveOrAsk(
                         true,
                         () => saveArtistSelectionDraft(selected, true),
                         () => replaceDraftWithArtistSelection(selected, true),
                         proceed
                       );
+                      setSingleSaving(false);
+                      // 저장에 실패했으면 이 시트를 그대로 둔다 — 고른 아티스트로 다시 누르면 된다.
+                      if (outcome !== "failed") setPendingSingleArtist(null);
                     }} className={`${primaryButton} w-full`}>{locale === "en" ? "Choose songs" : "곡 고르러 가기"}</button>
             <button onClick={() => setPendingSingleArtist(null)} className={`${secondaryButton} w-full`}>{t.cancel}</button>
           </div>
